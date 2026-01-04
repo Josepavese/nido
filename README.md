@@ -114,7 +114,7 @@ It combines a simple CLI for human operators with a powerful **Model Context Pro
 Scarica l'installer dalla cartella `bin/installers` del repository oppure usa il comando:
 
 ```bash
-git clone https://github.com/your-org/nido.git
+git clone https://github.com/Josepavese/nido.git
 cd nido
 # Esegui l'installer locale:
 ./bin/installers/get-nido.sh

@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/your-org/nido" # Replace with actual URL
+REPO_URL="https://github.com/Josepavese/nido"
 INSTALL_DIR="${HOME}/.nido"
 BIN_DIR="${INSTALL_DIR}/bin"
 
