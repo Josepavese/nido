@@ -1,1 +1,4 @@
 .secrets
+config/config.env
+.agent_memo.md
+docs/test_log.md
