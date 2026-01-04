@@ -1,0 +1,862 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ((BASH_VERSINFO[0] < 4)); then
+  echo "Error: Bash 4.0+ is required (you are running ${BASH_VERSION})." >&2
+  if [[ "$(uname)" == "Darwin" ]]; then
+    echo "On macOS, try: brew install bash" >&2
+  fi
+  exit 1
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# ... (omitted content)
+
+load_config() {
+  local cfg="${VMOPS_CONFIG:-$ROOT_DIR/config/config.env}"
+  if [[ -f "$cfg" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$cfg"
+    set +a
+  fi
+}
+
+load_config
+
+TEMPLATE_DEFAULT="${TEMPLATE_DEFAULT:-template-headless}"
+VMS_POOL="${VMS_POOL:-vms}"
+WAIT_TIMEOUT="${WAIT_TIMEOUT:-60}"
+POOL_PATH="${POOL_PATH:-/media/jose/Data/libvirt-pool}"
+BACKUP_DIR="${BACKUP_DIR:-$POOL_PATH/backups}"
+VM_MEM_MB="${VM_MEM_MB:-2048}"
+VM_VCPUS="${VM_VCPUS:-2}"
+VM_OS_VARIANT="${VM_OS_VARIANT:-debian12}"
+NETWORK_HOSTONLY="${NETWORK_HOSTONLY:-hostonly56}"
+NETWORK_NAT="${NETWORK_NAT:-default}"
+SSH_USER="${SSH_USER:-vmuser}"
+GRAPHICS="${GRAPHICS:-spice}"
+
+preflight() {
+  if [[ "${VMOPS_SKIP_PREFLIGHT:-0}" == "1" ]]; then
+    return 0
+  fi
+  local missing=0
+  if [[ ! -d "$POOL_PATH" ]]; then
+    echo "Missing POOL_PATH: $POOL_PATH" >&2
+    missing=1
+  fi
+  if [[ ! -d "$BACKUP_DIR" ]]; then
+    echo "Missing BACKUP_DIR: $BACKUP_DIR" >&2
+    missing=1
+  fi
+  if ! virsh pool-info "$VMS_POOL" >/dev/null 2>&1; then
+    echo "Libvirt pool not found: $VMS_POOL" >&2
+    missing=1
+  fi
+  if ! virsh net-info "$NETWORK_HOSTONLY" >/dev/null 2>&1; then
+    echo "Libvirt network not found: $NETWORK_HOSTONLY" >&2
+    missing=1
+  fi
+  if ! virsh net-info "$NETWORK_NAT" >/dev/null 2>&1; then
+    echo "Libvirt network not found: $NETWORK_NAT" >&2
+    missing=1
+  fi
+  if [[ "$missing" -eq 1 ]]; then
+    echo "Preflight failed. Check config in ${VMOPS_CONFIG:-$ROOT_DIR/config/config.env}." >&2
+    exit 1
+  fi
+}
+
+usage() {
+  cat <<EOF
+Usage: $0 <command> [args]
+
+Commands:
+  spawn <name> [template]      Create (if missing) and start VM (primary)
+  create <name> [template]     Just create VM disk and define libvirt domain
+  start <name>                 Start an existing VM
+  stop <name>                  Shutdown a running VM
+  delete <name>                Remove VM and delete its disk volume
+  ls [regex]                   List VMs (matches all by default)
+  info <name>                  Print VM IP and SSH connection string
+  prune                        Delete orphan volumes in pool vms
+  template <src> <tpl>         Create a compressed backup from a source VM
+  selftest [--real|--mock]     Run automated tests
+
+Options (env):
+  VMOPS_CONFIG=...             Path to config.env
+  POOL_PATH=...                Base libvirt pool path
+  VMS_POOL=vms                 Pool name for VM disks
+  WAIT_TIMEOUT=60              Seconds to wait for IP on start
+  BACKUP_DIR=...               Directory of compressed templates
+  VM_MEM_MB=2048               Memory size for new VMs
+  VM_VCPUS=2                   VCPU count for new VMs
+  VM_OS_VARIANT=debian12       libosinfo OS variant for virt-install
+  NETWORK_HOSTONLY=hostonly56  Libvirt host-only network name
+  NETWORK_NAT=default          Libvirt NAT network name
+  SSH_USER=vmuser              SSH username for helpers
+  VMOPS_SKIP_PREFLIGHT=1       Skip preflight checks
+  SELFTEST_PREFIX=vm-selftest  Prefix for real selftest VM/template names
+  GRAPHICS=spice               VM graphics: spice|vnc|none
+
+Examples:
+  $0 spawn vm-test-1
+  $0 ls
+  $0 info vm-test-1
+  $0 stop vm-test-1
+  $0 delete vm-test-1
+  $0 template debian-base my-template
+  $0 selftest --mock
+EOF
+}
+
+require_cmds() {
+  for cmd in "$@"; do
+    command -v "$cmd" >/dev/null 2>&1 || {
+      echo "Missing required command: $cmd" >&2
+      exit 1
+    }
+  done
+}
+
+extract_ip() {
+  grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | grep -vE '^127\.' | head -n 1 || true
+}
+
+get_ip() {
+  local vm="$1"
+  local ip=""
+  ip=$(virsh domifaddr "$vm" --source agent 2>/dev/null | extract_ip)
+  [[ -z "$ip" ]] && ip=$(virsh domifaddr "$vm" --source lease 2>/dev/null | extract_ip)
+  [[ -z "$ip" ]] && ip=$(virsh domifaddr "$vm" --source arp 2>/dev/null | extract_ip)
+  if [[ -z "$ip" ]]; then
+    mapfile -t macs < <(virsh domiflist "$vm" | awk 'NR>2 && $0 ~ /[0-9a-fA-F]{2}:/ {print $5}')
+    for mac in "${macs[@]:-}"; do
+      ip=$(ip neigh show | awk -v mac="$mac" '$0 ~ mac {print $1; exit}')
+      [[ -n "$ip" ]] && break
+    done
+  fi
+  echo "$ip"
+}
+
+wait_ip() {
+  local vm="$1"
+  local start_ts end_ts ip=""
+  start_ts=$(date +%s)
+  while true; do
+    ip=$(get_ip "$vm")
+    if [[ -n "$ip" ]]; then
+      echo "$ip"
+      return 0
+    fi
+    end_ts=$(date +%s)
+    if (( end_ts - start_ts >= WAIT_TIMEOUT )); then
+      return 1
+    fi
+    sleep 2
+  done
+}
+
+wait_shutoff() {
+  local vm="$1"
+  local start_ts end_ts
+  start_ts=$(date +%s)
+  while true; do
+    if virsh domstate "$vm" | grep -q "shut off"; then
+      return 0
+    fi
+    end_ts=$(date +%s)
+    if (( end_ts - start_ts >= WAIT_TIMEOUT )); then
+      return 1
+    fi
+    sleep 2
+  done
+}
+
+vm_hostname() {
+  local vm="$1"
+  local hn
+  hn=$(virsh domhostname "$vm" 2>/dev/null || true)
+  [[ -z "$hn" ]] && hn="(unknown)"
+  echo "$hn"
+}
+
+cmd_create() {
+  local name="$1"
+  local template="${2:-$TEMPLATE_DEFAULT}"
+  local backup="$BACKUP_DIR/${template}.compact.qcow2"
+  local disk_path="$POOL_PATH/vms/${name}.qcow2"
+
+  if virsh dominfo "$name" >/dev/null 2>&1; then
+    echo "Domain already exists: $name" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "$backup" ]]; then
+    echo "Compressed template not found: $backup" >&2
+    exit 1
+  fi
+
+  if [[ -e "$disk_path" ]]; then
+    echo "Disk already exists: $disk_path" >&2
+    exit 1
+  fi
+
+  mkdir -p "$POOL_PATH/vms"
+  qemu-img convert -O qcow2 "$backup" "$disk_path"
+
+  if [[ "$GRAPHICS" == "none" ]]; then
+    gfx_args=(--graphics none --noautoconsole)
+  elif [[ "$GRAPHICS" == "vnc" ]]; then
+    gfx_args=(--graphics vnc --noautoconsole)
+  else
+    gfx_args=(--graphics spice --noautoconsole)
+  fi
+
+  virt-install \
+    --name "$name" \
+    --memory "$VM_MEM_MB" \
+    --vcpus "$VM_VCPUS" \
+    --disk "path=$disk_path,format=qcow2,bus=virtio" \
+    --network "network=$NETWORK_HOSTONLY,model=virtio" \
+    --network "network=$NETWORK_NAT,model=virtio" \
+    --os-variant "$VM_OS_VARIANT" \
+    --import \
+    "${gfx_args[@]}"
+}
+
+cmd_start() {
+  local name="$1"
+  local template="${2:-$TEMPLATE_DEFAULT}"
+  if ! virsh dominfo "$name" >/dev/null 2>&1; then
+    cmd_create "$name" "$template"
+  fi
+  if virsh domstate "$name" | grep -q "running"; then
+    :
+  else
+    virsh start "$name" >/dev/null
+  fi
+  if ip=$(wait_ip "$name"); then
+    local hn
+    hn=$(vm_hostname "$name")
+    echo "VM: $name"
+    echo "Hostname: $hn"
+    echo "IP: $ip"
+    echo "SSH: ssh $SSH_USER@$ip"
+  else
+    echo "VM started, but IP not found within ${WAIT_TIMEOUT}s." >&2
+    return 1
+  fi
+}
+
+cmd_stop() {
+  local name="$1"
+  if ! virsh dominfo "$name" >/dev/null 2>&1; then
+    echo "Domain not found (nothing to do): $name"
+    exit 0
+  fi
+  if virsh domstate "$name" | grep -q "running"; then
+    virsh shutdown "$name"
+  else
+    echo "VM already stopped: $name"
+  fi
+}
+
+cmd_destroy() {
+  local name="$1"
+  if ! virsh dominfo "$name" >/dev/null 2>&1; then
+    echo "Domain not found (nothing to do): $name"
+    exit 0
+  fi
+
+  if virsh domstate "$name" | grep -q "running"; then
+    virsh destroy "$name"
+  fi
+
+  DISK_PATH=$(virsh domblklist --details "$name" | awk '$2 == "disk" && $3 == "vda" {print $4; exit}')
+  virsh undefine "$name" --nvram || virsh undefine "$name"
+
+  if [[ -n "$DISK_PATH" ]]; then
+    VOL_NAME=$(basename "$DISK_PATH")
+    if virsh vol-info --pool "$VMS_POOL" "$VOL_NAME" >/dev/null 2>&1; then
+      virsh vol-delete --pool "$VMS_POOL" "$VOL_NAME"
+    else
+      echo "Volume not found in pool '$VMS_POOL': $VOL_NAME"
+    fi
+  fi
+
+  echo "VM destroyed: $name"
+}
+
+cmd_info() {
+  local name="$1"
+  if ! virsh dominfo "$name" >/dev/null 2>&1; then
+    echo "Domain not found: $name" >&2
+    exit 1
+  fi
+  local hn ip
+  hn=$(vm_hostname "$name")
+  ip=$(get_ip "$name")
+  if [[ -z "$ip" ]]; then
+    ip="(no-ip)"
+  fi
+  echo "VM: $name"
+  echo "Hostname: $hn"
+  echo "IP: $ip"
+  if [[ "$ip" != "(no-ip)" ]]; then
+    echo "SSH: ssh $SSH_USER@$ip"
+  else
+    echo "SSH: ssh $SSH_USER@<ip>"
+  fi
+}
+
+cmd_ls() {
+  local regex="${1:-.}"
+  local name_regex="$regex"
+  mapfile -t vms < <(virsh list --all --name | awk 'NF' | grep -E "$name_regex" || true)
+  if [[ ${#vms[@]} -eq 0 ]]; then
+    echo "No test VMs found (NAME_REGEX=$name_regex)."
+    return 0
+  fi
+  printf "%-24s %-20s %-18s %s\n" "VM_NAME" "GUEST_HOSTNAME" "IP" "SSH"
+  printf "%-24s %-20s %-18s %s\n" "-------" "--------------" "--" "---"
+  for vm in "${vms[@]}"; do
+    local hn ip
+    hn=$(vm_hostname "$vm")
+    ip=$(get_ip "$vm")
+    if [[ -z "$ip" ]]; then
+      ip="(no-ip)"
+      printf "%-24s %-20s %-18s %s\n" "$vm" "$hn" "$ip" "ssh $SSH_USER@<ip>"
+    else
+      printf "%-24s %-20s %-18s %s\n" "$vm" "$hn" "$ip" "ssh $SSH_USER@$ip"
+    fi
+  done
+}
+
+cmd_prune() {
+  local vols
+  mapfile -t vols < <(virsh vol-list "$VMS_POOL" | awk 'NR>2 && NF {print $1}')
+  if [[ ${#vols[@]} -eq 0 ]]; then
+    echo "No volumes in pool: $VMS_POOL"
+    return 0
+  fi
+  mapfile -t domains < <(virsh list --all --name | awk 'NF')
+  for vol in "${vols[@]}"; do
+    local path in_use=0
+    path=$(virsh vol-path --pool "$VMS_POOL" "$vol" 2>/dev/null || true)
+    if [[ -z "$path" ]]; then
+      continue
+    fi
+    for dom in "${domains[@]}"; do
+      if virsh domblklist --details "$dom" 2>/dev/null | awk '{print $4}' | grep -qx "$path"; then
+        in_use=1
+        break
+      fi
+    done
+    if [[ "$in_use" -eq 0 ]]; then
+      virsh vol-delete --pool "$VMS_POOL" "$vol"
+      echo "Deleted: $vol"
+    else
+      echo "In use: $vol"
+    fi
+  done
+}
+
+cmd_template() {
+  local src="$1"
+  local tpl="$2"
+  local disk_path
+  local tmpdir tmpdisk
+  local template_name="$tpl"
+  local compressed_path="$BACKUP_DIR/${template_name}.compact.qcow2"
+
+  if ! virsh dominfo "$src" >/dev/null 2>&1; then
+    echo "Source VM not found: $src" >&2
+    exit 1
+  fi
+
+  if virsh domstate "$src" | grep -q "running"; then
+    echo "Source VM is running; shut it down before creating template: $src" >&2
+    exit 1
+  fi
+
+  disk_path=$(virsh domblklist --details "$src" | awk '$2 == "disk" && $3 == "vda" {print $4; exit}')
+  if [[ -z "$disk_path" || ! -f "$disk_path" ]]; then
+    echo "Source disk not found for VM: $src" >&2
+    exit 1
+  fi
+
+  mkdir -p "$BACKUP_DIR"
+
+  if [[ -e "$compressed_path" ]]; then
+    echo "Compressed template already exists: $compressed_path"
+    exit 0
+  fi
+
+  tmpdir=$(mktemp -d)
+  tmpdisk="$tmpdir/source.qcow2"
+  vol_name=$(basename "$disk_path")
+  if virsh vol-info --pool "$VMS_POOL" "$vol_name" >/dev/null 2>&1; then
+    virsh vol-download --pool "$VMS_POOL" "$vol_name" "$tmpdisk"
+  else
+    cp "$disk_path" "$tmpdisk"
+  fi
+
+  qemu-img convert -O qcow2 -c "$tmpdisk" "$compressed_path"
+  rm -rf "$tmpdir"
+
+  echo "Compressed template created: $compressed_path"
+}
+
+cmd_selftest_mock() {
+  local verbose=0
+  if [[ "${1:-}" == "--verbose" ]]; then
+    verbose=1
+  fi
+  local tmpdir mockbin state poolroot cfg
+  tmpdir=$(mktemp -d)
+  mockbin="$tmpdir/mockbin"
+  state="$tmpdir/state"
+  poolroot="$tmpdir/pool"
+  cfg="$tmpdir/config.env"
+
+  mkdir -p "$mockbin" "$state/domains" "$state/pools" "$poolroot/vms" "$poolroot/backups"
+
+  cat > "$cfg" <<EOF
+POOL_PATH=$poolroot
+BACKUP_DIR=$poolroot/backups
+VMS_POOL=vms
+TEMPLATE_DEFAULT=template-headless
+VM_MEM_MB=512
+VM_VCPUS=1
+VM_OS_VARIANT=debian12
+NETWORK_HOSTONLY=hostonly56
+NETWORK_NAT=default
+SSH_USER=vmuser
+WAIT_TIMEOUT=5
+EOF
+
+  cat > "$mockbin/virsh" <<'EOF'
+#!/usr/bin/env bash
+state="${VMOPS_MOCK_STATE:?}"
+cmd="$1"; shift || true
+case "$cmd" in
+  list)
+    if [[ "$1" == "--all" && "$2" == "--name" ]]; then
+      ls "$state/domains" 2>/dev/null | awk 'NF'
+    fi
+    ;;
+  dominfo)
+    [[ -f "$state/domains/$1" ]] && exit 0 || exit 1
+    ;;
+  domstate)
+    source "$state/domains/$1"
+    if [[ "$STATE" == "shut_off" ]]; then
+      echo "shut off"
+    else
+      echo "$STATE"
+    fi
+    ;;
+  start)
+    source "$state/domains/$1"; STATE="running"
+    if [[ "$(uname)" == "Darwin" ]]; then
+      sed -i '' "s/^STATE=.*/STATE=$STATE/" "$state/domains/$1"
+    else
+      sed -i "s/^STATE=.*/STATE=$STATE/" "$state/domains/$1"
+    fi
+    ;;
+  shutdown|destroy)
+    source "$state/domains/$1"; STATE="shut_off"
+    if [[ "$(uname)" == "Darwin" ]]; then
+      sed -i '' "s/^STATE=.*/STATE=$STATE/" "$state/domains/$1"
+    else
+      sed -i "s/^STATE=.*/STATE=$STATE/" "$state/domains/$1"
+    fi
+    ;;
+  undefine)
+    rm -f "$state/domains/$1"
+    ;;
+  domblklist)
+    if [[ "$1" == "--details" ]]; then
+      source "$state/domains/$2"
+      echo "Type Device Target Source"
+      echo "file disk vda $DISK"
+      exit 0
+    fi
+    ;;
+  domiflist)
+    source "$state/domains/$1"
+    echo " Interface   Type      Source       Model    MAC"
+    echo " vnet0       network   hostonly56   virtio   $MAC"
+    ;;
+  domifaddr)
+    source "$state/domains/$1"
+    echo " Name       MAC address          Protocol     Address"
+    echo "-------------------------------------------------------------------------------"
+    [[ -n "$IP" ]] && echo " vnet0      $MAC    ipv4         $IP/24" || true
+    ;;
+  domhostname)
+    source "$state/domains/$1"; [[ -n "$HOSTNAME" ]] && echo "$HOSTNAME" || true
+    ;;
+  pool-info)
+    [[ -d "$state/pools/$1" ]] && exit 0 || exit 1
+    ;;
+  net-info)
+    [[ "$1" == "hostonly56" || "$1" == "default" ]] && exit 0 || exit 1
+    ;;
+  vol-info)
+    pool="$2"; vol="$3"; [[ -f "$state/pools/$pool/$vol" ]] && exit 0 || exit 1
+    ;;
+  vol-list)
+    pool="$1"
+    echo " Name                         Path"
+    echo "----------------------------------------------------------------------------------------"
+    if [[ -d "$state/pools/$pool" ]]; then
+      for v in "$state/pools/$pool"/*; do
+        [[ -f "$v" ]] || continue
+        name=$(basename "$v")
+        path=$(cat "$v")
+        echo " $name   $path"
+      done
+    fi
+    ;;
+  vol-path)
+    pool="$2"; vol="$3"; cat "$state/pools/$pool/$vol"
+    ;;
+  vol-delete)
+    pool="$2"; vol="$3"
+    path=$(cat "$state/pools/$pool/$vol")
+    rm -f "$state/pools/$pool/$vol" "$path"
+    ;;
+  vol-create-as)
+    pool="$2"; name="$4"; capacity="$6"
+    mkdir -p "$state/pools/$pool"
+    path="${VMOPS_MOCK_POOL}/${pool}/${name}"
+    mkdir -p "$(dirname "$path")"
+    truncate -s "$capacity" "$path"
+    echo "$path" > "$state/pools/$pool/$name"
+    ;;
+  vol-upload)
+    pool="$2"; vol="$3"; file="$4"
+    path=$(cat "$state/pools/$pool/$vol")
+    cp "$file" "$path"
+    ;;
+  vol-download)
+    pool="$2"; vol="$3"; file="$4"
+    path=$(cat "$state/pools/$pool/$vol")
+    cp "$path" "$file"
+    ;;
+  *)
+    echo "Unsupported virsh cmd: $cmd" >&2; exit 1
+    ;;
+esac
+EOF
+  chmod +x "$mockbin/virsh"
+
+  cat > "$mockbin/virt-install" <<'EOF'
+#!/usr/bin/env bash
+state="${VMOPS_MOCK_STATE:?}"
+name=""; disk=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --name) name="$2"; shift 2;;
+    --disk) disk="$2"; shift 2;;
+    *) shift;;
+  esac
+done
+path=$(echo "$disk" | awk -F'path=' '{print $2}' | awk -F',' '{print $1}')
+mac="52:54:00:$(printf '%02x' $((RANDOM%256))):$(printf '%02x' $((RANDOM%256))):$(printf '%02x' $((RANDOM%256)))"
+idx=$(ls "$state/domains" 2>/dev/null | wc -l)
+ip="192.168.56.$((100+idx))"
+cat > "$state/domains/$name" <<CONF
+STATE=running
+DISK=$path
+HOSTNAME=$name
+IP=$ip
+MAC=$mac
+CONF
+pool="vms"
+mkdir -p "$state/pools/$pool"
+mkdir -p "${VMOPS_MOCK_POOL}/vms"
+truncate -s 1048576 "$path"
+echo "$path" > "$state/pools/$pool/$(basename "$path")"
+EOF
+  chmod +x "$mockbin/virt-install"
+
+  cat > "$mockbin/qemu-img" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+cmd="$1"; shift
+if [[ "$cmd" == "convert" ]]; then
+  out="${@: -1}"
+  in="${@: -2:1}"
+  if [[ -f "$in" ]]; then
+    cp "$in" "$out"
+  else
+    truncate -s 1048576 "$out"
+  fi
+  exit 0
+fi
+exit 0
+EOF
+  chmod +x "$mockbin/qemu-img"
+
+  cat > "$mockbin/ip" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$mockbin/ip"
+
+  mkdir -p "$state/pools/vms" "$state/pools/backups"
+  truncate -s 1048576 "$poolroot/backups/template-headless.compact.qcow2"
+  echo "$poolroot/backups/template-headless.compact.qcow2" > "$state/pools/backups/template-headless.compact.qcow2"
+
+  export PATH="$mockbin:$PATH"
+  export VMOPS_MOCK_STATE="$state"
+  export VMOPS_MOCK_POOL="$poolroot"
+
+  VMOPS_CONFIG="$cfg" VMOPS_SKIP_PREFLIGHT=1 "$SCRIPT_DIR/nido" -h >/tmp/vmops_test_help.txt
+  VMOPS_CONFIG="$cfg" VMOPS_SKIP_PREFLIGHT=1 "$SCRIPT_DIR/nido" ls >/tmp/vmops_test_list_empty.txt
+  VMOPS_CONFIG="$cfg" VMOPS_SKIP_PREFLIGHT=1 "$SCRIPT_DIR/nido" create vm-test-1
+  VMOPS_CONFIG="$cfg" VMOPS_SKIP_PREFLIGHT=1 "$SCRIPT_DIR/nido" info vm-test-1 >/tmp/vmops_test_info.txt
+  VMOPS_CONFIG="$cfg" VMOPS_SKIP_PREFLIGHT=1 "$SCRIPT_DIR/nido" stop vm-test-1
+  VMOPS_CONFIG="$cfg" VMOPS_SKIP_PREFLIGHT=1 "$SCRIPT_DIR/nido" start vm-test-1 >/tmp/vmops_test_start.txt
+  VMOPS_CONFIG="$cfg" VMOPS_SKIP_PREFLIGHT=1 "$SCRIPT_DIR/nido" ls >/tmp/vmops_test_list.txt
+  VMOPS_CONFIG="$cfg" VMOPS_SKIP_PREFLIGHT=1 "$SCRIPT_DIR/nido" delete vm-test-1
+  VMOPS_CONFIG="$cfg" VMOPS_SKIP_PREFLIGHT=1 "$SCRIPT_DIR/nido" prune >/tmp/vmops_test_cleanup.txt
+
+  cat > "$state/domains/base-vm" <<CONF
+STATE=shut_off
+DISK=$poolroot/vms/base-vm.qcow2
+HOSTNAME=base-vm
+IP=192.168.56.50
+MAC=52:54:00:aa:bb:cc
+CONF
+  truncate -s 1048576 "$poolroot/vms/base-vm.qcow2"
+  echo "$poolroot/vms/base-vm.qcow2" > "$state/pools/vms/base-vm.qcow2"
+  VMOPS_CONFIG="$cfg" VMOPS_SKIP_PREFLIGHT=1 "$SCRIPT_DIR/nido" template base-vm template-headless-2 >/tmp/vmops_test_template.txt
+
+  mkdir -p "$ROOT_DIR/docs"
+  cat > "$ROOT_DIR/docs/test_log.md" <<EOF
+# VM Ops Test Log
+
+Environment:
+- Mocked libvirt/qemu tools
+- Config: $cfg
+
+Commands executed:
+- nido -h
+- nido ls (empty)
+- nido create vm-test-1
+- nido info vm-test-1
+- nido stop vm-test-1
+- nido start vm-test-1
+- nido ls
+- nido delete vm-test-1
+- nido prune
+- nido template base-vm template-headless-2
+
+Outputs (captured):
+- help: /tmp/vmops_test_help.txt
+- info: /tmp/vmops_test_info.txt
+- start: /tmp/vmops_test_start.txt
+- list: /tmp/vmops_test_list.txt
+- cleanup: /tmp/vmops_test_cleanup.txt
+- template: /tmp/vmops_test_template.txt
+EOF
+
+  if [[ "$verbose" -eq 1 ]]; then
+    {
+      echo
+      echo "## Captured Output"
+      echo
+      echo "### help"
+      cat /tmp/vmops_test_help.txt || true
+      echo
+      echo "### info"
+      cat /tmp/vmops_test_info.txt || true
+      echo
+      echo "### start"
+      cat /tmp/vmops_test_start.txt || true
+      echo
+      echo "### list"
+      cat /tmp/vmops_test_list.txt || true
+      echo
+      echo "### cleanup"
+      cat /tmp/vmops_test_cleanup.txt || true
+      echo
+      echo "### template"
+      cat /tmp/vmops_test_template.txt || true
+    } >> "$ROOT_DIR/docs/test_log.md"
+  fi
+
+  rm -rf "$tmpdir"
+  echo "Selftest complete. Log: $ROOT_DIR/docs/test_log.md"
+}
+
+cmd_selftest_real() {
+  local prefix="${SELFTEST_PREFIX:-vm-selftest}"
+  local vm_main="${prefix}-1"
+  local vm_base="${prefix}-base"
+  local tpl_name="${prefix}-template"
+  local tmpdir old_backup_dir old_pool_path old_vms_pool tpl_backup pool_name
+  local log="$ROOT_DIR/docs/test_log_real.md"
+
+  tmpdir=$(mktemp -d)
+  pool_name="vmops-selftest-$$"
+  old_pool_path="$POOL_PATH"
+  old_vms_pool="$VMS_POOL"
+  old_backup_dir="$BACKUP_DIR"
+  POOL_PATH="$tmpdir/pool"
+  VMS_POOL="$pool_name"
+  BACKUP_DIR="$tmpdir/backups"
+  mkdir -p "$POOL_PATH/vms" "$BACKUP_DIR"
+  chmod 777 "$tmpdir" "$POOL_PATH" "$POOL_PATH/vms"
+
+  virsh pool-define-as "$pool_name" dir - - - - "$POOL_PATH/vms" >/dev/null 2>&1 || {
+    echo "Failed to define temp pool: $pool_name" >&2
+    POOL_PATH="$old_pool_path"
+    VMS_POOL="$old_vms_pool"
+    BACKUP_DIR="$old_backup_dir"
+    rm -rf "$tmpdir"
+    exit 1
+  }
+  virsh pool-build "$pool_name" >/dev/null 2>&1 || true
+  virsh pool-start "$pool_name" >/dev/null 2>&1 || true
+
+  preflight
+
+  tpl_backup="$BACKUP_DIR/${tpl_name}.compact.qcow2"
+
+  if virsh dominfo "$vm_main" >/dev/null 2>&1 || virsh dominfo "$vm_base" >/dev/null 2>&1; then
+    echo "Selftest VM names already exist. Remove or change SELFTEST_PREFIX." >&2
+    exit 1
+  fi
+
+  if [[ ! -f "$BACKUP_DIR/${TEMPLATE_DEFAULT}.compact.qcow2" ]]; then
+    if virsh vol-info --pool backups "${TEMPLATE_DEFAULT}.compact.qcow2" >/dev/null 2>&1; then
+      virsh vol-download --pool backups "${TEMPLATE_DEFAULT}.compact.qcow2" \
+        "$BACKUP_DIR/${TEMPLATE_DEFAULT}.compact.qcow2"
+    else
+      echo "Missing template backup in pool 'backups' and temp dir." >&2
+      BACKUP_DIR="$old_backup_dir"
+      rm -rf "$tmpdir"
+      exit 1
+    fi
+  fi
+
+  {
+    echo "# VM Ops Real Selftest Log"
+    echo
+    echo "Config:"
+    echo "- POOL_PATH=$POOL_PATH"
+    echo "- BACKUP_DIR=$BACKUP_DIR"
+    echo "- VMS_POOL=$VMS_POOL"
+    echo "- TEMPLATE_DEFAULT=$TEMPLATE_DEFAULT"
+    echo "- NETWORK_HOSTONLY=$NETWORK_HOSTONLY"
+    echo "- NETWORK_NAT=$NETWORK_NAT"
+    echo "- SELFTEST_PREFIX=$prefix"
+    echo
+    echo "Commands executed:"
+  } > "$log"
+
+  echo "- create $vm_main" >> "$log"
+  cmd_create "$vm_main" "$TEMPLATE_DEFAULT"
+
+  echo "- info $vm_main" >> "$log"
+  cmd_info "$vm_main" >> "$log"
+
+  echo "- stop $vm_main" >> "$log"
+  cmd_stop "$vm_main" >> "$log"
+
+  echo "- start $vm_main" >> "$log"
+  if ! WAIT_TIMEOUT=15 cmd_start "$vm_main" "$TEMPLATE_DEFAULT" >> "$log" 2>&1; then
+    echo "WARN: start did not resolve IP within timeout; VM may still be running." >> "$log"
+  fi
+
+  echo "- list-test" >> "$log"
+  cmd_list_test >> "$log"
+
+  echo "- destroy $vm_main" >> "$log"
+  cmd_destroy "$vm_main" >> "$log"
+
+  echo "- cleanup-orphans" >> "$log"
+  cmd_cleanup_orphans >> "$log"
+
+  echo "- create $vm_base" >> "$log"
+  cmd_create "$vm_base" "$TEMPLATE_DEFAULT"
+  cmd_stop "$vm_base" >> "$log"
+  if ! WAIT_TIMEOUT=15 wait_shutoff "$vm_base"; then
+    echo "WARN: base VM did not shut off; forcing destroy." >> "$log"
+    virsh destroy "$vm_base" >/dev/null 2>&1 || true
+  fi
+
+  echo "- create-template $vm_base $tpl_name" >> "$log"
+  cmd_create_template "$vm_base" "$tpl_name" >> "$log"
+
+  echo "- destroy $vm_base" >> "$log"
+  cmd_destroy "$vm_base" >> "$log"
+
+  if [[ -f "$tpl_backup" ]]; then
+    echo "- delete temp backup $tpl_backup" >> "$log"
+    rm -f "$tpl_backup"
+  fi
+
+  virsh pool-destroy "$pool_name" >/dev/null 2>&1 || true
+  virsh pool-undefine "$pool_name" >/dev/null 2>&1 || true
+  POOL_PATH="$old_pool_path"
+  VMS_POOL="$old_vms_pool"
+  BACKUP_DIR="$old_backup_dir"
+  rm -rf "$tmpdir"
+  echo "Selftest-real complete. Log: $log"
+}
+
+cmd_selftest() {
+  local mode="real"
+  local verbose=0
+  for arg in "$@"; do
+    case "$arg" in
+      --mock) mode="mock";;
+      --real) mode="real";;
+      --verbose) verbose=1;;
+    esac
+  done
+
+  if [[ "$mode" == "mock" ]]; then
+    if [[ "$verbose" -eq 1 ]]; then
+      cmd_selftest_mock --verbose
+    else
+      cmd_selftest_mock
+    fi
+  else
+    cmd_selftest_real
+  fi
+}
+
+main() {
+  require_cmds virsh awk grep ip qemu-img virt-install
+  preflight
+  local cmd="${1:-}"
+  shift || true
+  case "$cmd" in
+    spawn)    cmd_start "${@:?}";;
+    create)   cmd_create "${@:?}";;
+    start)    cmd_start "${@:?}";;
+    stop)     cmd_stop "${@:?}";;
+    delete)   cmd_destroy "${@:?}";;
+    destroy)  cmd_destroy "${@:?}";;
+    ls)       cmd_ls "$@";;
+    list)     cmd_ls "$@";;
+    info)     cmd_info "${@:?}";;
+    prune)    cmd_prune;;
+    template) cmd_template "${@:?}";;
+    selftest) cmd_selftest "$@";;
+    -h|--help|"") usage; exit 0;;
+    *) echo "Unknown command: $cmd" >&2; usage; exit 1;;
+  esac
+}
+
+main "$@"
