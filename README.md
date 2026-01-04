@@ -107,45 +107,55 @@ It combines a simple CLI for human operators with a powerful **Model Context Pro
 
 ## Quick Start
 
-### 1. Installation (The easy way 🐣)
+### 1. Installation (Recommended)
 
-Run the one-line installer on Linux or macOS:
+#### a) Installer script (Linux/macOS)
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/your-org/nido/main/get-nido.sh | bash
-```
-
-### 2. Manual Installation
-
-If you prefer to install manually:
+Scarica l'installer dalla cartella `bin/installers` del repository oppure usa il comando:
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/your-org/nido.git
 cd nido
-
-# 2. Install prerequisites (one-time)
-# Supports: Debian, Ubuntu, Fedora, and macOS (via Homebrew)
-./bin/setup_deps.sh
-
-# 3. Configure
-cp config/config.example.env config/config.env
-# Edit config/config.env with your local paths
+# Esegui l'installer locale:
+./bin/installers/get-nido.sh
 ```
 
-### 3. Usage
+> **Nota:** Gli installer ufficiali sono sempre disponibili nella cartella `bin/installers` del repository. Puoi copiarli e distribuirli su altri sistemi.
+
+#### b) Installazione manuale
+
+Se preferisci installare manualmente:
 
 ```bash
-#3) Create a compressed template from a base VM (VM must be shut off):
-   - `./bin/nido template debian-iso-1 template-headless`
-4) Create a VM:
-   - `./bin/nido create vm-test-1`
-5) Start and wait for IP:
-   - `./bin/nido start vm-test-1`
-6) OR spawn (create + start) in one go:
-   - `./bin/nido spawn vm-test-1`
-# -> SSH command will be printed, ready to copy-paste
+git clone https://github.com/your-org/nido.git
+cd nido
+# Installa le dipendenze (Debian/Ubuntu/Fedora/macOS):
+./bin/setup_deps.sh
+# Configura l'ambiente:
+cp config/config.example.env config/config.env
+# Modifica config/config.env con i tuoi percorsi locali
 ```
+
+
+### 2. Usage
+
+
+```bash
+# 1) Crea un template compresso da una VM base (la VM deve essere spenta):
+  ./bin/nido template debian-iso-1 template-headless
+# 2) Crea una nuova VM:
+  ./bin/nido create vm-test-1
+# 3) Avvia la VM e attendi l'IP:
+  ./bin/nido start vm-test-1
+# 4) Oppure "spawn" (crea + avvia in un colpo solo):
+  ./bin/nido spawn vm-test-1
+# -> Il comando SSH verrà stampato, pronto da copiare
+```
+## Installer distribution
+
+Gli installer ufficiali (es. `get-nido.sh`) sono mantenuti nella cartella [`bin/installers`](bin/installers/). Per distribuire nido su altri sistemi, copia semplicemente lo script desiderato da questa cartella e segui le istruzioni di installazione.
+
+Se aggiorni l'installer, ricordati di committare la nuova versione in git e aggiornare eventuali riferimenti nei README.
 
 
 ## Commands
