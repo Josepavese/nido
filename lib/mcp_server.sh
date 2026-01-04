@@ -186,6 +186,116 @@ handle_tool_call() {
              fi
              ;;
 
+
+
+        nido_describe)
+             local desc="Nido System Overview (Agent Manual)
+---------------------------------------
+Architecture: Libvirt/KVM (QEMU) Wrapper not a classic Container Desktop.
+Persistency: Disk-based (qcow2). VMs persist until 'vm_delete' is called.
+Networking: 
+  - NAT ($NETWORK_NAT): Outbound access.
+  - HostOnly ($NETWORK_HOSTONLY): Private communication.
+Templates:
+  - Stored in: $BACKUP_DIR
+  - Required format: *.compact.qcow2
+  - Default: $TEMPLATE_DEFAULT
+
+Workflow Tips:
+1. Always check 'vm_list' first to avoid name collisions.
+2. If 'vm_create' fails, check if the template exists via 'vm_info' or system tools.
+3. 'vm_exec' is currently NOT supported (SSH access required via 'ssh $SSH_USER@<ip>').
+4. Use 'config_get' to check resource limits (RAM/CPU) before spawning heavy fleets.
+
+Identity:
+I am Nido, the Archmagus of VMs. I prefer efficiency, clean logs, and functioning hypervisors."
+             
+             local content
+             content=$(jq -n --arg desc "$desc" '{content: [{type: "text", text: $desc}] }')
+             send_response "$id" "$content"
+             ;;
+
+        config_get)
+             # Return current env vars that match interesting keys
+             local cfg
+             cfg=$(jq -n \
+                 --arg pool_path "$POOL_PATH" \
+                 --arg backup_dir "$BACKUP_DIR" \
+                 --arg vms_pool "$VMS_POOL" \
+                 --arg net_nat "$NETWORK_NAT" \
+                 --arg net_host "$NETWORK_HOSTONLY" \
+                 --arg ssh_user "$SSH_USER" \
+                 --arg mem "$VM_MEM_MB" \
+                 --arg vcpus "$VM_VCPUS" \
+                 --arg os_variant "$VM_OS_VARIANT" \
+                 --arg template_default "$TEMPLATE_DEFAULT" \
+                 --arg graphics "$GRAPHICS" \
+                 --arg nested "$VM_NESTED" \
+                 --arg timeout "$WAIT_TIMEOUT" \
+                 '{
+                     POOL_PATH: $pool_path,
+                     BACKUP_DIR: $backup_dir,
+                     VMS_POOL: $vms_pool,
+                     NETWORK_NAT: $net_nat,
+                     NETWORK_HOSTONLY: $net_host,
+                     SSH_USER: $ssh_user,
+                     VM_MEM_MB: $mem,
+                     VM_VCPUS: $vcpus,
+                     VM_OS_VARIANT: $os_variant,
+                     TEMPLATE_DEFAULT: $template_default,
+                     GRAPHICS: $graphics,
+                     VM_NESTED: $nested,
+                     WAIT_TIMEOUT: $timeout
+                 }')
+             
+             local content
+             content=$(jq -n --argjson cfg "$cfg" '{content: [{type: "text", text: ($cfg | tostring)}] }')
+             send_response "$id" "$content"
+             ;;
+
+        config_set)
+             local key val
+             key=$(echo "$args" | jq -r '.key // empty')
+             val=$(echo "$args" | jq -r '.value // empty')
+             
+             if [[ -z "$key" ]]; then
+                 send_error "$id" -32602 "Missing parameter 'key'"
+                 return
+             fi
+             
+             # Basic validation for key (must be uppercase/underscore)
+             if [[ ! "$key" =~ ^[A-Z_]+$ ]]; then
+                 send_error "$id" -32602 "Invalid key format"
+                 return
+             fi
+             
+             # Locate config file
+             local config_file="${VMOPS_CONFIG:-$HOME/.nido/config/config.env}"
+             
+             # Ensure file exists
+             if [[ ! -f "$config_file" ]]; then
+                 send_error "$id" -32000 "Config file not found at $config_file"
+                 return
+             fi
+             
+             # Update using sed in place
+             # We escape delimiters in value just in case
+             if grep -q "^$key=" "$config_file"; then
+                 # Update existing
+                 sed -i "s|^$key=.*|$key=\"$val\"|" "$config_file"
+             else
+                 # Append new
+                 echo "$key=\"$val\"" >> "$config_file"
+             fi
+             
+             # Reload config in current content to verify? 
+             # No, this script is sourced once. Changes obey next sourcing (or restart).
+             
+             local content
+             content=$(jq -n --arg msg "Configuration updated: $key=$val" '{content: [{type: "text", text: $msg}] }')
+             send_response "$id" "$content"
+             ;;
+
         *)
             send_error "$id" -32601 "Tool not found: $tool_name"
             ;;
@@ -268,6 +378,32 @@ EOF
            "properties": { "name": { "type": "string", "description": "The exact name of the VM" } },
            "required": ["name"]
          }
+      },
+      {
+         "name": "config_get",
+         "description": "Read the current Nido configuration.",
+         "inputSchema": { "type": "object", "properties": {} }
+      },
+      {
+         "name": "config_set",
+         "description": "Update a configuration variable in config.env.",
+         "inputSchema": {
+            "type": "object",
+            "properties": {
+               "key": { 
+                   "type": "string", 
+                   "description": "Configuration key (e.g. POOL_PATH)",
+                   "enum": ["POOL_PATH", "BACKUP_DIR", "VMS_POOL", "NETWORK_NAT", "NETWORK_HOSTONLY", "SSH_USER", "VM_MEM_MB", "VM_VCPUS", "VM_OS_VARIANT", "TEMPLATE_DEFAULT", "GRAPHICS", "VM_NESTED", "WAIT_TIMEOUT"]
+               },
+               "value": { "type": "string", "description": "New value for the key" }
+            },
+            "required": ["key", "value"]
+         }
+      },
+      {
+         "name": "nido_describe",
+         "description": "Get a high-level overview of the Nido system, its architecture, and valid workflows. Use this to understand capabilities beyond individual tools.",
+         "inputSchema": { "type": "object", "properties": {} }
       },
       {
          "name": "vm_create",
