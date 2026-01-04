@@ -9,10 +9,54 @@ if ((BASH_VERSINFO[0] < 4)); then
   exit 1
 fi
 
+# --- Colors & Icons ---
+BOLD="$(tput bold || echo '')"
+BLUE="$(tput setaf 4 || echo '')"
+GREEN="$(tput setaf 2 || echo '')"
+YELLOW="$(tput setaf 3 || echo '')"
+RED="$(tput setaf 1 || echo '')"
+CYAN="$(tput setaf 6 || echo '')"
+RESET="$(tput sgr0 || echo '')"
+
+INFO="[${BLUE}i${RESET}]"
+OK="[${GREEN}ok${RESET}]"
+WARN="[${YELLOW}!${RESET}]"
+ERR="[${RED}ERR${RESET}]"
+BIRD="🐣"
+
+# --- Utils ---
+print_header() {
+  cat << "EOF"
+    _   _ ___ ____   ___  
+   | \ | |_ _|  _ \ / _ \ 
+   |  \| || || | | | | | |
+   | |\  || || |_| | |_| |
+   |_| \_|___|____/ \___/ 
+                          
+EOF
+  echo "${BOLD}${BLUE}  Virtual Machine OPeration System${RESET}"
+  echo "  ------------------------------------"
+  echo ""
+}
+
+spinner() {
+  local pid=$1
+  local msg=$2
+  local delay=0.1
+  local spinstr='|/-\'
+  printf "  ${BOLD}${CYAN}..${RESET} %s" "$msg"
+  while kill -0 "$pid" 2>/dev/null; do
+    local temp=${spinstr#?}
+    printf " [%c]" "$spinstr"
+    local spinstr=$temp${spinstr%"$temp"}
+    sleep $delay
+    printf "\b\b\b\b"
+  done
+  printf "\r${OK} %s    \n" "$msg"
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-# ... (omitted content)
 
 load_config() {
   local cfg="${VMOPS_CONFIG:-$ROOT_DIR/config/config.env}"
@@ -44,75 +88,68 @@ preflight() {
   if [[ "${VMOPS_SKIP_PREFLIGHT:-0}" == "1" ]]; then
     return 0
   fi
+  printf "  ${BOLD}${BLUE}System Check${RESET} "
   local missing=0
-  if [[ ! -d "$POOL_PATH" ]]; then
-    echo "Missing POOL_PATH: $POOL_PATH" >&2
-    missing=1
-  fi
-  if [[ ! -d "$BACKUP_DIR" ]]; then
-    echo "Missing BACKUP_DIR: $BACKUP_DIR" >&2
-    missing=1
-  fi
-  if ! virsh pool-info "$VMS_POOL" >/dev/null 2>&1; then
-    echo "Libvirt pool not found: $VMS_POOL" >&2
-    missing=1
-  fi
-  if ! virsh net-info "$NETWORK_HOSTONLY" >/dev/null 2>&1; then
-    echo "Libvirt network not found: $NETWORK_HOSTONLY" >&2
-    missing=1
-  fi
-  if ! virsh net-info "$NETWORK_NAT" >/dev/null 2>&1; then
-    echo "Libvirt network not found: $NETWORK_NAT" >&2
-    missing=1
-  fi
+  
+  check_item() {
+      local label=$1
+      shift
+      if "$@" >/dev/null 2>&1; then
+          printf "${GREEN}•${RESET}"
+      else
+          printf "${RED}•${RESET}"
+          missing=1
+          return 1
+      fi
+  }
+
+  check_item "Pool Path" [[ -d "$POOL_PATH" ]]
+  check_item "Backup Dir" [[ -d "$BACKUP_DIR" ]]
+  check_item "Libvirt Pool" virsh pool-info "$VMS_POOL"
+  check_item "Host-only Net" virsh net-info "$NETWORK_HOSTONLY"
+  check_item "NAT Net" virsh net-info "$NETWORK_NAT"
+  
   if [[ "$missing" -eq 1 ]]; then
-    echo "Preflight failed. Check config in ${VMOPS_CONFIG:-$ROOT_DIR/config/config.env}." >&2
+    echo " ${RED}${BOLD}FAILED${RESET}"
+    echo "  ${ERR} Preflight check failed. Use ${YELLOW}nido selftest${RESET} for details." >&2
     exit 1
   fi
+  echo " ${GREEN}READY${RESET}"
 }
 
 usage() {
+  print_header
   cat <<EOF
-Usage: $0 <command> [args]
+${BOLD}Usage:${RESET} nido ${CYAN}<command>${RESET} [args]
 
-Commands:
-  spawn <name> [template]      Create (if missing) and start VM (primary)
-  create <name> [template]     Just create VM disk and define libvirt domain
-  start <name>                 Start an existing VM
-  stop <name>                  Shutdown a running VM
-  delete <name>                Remove VM and delete its disk volume
-  ls [regex]                   List VMs (matches all by default)
-  info <name>                  Print VM IP and SSH connection string
-  prune                        Delete orphan volumes in pool vms
-  template <src> <tpl>         Create a compressed backup from a source VM
-  selftest [--real|--mock]     Run automated tests
+${BOLD}Commands:${RESET}
+  ${BOLD}spawn${RESET} <name> [tpl]      ${BLUE}Hatch${RESET} (create) and start a VM
+  ${BOLD}create${RESET} <name> [tpl]     Just construct the nest (disk + domain)
+  ${BOLD}start${RESET} <name>              Wake up a sleeping VM
+  ${BOLD}stop${RESET} <name>               Put a VM to sleep
+  ${BOLD}delete${RESET} <name>             Destroy the VM and its nest (disk)
+  ${BOLD}ls${RESET} [regex]               List all birds in the neighborhood
+  ${BOLD}info${RESET} <name>               Detailed bird-watching (IP/SSH/Specs)
+  ${BOLD}prune${RESET}                    Clean up abandoned nests (orphan volumes)
+  ${BOLD}template${RESET} <src> <tpl>    Preserve a bird species (backup VM)
+  ${BOLD}selftest${RESET}                 Run pre-flight diagnostics
+  ${BOLD}version${RESET}                  Show technical lineage
 
-Options (env):
-  VMOPS_CONFIG=...             Path to config.env
-  POOL_PATH=...                Base libvirt pool path
-  VMS_POOL=vms                 Pool name for VM disks
-  WAIT_TIMEOUT=60              Seconds to wait for IP on start
-  BACKUP_DIR=...               Directory of compressed templates
-  VM_MEM_MB=2048               Memory size for new VMs
-  VM_VCPUS=2                   VCPU count for new VMs
-  VM_OS_VARIANT=debian12       libosinfo OS variant for virt-install
-  NETWORK_HOSTONLY=hostonly56  Libvirt host-only network name
-  NETWORK_NAT=default          Libvirt NAT network name
-  SSH_USER=vmuser              SSH username for helpers
-  VMOPS_SKIP_PREFLIGHT=1       Skip preflight checks
-  VM_NESTED=true               Enable nested virtualization (host-passthrough)
-  SELFTEST_PREFIX=vm-selftest  Prefix for real selftest VM/template names
-  GRAPHICS=spice               VM graphics: spice|vnc|none
+${BOLD}Examples:${RESET}
+  nido ${CYAN}spawn${RESET} parrot
+  nido ${CYAN}ls${RESET}
+  nido ${CYAN}info${RESET} parrot
 
-Examples:
-  $0 spawn vm-test-1
-  $0 ls
-  $0 info vm-test-1
-  $0 stop vm-test-1
-  $0 delete vm-test-1
-  $0 template debian-base my-template
-  $0 selftest --mock
 EOF
+}
+
+cmd_version() {
+  print_header
+  echo "  ${BOLD}Version:${RESET} 2.1.0-nerd-edition"
+  echo "  ${BOLD}Codename:${RESET} Quantum Raven"
+  echo "  ${BOLD}Engine:${RESET} Libvirt/QEMU-KVM"
+  echo "  ${BOLD}Author:${RESET} Antipodes (with Antigravity's help)"
+  echo ""
 }
 
 require_cmds() {
@@ -147,18 +184,28 @@ get_ip() {
 wait_ip() {
   local vm="$1"
   local start_ts end_ts ip=""
+  local delay=0.2
+  local spinstr='|/-\'
   start_ts=$(date +%s)
+  printf "  ${BOLD}${CYAN}..${RESET} Waiting for bird to chirp (IP)..."
   while true; do
     ip=$(get_ip "$vm")
     if [[ -n "$ip" ]]; then
+      printf "\r${OK} Bird is online! IP: ${YELLOW}$ip${RESET}    \n"
       echo "$ip"
       return 0
     fi
+    local temp=${spinstr#?}
+    printf " [%c]" "$spinstr"
+    local spinstr=$temp${spinstr%"$temp"}
+    sleep $delay
+    printf "\b\b\b\b"
+    
     end_ts=$(date +%s)
     if (( end_ts - start_ts >= WAIT_TIMEOUT )); then
+      printf "\r${ERR} Timeout waiting for IP after ${WAIT_TIMEOUT}s.    \n"
       return 1
     fi
-    sleep 2
   done
 }
 
@@ -208,7 +255,8 @@ cmd_create() {
   fi
 
   mkdir -p "$POOL_PATH/vms"
-  qemu-img convert -O qcow2 "$backup" "$disk_path"
+  qemu-img convert -O qcow2 "$backup" "$disk_path" &
+  spinner $! "Preparing the nest (cloning disk)"
 
   if [[ "$GRAPHICS" == "none" ]]; then
     gfx_args=(--graphics none --noautoconsole)
@@ -302,31 +350,27 @@ cmd_destroy() {
 cmd_info() {
   local name="$1"
   if ! virsh dominfo "$name" >/dev/null 2>&1; then
-    echo "Domain not found: $name" >&2
+    echo "  ${ERR} Domain not found: $name" >&2
     exit 1
   fi
-  local hn ip
+  local hn ip state
   hn=$(vm_hostname "$name")
   ip=$(get_ip "$name")
-  if [[ -z "$ip" ]]; then
-    ip="(no-ip)"
-  fi
-  echo "VM: $name"
-  echo "Hostname: $hn"
-  echo "IP: $ip"
-  if [[ "$ip" != "(no-ip)" ]]; then
-    echo "SSH: ssh $SSH_USER@$ip"
-  else
-    echo "SSH: ssh $SSH_USER@<ip>"
-  fi
-  local dom_cpu
-  dom_cpu=$(virsh domifaddr "$name" --source agent 2>/dev/null | grep -o "CPU:.*" | cut -d: -f2 || true)
-  # Actually, the mock domain file has it. Let's make it simpler for the mock test to see it.
-  # In a real cmd_info we don't usually show CPU unless asked, but for the test log we can.
+  state=$(virsh domstate "$name" 2>/dev/null || echo "unknown")
+  
+  if [[ -z "$ip" ]]; then ip="(no-ip)"; fi
+
+  echo "  ${BOLD}${BLUE}┌─ VM DETECTED: $name${RESET}"
+  echo "  ${BLUE}│${RESET}  ${BOLD}State:${RESET}    $state"
+  echo "  ${BLUE}│${RESET}  ${BOLD}Hostname:${RESET} $hn"
+  echo "  ${BLUE}│${RESET}  ${BOLD}IP ADDR:${RESET}  ${YELLOW}$ip${RESET}"
+  echo "  ${BLUE}│${RESET}  ${BOLD}SSH CMD:${RESET}  ${CYAN}ssh $SSH_USER@$ip${RESET}"
+  
   if [[ -n "${VMOPS_MOCK_STATE:-}" ]]; then
     source "$VMOPS_MOCK_STATE/domains/$name"
-    echo "CPU: $CPU"
+    echo "  ${BLUE}│${RESET}  ${BOLD}CPU Type:${RESET} $CPU"
   fi
+  echo "  ${BLUE}└────────────────────────────────────${RESET}"
 }
 
 cmd_ls() {
@@ -334,22 +378,32 @@ cmd_ls() {
   local name_regex="$regex"
   mapfile -t vms < <(virsh list --all --name | awk 'NF' | grep -E "$name_regex" || true)
   if [[ ${#vms[@]} -eq 0 ]]; then
-    echo "No test VMs found (NAME_REGEX=$name_regex)."
+    echo "  ${INFO} No birds found in the nest (NAME_REGEX=$name_regex)."
     return 0
   fi
-  printf "%-24s %-20s %-18s %s\n" "VM_NAME" "GUEST_HOSTNAME" "IP" "SSH"
-  printf "%-24s %-20s %-18s %s\n" "-------" "--------------" "--" "---"
+  
+  printf "  ${BOLD}%-24s %-12s %-16s %s${RESET}\n" "VM NAME" "STATE" "IP ADDRESS" "CONNECTION"
+  echo "  --------------------------------------------------------------------------------"
+  
   for vm in "${vms[@]}"; do
-    local hn ip
+    local hn ip state state_icon
     hn=$(vm_hostname "$vm")
     ip=$(get_ip "$vm")
-    if [[ -z "$ip" ]]; then
-      ip="(no-ip)"
-      printf "%-24s %-20s %-18s %s\n" "$vm" "$hn" "$ip" "ssh $SSH_USER@<ip>"
-    else
-      printf "%-24s %-20s %-18s %s\n" "$vm" "$hn" "$ip" "ssh $SSH_USER@$ip"
-    fi
+    state=$(virsh domstate "$vm" 2>/dev/null || echo "unknown")
+    
+    case "$state" in
+        running)     state_icon="${GREEN}🟢 running${RESET}" ;;
+        "shut off")  state_icon="${RED}🔴 stopped${RESET}" ;;
+        paused)      state_icon="${YELLOW}🟡 paused${RESET}" ;;
+        *)           state_icon="${CYAN}⚪ $state${RESET}" ;;
+    esac
+
+    [[ -z "$ip" ]] && ip="(no-ip)"
+    
+    printf "  %-24s %-22s %-16s ${CYAN}%-18s${RESET}\n" \
+      "$vm" "$state_icon" "$ip" "ssh $SSH_USER@$ip"
   done
+  echo ""
 }
 
 cmd_prune() {
@@ -421,10 +475,11 @@ cmd_template() {
     cp "$disk_path" "$tmpdisk"
   fi
 
-  qemu-img convert -O qcow2 -c "$tmpdisk" "$compressed_path"
+  qemu-img convert -O qcow2 -c "$tmpdisk" "$compressed_path" &
+  spinner $! "Preserving species (compressing template)"
   rm -rf "$tmpdir"
 
-  echo "Compressed template created: $compressed_path"
+  echo "  ${OK} Compressed template created: ${YELLOW}$compressed_path${RESET}"
 }
 
 cmd_selftest_mock() {
@@ -862,24 +917,29 @@ cmd_selftest() {
 
 main() {
   require_cmds virsh awk grep ip qemu-img virt-install
-  preflight
   local cmd="${1:-}"
   shift || true
+
   case "$cmd" in
-    spawn)    cmd_start "${@:?}";;
-    create)   cmd_create "${@:?}";;
-    start)    cmd_start "${@:?}";;
-    stop)     cmd_stop "${@:?}";;
-    delete)   cmd_destroy "${@:?}";;
-    destroy)  cmd_destroy "${@:?}";;
-    ls)       cmd_ls "$@";;
-    list)     cmd_ls "$@";;
-    info)     cmd_info "${@:?}";;
-    prune)    cmd_prune;;
-    template) cmd_template "${@:?}";;
-    selftest) cmd_selftest "$@";;
-    -h|--help|"") usage; exit 0;;
-    *) echo "Unknown command: $cmd" >&2; usage; exit 1;;
+    spawn|start|stop|delete|destroy|ls|list|info|prune|template|create)
+      preflight
+      ;;
+  esac
+
+  case "$cmd" in
+    spawn)      cmd_start "${@:?}";;
+    create)     cmd_create "${@:?}";;
+    start)      cmd_start "${@:?}";;
+    stop)       cmd_stop "${@:?}";;
+    delete)     cmd_destroy "${@:?}";;
+    destroy)    cmd_destroy "${@:?}";;
+    ls|list)    cmd_ls "${@}";;
+    info)       cmd_info "${@:?}";;
+    prune)      cmd_prune;;
+    template)   cmd_template "${@:?}";;
+    selftest)   cmd_selftest "${@}";;
+    version)    cmd_version;;
+    *)          usage;;
   esac
 }
 

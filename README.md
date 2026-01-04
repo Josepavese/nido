@@ -14,7 +14,7 @@ It combines a simple CLI for human operators with a powerful **Model Context Pro
 
 `nido` is built around **compressed template backups**. Templates are stored as highly compressed qcow2 files, and new VMs are created by rapidly expanding a template into a fresh disk. This keeps storage usage minimal while allowing for near-instant VM deployment.
 
-> *Think of it as a bird's nest (nido 🇮🇹) where your VMs hatch quickly and fly away when done.*
+> *Think of it as a bird's nest ("nido") where your VMs hatch quickly and fly away when done.*
 
 ## Features
 
@@ -122,11 +122,11 @@ Yes, you can hatch a bird inside a bird. This is perfect for testing hypervisors
 
 ### 🐳 VM inside Container (KVM-in-Docker)
 
-Want to lanciare una VM da dentro un container? `nido` non giudica i tuoi feticci tecnologici.
+Want to hatch a bird inside a whale? Nido doesn't judge your technical curiosities.
 
-- **Prerequisite:** Il tuo container deve essere lanciato con `--privileged` e avere accesso a `/dev/kvm` (es. `--device /dev/kvm`).
-- **Setup:** Installa `libvirt-daemon-system` e `nido` nel container. Avvia `virtlogd` e `libvirtd` all'entrypoint.
-- **Pro Tip:** È il modo più pulito per avere un ambiente di automazione VM portatile senza sporcare il tuo host.
+- **Prerequisite:** Your container must be launched with `--privileged` and have access to `/dev/kvm` (e.g., `--device /dev/kvm`).
+- **Setup:** Install `libvirt-daemon-system` and `nido` inside the container. Start `virtlogd` and `libvirtd` at the entrypoint.
+- **Pro Tip:** This is the cleanest way to have a portable VM automation environment without cluttering your host system.
 
 ---
 
@@ -136,50 +136,48 @@ Want to lanciare una VM da dentro un container? `nido` non giudica i tuoi feticc
 
 #### a) Installer script (Linux/macOS)
 
-Scarica l'installer dalla cartella `bin/installers` del repository oppure usa il comando:
+Download the installer from the `bin/installers` directory of the repository or use the command:
 
 ```bash
 git clone https://github.com/Josepavese/nido.git
 cd nido
-# Esegui l'installer locale:
+# Run the local installer:
 ./bin/installers/get-nido.sh
 ```
 
-> **Nota:** Gli installer ufficiali sono sempre disponibili nella cartella `bin/installers` del repository. Puoi copiarli e distribuirli su altri sistemi.
+> **Note:** Official installers are always available in the `bin/installers` folder of the repository. You can copy and distribute them to other systems.
 
-#### b) Installazione manuale
+#### b) Manual Installation
 
-Se preferisci installare manualmente:
+If you prefer to install manually:
 
 ```bash
 git clone https://github.com/your-org/nido.git
 cd nido
-# Installa le dipendenze (Debian/Ubuntu/Fedora/macOS):
+# Install dependencies (Debian/Ubuntu/Fedora/macOS):
 ./bin/setup_deps.sh
-# Configura l'ambiente:
+# Configure the environment:
 cp config/config.example.env config/config.env
-# Modifica config/config.env con i tuoi percorsi locali
+# Edit config/config.env with your local paths
 ```
 
 ### 2. Usage
 
 ```bash
-# 1) Crea un template compresso da una VM base (la VM deve essere spenta):
+# 1) Create a compressed template from a base VM (VM must be shut off):
   ./bin/nido template debian-iso-1 template-headless
-# 2) Crea una nuova VM:
+# 2) Create a new VM:
   ./bin/nido create vm-test-1
-# 3) Avvia la VM e attendi l'IP:
+# 3) Start the VM and wait for the IP:
   ./bin/nido start vm-test-1
-# 4) Oppure "spawn" (crea + avvia in un colpo solo):
+# 4) Or "spawn" (create + start in one go):
   ./bin/nido spawn vm-test-1
-# -> Il comando SSH verrà stampato, pronto da copiare
+# -> The SSH command will be printed, ready to be copied
 ```
 
-## Installer distribution
+Official installers (e.g., `get-nido.sh`) are maintained in the [`bin/installers`](bin/installers/) folder. To distribute nido to other systems, simply copy the desired script from this folder and follow the installation instructions.
 
-Gli installer ufficiali (es. `get-nido.sh`) sono mantenuti nella cartella [`bin/installers`](bin/installers/). Per distribuire nido su altri sistemi, copia semplicemente lo script desiderato da questa cartella e segui le istruzioni di installazione.
-
-Se aggiorni l'installer, ricordati di committare la nuova versione in git e aggiornare eventuali riferimenti nei README.
+If you update the installer, remember to commit the new version to git and update any references in the READMEs.
 
 ## Commands
 
