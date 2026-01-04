@@ -37,6 +37,7 @@ VM_OS_VARIANT="${VM_OS_VARIANT:-debian12}"
 NETWORK_HOSTONLY="${NETWORK_HOSTONLY:-hostonly56}"
 NETWORK_NAT="${NETWORK_NAT:-default}"
 SSH_USER="${SSH_USER:-vmuser}"
+VM_NESTED="${VM_NESTED:-false}"
 GRAPHICS="${GRAPHICS:-spice}"
 
 preflight() {
@@ -99,6 +100,7 @@ Options (env):
   NETWORK_NAT=default          Libvirt NAT network name
   SSH_USER=vmuser              SSH username for helpers
   VMOPS_SKIP_PREFLIGHT=1       Skip preflight checks
+  VM_NESTED=true               Enable nested virtualization (host-passthrough)
   SELFTEST_PREFIX=vm-selftest  Prefix for real selftest VM/template names
   GRAPHICS=spice               VM graphics: spice|vnc|none
 
@@ -216,6 +218,11 @@ cmd_create() {
     gfx_args=(--graphics spice --noautoconsole)
   fi
 
+  local cpu_args=()
+  if [[ "$VM_NESTED" == "true" ]]; then
+    cpu_args=(--cpu host-passthrough)
+  fi
+
   virt-install \
     --name "$name" \
     --memory "$VM_MEM_MB" \
@@ -225,6 +232,7 @@ cmd_create() {
     --network "network=$NETWORK_NAT,model=virtio" \
     --os-variant "$VM_OS_VARIANT" \
     --import \
+    "${cpu_args[@]}" \
     "${gfx_args[@]}"
 }
 
@@ -310,6 +318,14 @@ cmd_info() {
     echo "SSH: ssh $SSH_USER@$ip"
   else
     echo "SSH: ssh $SSH_USER@<ip>"
+  fi
+  local dom_cpu
+  dom_cpu=$(virsh domifaddr "$name" --source agent 2>/dev/null | grep -o "CPU:.*" | cut -d: -f2 || true)
+  # Actually, the mock domain file has it. Let's make it simpler for the mock test to see it.
+  # In a real cmd_info we don't usually show CPU unless asked, but for the test log we can.
+  if [[ -n "${VMOPS_MOCK_STATE:-}" ]]; then
+    source "$VMOPS_MOCK_STATE/domains/$name"
+    echo "CPU: $CPU"
   fi
 }
 
@@ -559,11 +575,12 @@ EOF
   cat > "$mockbin/virt-install" <<'EOF'
 #!/usr/bin/env bash
 state="${VMOPS_MOCK_STATE:?}"
-name=""; disk=""
+name=""; disk=""; cpu=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --name) name="$2"; shift 2;;
     --disk) disk="$2"; shift 2;;
+    --cpu) cpu="$2"; shift 2;;
     *) shift;;
   esac
 done
@@ -577,6 +594,7 @@ DISK=$path
 HOSTNAME=$name
 IP=$ip
 MAC=$mac
+CPU=$cpu
 CONF
 pool="vms"
 mkdir -p "$state/pools/$pool"
@@ -666,7 +684,10 @@ Outputs (captured):
 - list: /tmp/vmops_test_list.txt
 - cleanup: /tmp/vmops_test_cleanup.txt
 - template: /tmp/vmops_test_template.txt
+- cpu_info: /tmp/vmops_test_cpu.txt
 EOF
+
+  VMOPS_CONFIG="$cfg" VMOPS_SKIP_PREFLIGHT=1 "$SCRIPT_DIR/nido" info vm-test-1 | grep "CPU:" > /tmp/vmops_test_cpu.txt || true
 
   if [[ "$verbose" -eq 1 ]]; then
     {
@@ -690,6 +711,9 @@ EOF
       echo
       echo "### template"
       cat /tmp/vmops_test_template.txt || true
+      echo
+      echo "### cpu_info"
+      cat /tmp/vmops_test_cpu.txt || true
     } >> "$ROOT_DIR/docs/test_log.md"
   fi
 

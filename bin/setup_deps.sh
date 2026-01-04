@@ -22,7 +22,7 @@ setup_linux() {
   check_sudo
 
   case "${ID:-}" in
-    debian|ubuntu|linuxmint|pop)
+    debian|ubuntu|linuxmint|pop|kali)
       echo "Using apt-get..."
       sudo apt-get update
       sudo apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients virtinst qemu-utils libguestfs-tools iproute2 jq
@@ -32,13 +32,24 @@ setup_linux() {
       sudo dnf install -y qemu-kvm libvirt virt-install guestfs-tools jq
       ;;
     *)
-      echo "Unsupported distro: ${ID:-unknown}. Please install libvirt/kvm/virt-install manually." >&2
-      exit 1
+      # Fallback to ID_LIKE for derivatives
+      if [[ "${ID_LIKE:-}" =~ "debian" ]]; then
+          echo "Derivative detected (ID_LIKE: $ID_LIKE). Using apt-get..."
+          sudo apt-get update
+          sudo apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients virtinst qemu-utils libguestfs-tools iproute2 jq
+      else
+          echo "Unsupported distro: ${ID:-unknown}. Please install libvirt/kvm/virt-install manually." >&2
+          exit 1
+      fi
       ;;
   esac
 
   echo "Enabling libvirtd..."
-  sudo systemctl enable --now libvirtd
+  if command -v systemctl >/dev/null 2>&1 && systemctl status >/dev/null 2>&1; then
+      sudo systemctl enable --now libvirtd
+  else
+      echo "Systemd not found/active (container?). Skipping systemctl."
+  fi
 
   # Group membership
   local need_logout=0
@@ -91,70 +102,3 @@ case "$OS" in
 esac
 
 echo "Setup complete. Run 'nido selftest' to verify."
-
-if ! command -v sudo >/dev/null 2>&1; then
-  echo "sudo is required. Install it and re-run this script." >&2
-  exit 1
-fi
-
-if [[ ! -r /etc/os-release ]]; then
-  echo "/etc/os-release not found; unsupported distro." >&2
-  exit 1
-fi
-
-. /etc/os-release
-
-case "${ID:-}" in
-  debian|ubuntu|linuxmint)
-    PKG_MGR="apt-get"
-    ;;
-  *)
-    echo "Unsupported distro: ${ID:-unknown}. Install libvirt/qemu/virtinst manually." >&2
-    exit 1
-    ;;
-esac
-
-REQUIRED_PKGS=(
-  qemu-kvm
-  libvirt-daemon-system
-  libvirt-clients
-  virtinst
-  qemu-utils
-  libguestfs-tools
-  iproute2
-)
-
-echo "Installing prerequisites (idempotent) ..."
-sudo "$PKG_MGR" update -y
-sudo "$PKG_MGR" install -y "${REQUIRED_PKGS[@]}"
-
-echo "Enabling libvirt service ..."
-sudo systemctl enable --now libvirtd
-
-USER_NAME="${USER:-$(id -un)}"
-NEED_LOGOUT=0
-
-ensure_group() {
-  local group="$1"
-  if ! id -nG "$USER_NAME" | grep -qw "$group"; then
-    sudo usermod -aG "$group" "$USER_NAME"
-    NEED_LOGOUT=1
-  fi
-}
-
-ensure_group "libvirt"
-ensure_group "kvm"
-
-if [[ "$NEED_LOGOUT" -eq 1 ]]; then
-  echo "Added $USER_NAME to libvirt/kvm. Logout/login required."
-else
-  echo "User groups already ok: libvirt/kvm."
-fi
-
-echo "Sanity check: virsh list --all"
-if ! virsh list --all >/dev/null 2>&1; then
-  echo "virsh access failed. Check group membership or libvirt socket." >&2
-  exit 1
-fi
-
-echo "Done."
