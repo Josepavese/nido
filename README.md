@@ -6,7 +6,7 @@
 
 ---
 
-`nido` is a minimal, automation-friendly toolkit to manage headless KVM virtual machines. It is designed for developers and AI agents who need a fast, simple, and robust way to spawn and control local VMs for testing, development, and sandboxing.
+`nido` is a minimal, automation-friendly toolkit to manage local KVM virtual machines (Headless or GUI). It is designed for developers and AI agents who need a fast, simple, and robust way to spawn and control local VMs for testing, development, and sandboxing.
 
 It combines a simple CLI for human operators with a powerful **Model Context Protocol (MCP) Server**, making it the first local-first, AI-native VM manager.
 
