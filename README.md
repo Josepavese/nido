@@ -35,6 +35,7 @@ It combines a simple CLI for human operators with a powerful **Model Context Pro
 ## Roadmap
 
 ### Phase 1: Foundation ✅
+
 *The egg has hatched!*
 
 - [x] Core CLI (`nido spawn`, `start`, `stop`, `destroy`)
@@ -46,6 +47,7 @@ It combines a simple CLI for human operators with a powerful **Model Context Pro
 - [x] Selftest mode (mock & real)
 
 ### Phase 2: AI Integration 🚧
+
 *Teaching the bird to talk with robots*
 
 - [ ] MCP Server implementation
@@ -63,6 +65,7 @@ It combines a simple CLI for human operators with a powerful **Model Context Pro
 - [ ] MCP Prompts (workflow templates)
 
 ### Phase 3: Integration & Ecosystem 📋
+
 *Building the whole tree*
 
 - [ ] REST API Server
@@ -81,6 +84,7 @@ It combines a simple CLI for human operators with a powerful **Model Context Pro
   - [ ] `vm_download` - Download files from VM
 
 ### Phase 4: Advanced Features 📋
+
 *The bird learns new tricks*
 
 - [ ] Snapshot management
@@ -95,6 +99,7 @@ It combines a simple CLI for human operators with a powerful **Model Context Pro
 - [ ] Interactive TUI (Text User Interface)
 
 ### Phase 5: Polish & DX 📋
+
 *Making it shine*
 
 - [ ] Self-healing and auto-recovery
@@ -102,6 +107,26 @@ It combines a simple CLI for human operators with a powerful **Model Context Pro
 - [ ] Comprehensive documentation
 - [ ] Plugin system
 - [ ] Windows/macOS support (via remote libvirt)
+
+---
+
+## 💡 Tips & Tricks (The "Matryoshka" Section)
+
+### 🪺 VM inside VM (Nested Virtualization)
+
+Yes, you can hatch a bird inside a bird. This is perfect for testing hypervisors or creating complex labs.
+
+- **Prerequisite:** Set `VM_NESTED=true` in your `config.env`.
+- **How it works:** We pass `--cpu host-passthrough` to the guest, giving it the raw power (and VMX/SVM flags) of your physical CPU.
+- **Warning:** Expect a small performance hit. It's like inception, the deeper you go, the slower time (and your VM) becomes.
+
+### 🐳 VM inside Container (KVM-in-Docker)
+
+Want to lanciare una VM da dentro un container? `nido` non giudica i tuoi feticci tecnologici.
+
+- **Prerequisite:** Il tuo container deve essere lanciato con `--privileged` e avere accesso a `/dev/kvm` (es. `--device /dev/kvm`).
+- **Setup:** Installa `libvirt-daemon-system` e `nido` nel container. Avvia `virtlogd` e `libvirtd` all'entrypoint.
+- **Pro Tip:** È il modo più pulito per avere un ambiente di automazione VM portatile senza sporcare il tuo host.
 
 ---
 
@@ -136,9 +161,7 @@ cp config/config.example.env config/config.env
 # Modifica config/config.env con i tuoi percorsi locali
 ```
 
-
 ### 2. Usage
-
 
 ```bash
 # 1) Crea un template compresso da una VM base (la VM deve essere spenta):
@@ -151,12 +174,12 @@ cp config/config.example.env config/config.env
   ./bin/nido spawn vm-test-1
 # -> Il comando SSH verrà stampato, pronto da copiare
 ```
+
 ## Installer distribution
 
 Gli installer ufficiali (es. `get-nido.sh`) sono mantenuti nella cartella [`bin/installers`](bin/installers/). Per distribuire nido su altri sistemi, copia semplicemente lo script desiderato da questa cartella e segui le istruzioni di installazione.
 
 Se aggiorni l'installer, ricordati di committare la nuova versione in git e aggiornare eventuali riferimenti nei README.
-
 
 ## Commands
 
