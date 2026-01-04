@@ -73,7 +73,7 @@ handle_tool_call() {
             
             if vm_start "$name"; then
                  local ip
-                 if ip=$(vm_wait_ip "$name" 5); then
+                 if ip=$(network_wait_ip "$name" 5); then
                      local msg="VM $name started. IP: $ip"
                      local content
                      content=$(jq -n --arg msg "$msg" '{content: [{type: "text", text: $msg}] }')
@@ -178,9 +178,14 @@ handle_tool_call() {
                     sleep 0.2
                  done
                  
-                 local content
-                 content=$(jq -n --arg msg "VM $name created successfully." '{content: [{type: "text", text: $msg}] }')
-                 send_response "$id" "$content"
+                 # Define the VM
+                 if vm_define "$name" "$POOL_PATH" "$VM_MEM_MB" "$VM_VCPUS" "$VM_OS_VARIANT" "$NETWORK_HOSTONLY" "$NETWORK_NAT" "$GRAPHICS" "$VM_NESTED"; then
+                     local content
+                     content=$(jq -n --arg msg "VM $name created successfully." '{content: [{type: "text", text: $msg}] }')
+                     send_response "$id" "$content"
+                 else
+                     send_error "$id" -32000 "Failed to define domain for $name"
+                 fi
              else
                  send_error "$id" -32000 "Failed to create VM $name"
              fi

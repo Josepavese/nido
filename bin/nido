@@ -127,6 +127,11 @@ cmd_create_ui() {
   
   pid="$out" # vm_create prints PID on success
   spinner "$pid" "Preparing the nest (cloning disk)"
+  
+  vm_define "$name" "$POOL_PATH" "$VM_MEM_MB" "$VM_VCPUS" "$VM_OS_VARIANT" \
+            "$NETWORK_HOSTONLY" "$NETWORK_NAT" "$GRAPHICS" "$VM_NESTED"
+  
+  echo "  ${OK} Nest constructed."
 }
 
 cmd_start_ui() {

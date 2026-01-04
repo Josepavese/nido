@@ -48,6 +48,38 @@ vm_create() {
   return 0
 }
 
+
+vm_define() {
+  local name="$1"
+  local pool_path="$2"
+  local memory="$3"
+  local vcpus="$4"
+  local os_variant="$5"
+  local net_host="$6"
+  local net_nat="$7"
+  local graphics="$8"
+  local nested="${9:-false}"
+
+  local disk_path="$pool_path/vms/${name}.qcow2"
+  
+  local cpu_mode="host-model"
+  [[ "$nested" == "true" ]] && cpu_mode="host-passthrough"
+
+  # Define the VM using virt-install
+  virt-install \
+    --name "$name" \
+    --memory "$memory" \
+    --vcpus "$vcpus" \
+    --os-variant "$os_variant" \
+    --disk "path=$disk_path,bus=virtio" \
+    --import \
+    --noautoconsole \
+    --graphics "$graphics" \
+    --network "network=$net_nat" \
+    --network "network=$net_host" \
+    --cpu "$cpu_mode" >/dev/null
+}
+
 vm_start() {
   local name="$1"
   if ! virsh dominfo "$name" >/dev/null 2>&1; then
