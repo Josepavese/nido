@@ -1,7 +1,7 @@
 sources:
   - name: ubuntu
     provider: official
-    description: "Official Ubuntu Cloud Images (Verified by Nido)"
+    description: "Official Ubuntu Cloud Images"
     homepage: "https://ubuntu.com/"
     strategies:
       - type: "ubuntu-cloud"
