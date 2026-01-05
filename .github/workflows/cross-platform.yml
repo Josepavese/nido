@@ -126,7 +126,7 @@ jobs:
           GOOS=windows GOARCH=amd64 go build -o dist/nido-windows-amd64.exe cmd/nido/main.go
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: nido-binaries
           path: dist/
