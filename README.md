@@ -22,7 +22,7 @@ It combines a simple CLI for human operators with a powerful **Model Context Pro
 |---|:---:|---|
 | CLI for VM lifecycle | ✅ | Create, start, stop, destroy VMs |
 | Compressed templates | ✅ | Fast deployment from minimal storage |
-| MCP Server | 🚧 | AI agent integration via Model Context Protocol |
+| MCP Server | ✅ | AI agent integration via Model Context Protocol |
 | REST API | 📋 | Traditional HTTP API for integrations |
 | Webhooks | 📋 | Event-driven notifications |
 | Snapshot management | 📋 | Save and restore VM states |
@@ -41,26 +41,30 @@ It combines a simple CLI for human operators with a powerful **Model Context Pro
 - [x] Core CLI (`nido spawn`, `start`, `stop`, `destroy`)
 - [x] Compressed template system (`.compact.qcow2`)
 - [x] Configuration management (`config.env`)
+- [x] Interactive Setup Wizard (`nido setup`)
 - [x] VM info and listing
 - [x] SSH command generation
 - [x] Preflight checks and validation
 - [x] Selftest mode (mock & real)
+- [x] IDE Registration helper (`nido register`)
 
 ### Phase 2: AI Integration 🚧
 
 *Teaching the bird to talk with robots*
 
-- [ ] MCP Server implementation
-  - [ ] Transport: stdio (for Claude Desktop)
+- [x] MCP Server implementation
+  - [x] Transport: stdio (for Claude Desktop)
   - [ ] Transport: HTTP + SSE (for remote clients)
-- [ ] MCP Tools
-  - [ ] `vm_list` - List all VMs
-  - [ ] `vm_create` - Create VM from template
-  - [ ] `vm_start` / `vm_stop` - Lifecycle control
-  - [ ] `vm_destroy` - Remove VM
+- [x] MCP Tools
+  - [x] `vm_list` - List all VMs
+  - [x] `vm_create` - Create VM from template
+  - [x] `vm_start` / `vm_stop` - Lifecycle control
+  - [x] `vm_destroy` - Remove VM (implemented as `vm_delete`)
   - [ ] `vm_exec` - Execute commands in VM
-  - [ ] `vm_info` - Get VM details
+  - [x] `vm_info` - Get VM details
   - [ ] `template_list` - List available templates
+  - [x] `config_get` / `config_set` - Manage configuration
+  - [x] `nido_describe` - System overview
 - [ ] MCP Resources (dynamic context for AI)
 - [ ] MCP Prompts (workflow templates)
 
@@ -165,13 +169,13 @@ cp config/config.example.env config/config.env
 
 ```bash
 # 1) Create a compressed template from a base VM (VM must be shut off):
-  ./bin/nido template debian-iso-1 template-headless
+  nido template debian-iso-1 template-headless
 # 2) Create a new VM:
-  ./bin/nido create vm-test-1
+  nido create vm-test-1
 # 3) Start the VM and wait for the IP:
-  ./bin/nido start vm-test-1
+  nido start vm-test-1
 # 4) Or "spawn" (create + start in one go):
-  ./bin/nido spawn vm-test-1
+  nido spawn vm-test-1
 # -> The SSH command will be printed, ready to be copied
 ```
 
@@ -182,24 +186,28 @@ If you update the installer, remember to commit the new version to git and updat
 ## Commands
 
 ```bash
-spawn <name> [template]      # Create and start a new VM
-create <name> [template]     # Just create VM disk and define libvirt domain
-start <name>                 # Start an existing VM
-stop <name>                  # Shutdown a running VM
-delete <name>                # Remove VM and delete its disk volume 💀
-ls [regex]                   # List VMs (matches all by default)
-info <name>                  # Print VM IP and SSH connection string
-prune                        # Delete orphan volumes in pool vms
-template <src> <tpl>         # Create a compressed backup from a source VM
-selftest                     # Run automated tests
-mcp-server start             # Start MCP server (coming soon™)
+nido spawn <name> [template]      # Create and start a new VM
+nido create <name> [template]     # Just create VM disk and define libvirt domain
+nido start <name>                 # Start an existing VM
+nido stop <name>                  # Shutdown a running VM
+nido delete <name>                # Remove VM and delete its disk volume 💀
+nido ls [regex]                   # List VMs (matches all by default)
+nido info <name>                  # Print VM IP and SSH connection string
+nido prune                        # Delete orphan volumes in pool vms
+nido template <src> <tpl>         # Create a compressed backup from a source VM
+nido setup                        # Interactive configuration wizard
+nido config                       # View current configuration
+nido register                     # Generate MCP config for IDEs
+nido selftest                     # Run automated tests
+nido version                      # Show version info
+nido mcp-server start             # Start MCP server
 ```
 
 ## Why nido?
 
 | | nido | Vagrant | Multipass | E2B |
 |---|:---:|:---:|:---:|:---:|
-| **AI Integration** | 🚧 MCP | ❌ | ❌ | ✅ Cloud |
+| **AI Integration** | ✅ MCP | ❌ | ❌ | ✅ Cloud |
 | **Local-first** | ✅ | ✅ | ✅ | ❌ |
 | **Storage** | Compressed | Full boxes | Full images | Cloud |
 | **Simplicity** | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ |
