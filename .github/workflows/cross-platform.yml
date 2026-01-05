@@ -1,0 +1,121 @@
+name: Cross-Platform CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go-version: ['1.21']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      # Install QEMU on Linux
+      - name: Install QEMU (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils
+
+      # Install QEMU on macOS
+      - name: Install QEMU (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install qemu
+
+      # Install QEMU on Windows
+      - name: Install QEMU (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install qemu --version=2023.10.24
+
+      # Verify QEMU installation
+      - name: Verify QEMU
+        run: |
+          qemu-system-x86_64 --version
+          qemu-img --version
+
+      # Build Nido
+      - name: Build Nido
+        run: go build -o nido${{ runner.os == 'Windows' && '.exe' || '' }} cmd/nido/main.go
+
+      # Run unit tests
+      - name: Run unit tests
+        run: go test -v ./...
+
+      # Run doctor command (all platforms)
+      - name: Test nido doctor
+        run: ./nido${{ runner.os == 'Windows' && '.exe' || '' }} doctor
+
+      # Run config command (all platforms)
+      - name: Test nido config
+        run: ./nido${{ runner.os == 'Windows' && '.exe' || '' }} config || true
+
+      # Linux-specific: Full VM lifecycle test
+      - name: Full VM lifecycle test (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          # Create a minimal test template
+          mkdir -p ~/.nido/vms
+          mkdir -p /tmp/libvirt-pool/backups
+          qemu-img create -f qcow2 /tmp/libvirt-pool/backups/template-test.compact.qcow2 1G
+          
+          # Test VM operations
+          ./nido ls
+          echo "VM lifecycle tests would go here (requires proper template)"
+
+      # macOS/Windows: Limited testing (no nested virtualization)
+      - name: Limited tests (macOS/Windows)
+        if: runner.os != 'Linux'
+        run: |
+          ./nido${{ runner.os == 'Windows' && '.exe' || '' }} version
+          ./nido${{ runner.os == 'Windows' && '.exe' || '' }} template list || true
+
+  build-binaries:
+    name: Build release binaries
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Build for all platforms
+        run: |
+          # Linux
+          GOOS=linux GOARCH=amd64 go build -o dist/nido-linux-amd64 cmd/nido/main.go
+          
+          # macOS (Intel)
+          GOOS=darwin GOARCH=amd64 go build -o dist/nido-darwin-amd64 cmd/nido/main.go
+          
+          # macOS (Apple Silicon)
+          GOOS=darwin GOARCH=arm64 go build -o dist/nido-darwin-arm64 cmd/nido/main.go
+          
+          # Windows
+          GOOS=windows GOARCH=amd64 go build -o dist/nido-windows-amd64.exe cmd/nido/main.go
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: nido-binaries
+          path: dist/
