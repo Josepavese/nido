@@ -42,7 +42,7 @@ jobs:
       - name: Install QEMU (Windows)
         if: runner.os == 'Windows'
         run: |
-          choco install qemu --version=2023.10.24
+          choco install qemu -y
 
       # Verify QEMU installation
       - name: Verify QEMU

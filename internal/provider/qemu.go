@@ -335,7 +335,10 @@ func (p *QemuProvider) Doctor() []string {
 	}
 
 	// 1. Directories
-	dirs := []string{p.RootDir, filepath.Join(p.RootDir, "bin"), filepath.Join(p.RootDir, "vms"), filepath.Join(p.RootDir, "run"), p.Config.BackupDir}
+	dirs := []string{p.RootDir, filepath.Join(p.RootDir, "bin"), filepath.Join(p.RootDir, "vms"), filepath.Join(p.RootDir, "run")}
+	if p.Config != nil {
+		dirs = append(dirs, p.Config.BackupDir)
+	}
 	for _, d := range dirs {
 		_, err := os.Stat(d)
 		add("Dir: "+filepath.Base(d), err == nil, d)
