@@ -1,7 +1,7 @@
 sources:
   - name: ubuntu
-    provider: Canonical
-    description: "Ubuntu Server LTS"
+    provider: official
+    description: "Official Ubuntu Cloud Images (Verified by Nido)"
     homepage: "https://ubuntu.com/"
     strategies:
       - type: "ubuntu-cloud"
