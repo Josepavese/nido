@@ -10,6 +10,7 @@ type Config struct {
 	BackupDir       string
 	TemplateDefault string
 	SSHUser         string
+	ImageDir        string // Directory for downloaded images (default: ~/.nido/images)
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -23,6 +24,7 @@ func LoadConfig(path string) (*Config, error) {
 		BackupDir:       "/tmp/libvirt-pool/backups",
 		TemplateDefault: "template-headless",
 		SSHUser:         "vmuser",
+		ImageDir:        "", // Will be set to ~/.nido/images if not specified
 	}
 
 	scanner := bufio.NewScanner(file)
@@ -45,6 +47,8 @@ func LoadConfig(path string) (*Config, error) {
 			cfg.TemplateDefault = val
 		case "SSH_USER":
 			cfg.SSHUser = val
+		case "IMAGE_DIR":
+			cfg.ImageDir = val
 		}
 	}
 

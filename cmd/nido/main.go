@@ -185,6 +185,8 @@ func main() {
 			os.Exit(1)
 		}
 		ui.Success("Vaporized %d stopped life forms.", count)
+	case "image":
+		cmdImage(nidoDir, args)
 	case "mcp":
 		server := mcp.NewServer(prov)
 		server.Serve()

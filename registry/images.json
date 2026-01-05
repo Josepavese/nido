@@ -1,0 +1,70 @@
+{
+  "schema_version": "1",
+  "updated_at": "2026-01-05T16:00:00Z",
+  "images": [
+    {
+      "name": "ubuntu",
+      "registry": "official",
+      "description": "Ubuntu Server LTS",
+      "homepage": "https://ubuntu.com/",
+      "versions": [
+        {
+          "version": "24.04",
+          "aliases": ["noble", "latest", "lts"],
+          "arch": "amd64",
+          "url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
+          "checksum_type": "sha256",
+          "checksum": "TO_BE_VERIFIED",
+          "size_bytes": 629145600,
+          "format": "qcow2"
+        },
+        {
+          "version": "22.04",
+          "aliases": ["jammy"],
+          "arch": "amd64",
+          "url": "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img",
+          "checksum_type": "sha256",
+          "checksum": "TO_BE_VERIFIED",
+          "size_bytes": 615514112,
+          "format": "qcow2"
+        }
+      ]
+    },
+    {
+      "name": "debian",
+      "registry": "official",
+      "description": "Debian GNU/Linux",
+      "homepage": "https://www.debian.org/",
+      "versions": [
+        {
+          "version": "12",
+          "aliases": ["bookworm", "latest", "stable"],
+          "arch": "amd64",
+          "url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
+          "checksum_type": "sha512",
+          "checksum": "TO_BE_VERIFIED",
+          "size_bytes": 347078656,
+          "format": "qcow2"
+        }
+      ]
+    },
+    {
+      "name": "alpine",
+      "registry": "official",
+      "description": "Alpine Linux - Lightweight and secure",
+      "homepage": "https://alpinelinux.org/",
+      "versions": [
+        {
+          "version": "3.20",
+          "aliases": ["latest"],
+          "arch": "amd64",
+          "url": "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/cloud/nocloud_alpine-3.20.0-x86_64-bios-cloudinit-r0.qcow2",
+          "checksum_type": "sha256",
+          "checksum": "TO_BE_VERIFIED",
+          "size_bytes": 54525952,
+          "format": "qcow2"
+        }
+      ]
+    }
+  ]
+}
