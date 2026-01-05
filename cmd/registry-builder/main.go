@@ -88,7 +88,23 @@ func main() {
 		}
 	}
 
-	// 5. Write Output
+	// 5. Semantic Check & Write Output
+	// If the new catalog (excluding UpdatedAt) is the same as the old one,
+	// we keep the old UpdatedAt to avoid "noisy" git diffs.
+	if existingCatalog != nil {
+		// Temporary match check (ignoring UpdatedAt)
+		tempCatalog := *catalog
+		tempCatalog.UpdatedAt = existingCatalog.UpdatedAt
+
+		newData, _ := json.Marshal(tempCatalog)
+		oldData, _ := json.Marshal(existingCatalog)
+
+		if string(newData) == string(oldData) {
+			fmt.Println("\n✅ No semantic changes detected. Keeping existing catalog timestamp.")
+			catalog.UpdatedAt = existingCatalog.UpdatedAt
+		}
+	}
+
 	outputData, err := json.MarshalIndent(catalog, "", "  ")
 	if err != nil {
 		fmt.Printf("❌ Failed to marshal JSON: %v\n", err)
@@ -100,7 +116,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("\n✨ Registry generated at %s (%d images)\n", *outputFile, len(catalog.Images))
+	fmt.Printf("\n✨ Registry sync complete at %s (%d images)\n", *outputFile, len(catalog.Images))
 
 	// 6. Signal for Validation (used by CI/CD)
 	if len(newImages) > 0 {
