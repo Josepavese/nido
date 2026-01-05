@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Josepavese/nido/internal/image"
@@ -144,9 +145,74 @@ func formatDuration(d time.Duration) string {
 
 // Stubs for other commands (Phase 2+)
 func cmdImagePull(nidoDir string, args []string) {
-	ui.Ironic("The bird is still learning to fetch images...")
-	ui.Info("This feature is coming in Phase 2! 🐣")
-	ui.Info("For now, you can see what's available with: nido image list")
+	if len(args) < 1 {
+		ui.Error("Usage: nido image pull <name>[:version]")
+		os.Exit(1)
+	}
+
+	target := args[0]
+	name := target
+	version := ""
+
+	// Parse version if present
+	if strings.Contains(target, ":") {
+		parts := strings.Split(target, ":")
+		name = parts[0]
+		version = parts[1]
+	}
+
+	imageDir := filepath.Join(nidoDir, "images")
+
+	// Load catalog
+	catalog, err := image.LoadCatalog(imageDir, image.DefaultCacheTTL)
+	if err != nil {
+		ui.Error("Failed to load catalog: %v", err)
+		os.Exit(1)
+	}
+
+	// Find image
+	img, ver, err := catalog.FindImage(name, version)
+	if err != nil {
+		ui.Error("Image not found: %s", target)
+		ui.Info("Try 'nido image list' to see available images.")
+		os.Exit(1)
+	}
+
+	// Target file path (stored as qcow2 for now, future proofing for potential raw)
+	destPath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
+
+	// Check if already exists and verified
+	// Note: Ideally we'd verify checksum here too, but that's slow.
+	// We assume if file exists at final path, it's good.
+	if _, err := os.Stat(destPath); err == nil {
+		ui.Success("Image %s:%s is already downloaded.", img.Name, ver.Version)
+		return
+	}
+
+	// Announce download
+	ui.Header(fmt.Sprintf("Pulling %s:%s", img.Name, ver.Version))
+	ui.Info("Source: %s", ver.URL)
+	ui.Info("Size:   %d MB", ver.SizeBytes/1024/1024)
+
+	// Download
+	downloader := image.Downloader{}
+	if err := downloader.Download(ver.URL, destPath, ver.SizeBytes); err != nil {
+		ui.Error("Download failed: %v", err)
+		os.Exit(1)
+	}
+
+	// Verify Checksum
+	ui.Ironic("Verifying genetic integrity...")
+	if err := image.VerifyChecksum(destPath, ver.Checksum, ver.ChecksumType); err != nil {
+		ui.Error("Checksum verification failed: %v", err)
+		ui.Warn("The downloaded file may be corrupted or tampered with.")
+		ui.Warn("Deleting corrupted file...")
+		os.Remove(destPath)
+		os.Exit(1)
+	}
+
+	ui.Success("Image downloaded and verified successfully! 🐣")
+	ui.Info("You can now spawn a VM using: nido spawn my-vm --image %s:%s", img.Name, ver.Version)
 }
 
 func cmdImageInfo(nidoDir string, args []string) {

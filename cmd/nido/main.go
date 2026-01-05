@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Josepavese/nido/internal/config"
+	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/mcp"
 	"github.com/Josepavese/nido/internal/provider"
 	"github.com/Josepavese/nido/internal/ui"
@@ -90,20 +91,77 @@ func main() {
 		fmt.Println("")
 	case "spawn":
 		if len(args) < 1 {
-			fmt.Println("Usage: nido spawn <name> [template]")
+			fmt.Println("Usage: nido spawn <name> [--image <name:tag> | <template>]")
 			os.Exit(1)
 		}
 		name := args[0]
 		tpl := ""
+		imageTag := ""
+
 		if len(args) > 1 {
-			tpl = args[1]
+			if args[1] == "--image" && len(args) > 2 {
+				imageTag = args[2]
+			} else {
+				tpl = args[1]
+			}
 		}
+
+		if imageTag != "" {
+			// Resolve image
+			imgDir := filepath.Join(nidoDir, "images")
+			catalog, err := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
+			if err != nil {
+				ui.Error("Failed to load catalog: %v", err)
+				os.Exit(1)
+			}
+
+			pName, pVer := imageTag, ""
+			if strings.Contains(imageTag, ":") {
+				parts := strings.Split(imageTag, ":")
+				pName, pVer = parts[0], parts[1]
+			}
+
+			img, ver, err := catalog.FindImage(pName, pVer)
+			if err != nil {
+				ui.Error("Image %s not found in catalog.", imageTag)
+				os.Exit(1)
+			}
+
+			imgPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
+
+			// Auto-pull if missing
+			if _, err := os.Stat(imgPath); os.IsNotExist(err) {
+				ui.Info("Image not found locally. Pulling %s:%s...", img.Name, ver.Version)
+				downloader := image.Downloader{}
+				if err := downloader.Download(ver.URL, imgPath, ver.SizeBytes); err != nil {
+					ui.Error("Download failed: %v", err)
+					os.Exit(1)
+				}
+				// Verify
+				ui.Ironic("Verifying genetic integrity...")
+				if err := image.VerifyChecksum(imgPath, ver.Checksum, ver.ChecksumType); err != nil {
+					ui.Error("Verification failed: %v", err)
+					os.Remove(imgPath)
+					os.Exit(1)
+				}
+				ui.Success("Image downloaded successfully.")
+			}
+
+			// Use absolute path as template
+			tpl = imgPath
+		}
+
 		ui.Ironic("Initiating hypervisor handshake...")
 		if err := prov.Spawn(name, provider.VMOptions{DiskPath: tpl}); err != nil {
 			ui.Error("Hatch failure for %s: %v", name, err)
 			os.Exit(1)
 		}
-		ui.Success("VM %s hatched successfully from template.", name)
+
+		source := "template"
+		if imageTag != "" {
+			source = "image " + imageTag
+		}
+		ui.Success("VM %s hatched successfully from %s.", name, source)
 	case "start":
 		if len(args) < 1 {
 			fmt.Println("Usage: nido start <name>")

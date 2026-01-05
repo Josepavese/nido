@@ -101,14 +101,20 @@ nido doctor                        # Run system health check
 nido config                        # View current genetics
 
 # AI agent setup
+# AI agent setup
 nido register                      # Get MCP config for Claude/Antigravity
+
+# Image Management 🆕
+nido image list                    # Browse available cloud images
+nido image pull ubuntu:24.04       # Download official Ubuntu image
+nido spawn my-vm --image ubuntu:24.04  # Spawn directly from image
 ```
 
 ## Commands
 
 | Command | What it does | Example |
 |---------|--------------|---------|
-| `spawn <name> [template]` | Create and start a VM | `nido spawn test-vm` |
+| `spawn <name> [--image <img/tpl>]` | Create and start a VM | `nido spawn vm1 --image ubuntu:24.04` |
 | `start <name>` | Revive a stopped VM | `nido start test-vm` |
 | `stop <name>` | Put VM into deep sleep | `nido stop test-vm` |
 | `delete <name>` | Evict VM permanently | `nido delete test-vm` |
@@ -116,6 +122,8 @@ nido register                      # Get MCP config for Claude/Antigravity
 | `ls` | List all VMs | `nido ls` |
 | `info <name>` | Get VM details | `nido info test-vm` |
 | `ssh <name>` | SSH into VM | `nido ssh test-vm` |
+| `image list` | List cloud images | `nido image list` |
+| `image pull <image>` | Download image | `nido image pull ubuntu:24.04` |
 | `template list` | List templates | `nido template list` |
 | `template create <vm> <tpl>` | Archive VM | `nido template create my-vm golden` |
 | `doctor` | System diagnostics | `nido doctor` |
@@ -130,6 +138,7 @@ Nido stores its state in `~/.nido/`. Configuration lives in `~/.nido/config.env`
 BACKUP_DIR=/path/to/templates       # Where templates are stored
 TEMPLATE_DEFAULT=template-headless  # Default template for spawn
 SSH_USER=vmuser                     # Default SSH username
+IMAGE_DIR=/home/user/.nido/images   # Where downloaded images live
 ```
 
 ## 💡 Tips & Tricks (The "Matryoshka" Section)
