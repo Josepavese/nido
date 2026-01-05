@@ -2,117 +2,135 @@
 
 **Where your local VMs come to life.**
 
-> *"Why did the VM cross the road? To get to the other hypervisor. But with nido, it just spawns there instantly."* 🐣
+_"Why did the VM cross the road? To get to the other hypervisor. But with nido, it just spawns there instantly."_ 🐣
 
 ---
 
-`nido` is a minimal, automation-friendly toolkit to manage local KVM virtual machines (Headless or GUI). It is designed for developers and AI agents who need a fast, simple, and robust way to spawn and control local VMs for testing, development, and sandboxing.
+`nido` is a minimal, automation-friendly toolkit to manage local virtual machines on **Linux, macOS, and Windows**. It's designed for developers and AI agents who need a fast, simple, and robust way to spawn and control local VMs for testing, development, and sandboxing.
 
 It combines a simple CLI for human operators with a powerful **Model Context Protocol (MCP) Server**, making it the first local-first, AI-native VM manager.
 
 ## Philosophy
 
-`nido` is built around **compressed template backups**. Templates are stored as highly compressed qcow2 files, and new VMs are created by rapidly expanding a template into a fresh disk. This keeps storage usage minimal while allowing for near-instant VM deployment.
+nido is built around **compressed template backups**. Templates are stored as highly compressed `.compact.qcow2` files, and new VMs are created by rapidly expanding a template into a fresh disk. This keeps storage usage minimal while allowing for near-instant VM deployment.
 
-> *Think of it as a bird's nest ("nido") where your VMs hatch quickly and fly away when done.*
+Think of it as a bird's nest ("nido") where your VMs hatch quickly and fly away when done. 🐦
 
 ## Features
 
-| Feature | Status | Description |
-|---|:---:|---|
-| CLI for VM lifecycle | ✅ | Create, start, stop, destroy VMs |
-| Compressed templates | ✅ | Fast deployment from minimal storage |
-| MCP Server | ✅ | AI agent integration via Model Context Protocol |
-| REST API | 📋 | Traditional HTTP API for integrations |
-| Webhooks | 📋 | Event-driven notifications |
-| Snapshot management | 📋 | Save and restore VM states |
-| GitHub Action | 📋 | CI/CD integration |
+Legend: ✅ Done | 🚧 In Progress | 📋 Planned
 
-**Legend:** ✅ Done | 🚧 In Progress | 📋 Planned
+### Core VM Management ✅
 
----
+- **Instant Spawn:** Deploy VMs from compressed templates in seconds
+- **Lifecycle Control:** Start, stop, delete VMs with simple commands
+- **Template System:** Archive running VMs into reusable templates
+- **SSH Integration:** Automatic SSH connection strings
+- **Health Checks:** Built-in diagnostics (`nido doctor`)
+- **Cross-Platform:** Native QEMU support on Linux (KVM), macOS (HVF), and Windows (WHPX)
 
-## Roadmap
+### AI Integration ✅
 
-### Phase 1: Foundation ✅
+- **MCP Server:** Full Model Context Protocol implementation
+- **12 MCP Tools:** Complete VM management via AI agents
+  - `vm_list`, `vm_create`, `vm_start`, `vm_stop`, `vm_delete`
+  - `vm_info`, `vm_ssh`, `vm_prune`
+  - `template_list`, `template_create`
+  - `config_get`, `doctor`
+- **Claude Desktop Ready:** Works out of the box with `nido register`
+- **Antigravity Compatible:** Seamless integration with modern AI coding assistants
 
-*The egg has hatched!*
+### Developer Experience ✅
 
-- [x] Core CLI (`nido spawn`, `start`, `stop`, `destroy`)
-- [x] Compressed template system (`.compact.qcow2`)
-- [x] Configuration management (`config.env`)
-- [x] Interactive Setup Wizard (`nido setup`)
-- [x] VM info and listing
-- [x] SSH command generation
-- [x] Preflight checks and validation
-- [x] Selftest mode (mock & real)
-- [x] IDE Registration helper (`nido register`)
+- **Zero Dependencies:** No `libvirt` or `virsh` required. Pure QEMU.
+- **Configuration Management:** Simple `.env` file for all settings
+- **Port Forwarding:** Automatic SSH port mapping (no root needed!)
+- **Compressed Storage:** Templates use `.compact.qcow2` format
 
-### Phase 2: AI Integration 🚧
+## Quick Start
 
-*Teaching the bird to talk with robots*
+### 1. Installation
 
-- [x] MCP Server implementation
-  - [x] Transport: stdio (for Claude Desktop)
-  - [ ] Transport: HTTP + SSE (for remote clients)
-- [x] MCP Tools
-  - [x] `vm_list` - List all VMs
-  - [x] `vm_create` - Create VM from template
-  - [x] `vm_start` / `vm_stop` - Lifecycle control
-  - [x] `vm_destroy` - Remove VM (implemented as `vm_delete`)
-  - [ ] `vm_exec` - Execute commands in VM
-  - [x] `vm_info` - Get VM details
-  - [ ] `template_list` - List available templates
-  - [x] `config_get` / `config_set` - Manage configuration
-  - [x] `nido_describe` - System overview
-- [ ] MCP Resources (dynamic context for AI)
-- [ ] MCP Prompts (workflow templates)
+#### Linux
 
-### Phase 3: Integration & Ecosystem 📋
+```bash
+git clone https://github.com/Josepavese/nido
+cd nido
+bash bin/install.sh
+source ~/.bashrc
+```
 
-*Building the whole tree*
+#### macOS
 
-- [ ] REST API Server
-  - [ ] CRUD endpoints for VMs
-  - [ ] Template management endpoints
-  - [ ] Authentication (API keys)
-- [ ] Webhook System
-  - [ ] Event: `vm.created`, `vm.started`, `vm.stopped`
-  - [ ] Event: `vm.destroyed`, `vm.crashed`
-  - [ ] Webhook management CLI
-- [ ] CI/CD Integration
-  - [ ] Official GitHub Action
-  - [ ] GitLab CI template
-- [ ] File operations
-  - [ ] `vm_upload` - Upload files to VM
-  - [ ] `vm_download` - Download files from VM
+```bash
+brew install qemu
+curl -L https://github.com/Josepavese/nido/releases/latest/download/nido-darwin-amd64 -o nido
+chmod +x nido
+sudo mv nido /usr/local/bin/
+```
 
-### Phase 4: Advanced Features 📋
+#### Windows
 
-*The bird learns new tricks*
+```powershell
+choco install qemu
+# Download from https://github.com/Josepavese/nido/releases
+# Extract and add to PATH
+```
 
-- [ ] Snapshot management
-  - [ ] Create snapshots
-  - [ ] Restore from snapshot
-  - [ ] Snapshot listing
-- [ ] Advanced networking
-  - [ ] Port forwarding
-  - [ ] Custom network configurations
-- [ ] Template marketplace/registry
-- [ ] Fleet management (manage multiple VMs)
-- [ ] Interactive TUI (Text User Interface)
+> **Beta Testers Wanted!** macOS and Windows support is fresh. See [TESTING.md](TESTING.md) for details.
 
-### Phase 5: Polish & DX 📋
+### 2. Usage
 
-*Making it shine*
+```bash
+# The essentials
+nido spawn my-vm                   # Hatch a new VM from default template
+nido ls                            # List all life forms in the nest
+nido ssh my-vm                     # Instant bridge via SSH
+nido stop my-vm                    # Put VM into deep sleep
+nido delete my-vm                  # Evict VM permanently
 
-- [ ] Self-healing and auto-recovery
-- [ ] AI-powered troubleshooting
-- [ ] Comprehensive documentation
-- [ ] Plugin system
-- [ ] Windows/macOS support (via remote libvirt)
+# Template management
+nido template list                 # See what's in cold storage
+nido template create my-vm golden  # Archive VM as reusable template
 
----
+# Power user moves
+nido start my-vm                   # Revive a stopped VM
+nido prune                         # Vaporize all stopped VMs
+nido info my-vm                    # Inspect neural links (IP, Port)
+nido doctor                        # Run system health check
+nido config                        # View current genetics
+
+# AI agent setup
+nido register                      # Get MCP config for Claude/Antigravity
+```
+
+## Commands
+
+| Command | What it does | Example |
+|---------|--------------|---------|
+| `spawn <name> [template]` | Create and start a VM | `nido spawn test-vm` |
+| `start <name>` | Revive a stopped VM | `nido start test-vm` |
+| `stop <name>` | Put VM into deep sleep | `nido stop test-vm` |
+| `delete <name>` | Evict VM permanently | `nido delete test-vm` |
+| `prune` | Remove all stopped VMs | `nido prune` |
+| `ls` | List all VMs | `nido ls` |
+| `info <name>` | Get VM details | `nido info test-vm` |
+| `ssh <name>` | SSH into VM | `nido ssh test-vm` |
+| `template list` | List templates | `nido template list` |
+| `template create <vm> <tpl>` | Archive VM | `nido template create my-vm golden` |
+| `doctor` | System diagnostics | `nido doctor` |
+| `config` | View configuration | `nido config` |
+| `register` | MCP setup helper | `nido register` |
+
+## Configuration
+
+Nido stores its state in `~/.nido/`. Configuration lives in `~/.nido/config.env`:
+
+```bash
+BACKUP_DIR=/path/to/templates       # Where templates are stored
+TEMPLATE_DEFAULT=template-headless  # Default template for spawn
+SSH_USER=vmuser                     # Default SSH username
+```
 
 ## 💡 Tips & Tricks (The "Matryoshka" Section)
 
@@ -120,130 +138,71 @@ It combines a simple CLI for human operators with a powerful **Model Context Pro
 
 Yes, you can hatch a bird inside a bird. This is perfect for testing hypervisors or creating complex labs.
 
-- **Prerequisite:** Set `VM_NESTED=true` in your `config.env`.
-- **How it works:** We pass `--cpu host-passthrough` to the guest, giving it the raw power (and VMX/SVM flags) of your physical CPU.
-- **Warning:** Expect a small performance hit. It's like inception, the deeper you go, the slower time (and your VM) becomes.
+- **How it works:** We pass the right CPU flags to enable nested virtualization
+- **Warning:** Expect a small performance hit. It's like inception—the deeper you go, the slower time (and your VM) becomes.
 
 ### 🐳 VM inside Container (KVM-in-Docker)
 
 Want to hatch a bird inside a whale? Nido doesn't judge your technical curiosities.
 
-- **Prerequisite:** Your container must be launched with `--privileged` and have access to `/dev/kvm` (e.g., `--device /dev/kvm`).
-- **Setup:** Install `libvirt-daemon-system` and `nido` inside the container. Start `virtlogd` and `libvirtd` at the entrypoint.
+- **Prerequisite:** Container needs `--privileged` and `--device /dev/kvm`
 - **Pro Tip:** This is the cleanest way to have a portable VM automation environment without cluttering your host system.
 
----
+## Why Nido?
 
-## Quick Start
-
-### 1. Installation (Recommended)
-
-#### a) Installer script (Linux/macOS)
-
-Download the installer from the `bin/installers` directory of the repository or use the command:
-
-```bash
-git clone https://github.com/Josepavese/nido.git
-cd nido
-# Run the local installer:
-./bin/installers/get-nido.sh
-```
-
-> **Note:** Official installers are always available in the `bin/installers` folder of the repository. You can copy and distribute them to other systems.
-
-#### b) Manual Installation
-
-If you prefer to install manually:
-
-```bash
-git clone https://github.com/your-org/nido.git
-cd nido
-# Install dependencies (Debian/Ubuntu/Fedora/macOS):
-./bin/setup_deps.sh
-# Configure the environment:
-cp config/config.example.env config/config.env
-# Edit config/config.env with your local paths
-```
-
-### 2. Usage
-
-```bash
-# 1) Create a compressed template from a base VM (VM must be shut off):
-  nido template debian-iso-1 template-headless
-# 2) Create a new VM:
-  nido create vm-test-1
-# 3) Start the VM and wait for the IP:
-  nido start vm-test-1
-# 4) Or "spawn" (create + start in one go):
-  nido spawn vm-test-1
-# -> The SSH command will be printed, ready to be copied
-```
-
-Official installers (e.g., `get-nido.sh`) are maintained in the [`bin/installers`](bin/installers/) folder. To distribute nido to other systems, simply copy the desired script from this folder and follow the installation instructions.
-
-If you update the installer, remember to commit the new version to git and update any references in the READMEs.
-
-## Commands
-
-```bash
-nido spawn <name> [template]      # Create and start a new VM
-nido create <name> [template]     # Just create VM disk and define libvirt domain
-nido start <name>                 # Start an existing VM
-nido stop <name>                  # Shutdown a running VM
-nido delete <name>                # Remove VM and delete its disk volume 💀
-nido ls [regex]                   # List VMs (matches all by default)
-nido info <name>                  # Print VM IP and SSH connection string
-nido prune                        # Delete orphan volumes in pool vms
-nido template <src> <tpl>         # Create a compressed backup from a source VM
-nido setup                        # Interactive configuration wizard
-nido config                       # View current configuration
-nido register                     # Generate MCP config for IDEs
-nido selftest                     # Run automated tests
-nido version                      # Show version info
-nido mcp-server start             # Start MCP server
-```
-
-## Why nido?
-
-| | nido | Vagrant | Multipass | E2B |
-|---|:---:|:---:|:---:|:---:|
+| Feature | nido | Vagrant | Multipass | E2B |
+|---------|:----:|:-------:|:---------:|:---:|
 | **AI Integration** | ✅ MCP | ❌ | ❌ | ✅ Cloud |
 | **Local-first** | ✅ | ✅ | ✅ | ❌ |
 | **Storage** | Compressed | Full boxes | Full images | Cloud |
+| **Cross-Platform** | ✅ | ✅ | ✅ | ✅ |
 | **Simplicity** | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ |
-| **Cost** | Free | Free | Free | $$$  |
-| **Fun to use** | 🐣 | 🤷 | 🤷 | 🤷 |
+| **Humor Level** | 🐣🐣🐣 | 😐 | 😐 | 🤖 |
 
-## Configuration
+## Roadmap
 
-Default config file: `config/config.env`
+### Phase 3: Integration & Ecosystem 📋
 
-```bash
-POOL_PATH=/path/to/libvirt-pool
-BACKUP_DIR=/path/to/backups
-VMS_POOL=vms
-TEMPLATE_DEFAULT=template-headless
-VM_MEM_MB=2048
-VM_VCPUS=2
-VM_OS_VARIANT=debian12
-NETWORK_HOSTONLY=hostonly56
-NETWORK_NAT=default
-SSH_USER=vmuser
-WAIT_TIMEOUT=60
-```
+Building the whole tree
+
+- REST API Server (CRUD endpoints, webhooks)
+- CI/CD Integration (GitHub Actions, GitLab CI)
+- File operations (`vm_upload`, `vm_download`)
+
+### Phase 4: Advanced Features 📋
+
+The bird learns new tricks
+
+- Snapshot management (create, restore, list)
+- Advanced networking (custom configs)
+- Template marketplace/registry
+- Fleet management (multiple VMs)
+- Interactive TUI
+
+### Phase 5: Polish & DX 📋
+
+Making it shine
+
+- Self-healing and auto-recovery
+- AI-powered troubleshooting
+- Comprehensive documentation
+- Plugin system
 
 ## Contributing
 
-Contributions are welcome! Whether it's a bug fix, new feature, or just improving docs, feel free to open a PR.
+Found a bug? Have a feature idea? Want to teach the bird new tricks?
 
-> *Every bird in the nest helps it grow.* 🪺
+1. Open an issue on GitHub
+2. Fork, hack, and submit a PR
+3. Follow the [tone of voice guidelines](.tonodivoce) (keep it fun!)
 
 ## License
 
-MIT License - do whatever you want, just don't blame us if your VMs fly away.
+MIT License - See [LICENSE](LICENSE) for details.
 
 ---
 
 <p align="center">
-  <i>Made with ❤️ and a healthy dose of <code>virsh</code> commands</i>
+  <i>Made with ❤️ for the Agentic future.</i><br>
+  <i>"It's not a VM, it's a lifestyle."</i> 🪺
 </p>

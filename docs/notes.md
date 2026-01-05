@@ -7,3 +7,5 @@
 - 2025-01-04: Command names normalized (spawn/create/ls/delete/prune/template) and selftest verified via mock.
 - 2025-01-04: Templates are stored as compressed backups (`.compact.qcow2`) under `BACKUP_DIR`.
 - 2025-01-04: Centralized configuration via `./config/config.env` (see `config.example.env`).
+- 2026-01-05: Added `start` command to revive stopped VMs and `prune` to remove all stopped VMs.
+- 2026-01-05: MCP server expanded with `config_get` and `vm_prune` tools for full CLI/MCP parity.

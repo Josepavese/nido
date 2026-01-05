@@ -1,14 +1,14 @@
-# VM Ops Configuration
+# Nido Configuration
 
 Copy the example and edit:
 
-```
-cp config.example.env config.env
+```bash
+cp config.example.env ~/.nido/config.env
 ```
 
-Scripts load `./config/config.env` by default.
+Nido loads `~/.nido/config.env` by default.
 Override with:
 
-```
-VMOPS_CONFIG=/path/to/config.env
+```bash
+NIDO_CONFIG=/path/to/config.env nido <command>
 ```
