@@ -63,7 +63,7 @@ jobs:
 
       # Build Nido
       - name: Build Nido
-        run: go build -o nido${{ runner.os == 'Windows' && '.exe' || '' }} cmd/nido/main.go
+        run: go build -o nido${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/nido
 
       # Run unit tests
       - name: Run unit tests
@@ -114,16 +114,16 @@ jobs:
       - name: Build for all platforms
         run: |
           # Linux
-          GOOS=linux GOARCH=amd64 go build -o dist/nido-linux-amd64 cmd/nido/main.go
+          GOOS=linux GOARCH=amd64 go build -o dist/nido-linux-amd64 ./cmd/nido
           
           # macOS (Intel)
-          GOOS=darwin GOARCH=amd64 go build -o dist/nido-darwin-amd64 cmd/nido/main.go
+          GOOS=darwin GOARCH=amd64 go build -o dist/nido-darwin-amd64 ./cmd/nido
           
           # macOS (Apple Silicon)
-          GOOS=darwin GOARCH=arm64 go build -o dist/nido-darwin-arm64 cmd/nido/main.go
+          GOOS=darwin GOARCH=arm64 go build -o dist/nido-darwin-arm64 ./cmd/nido
           
           # Windows
-          GOOS=windows GOARCH=amd64 go build -o dist/nido-windows-amd64.exe cmd/nido/main.go
+          GOOS=windows GOARCH=amd64 go build -o dist/nido-windows-amd64.exe ./cmd/nido
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
