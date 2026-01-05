@@ -5,7 +5,16 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.1.0] - 2026-01-05
+
+### Added
+
+- **Image Registry:** Built-in catalog of cloud images (Ubuntu, Debian, Alpine)
+- `nido image list/pull` commands
+- `nido spawn --image <name>` support
+- `internal/image` package with downloader and verifier
+
+## [3.0.0] - 2026-01-05
 
 ### Added
 
@@ -20,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Complete rewrite from Bash to Go
+- **Rewrite:** Complete migration from Bash to Go
 - Direct QEMU integration (no libvirt dependency)
 - Port-based SSH forwarding instead of bridge networking
 - Updated README with cross-platform installation instructions
@@ -55,6 +64,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/Josepavese/nido/compare/v2.0.0...HEAD
 [2.0.0]: https://github.com/Josepavese/nido/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/Josepavese/nido/releases/tag/v1.0.0
