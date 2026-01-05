@@ -1,0 +1,219 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v3.0.0
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Build release binaries
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          bash bin/build-release.sh $VERSION
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          # Get the tag name
+          TAG=${GITHUB_REF#refs/tags/}
+          
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 $TAG^ 2>/dev/null || echo "")
+          
+          # Determine if this is a major/minor/patch release
+          if [[ $TAG =~ v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+            MAJOR=${BASH_REMATCH[1]}
+            MINOR=${BASH_REMATCH[2]}
+            PATCH=${BASH_REMATCH[3]}
+          fi
+          
+          # Generate witty intro based on version type
+          if [ "$PATCH" = "0" ] && [ "$MINOR" = "0" ]; then
+            INTRO="🎉 **Major Release Alert!** The bird has evolved significantly. This is a big one, folks."
+          elif [ "$PATCH" = "0" ]; then
+            INTRO="🐣 **New Features Hatched!** The nest got some shiny new additions."
+          else
+            INTRO="🔧 **Maintenance Release** - Bug fixes and polish. Even birds need grooming."
+          fi
+          
+          # Generate changelog with categorization
+          if [ -z "$PREV_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"%s|||%h" $TAG)
+          else
+            COMMITS=$(git log --pretty=format:"%s|||%h" $PREV_TAG..$TAG)
+          fi
+          
+          # Categorize commits
+          FEATURES=""
+          FIXES=""
+          DOCS=""
+          CHORES=""
+          TESTS=""
+          CI=""
+          
+          while IFS='|||' read -r msg hash; do
+            if [[ $msg =~ ^feat ]]; then
+              FEATURES="${FEATURES}\n* ${msg#feat: } (\`${hash}\`)"
+            elif [[ $msg =~ ^fix ]]; then
+              FIXES="${FIXES}\n* ${msg#fix: } (\`${hash}\`)"
+            elif [[ $msg =~ ^docs ]]; then
+              DOCS="${DOCS}\n* ${msg#docs: } (\`${hash}\`)"
+            elif [[ $msg =~ ^test ]]; then
+              TESTS="${TESTS}\n* ${msg#test: } (\`${hash}\`)"
+            elif [[ $msg =~ ^ci ]]; then
+              CI="${CI}\n* ${msg#ci: } (\`${hash}\`)"
+            elif [[ $msg =~ ^chore ]]; then
+              CHORES="${CHORES}\n* ${msg#chore: } (\`${hash}\`)"
+            else
+              CHORES="${CHORES}\n* ${msg} (\`${hash}\`)"
+            fi
+          done <<< "$COMMITS"
+          
+          # Create release notes with Nido personality
+          cat > release_notes.md << EOF
+          ## 🪺 Nido $TAG
+          
+          $INTRO
+          
+          EOF
+          
+          # Add sections only if they have content
+          if [ -n "$FEATURES" ]; then
+            cat >> release_notes.md << EOF
+          ### ✨ New Features
+          
+          The bird learned some new tricks:
+          $(echo -e "$FEATURES")
+          
+          EOF
+          fi
+          
+          if [ -n "$FIXES" ]; then
+            cat >> release_notes.md << EOF
+          ### 🐛 Bug Fixes
+          
+          Squashed these pesky bugs (they were bothering the VMs):
+          $(echo -e "$FIXES")
+          
+          EOF
+          fi
+          
+          if [ -n "$DOCS" ]; then
+            cat >> release_notes.md << EOF
+          ### 📚 Documentation
+          
+          Made the docs more readable (and funnier):
+          $(echo -e "$DOCS")
+          
+          EOF
+          fi
+          
+          if [ -n "$CI" ]; then
+            cat >> release_notes.md << EOF
+          ### 🤖 CI/CD
+          
+          Robot improvements (the machines are getting smarter):
+          $(echo -e "$CI")
+          
+          EOF
+          fi
+          
+          if [ -n "$TESTS" ]; then
+            cat >> release_notes.md << EOF
+          ### 🧪 Tests
+          
+          More tests = more confidence:
+          $(echo -e "$TESTS")
+          
+          EOF
+          fi
+          
+          if [ -n "$CHORES" ]; then
+            cat >> release_notes.md << EOF
+          ### 🧹 Housekeeping
+          
+          The boring but necessary stuff:
+          $(echo -e "$CHORES")
+          
+          EOF
+          fi
+          
+          # Add installation instructions
+          cat >> release_notes.md << EOF
+          ---
+          
+          ### 📦 Installation
+          
+          Pick your platform and get hatching:
+          
+          #### Linux
+          \`\`\`bash
+          curl -L https://github.com/Josepavese/nido/releases/download/$TAG/nido-linux-amd64 -o nido
+          chmod +x nido
+          sudo mv nido /usr/local/bin/
+          nido version  # Should show $TAG
+          \`\`\`
+          
+          #### macOS (Intel)
+          \`\`\`bash
+          curl -L https://github.com/Josepavese/nido/releases/download/$TAG/nido-darwin-amd64 -o nido
+          chmod +x nido
+          sudo mv nido /usr/local/bin/
+          \`\`\`
+          
+          #### macOS (Apple Silicon)
+          \`\`\`bash
+          curl -L https://github.com/Josepavese/nido/releases/download/$TAG/nido-darwin-arm64 -o nido
+          chmod +x nido
+          sudo mv nido /usr/local/bin/
+          \`\`\`
+          
+          #### Windows
+          Download \`nido-windows-amd64.exe\` from the assets below, rename to \`nido.exe\`, and add to PATH.
+          
+          ---
+          
+          ### 🔗 Links
+          
+          * **Full Changelog:** https://github.com/Josepavese/nido/compare/$PREV_TAG...$TAG
+          * **Documentation:** https://github.com/Josepavese/nido#readme
+          * **Issues:** https://github.com/Josepavese/nido/issues
+          
+          ---
+          
+          <p align="center">
+            <i>Made with ❤️ for the Agentic future.</i><br>
+            <i>"It's not a VM, it's a lifestyle."</i> 🪺
+          </p>
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release_notes.md
+          files: |
+            dist/nido-linux-amd64
+            dist/nido-darwin-amd64
+            dist/nido-darwin-arm64
+            dist/nido-windows-amd64.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
