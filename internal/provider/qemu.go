@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/Josepavese/nido/internal/config"
 )
@@ -43,7 +44,24 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 		return err
 	}
 
-	// 3. Start
+	// 3. Generate Cloud-Init Seed ISO
+	// This ensures that if the image supports cloud-init (like official cloud images),
+	// it will automatically configure the user and SSH keys.
+	seedPath := filepath.Join(p.RootDir, "vms", name+"-seed.iso")
+	sshKey := GetLocalSSHKey()
+
+	ci := CloudInit{
+		Hostname: name,
+		User:     p.Config.SSHUser,
+		SSHKey:   sshKey,
+	}
+
+	// Create seed ISO (warn on failure but don't block spawn)
+	if err := ci.GenerateISO(seedPath); err != nil {
+		fmt.Printf("⚠️  Warning: Failed to generate cloud-init seed: %v\n", err)
+	}
+
+	// 4. Start
 	return p.Start(name)
 }
 
@@ -75,7 +93,15 @@ func (p *QemuProvider) Start(name string) error {
 	args := p.buildQemuArgs(name, diskPath, state.SSHPort, runDir)
 
 	cmd := exec.Command("qemu-system-x86_64", args...)
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+
+	// 4. Skip Bootloader (Background)
+	// We send "Enter" key via QMP to skip any guest countdowns (Alpine, GRUB, etc.)
+	go p.skipBootloader(name)
+
+	return nil
 }
 
 // buildQemuArgs constructs QEMU arguments based on the host OS.
@@ -88,24 +114,38 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, runDir 
 	// Platform-specific acceleration
 	switch runtime.GOOS {
 	case "linux":
-		args = append(args, "-enable-kvm", "-cpu", "host")
+		if _, err := os.Stat("/dev/kvm"); err == nil {
+			args = append(args, "-enable-kvm", "-cpu", "host")
+		} else {
+			// Fallback to TCG (no acceleration) for CI/CD environments without KVM
+			args = append(args, "-cpu", "qemu64")
+		}
 	case "darwin": // macOS
 		args = append(args, "-accel", "hvf", "-cpu", "host")
 	case "windows":
 		args = append(args, "-accel", "whpx", "-cpu", "host")
 	default:
-		// No acceleration, fallback to TCG (slow but works everywhere)
 		args = append(args, "-cpu", "qemu64")
 	}
 
 	// Common arguments
 	args = append(args,
-		"-drive", fmt.Sprintf("file=%s,format=qcow2", diskPath),
+		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", diskPath),
 		"-daemonize",
 		"-pidfile", filepath.Join(runDir, name+".pid"),
 		"-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", sshPort),
 		"-device", "virtio-net-pci,netdev=net0",
+		"-boot", "menu=off,strict=on,splash-time=0", // Fast boot: skip menu, no splash timeout
 	)
+
+	// Attach Cloud-Init Seed if exists
+	seedPath := filepath.Join(p.RootDir, "vms", name+"-seed.iso")
+	if _, err := os.Stat(seedPath); err == nil {
+		// Using virtio-scsi for CD-ROM often helps cloud-init detection speed and reliability
+		args = append(args, "-device", "virtio-scsi-pci,id=scsi0")
+		args = append(args, "-drive", fmt.Sprintf("file=%s,format=raw,if=none,id=drive-seed0,readonly=on", seedPath))
+		args = append(args, "-device", "scsi-cd,bus=scsi0.0,drive=drive-seed0,id=seed0")
+	}
 
 	// QMP socket (platform-specific path handling)
 	if runtime.GOOS == "windows" {
@@ -204,6 +244,7 @@ func (p *QemuProvider) Delete(name string) error {
 	vmsDir := filepath.Join(p.RootDir, "vms")
 	diskPath := filepath.Join(vmsDir, name+".qcow2")
 	os.Remove(filepath.Join(p.RootDir, "run", name+".json"))
+	os.Remove(filepath.Join(vmsDir, name+"-seed.iso"))
 	return os.Remove(diskPath)
 }
 
@@ -358,4 +399,67 @@ func (p *QemuProvider) Doctor() []string {
 	}
 
 	return reports
+}
+func (p *QemuProvider) skipBootloader(name string) {
+	qmpPath := filepath.Join(p.RootDir, "run", name+".qmp")
+	if runtime.GOOS == "windows" {
+		return
+	}
+
+	// 1. Initial wait: Give BIOS/UEFI time to finish and reach bootloader (3s)
+	time.Sleep(3 * time.Second)
+
+	// 2. Connect to QMP
+	conn, err := net.DialTimeout("unix", qmpPath, 500*time.Millisecond)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+
+	// 3. Handshake
+	decoder := json.NewDecoder(conn)
+	var greeting map[string]interface{}
+	_ = decoder.Decode(&greeting)
+	fmt.Fprintf(conn, `{"execute":"qmp_capabilities"}`+"\n")
+	_ = decoder.Decode(&greeting)
+
+	// 4. Send "Return" exactly 3 times with 1s gap
+	// This covers potential UI lag or early bootloader states
+	for i := 0; i < 3; i++ {
+		cmd, _ := json.Marshal(map[string]interface{}{
+			"execute": "send-key",
+			"arguments": map[string]interface{}{
+				"keys": []map[string]interface{}{
+					{"type": "qcode", "data": "ret"},
+				},
+			},
+		})
+		fmt.Fprintf(conn, "%s\n", string(cmd))
+
+		var res map[string]interface{}
+		_ = decoder.Decode(&res)
+
+		time.Sleep(1 * time.Second)
+	}
+}
+
+func (p *QemuProvider) execQMP(qmpPath string, command map[string]interface{}) error {
+	// Keep existing execQMP for general use if needed, but skipBootloader uses its own persistent conn
+	conn, err := net.DialTimeout("unix", qmpPath, 100*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
+
+	decoder := json.NewDecoder(conn)
+	var greeting map[string]interface{}
+	decoder.Decode(&greeting)
+	fmt.Fprintf(conn, `{"execute":"qmp_capabilities"}`+"\n")
+	decoder.Decode(&greeting)
+
+	data, _ := json.Marshal(command)
+	fmt.Fprintf(conn, "%s\n", data)
+	return decoder.Decode(&greeting)
 }

@@ -33,19 +33,23 @@ func main() {
 
 	fmt.Printf("🔍 Loaded %d sources from %s\n", len(config.Sources), *sourcesFile)
 
-	// 2. Fetch Images
+	// 3. Load existing catalog for comparison (to detect new versions)
+	existingCatalog, _ := image.LoadCatalogFromFile(*outputFile)
+
+	// 4. Fetch and Filter Images
 	catalog := &image.Catalog{
 		SchemaVersion: "1",
 		UpdatedAt:     time.Now().UTC(),
 		Images:        []image.Image{},
 	}
 
+	newImages := []string{}
 	for _, source := range config.Sources {
 		fmt.Printf("Processing %s...\n", source.Name)
 
 		imgEntry := image.Image{
 			Name:        source.Name,
-			Registry:    "official", // TODO: make configurable?
+			Registry:    "official",
 			Description: source.Description,
 			Homepage:    source.Homepage,
 			Versions:    []image.Version{},
@@ -57,6 +61,22 @@ func main() {
 				fmt.Printf("  ⚠️ Strategy %s failed: %v\n", strat.Type, err)
 				continue
 			}
+
+			// Detect new versions
+			for _, v := range vers {
+				isNew := true
+				if existingCatalog != nil {
+					_, _, findErr := existingCatalog.FindImage(source.Name, v.Version)
+					if findErr == nil {
+						isNew = false
+					}
+				}
+				if isNew {
+					fmt.Printf("  ✨ NEW VERSION FOUND: %s:%s\n", source.Name, v.Version)
+					newImages = append(newImages, fmt.Sprintf("%s:%s", source.Name, v.Version))
+				}
+			}
+
 			imgEntry.Versions = append(imgEntry.Versions, vers...)
 			fmt.Printf("  ✅ Added %d versions via %s\n", len(vers), strat.Type)
 		}
@@ -68,7 +88,7 @@ func main() {
 		}
 	}
 
-	// 3. Write Output
+	// 5. Write Output
 	outputData, err := json.MarshalIndent(catalog, "", "  ")
 	if err != nil {
 		fmt.Printf("❌ Failed to marshal JSON: %v\n", err)
@@ -81,4 +101,12 @@ func main() {
 	}
 
 	fmt.Printf("\n✨ Registry generated at %s (%d images)\n", *outputFile, len(catalog.Images))
+
+	// 6. Signal for Validation (used by CI/CD)
+	if len(newImages) > 0 {
+		fmt.Println("\n📋 Targeted validation required for new images:")
+		for _, imgName := range newImages {
+			fmt.Printf("VALIDATE: %s\n", imgName)
+		}
+	}
 }

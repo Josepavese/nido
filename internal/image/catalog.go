@@ -21,6 +21,11 @@ const (
 	CatalogCacheFile = ".catalog.json"
 )
 
+// LoadCatalogFromFile loads a catalog from a specific file path.
+func LoadCatalogFromFile(path string) (*Catalog, error) {
+	return loadFromFile(path)
+}
+
 // LoadCatalog loads the image catalog from cache or remote source.
 // It implements a cache-first strategy with TTL:
 // 1. If cache exists and is fresh (< TTL), use it

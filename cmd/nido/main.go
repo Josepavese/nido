@@ -71,7 +71,7 @@ func main() {
 			ui.Error("Usage: nido ssh <name>")
 			os.Exit(1)
 		}
-		cmdSsh(prov, args[0])
+		cmdSsh(prov, args[0], args[1:])
 	case "doctor":
 		cmdDoctor(prov)
 	case "info":
@@ -372,23 +372,41 @@ compdef _nido_completion nido
 	}
 }
 
-func cmdSsh(prov provider.VMProvider, name string) {
+func cmdSsh(prov provider.VMProvider, name string, args []string) {
 	cmdStr, err := prov.SSHCommand(name)
 	if err != nil {
 		ui.Error("Target acquisition failed: %v", err)
 		os.Exit(1)
 	}
 	ui.Info("Bridging to %s...", name)
-	ui.Ironic("Establishing secure neural link...")
+	if len(args) == 0 {
+		ui.Ironic("Establishing secure neural link...")
+	}
 
 	parts := strings.Split(cmdStr, " ")
-	// ssh -p [port] [user]@[ip]
-	// we need to be careful with splitting if there are spaces in options, but here it's simple
-	cmd := exec.Command(parts[0], parts[1:]...)
+	// ssh -p [port] [user]@[ip] [args...]
+	// Inject options to skip fingerprint check for ephemeral VMs
+	sshOptions := []string{
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "LogLevel=ERROR", // Reduce noise
+		"-o", "BatchMode=yes", // Fail instead of prompting for password
+	}
+
+	baseArgs := append(sshOptions, parts[1:]...)
+	finalArgs := append(baseArgs, args...)
+
+	cmd := exec.Command(parts[0], finalArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
-	cmd.Run()
+	if err := cmd.Run(); err != nil {
+		// Pass through exit code if possible
+		if exitError, ok := err.(*exec.ExitError); ok {
+			os.Exit(exitError.ExitCode())
+		}
+		os.Exit(1)
+	}
 }
 
 func cmdDoctor(prov provider.VMProvider) {

@@ -5,4 +5,6 @@ docs/test_log.md
 .actions
 .improvements
 .tone_of_voice
-nido
+/nido
+/registry-builder
+/registry-validator
