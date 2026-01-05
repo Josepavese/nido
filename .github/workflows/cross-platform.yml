@@ -43,12 +43,23 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           choco install qemu -y
+          # Refresh PATH to include QEMU
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+          # Verify installation
+          & "C:\Program Files\qemu\qemu-system-x86_64.exe" --version
+        shell: pwsh
 
       # Verify QEMU installation
       - name: Verify QEMU
         run: |
-          qemu-system-x86_64 --version
-          qemu-img --version
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            "/c/Program Files/qemu/qemu-system-x86_64.exe" --version
+            "/c/Program Files/qemu/qemu-img.exe" --version
+          else
+            qemu-system-x86_64 --version
+            qemu-img --version
+          fi
+        shell: bash
 
       # Build Nido
       - name: Build Nido
