@@ -130,15 +130,17 @@ nido spawn my-vm --image ubuntu:24.04  # Spawn directly from image
 | `config` | View configuration | `nido config` |
 | `register` | MCP setup helper | `nido register` |
 
-## Configuration
+### Automation
 
-Nido stores its state in `~/.nido/`. Configuration lives in `~/.nido/config.env`:
+The registry (`registry/images.json`) is automatically updated daily by a GitHub Action.
+To add a new image source, submit a PR to `registry/sources.yaml`. The `registry-builder` tool will automatically fetch the latest versions and checksums.
+
+### Configuration
+
+By default, images are stored in `~/.nido/images/`. You can change this via an environment variable:
 
 ```bash
-BACKUP_DIR=/path/to/templates       # Where templates are stored
-TEMPLATE_DEFAULT=template-headless  # Default template for spawn
-SSH_USER=vmuser                     # Default SSH username
-IMAGE_DIR=/home/user/.nido/images   # Where downloaded images live
+export NIDO_IMAGE_DIR="/path/to/my/images"
 ```
 
 ## 💡 Tips & Tricks (The "Matryoshka" Section)

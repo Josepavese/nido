@@ -1,83 +1,114 @@
 {
-    "schema_version": "1",
-    "updated_at": "2026-01-05T16:00:00Z",
-    "images": [
+  "schema_version": "1",
+  "updated_at": "2026-01-05T15:47:53.754735501Z",
+  "images": [
+    {
+      "name": "ubuntu",
+      "registry": "official",
+      "description": "Ubuntu Server LTS",
+      "homepage": "https://ubuntu.com/",
+      "versions": [
         {
-            "name": "ubuntu",
-            "registry": "official",
-            "description": "Ubuntu Server LTS",
-            "homepage": "https://ubuntu.com/",
-            "versions": [
-                {
-                    "version": "24.04",
-                    "aliases": [
-                        "noble",
-                        "latest",
-                        "lts"
-                    ],
-                    "arch": "amd64",
-                    "url": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
-                    "checksum_type": "sha256",
-                    "checksum": "2b5f90ffe8180def601c021c874e55d8303e8bcbfc66fee2b94414f43ac5eb1f",
-                    "size_bytes": 629145600,
-                    "format": "qcow2"
-                },
-                {
-                    "version": "22.04",
-                    "aliases": [
-                        "jammy"
-                    ],
-                    "arch": "amd64",
-                    "url": "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img",
-                    "checksum_type": "sha256",
-                    "checksum": "2cbbe814d84c9dc7d749ea0afda924d9e26f771a3f824b48f33cf3a438a21f4b",
-                    "size_bytes": 615514112,
-                    "format": "qcow2"
-                }
-            ]
+          "version": "24.04",
+          "aliases": [
+            "noble",
+            "lts",
+            "latest"
+          ],
+          "arch": "amd64",
+          "url": "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img",
+          "checksum_type": "sha256",
+          "checksum": "2b5f90ffe8180def601c021c874e55d8303e8bcbfc66fee2b94414f43ac5eb1f",
+          "size_bytes": 626655744,
+          "format": "qcow2"
         },
         {
-            "name": "debian",
-            "registry": "official",
-            "description": "Debian GNU/Linux",
-            "homepage": "https://www.debian.org/",
-            "versions": [
-                {
-                    "version": "12",
-                    "aliases": [
-                        "bookworm",
-                        "latest",
-                        "stable"
-                    ],
-                    "arch": "amd64",
-                    "url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
-                    "checksum_type": "sha512",
-                    "checksum": "650a0c89c906707134b8b418004d42ea57556fbbe255e9071fbb78537704085328765d1a396bca1b5cca4540f4f12cadfff53b87f978a9b982e6e59356ddfdde",
-                    "size_bytes": 347078656,
-                    "format": "qcow2"
-                }
-            ]
-        },
-        {
-            "name": "alpine",
-            "registry": "official",
-            "description": "Alpine Linux - Lightweight and secure",
-            "homepage": "https://alpinelinux.org/",
-            "versions": [
-                {
-                    "version": "3.20.8",
-                    "aliases": [
-                        "latest",
-                        "3.20"
-                    ],
-                    "arch": "amd64",
-                    "url": "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/cloud/oci_alpine-3.20.8-x86_64-bios-cloudinit-r0.qcow2",
-                    "checksum_type": "sha512",
-                    "checksum": "c79a0a5c6b197120793c0d61248158cf6de89639efb9d9903b5a61be2715b6e9f04453787f8a4ef0fca1b6e8a6da534d1ab5fc946d16ffb62599e72b3e9acf8e",
-                    "size_bytes": 173015040,
-                    "format": "qcow2"
-                }
-            ]
+          "version": "22.04",
+          "aliases": [
+            "jammy"
+          ],
+          "arch": "amd64",
+          "url": "https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img",
+          "checksum_type": "sha256",
+          "checksum": "2cbbe814d84c9dc7d749ea0afda924d9e26f771a3f824b48f33cf3a438a21f4b",
+          "size_bytes": 691721216,
+          "format": "qcow2"
         }
-    ]
+      ]
+    },
+    {
+      "name": "debian",
+      "registry": "official",
+      "description": "Debian GNU/Linux",
+      "homepage": "https://www.debian.org/",
+      "versions": [
+        {
+          "version": "12",
+          "aliases": [
+            "bookworm"
+          ],
+          "arch": "amd64",
+          "url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
+          "checksum_type": "sha512",
+          "checksum": "650a0c89c906707134b8b418004d42ea57556fbbe255e9071fbb78537704085328765d1a396bca1b5cca4540f4f12cadfff53b87f978a9b982e6e59356ddfdde",
+          "size_bytes": 346619904,
+          "format": "qcow2"
+        }
+      ]
+    },
+    {
+      "name": "alpine",
+      "registry": "official",
+      "description": "Alpine Linux - Lightweight and secure",
+      "homepage": "https://alpinelinux.org/",
+      "versions": [
+        {
+          "version": "3.20",
+          "aliases": [
+            "3.20",
+            "latest"
+          ],
+          "arch": "amd64",
+          "url": "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/cloud/nocloud_alpine-3.20.8-x86_64-bios-cloudinit-r0.qcow2",
+          "checksum_type": "sha512",
+          "checksum": "563ab052b758022e537e718bc29863c1ae7ca2790f276f556f1d4fee5d69b06deb027025f34af8114805d9998b46e1cbc50d8e402e50fb2f46b23dec31b89adb",
+          "size_bytes": 177733632,
+          "format": "qcow2"
+        },
+        {
+          "version": "3.21",
+          "aliases": [
+            "3.21",
+            "latest"
+          ],
+          "arch": "amd64",
+          "url": "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/cloud/nocloud_alpine-3.21.5-x86_64-bios-cloudinit-r0.qcow2",
+          "checksum_type": "sha512",
+          "checksum": "d8583f69bcda16e47ae748c8b945f60d765a6a9d6a281685040c4ccd7092f0b80432b80ee076b83ee2620cf5ba868ea520d7ffc37266b9eb6c6c3726ff4440fc",
+          "size_bytes": 177078272,
+          "format": "qcow2"
+        }
+      ]
+    },
+    {
+      "name": "cirros",
+      "registry": "official",
+      "description": "CirrOS - Test Image",
+      "homepage": "https://download.cirros-cloud.net",
+      "versions": [
+        {
+          "version": "0.6.3",
+          "aliases": [
+            "0.6.3"
+          ],
+          "arch": "amd64",
+          "url": "https://download.cirros-cloud.net/0.6.3/cirros-0.6.3-x86_64-disk.img",
+          "checksum_type": "sha256",
+          "checksum": "7d6355852aeb6dbcd191bcda7cd74f1536cfe5cbf8a10495a7283a8396e4b75b",
+          "size_bytes": 21692416,
+          "format": "qcow2"
+        }
+      ]
+    }
+  ]
 }

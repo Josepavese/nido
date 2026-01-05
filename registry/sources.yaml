@@ -1,0 +1,41 @@
+sources:
+  - name: ubuntu
+    provider: Canonical
+    description: "Ubuntu Server LTS"
+    homepage: "https://ubuntu.com/"
+    strategies:
+      - type: "ubuntu-cloud"
+        base_url: "https://cloud-images.ubuntu.com/releases"
+        versions: ["24.04", "22.04"]
+
+  - name: debian
+    provider: Debian Project
+    description: "Debian GNU/Linux"
+    homepage: "https://www.debian.org/"
+    strategies:
+      - type: "debian-cloud"
+        base_url: "https://cloud.debian.org/images/cloud"
+        versions: ["12"]
+
+  - name: alpine
+    provider: Alpine Linux
+    description: "Alpine Linux - Lightweight and secure"
+    homepage: "https://alpinelinux.org/"
+    strategies:
+      - type: "alpine-cdn"
+        base_url: "https://dl-cdn.alpinelinux.org/alpine"
+        versions: ["3.20", "3.21"]
+
+  - name: cirros
+    provider: CirrOS Project
+    description: "CirrOS - Test Image"
+    homepage: "https://download.cirros-cloud.net"
+    strategies:
+      - type: "generic"
+        base_url: "https://download.cirros-cloud.net"
+        versions: ["0.6.3"]
+        template_url: "{base_url}/{version}/cirros-{version}-x86_64-disk.img"
+        checksum_url: "{base_url}/{version}/SHA256SUMS"
+        checksum_type: "sha256"
+        regex: "cirros-{version}-x86_64-disk.img"
+
