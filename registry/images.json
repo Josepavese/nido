@@ -1,11 +1,11 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-01-05T18:18:13.139765858Z",
+  "updated_at": "2026-01-06T08:24:59.485228108Z",
   "images": [
     {
       "name": "ubuntu",
       "registry": "official",
-      "description": "Ubuntu Server LTS",
+      "description": "Official Ubuntu Cloud Images",
       "homepage": "https://ubuntu.com/",
       "versions": [
         {
