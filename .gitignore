@@ -2,7 +2,7 @@
 .secrets
 config/config.env
 
-# Agent/AI Junk
+# Memo Junk
 .agent_memo.md
 .improvements/
 .tone_of_voice.md
