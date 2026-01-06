@@ -1,10 +1,22 @@
+# Secrets and Config
 .secrets
 config/config.env
+
+# Agent/AI Junk
 .agent_memo.md
-docs/test_log.md
-.actions
-.improvements
-.tone_of_voice
+.improvements/
+.tone_of_voice.md
+
+# Build Artifacts
 /nido
 /registry-builder
 /registry-validator
+/dist/
+bin/nido
+
+# System Junk
+.DS_Store
+*.log
+docs/test_log.md
+.actions/
+nohup.out
