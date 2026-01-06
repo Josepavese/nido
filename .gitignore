@@ -18,4 +18,5 @@ bin/nido
 .DS_Store
 *.log
 docs/test_log.md
+.actions/
 nohup.out
