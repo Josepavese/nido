@@ -1,11 +1,11 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-01-05T18:18:13.139765858Z",
+  "updated_at": "2026-01-05T22:44:41.041934602Z",
   "images": [
     {
       "name": "ubuntu",
       "registry": "official",
-      "description": "Ubuntu Server LTS",
+      "description": "Official Ubuntu Cloud Images",
       "homepage": "https://ubuntu.com/",
       "versions": [
         {
@@ -33,6 +33,46 @@
           "checksum": "2cbbe814d84c9dc7d749ea0afda924d9e26f771a3f824b48f33cf3a438a21f4b",
           "size_bytes": 691721216,
           "format": "qcow2"
+        }
+      ]
+    },
+    {
+      "name": "opensuse",
+      "registry": "official",
+      "description": "openSUSE Tumbleweed Cloud Images",
+      "homepage": "https://get.opensuse.org/tumbleweed/",
+      "versions": [
+        {
+          "version": "Latest",
+          "aliases": [
+            "Latest"
+          ],
+          "arch": "amd64",
+          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-Cloud.qcow2",
+          "checksum_type": "sha256",
+          "checksum": "ab1b0cd1b5e6b2dc7a4157d31a651f2c100ccb3fefbada90762a145382626321",
+          "size_bytes": 292648448,
+          "format": "qcow2"
+        }
+      ]
+    },
+    {
+      "name": "kali",
+      "registry": "official",
+      "description": "Kali Linux Cloud Images",
+      "homepage": "https://www.kali.org/",
+      "versions": [
+        {
+          "version": "2025.4",
+          "aliases": [
+            "2025.4"
+          ],
+          "arch": "amd64",
+          "url": "https://kali.download/cloud-images/current/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz",
+          "checksum_type": "sha256",
+          "checksum": "649f20a4703f2324c0a5fa286a9260a5eb98d7f5d554d9aa179f284e8338fe8f",
+          "size_bytes": 203023936,
+          "format": "raw"
         }
       ]
     },

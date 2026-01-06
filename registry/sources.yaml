@@ -8,6 +8,33 @@ sources:
         base_url: "https://cloud-images.ubuntu.com/releases"
         versions: ["24.04", "22.04"]
 
+  - name: opensuse
+    provider: openSUSE Project
+    description: "openSUSE Tumbleweed Cloud Images"
+    homepage: "https://get.opensuse.org/tumbleweed/"
+    strategies:
+      - type: "generic"
+        base_url: "https://download.opensuse.org/tumbleweed/appliances"
+        versions: ["Latest"]
+        template_url: "{base_url}/openSUSE-Tumbleweed-Minimal-VM.x86_64-Cloud.qcow2"
+        checksum_url: "{base_url}/openSUSE-Tumbleweed-Minimal-VM.x86_64-Cloud.qcow2.sha256"
+        checksum_type: "sha256"
+        regex: "openSUSE-Tumbleweed-Minimal-VM.x86_64-Cloud.qcow2"
+
+  - name: kali
+    provider: Kali Linux
+    description: "Kali Linux Cloud Images"
+    homepage: "https://www.kali.org/"
+    strategies:
+      - type: "generic"
+        base_url: "https://kali.download/cloud-images/current"
+        versions: ["2025.4"]
+        template_url: "{base_url}/kali-linux-{version}-cloud-genericcloud-amd64.tar.xz"
+        checksum_url: "{base_url}/SHA256SUMS"
+        checksum_type: "sha256"
+        regex: "kali-linux-{version}-cloud-genericcloud-amd64.tar.xz"
+        format: "raw"
+
   - name: debian
     provider: Debian Project
     description: "Debian GNU/Linux"
