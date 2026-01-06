@@ -90,14 +90,4 @@ Flavours are pre-configured environments optimized for Nido.
 
 ---
 
-## 🤖 CI/CD Workflows
-
-Located in `.github/workflows/`:
-
-1. **`update-registry.yml`**: Daily cron job that builds the registry, validates new images, and creates Pull Requests.
-2. **`release.yml`**: Triggers on new tags (`v*`). Compiles Nido binaries for Linux, macOS, and Windows and uploads them as Release Assets.
-3. **`cross-platform.yml`**: Runs tests on every PR to ensure compatibility across different operating systems.
-
----
-
 *“It’s not just code, it’s a living ecosystem.”* 🐣✨
