@@ -78,4 +78,6 @@ Write-Host ""
 Write-Host "💡 Note: You'll need QEMU installed to run VMs" -ForegroundColor Yellow
 Write-Host "   Install via: " -NoNewline; Write-Host "choco install qemu" -ForegroundColor Cyan
 Write-Host ""
+Write-Host "💡 Tip: PowerShell completion is not yet automatic. Run " -NoNewline; Write-Host "nido completion powershell" -ForegroundColor Cyan -NoNewline; Write-Host " to check status."
+Write-Host ""
 Write-Host '"It''s not a VM, it''s a lifestyle." 🪺' -ForegroundColor White

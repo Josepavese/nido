@@ -132,15 +132,13 @@ nido config                        # View current genetics
 # AI agent setup
 nido register                      # Get MCP config for Claude/Antigravity
 
-# Image Management 🆕
+# Image & Cache Management 🆕
 nido images list                    # Browse cloud images (shows file sizes)
 nido images pull ubuntu:24.04       # Pull official Ubuntu 24.04 image
+nido cache ls                       # List cached images and their sizes
+nido cache info                     # Show cache stats (total size, age)
 nido spawn my-vm --image ubuntu:24.04  # Spawn directly from any cloud image
-nido spawn build-vm --user-data config.yaml # Spawn with custom cloud-init (Cook your own flavour!)
-
-# Nido Flavours 🧁
-nido spawn desk --image lubuntu:24.04 # Spawn a pre-built Lubuntu Minimal desktop
-nido spawn code --image xfce:24.04    # Spawn an XFCE development environment
+nido spawn test-vm --no-cache       # Spawn without saving image to local cache
 ```
 
 ## Nido Flavours & Split Distribution 🧁📦
@@ -166,7 +164,7 @@ echo "source ~/.nido/bash_completion" >> ~/.bashrc
 ## Commands
 
 | Command | What it does | Example |
-|---------|--------------|---------|
+| :--- | :--- | :--- |
 | `spawn <name> [--image <img> --gui]` | Create and start a VM with optional GUI | `nido spawn vm1 --image xfce:24.04 --gui` |
 | `start <name> [--gui]` | Revive a stopped VM with optional GUI | `nido start test-vm --gui` |
 | `stop <name>` | Put VM into deep sleep | `nido stop test-vm` |
@@ -182,6 +180,9 @@ echo "source ~/.nido/bash_completion" >> ~/.bashrc
 | `doctor` | System diagnostics | `nido doctor` |
 | `config` | View configuration | `nido config` |
 | `register` | MCP setup helper | `nido register` |
+| `cache ls` | List cached images | `nido cache ls` |
+| `cache info` | Show cache statistics | `nido cache info` |
+| `cache prune` | Remove all cached images | `nido cache prune` |
 
 ### GUI Support (VNC)
 
@@ -222,7 +223,7 @@ Want to hatch a bird inside a whale? Nido doesn't judge your technical curiositi
 ## Why Nido?
 
 | Feature | nido | Vagrant | Multipass | E2B |
-|---------|:----:|:-------:|:---------:|:---:|
+| :--- | :---: | :---: | :---: | :---: |
 | **AI Integration** | ✅ MCP | ❌ | ❌ | ✅ Cloud |
 | **Local-first** | ✅ | ✅ | ✅ | ❌ |
 | **Storage** | Compressed | Full boxes | Full images | Cloud |

@@ -93,12 +93,31 @@ case "$SHELL" in
 esac
 
 if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ]; then
+  # Update PATH
   if ! grep -q "${NIDO_HOME}/bin" "$SHELL_RC" 2>/dev/null; then
     echo "" >> "$SHELL_RC"
     echo "# Nido VM Manager" >> "$SHELL_RC"
     echo "export PATH=\"\$PATH:${NIDO_HOME}/bin\"" >> "$SHELL_RC"
     echo "${GREEN}✅ Added to PATH in ${SHELL_RC}${RESET}"
   fi
+
+  # Setup Completions
+  case "$SHELL" in
+    */bash)
+      "${NIDO_HOME}/bin/nido" completion bash > "${NIDO_HOME}/bin/nido.bash"
+      if ! grep -q "nido.bash" "$SHELL_RC" 2>/dev/null; then
+        echo "source \"${NIDO_HOME}/bin/nido.bash\"" >> "$SHELL_RC"
+        echo "${GREEN}✅ Bash completions enabled${RESET}"
+      fi
+      ;;
+    */zsh)
+      "${NIDO_HOME}/bin/nido" completion zsh > "${NIDO_HOME}/bin/nido.zsh"
+      if ! grep -q "nido.zsh" "$SHELL_RC" 2>/dev/null; then
+        echo "source \"${NIDO_HOME}/bin/nido.zsh\"" >> "$SHELL_RC"
+        echo "${GREEN}✅ Zsh completions enabled${RESET}"
+      fi
+      ;;
+  esac
 fi
 
 echo ""
