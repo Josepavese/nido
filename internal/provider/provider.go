@@ -9,6 +9,7 @@ type VMStatus struct {
 	PID     int
 	SSHPort int
 	VNCPort int
+	SSHUser string
 }
 
 // VMOptions defines parameters for creating/starting a VM.
@@ -18,6 +19,7 @@ type VMOptions struct {
 	DiskPath     string
 	UserDataPath string
 	Gui          bool
+	SSHUser      string
 }
 
 // VMDetail contains comprehensive data about a VM.

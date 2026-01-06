@@ -17,6 +17,7 @@ type Image struct {
 	Registry    string    `json:"registry"` // "official" or "nido"
 	Description string    `json:"description"`
 	Homepage    string    `json:"homepage,omitempty"`
+	SSHUser     string    `json:"ssh_user,omitempty"`
 	Versions    []Version `json:"versions"`
 }
 

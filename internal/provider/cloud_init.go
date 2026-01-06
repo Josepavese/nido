@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// CloudInit handles the generation of cloud-init seed ISOs.
 type CloudInit struct {
 	Hostname       string
 	User           string
@@ -15,6 +16,7 @@ type CloudInit struct {
 	CustomUserData string
 }
 
+// GenerateISO creates a cloud-init seed ISO using NoCloud format.
 func (c *CloudInit) GenerateISO(outPath string) error {
 	tmpDir, err := os.MkdirTemp("", "nido-cloud-init")
 	if err != nil {
@@ -22,8 +24,8 @@ func (c *CloudInit) GenerateISO(outPath string) error {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// 1. meta-data (One-line JSON for best compatibility with some minimal CirrOS parsers)
-	metaData := fmt.Sprintf("{\"instance-id\": \"i-%s\", \"local-hostname\": \"%s\"}\n", c.Hostname, c.Hostname)
+	// 1. meta-data
+	metaData := fmt.Sprintf("{\"instance-id\": \"i-%s\", \"local-hostname\": \"%s\"}", c.Hostname, c.Hostname)
 	if err := os.WriteFile(filepath.Join(tmpDir, "meta-data"), []byte(metaData), 0644); err != nil {
 		return err
 	}
@@ -32,6 +34,18 @@ func (c *CloudInit) GenerateISO(outPath string) error {
 	var userData string
 	if c.CustomUserData != "" {
 		userData = c.CustomUserData
+	} else if c.User == "cirros" {
+		// CirrOS's minimal cloud-init only supports shell scripts (starting with #!)
+		userData = "#!/bin/sh\n"
+		userData += "echo \"[Nido] cloud-init script starting...\" > /dev/console\n"
+		if c.SSHKey != "" {
+			userData += fmt.Sprintf("mkdir -p /home/%s/.ssh\n", c.User)
+			userData += fmt.Sprintf("cat <<EOF >> /home/%s/.ssh/authorized_keys\n%s\nEOF\n", c.User, c.SSHKey)
+			userData += fmt.Sprintf("chown -R %s:%s /home/%s/.ssh\n", c.User, c.User, c.User)
+			userData += fmt.Sprintf("chmod 700 /home/%s/.ssh\n", c.User)
+			userData += fmt.Sprintf("chmod 600 /home/%s/.ssh/authorized_keys\n", c.User)
+			userData += "echo \"[Nido] SSH key injected.\" > /dev/console\n"
+		}
 	} else {
 		userData = "#cloud-config\n"
 		userData += "users:\n"

@@ -66,11 +66,21 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 		return err
 	}
 
-	// 3. Generate Cloud-Init Seed ISO
-	// This ensures that if the image supports cloud-init (like official cloud images),
-	// it will automatically configure the user and SSH keys.
-	seedPath := filepath.Join(p.RootDir, "vms", name+"-seed.iso")
+	// 3. Prepare Paths
+	runDir := filepath.Join(p.RootDir, "run")
+	vmsDir := filepath.Join(p.RootDir, "vms")
+	os.MkdirAll(runDir, 0755)
+	os.MkdirAll(vmsDir, 0755)
+
+	// 4. Generate Cloud-Init Seed ISO
+	seedPath := filepath.Join(vmsDir, name+"-seed.iso")
 	sshKey := GetLocalSSHKey()
+
+	// Resolve SSH user first so it can be used for Cloud-Init and state
+	sshUser := opts.SSHUser
+	if sshUser == "" {
+		sshUser = p.Config.SSHUser
+	}
 
 	customUserData := ""
 	if opts.UserDataPath != "" {
@@ -85,7 +95,7 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 
 	ci := CloudInit{
 		Hostname:       name,
-		User:           p.Config.SSHUser,
+		User:           sshUser,
 		SSHKey:         sshKey,
 		CustomUserData: customUserData,
 	}
@@ -95,10 +105,12 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 		fmt.Printf("⚠️  Warning: Failed to generate cloud-init seed: %v\n", err)
 	}
 
-	// 4. Save Initial State (with GUI preference)
-	p.saveState(name, 0, 0, 0, opts.Gui)
+	// 5. Save Initial State (with GUI preference and custom SSH user)
+	if err := p.saveState(name, 0, 0, 0, opts.Gui, sshUser); err != nil {
+		return fmt.Errorf("failed to save initial state: %w", err)
+	}
 
-	// 5. Start
+	// 6. Start
 	return p.Start(name, opts)
 }
 
@@ -111,6 +123,7 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	// 1. Prepare Paths
 	runDir := filepath.Join(p.RootDir, "run")
 	vmsDir := filepath.Join(p.RootDir, "vms")
+	// Already created by Spawn or should be there
 	os.MkdirAll(runDir, 0755)
 	os.MkdirAll(vmsDir, 0755)
 
@@ -120,19 +133,26 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	}
 
 	// 2. Port Management
-	state, _ := p.loadState(name)
+	state, err := p.loadState(name)
+	if err != nil {
+		// Fallback for direct 'start' without 'spawn' (e.g. legacy)
+		state = VMState{
+			Name:    name,
+			Gui:     opts.Gui,
+			SSHUser: p.Config.SSHUser,
+		}
+	}
 	updated := false
 	if state.SSHPort == 0 {
 		state.SSHPort = p.findAvailablePort(50022)
 		updated = true
 	}
 	if state.Gui && state.VNCPort == 0 {
-		state.VNCPort = p.findAvailablePort(59000) // VNC range usually starts at 5900, but we use high ports
+		state.VNCPort = p.findAvailablePort(59000)
 		updated = true
 	}
-
 	if updated {
-		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui)
+		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser)
 	}
 
 	// 3. Build Arguments (cross-platform)
@@ -150,6 +170,15 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	// 4. Skip Bootloader (Background)
 	// We send "Enter" key via QMP to skip any guest countdowns (Alpine, GRUB, etc.)
 	go p.skipBootloader(name)
+
+	// 5. Record PID
+	pidFile := filepath.Join(runDir, name+".pid")
+	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", cmd.Process.Pid)), 0644); err != nil {
+		return fmt.Errorf("failed to write pid file: %w", err)
+	}
+
+	// 6. Update State with PID
+	p.saveState(name, cmd.Process.Pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser)
 
 	return nil
 }
@@ -188,6 +217,7 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 		"-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", sshPort),
 		"-device", "virtio-net-pci,netdev=net0",
 		"-boot", "menu=off,strict=on,splash-time=0", // Fast boot: skip menu, no splash timeout
+		"-serial", "file:"+filepath.Join(runDir, name+".serial.log"),
 	)
 
 	// Attach Cloud-Init Seed if exists
@@ -199,7 +229,7 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 	// QMP socket (platform-specific path handling)
 	if runtime.GOOS == "windows" {
 		// Windows uses named pipes for QMP
-		args = append(args, "-qmp", fmt.Sprintf("tcp:127.0.0.1:0,server,nowait"))
+		args = append(args, "-qmp", "tcp:127.0.0.1:0,server,nowait")
 	} else {
 		// Unix-like systems use Unix sockets
 		args = append(args, "-qmp", "unix:"+filepath.Join(runDir, name+".qmp")+",server,nowait")
@@ -248,6 +278,7 @@ func (p *QemuProvider) List() ([]VMStatus, error) {
 				State:   stateStr,
 				PID:     pid,
 				SSHPort: vmState.SSHPort,
+				SSHUser: vmState.SSHUser,
 			})
 		}
 	}
@@ -276,7 +307,7 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 		Name:    name,
 		State:   liveness,
 		IP:      "127.0.0.1",
-		SSHUser: p.Config.SSHUser,
+		SSHUser: state.SSHUser,
 		SSHPort: state.SSHPort,
 		VNCPort: state.VNCPort,
 	}, nil
@@ -376,10 +407,11 @@ type VMState struct {
 	SSHPort int    `json:"ssh_port"`
 	VNCPort int    `json:"vnc_port,omitempty"`
 	Gui     bool   `json:"gui,omitempty"`
+	SSHUser string `json:"ssh_user,omitempty"`
 }
 
-func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool) error {
-	state := VMState{Name: name, PID: pid, SSHPort: sshPort, VNCPort: vncPort, Gui: gui}
+func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser string) error {
+	state := VMState{Name: name, PID: pid, SSHPort: sshPort, VNCPort: vncPort, Gui: gui, SSHUser: sshUser}
 	data, _ := json.MarshalIndent(state, "", "  ")
 	return os.WriteFile(filepath.Join(p.RootDir, "run", name+".json"), data, 0644)
 }

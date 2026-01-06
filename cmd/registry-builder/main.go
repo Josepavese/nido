@@ -47,11 +47,17 @@ func main() {
 	for _, source := range config.Sources {
 		fmt.Printf("Processing %s...\n", source.Name)
 
+		registry := source.Registry
+		if registry == "" {
+			registry = "official"
+		}
+
 		imgEntry := image.Image{
 			Name:        source.Name,
-			Registry:    "official",
+			Registry:    registry,
 			Description: source.Description,
 			Homepage:    source.Homepage,
+			SSHUser:     source.SSHUser,
 			Versions:    []image.Version{},
 		}
 

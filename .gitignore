@@ -5,7 +5,7 @@ config/config.env
 # Memo Junk
 .agent_memo.md
 .improvements/
-.tone_of_voice.md
+#.tone_of_voice.md
 
 # Build Artifacts
 /nido
