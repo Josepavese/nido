@@ -5,6 +5,19 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.1] - 2026-01-06 "The Delivery Drone" 🛸
+
+### 🔧 Maintenance & Reliability
+
+- **Release Integrity Safeguards:**
+  - New `bin/verify-release.sh` tool to ensure all binaries and assets are correctly published.
+  - Hardened CI/CD workflows to prevent "partial" releases during manual interventions.
+- **Fixed Installer Detection:** Resolved an issue where the `quick-install.sh` would occasionally see older versions due to release metadata delays.
+
+### ✨ Maintainer Tools
+
+- **Flavour Sync Tool:** Added `bin/upload-flavours.sh`, a professional, idempotent utility for maintainers to sync local image segments with GitHub Releases. It includes a real-time progress bar to watch those 1GB chunks fly. 🚀
+
 ## [4.0.0] - 2026-01-06 "Sentient Nest" 🤖
 
 ### 🎉 Major Features
