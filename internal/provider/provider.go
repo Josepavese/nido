@@ -8,13 +8,16 @@ type VMStatus struct {
 	State   string
 	PID     int
 	SSHPort int
+	VNCPort int
 }
 
 // VMOptions defines parameters for creating/starting a VM.
 type VMOptions struct {
-	MemoryMB int
-	VCPUs    int
-	DiskPath string
+	MemoryMB     int
+	VCPUs        int
+	DiskPath     string
+	UserDataPath string
+	Gui          bool
 }
 
 // VMDetail contains comprehensive data about a VM.
@@ -24,6 +27,7 @@ type VMDetail struct {
 	IP      string
 	SSHUser string
 	SSHPort int
+	VNCPort int
 }
 
 // VMProvider defines the contract for OS-specific hypervisor management.
@@ -36,7 +40,8 @@ type VMProvider interface {
 	Spawn(name string, opts VMOptions) error
 
 	// Start boots up a stopped VM. Returns nil if already running.
-	Start(name string) error
+	// If gui is true, enables the graphical interface.
+	Start(name string, opts VMOptions) error
 
 	// Stop halts a running VM. If graceful is true, sends ACPI shutdown signal.
 	Stop(name string, graceful bool) error

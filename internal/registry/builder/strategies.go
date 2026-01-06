@@ -45,6 +45,11 @@ func fetchGeneric(src Source, strat Strategy) ([]image.Version, error) {
 		checksumURL := replacer.Replace(strat.ChecksumURL)
 		regex := replacer.Replace(strat.Regex)
 
+		format := strat.Format
+		if format == "" {
+			format = "qcow2"
+		}
+
 		// 2. Verify Image Existence (HEAD)
 		size, err := getRemoteSize(imgURL)
 		if err != nil {
@@ -67,7 +72,7 @@ func fetchGeneric(src Source, strat Strategy) ([]image.Version, error) {
 			ChecksumType: strat.ChecksumType,
 			Checksum:     chk,
 			SizeBytes:    size,
-			Format:       "qcow2", // Assumed for generic tier 1
+			Format:       format,
 		})
 	}
 	return results, nil

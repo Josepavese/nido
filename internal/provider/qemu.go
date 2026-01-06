@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -40,7 +41,28 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	}
 
 	// 2. Create Disk
-	if err := p.CreateDisk(name, "20G", tpl); err != nil {
+	// Default to 20G, but expand if template is larger
+	diskSize := "20G"
+	if tpl != "" {
+		out, err := exec.Command("qemu-img", "info", "--output=json", tpl).Output()
+		if err == nil {
+			var info struct {
+				VirtualSize int64 `json:"virtual-size"`
+			}
+			if json.Unmarshal(out, &info) == nil && info.VirtualSize > 0 {
+				// Convert virtual size to GB and add 1G buffer (or just use virtual size)
+				// qemu-img create handles bytes if we provide a number without suffix
+				diskSize = fmt.Sprintf("%d", info.VirtualSize)
+
+				// Ensure at least 20G
+				if info.VirtualSize < 20*1024*1024*1024 {
+					diskSize = "20G"
+				}
+			}
+		}
+	}
+
+	if err := p.CreateDisk(name, diskSize, tpl); err != nil {
 		return err
 	}
 
@@ -50,10 +72,22 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	seedPath := filepath.Join(p.RootDir, "vms", name+"-seed.iso")
 	sshKey := GetLocalSSHKey()
 
+	customUserData := ""
+	if opts.UserDataPath != "" {
+		if data, err := os.ReadFile(opts.UserDataPath); err == nil {
+			customUserData = string(data)
+			// Handle placeholder if present
+			customUserData = strings.ReplaceAll(customUserData, "${SSH_KEY}", sshKey)
+		} else {
+			fmt.Printf("⚠️  Warning: Failed to read custom user-data file: %v\n", err)
+		}
+	}
+
 	ci := CloudInit{
-		Hostname: name,
-		User:     p.Config.SSHUser,
-		SSHKey:   sshKey,
+		Hostname:       name,
+		User:           p.Config.SSHUser,
+		SSHKey:         sshKey,
+		CustomUserData: customUserData,
 	}
 
 	// Create seed ISO (warn on failure but don't block spawn)
@@ -61,11 +95,14 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 		fmt.Printf("⚠️  Warning: Failed to generate cloud-init seed: %v\n", err)
 	}
 
-	// 4. Start
-	return p.Start(name)
+	// 4. Save Initial State (with GUI preference)
+	p.saveState(name, 0, 0, 0, opts.Gui)
+
+	// 5. Start
+	return p.Start(name, opts)
 }
 
-func (p *QemuProvider) Start(name string) error {
+func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	// 0. Check if already running
 	if status, err := p.Info(name); err == nil && status.State == "running" {
 		return nil // Already running
@@ -84,17 +121,30 @@ func (p *QemuProvider) Start(name string) error {
 
 	// 2. Port Management
 	state, _ := p.loadState(name)
+	updated := false
 	if state.SSHPort == 0 {
 		state.SSHPort = p.findAvailablePort(50022)
-		p.saveState(name, 0, state.SSHPort)
+		updated = true
+	}
+	if state.Gui && state.VNCPort == 0 {
+		state.VNCPort = p.findAvailablePort(59000) // VNC range usually starts at 5900, but we use high ports
+		updated = true
+	}
+
+	if updated {
+		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui)
 	}
 
 	// 3. Build Arguments (cross-platform)
-	args := p.buildQemuArgs(name, diskPath, state.SSHPort, runDir)
+	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, runDir)
 
 	cmd := exec.Command("qemu-system-x86_64", args...)
+	fmt.Fprintf(os.Stderr, "⚡ Debug: Running QEMU: qemu-system-x86_64 %s\n", strings.Join(args, " "))
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return err
+		fmt.Fprintf(os.Stderr, "❌ QEMU Error Output: %s\n", stderr.String())
+		return fmt.Errorf("QEMU failed to start: %w (stderr: %s)", err, stderr.String())
 	}
 
 	// 4. Skip Bootloader (Background)
@@ -105,10 +155,12 @@ func (p *QemuProvider) Start(name string) error {
 }
 
 // buildQemuArgs constructs QEMU arguments based on the host OS.
-func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, runDir string) []string {
+func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort int, runDir string) []string {
 	args := []string{
 		"-name", name,
 		"-m", "2048",
+		// Using 'pc' (i440fx) by default for maximum compatibility with legacy images (CirrOS, etc.)
+		"-machine", "pc",
 	}
 
 	// Platform-specific acceleration
@@ -141,10 +193,7 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, runDir 
 	// Attach Cloud-Init Seed if exists
 	seedPath := filepath.Join(p.RootDir, "vms", name+"-seed.iso")
 	if _, err := os.Stat(seedPath); err == nil {
-		// Using virtio-scsi for CD-ROM often helps cloud-init detection speed and reliability
-		args = append(args, "-device", "virtio-scsi-pci,id=scsi0")
-		args = append(args, "-drive", fmt.Sprintf("file=%s,format=raw,if=none,id=drive-seed0,readonly=on", seedPath))
-		args = append(args, "-device", "scsi-cd,bus=scsi0.0,drive=drive-seed0,id=seed0")
+		args = append(args, "-cdrom", seedPath)
 	}
 
 	// QMP socket (platform-specific path handling)
@@ -153,7 +202,16 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, runDir 
 		args = append(args, "-qmp", fmt.Sprintf("tcp:127.0.0.1:0,server,nowait"))
 	} else {
 		// Unix-like systems use Unix sockets
-		args = append(args, "-qmp", fmt.Sprintf("unix:%s,server,nowait", filepath.Join(runDir, name+".qmp")))
+		args = append(args, "-qmp", "unix:"+filepath.Join(runDir, name+".qmp")+",server,nowait")
+	}
+
+	// VNC Support
+	if vncPort > 0 {
+		// QEMU uses display numbers (port - 5900)
+		display := vncPort - 5900
+		args = append(args, "-vnc", fmt.Sprintf("127.0.0.1:%d", display))
+	} else {
+		args = append(args, "-display", "none")
 	}
 
 	return args
@@ -220,6 +278,7 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 		IP:      "127.0.0.1",
 		SSHUser: p.Config.SSHUser,
 		SSHPort: state.SSHPort,
+		VNCPort: state.VNCPort,
 	}, nil
 }
 
@@ -279,7 +338,18 @@ func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
 
 	args := []string{"create", "-f", "qcow2"}
 	if tpl != "" {
-		args = append(args, "-b", tpl, "-F", "qcow2")
+		// Autodetect template format
+		format := "qcow2"
+		out, err := exec.Command("qemu-img", "info", "--output=json", tpl).Output()
+		if err == nil {
+			var info struct {
+				Format string `json:"format"`
+			}
+			if json.Unmarshal(out, &info) == nil && info.Format != "" {
+				format = info.Format
+			}
+		}
+		args = append(args, "-b", tpl, "-F", format)
 	}
 	args = append(args, target, size)
 
@@ -304,10 +374,12 @@ type VMState struct {
 	Name    string `json:"name"`
 	PID     int    `json:"pid"`
 	SSHPort int    `json:"ssh_port"`
+	VNCPort int    `json:"vnc_port,omitempty"`
+	Gui     bool   `json:"gui,omitempty"`
 }
 
-func (p *QemuProvider) saveState(name string, pid int, port int) error {
-	state := VMState{Name: name, PID: pid, SSHPort: port}
+func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool) error {
+	state := VMState{Name: name, PID: pid, SSHPort: sshPort, VNCPort: vncPort, Gui: gui}
 	data, _ := json.MarshalIndent(state, "", "  ")
 	return os.WriteFile(filepath.Join(p.RootDir, "run", name+".json"), data, 0644)
 }

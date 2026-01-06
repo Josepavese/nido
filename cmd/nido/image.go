@@ -67,42 +67,42 @@ func cmdImageList(nidoDir string, args []string) {
 
 	// Display official images
 	if len(official) > 0 {
-		fmt.Printf("%sOFFICIAL:%s\n", ui.Bold, ui.Reset)
+		fmt.Printf("%sOFFICIAL (Upstream Proxy):%s\n", ui.Bold+ui.Cyan, ui.Reset)
 		for _, img := range official {
 			for _, v := range img.Versions {
-				// Format aliases
 				aliases := ""
 				if len(v.Aliases) > 0 {
 					aliases = fmt.Sprintf(" %s(%s)%s", ui.Dim, v.Aliases[0], ui.Reset)
 				}
 
-				// Calculate size in MB
-				sizeMB := v.SizeBytes / 1024 / 1024
-
-				// Check if downloaded
 				downloaded := ""
 				imagePath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.qcow2", img.Name, v.Version))
 				if _, err := os.Stat(imagePath); err == nil {
 					downloaded = fmt.Sprintf(" %s[downloaded]%s", ui.Green, ui.Reset)
 				}
 
-				fmt.Printf("  %s%-20s%s%s %s%d MB%s%s\n",
+				fmt.Printf("  %s%-20s%s%s %s%s%s%s\n",
 					ui.Cyan, fmt.Sprintf("%s:%s", img.Name, v.Version), ui.Reset,
-					aliases, ui.Dim, sizeMB, ui.Reset, downloaded)
+					aliases, ui.Dim, ui.HumanSize(v.SizeBytes), ui.Reset, downloaded)
 			}
 		}
 		fmt.Println("")
 	}
 
-	// Display nido-optimized images
+	// Display nido-optimized flavours
 	if len(nidoImages) > 0 {
-		fmt.Printf("%sNIDO-OPTIMIZED:%s\n", ui.Bold, ui.Reset)
+		fmt.Printf("%sNIDO FLAVOURS (Compressed & Optimized):%s\n", ui.Bold+ui.Magenta, ui.Reset)
 		for _, img := range nidoImages {
 			for _, v := range img.Versions {
-				sizeMB := v.SizeBytes / 1024 / 1024
-				fmt.Printf("  %s%-20s%s %s%d MB%s\n",
-					ui.Cyan, fmt.Sprintf("%s:%s", img.Name, v.Version), ui.Reset,
-					ui.Dim, sizeMB, ui.Reset)
+				downloaded := ""
+				imagePath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.qcow2", img.Name, v.Version))
+				if _, err := os.Stat(imagePath); err == nil {
+					downloaded = fmt.Sprintf(" %s[downloaded]%s", ui.Green, ui.Reset)
+				}
+
+				fmt.Printf("  %s%-20s%s %s%s%s%s\n",
+					ui.Magenta, fmt.Sprintf("%s:%s", img.Name, v.Version), ui.Reset,
+					ui.Dim, ui.HumanSize(v.SizeBytes), ui.Reset, downloaded)
 			}
 		}
 		fmt.Println("")
@@ -192,12 +192,19 @@ func cmdImagePull(nidoDir string, args []string) {
 	// Announce download
 	ui.Header(fmt.Sprintf("Pulling %s:%s", img.Name, ver.Version))
 	ui.Info("Source: %s", ver.URL)
-	ui.Info("Size:   %d MB", ver.SizeBytes/1024/1024)
+	ui.Info("Size:   %s", ui.HumanSize(ver.SizeBytes))
 
 	// Download
 	downloader := image.Downloader{}
-	if err := downloader.Download(ver.URL, destPath, ver.SizeBytes); err != nil {
-		ui.Error("Download failed: %v", err)
+	var downloadErr error
+	if len(ver.PartURLs) > 0 {
+		downloadErr = downloader.DownloadMultiPart(ver.PartURLs, destPath, ver.SizeBytes)
+	} else {
+		downloadErr = downloader.Download(ver.URL, destPath, ver.SizeBytes)
+	}
+
+	if downloadErr != nil {
+		ui.Error("Download failed: %v", downloadErr)
 		os.Exit(1)
 	}
 

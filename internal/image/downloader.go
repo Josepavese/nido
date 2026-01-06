@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -109,6 +111,100 @@ func (d *Downloader) Download(url, dest string, expectedSize int64) error {
 	}
 
 	return nil
+}
+
+// DownloadMultiPart downloads multiple sequential parts and concatenates them into dest.
+func (d *Downloader) DownloadMultiPart(urls []string, dest string, expectedTotalSize int64) error {
+	tmpDir, err := os.MkdirTemp("", "nido-download-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	var parts []string
+	for i, url := range urls {
+		partDest := filepath.Join(tmpDir, fmt.Sprintf("part.%03d", i+1))
+		if !d.Quiet {
+			fmt.Printf("🌐 Downloading part %d/%d...\n", i+1, len(urls))
+		}
+		if err := d.Download(url, partDest, 0); err != nil {
+			return fmt.Errorf("failed to download part %d: %w", i+1, err)
+		}
+		parts = append(parts, partDest)
+	}
+
+	if !d.Quiet {
+		fmt.Printf("🧩 Reassembling image...\n")
+	}
+
+	out, err := os.Create(dest)
+	if err != nil {
+		return fmt.Errorf("failed to create final image: %w", err)
+	}
+	defer out.Close()
+
+	for _, part := range parts {
+		f, err := os.Open(part)
+		if err != nil {
+			return fmt.Errorf("failed to open part %s: %w", part, err)
+		}
+		if _, err := io.Copy(out, f); err != nil {
+			f.Close()
+			return fmt.Errorf("failed to concatenate part %s: %w", part, err)
+		}
+		f.Close()
+	}
+
+	if expectedTotalSize > 0 {
+		info, err := os.Stat(dest)
+		if err == nil && info.Size() != expectedTotalSize {
+			return fmt.Errorf("final size mismatch: expected %d, got %d", expectedTotalSize, info.Size())
+		}
+	}
+
+	return nil
+}
+
+// Decompress extracts an archive to a destination.
+// Currently supported: .tar.xz (standard for Kali cloud images)
+func (d *Downloader) Decompress(src, dest string) error {
+	if !d.Quiet {
+		fmt.Printf("📦 Decompressing %s...\n", filepath.Base(src))
+	}
+
+	if strings.HasSuffix(src, ".tar.xz") {
+		// Kali images are tarballs containing the qcow2
+		// tar -xJf src -C dir
+		destDir := filepath.Dir(dest)
+		cmd := exec.Command("tar", "-xJf", src, "-C", destDir)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("extraction failed: %v (%s)", err, string(out))
+		}
+
+		// Kali convention: kali-linux-2025.4-genericcloud-amd64.tar.xz
+		// contains 'disk.raw' (but in qcow2 format despite the extension!)
+		// We try several candidates for what was extracted
+		candidates := []string{
+			strings.TrimSuffix(filepath.Base(src), ".tar.xz") + ".qcow2",
+			"disk.raw",
+		}
+
+		for _, cand := range candidates {
+			candPath := filepath.Join(destDir, cand)
+			if _, err := os.Stat(candPath); err == nil {
+				if candPath != dest {
+					if err := os.Rename(candPath, dest); err != nil {
+						return fmt.Errorf("failed to move extracted image (%s -> %s): %w", candPath, dest, err)
+					}
+				}
+				return nil
+			}
+		}
+
+		return fmt.Errorf("extraction succeeded but could not find extracted image in %s", destDir)
+	}
+
+	return fmt.Errorf("unsupported compression format for %s", src)
 }
 
 // writeCounter counts bytes written and prints progress

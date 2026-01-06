@@ -27,6 +27,7 @@ type Strategy struct {
 	ChecksumURL  string `yaml:"checksum_url,omitempty"`  // URL to SUMS file
 	ChecksumType string `yaml:"checksum_type,omitempty"` // sha256 or sha512
 	Regex        string `yaml:"regex,omitempty"`         // Regex to match filename in directory listing or SUMS file
+	Format       string `yaml:"format,omitempty"`        // qcow2 or raw
 }
 
 // Fetcher defines the interface for different strategies

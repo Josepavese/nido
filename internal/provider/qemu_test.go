@@ -49,7 +49,7 @@ func TestBuildQemuArgs_CrossPlatform(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Note: We can't actually mock runtime.GOOS in tests,
 			// but we can verify the logic by checking the current platform
-			args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, "/tmp/run")
+			args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 0, "/tmp/run")
 
 			// Verify common arguments are present
 			if !contains(args, "-name") {
@@ -118,7 +118,7 @@ func TestBuildQemuArgs_CommonArguments(t *testing.T) {
 		Config:  &config.Config{},
 	}
 
-	args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, "/tmp/run")
+	args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 0, "/tmp/run")
 
 	requiredArgs := map[string]bool{
 		"-name":      false,
@@ -152,7 +152,7 @@ func TestBuildQemuArgs_DiskPath(t *testing.T) {
 	}
 
 	diskPath := "/path/to/vm.qcow2"
-	args := p.buildQemuArgs("test-vm", diskPath, 50022, "/tmp/run")
+	args := p.buildQemuArgs("test-vm", diskPath, 50022, 0, "/tmp/run")
 
 	found := false
 	for _, arg := range args {
@@ -164,6 +164,33 @@ func TestBuildQemuArgs_DiskPath(t *testing.T) {
 
 	if !found {
 		t.Errorf("Disk path %q not properly formatted in args: %v", diskPath, args)
+	}
+}
+
+// TestBuildQemuArgs_VNC verifies VNC arguments are correctly generated
+func TestBuildQemuArgs_VNC(t *testing.T) {
+	p := &QemuProvider{
+		RootDir: "/tmp/nido-test",
+		Config:  &config.Config{},
+	}
+
+	// 1. Test with VNC enabled (port 5901)
+	args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 5901, "/tmp/run")
+	if !contains(args, "-vnc") {
+		t.Error("Missing -vnc argument when port is provided")
+	}
+	// display = port - 5900 = 1
+	if !contains(args, "127.0.0.1:1") {
+		t.Errorf("Expected VNC display '127.0.0.1:1' for port 5901, got something else in: %v", args)
+	}
+
+	// 2. Test with VNC disabled (port 0)
+	argsNoVNC := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 0, "/tmp/run")
+	if contains(argsNoVNC, "-vnc") {
+		t.Error("-vnc argument should not be present when port is 0")
+	}
+	if !contains(argsNoVNC, "-display") || !contains(argsNoVNC, "none") {
+		t.Error("Should have -display none when VNC is disabled")
 	}
 }
 
