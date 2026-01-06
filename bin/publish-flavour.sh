@@ -22,6 +22,9 @@ echo "🔍 Calculating genetic fingerprint (SHA256)..."
 FULL_HASH=$(sha256sum "$IMAGE_PATH" | awk '{print $1}')
 FULL_SIZE=$(stat -c%s "$IMAGE_PATH")
 
+# Create checksum file for automation
+echo "$FULL_HASH  flavour-$FLAVOUR-$VERSION-amd64.qcow2" > "$DIST_DIR/flavour-$FLAVOUR-$VERSION-amd64.qcow2.sha256"
+
 # 2. Split into 1GB chunks
 echo "🧩 Partitioning into 1GB chunks..."
 split -b 1000M --numeric-suffixes=1 --suffix-length=3 "$IMAGE_PATH" "$DIST_DIR/flavour-$FLAVOUR-$VERSION-amd64.qcow2."

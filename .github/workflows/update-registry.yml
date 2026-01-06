@@ -3,6 +3,8 @@ name: Update Registry
 on:
   schedule:
     - cron: '0 8 * * *' # Run daily at 08:00 UTC
+  release:
+    types: [published]
   workflow_dispatch:      # Allow manual trigger
 
 permissions:
@@ -28,6 +30,8 @@ jobs:
 
       - name: Run Registry Builder
         id: builder
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Run builder and capture output to a file
           go run cmd/registry-builder/main.go --sources registry/sources.yaml --output registry/images.json > builder_output.txt

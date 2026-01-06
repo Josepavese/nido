@@ -2,9 +2,11 @@ package builder
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -28,6 +30,8 @@ func Fetch(src Source, strat Strategy) ([]image.Version, error) {
 		return fetchDebian(src, strat)
 	case "alpine-cdn":
 		return fetchAlpine(src, strat)
+	case "github-release":
+		return fetchGithubRelease(src, strat)
 	default:
 		return nil, fmt.Errorf("unknown strategy type: %s", strat.Type)
 	}
@@ -305,4 +309,131 @@ func findChecksum(url, regexPattern, algo string) (string, error) {
 	}
 
 	return "", fmt.Errorf("could not parse checksum")
+}
+
+func fetchGithubRelease(src Source, strat Strategy) ([]image.Version, error) {
+	if strat.Owner == "" || strat.Repo == "" {
+		return nil, fmt.Errorf("github-release strategy requires owner and repo")
+	}
+
+	// 1. Fetch Releases
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases", strat.Owner, strat.Repo)
+	if strat.Tag != "" {
+		apiURL = fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/tags/%s", strat.Owner, strat.Repo, strat.Tag)
+	}
+
+	req, _ := http.NewRequest("GET", apiURL, nil)
+	// Add token if available in environment
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		req.Header.Set("Authorization", "token "+token)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("github api status %d", resp.StatusCode)
+	}
+
+	var releases []githubRelease
+	if strat.Tag != "" {
+		var r githubRelease
+		if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+			return nil, fmt.Errorf("failed to decode github release: %w", err)
+		}
+		releases = append(releases, r)
+	} else {
+		if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+			return nil, fmt.Errorf("failed to decode github releases list: %w", err)
+		}
+	}
+
+	// 2. Process Releases
+	var results []image.Version
+
+	for _, rel := range releases {
+		// Group assets by "image-version"
+		// Key: version
+		type group struct {
+			parts    []string
+			size     int64
+			checksum string
+			chkType  string
+		}
+		groups := make(map[string]*group)
+
+		// Regex to parse asset name: flavour-<name>-<version>-amd64.qcow2.<part>
+		// or flavour-<name>-<version>-amd64.qcow2.sha256
+		assetRegex := regexp.MustCompile(`flavour-(.+)-(.+)-amd64\.qcow2(\..+)?`)
+
+		for _, asset := range rel.Assets {
+			matches := assetRegex.FindStringSubmatch(asset.Name)
+			if matches == nil {
+				continue
+			}
+
+			flavourName := matches[1]
+			version := matches[2]
+			suffix := matches[3]
+
+			// Skip if this isn't the flavour we are looking for in this source
+			if flavourName != src.Name {
+				continue
+			}
+
+			key := version
+			if groups[key] == nil {
+				groups[key] = &group{parts: []string{}}
+			}
+
+			if strings.HasSuffix(suffix, ".sha256") {
+				groups[key].chkType = "sha256"
+				ch, _ := fetchString(asset.DownloadURL)
+				groups[key].checksum = strings.Fields(ch)[0]
+			} else if strings.HasSuffix(suffix, ".sha512") {
+				groups[key].chkType = "sha512"
+				ch, _ := fetchString(asset.DownloadURL)
+				groups[key].checksum = strings.Fields(ch)[0]
+			} else if regexp.MustCompile(`\.\d{3}$`).MatchString(suffix) {
+				// It's a part
+				groups[key].parts = append(groups[key].parts, asset.DownloadURL)
+				groups[key].size += asset.Size
+			}
+		}
+
+		// 3. Convert groups to versions
+		for ver, g := range groups {
+			if len(g.parts) == 0 {
+				continue
+			}
+
+			results = append(results, image.Version{
+				Version:      ver,
+				Aliases:      []string{ver},
+				Arch:         "amd64",
+				URL:          g.parts[0], // First part as main URL for compatibility
+				PartURLs:     g.parts,
+				ChecksumType: g.chkType,
+				Checksum:     g.checksum,
+				SizeBytes:    g.size,
+				Format:       "qcow2",
+			})
+		}
+	}
+
+	return results, nil
+}
+
+type githubRelease struct {
+	TagName string        `json:"tag_name"`
+	Assets  []githubAsset `json:"assets"`
+}
+
+type githubAsset struct {
+	Name        string `json:"name"`
+	Size        int64  `json:"size"`
+	DownloadURL string `json:"browser_download_url"`
 }
