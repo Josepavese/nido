@@ -1,0 +1,33 @@
+#cloud-config
+users:
+  - name: vmuser
+    sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    groups: [sudo, adm, nopasswdlogin]
+    ssh_authorized_keys:
+      - ${SSH_KEY}
+ssh_pwauth: true
+chpasswd:
+  list: |
+    vmuser:nido
+  expire: false
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - xorg
+  - lxqt
+  - lightdm
+  - lubuntu-desktop
+  - tigervnc-standalone-server
+  - novnc
+  - python3-websockify
+
+runcmd:
+  - systemctl set-default graphical.target
+  - systemctl enable lightdm
+  - mkdir -p /etc/lightdm/lightdm.conf.d
+  - |
+    printf "[Seat:*]\nautologin-user=vmuser\nautologin-user-timeout=0\n" > /etc/lightdm/lightdm.conf.d/01-autologin.conf
+  # Optimization for fast boot
+  - if [ -f /etc/default/grub ]; then sed -i 's/GRUB_TIMEOUT=[0-9]*/GRUB_TIMEOUT=0/' /etc/default/grub && (update-grub || grub-mkconfig -o /boot/grub/grub.cfg); fi
