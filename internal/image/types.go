@@ -30,5 +30,26 @@ type Version struct {
 	ChecksumType string   `json:"checksum_type"` // "sha256" or "sha512"
 	Checksum     string   `json:"checksum"`
 	SizeBytes    int64    `json:"size_bytes"`
-	Format       string   `json:"format"` // "qcow2"
+	SizeHuman    string   `json:"size,omitempty"` // e.g., "1.2 GB"
+	Format       string   `json:"format"`         // "qcow2"
+	PartURLs     []string `json:"part_urls,omitempty"`
+}
+
+// CachedImage represents a cached image file on disk.
+// Used for cache management operations.
+type CachedImage struct {
+	Name    string    // Image name (e.g., "ubuntu")
+	Version string    // Version (e.g., "24.04")
+	Path    string    // Full path to cached file
+	Size    int64     // File size in bytes
+	ModTime time.Time // Last modification time
+}
+
+// CacheStats provides statistics about the image cache.
+// Used for displaying cache information to users.
+type CacheStats struct {
+	TotalImages int       // Total number of cached images
+	TotalSize   int64     // Total size in bytes
+	OldestImage time.Time // Modification time of oldest image
+	NewestImage time.Time // Modification time of newest image
 }

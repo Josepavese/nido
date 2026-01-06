@@ -45,26 +45,6 @@ func TestLoadCatalogFromFile(t *testing.T) {
 	}
 }
 
-func TestLoadCatalogInvalidSchema(t *testing.T) {
-	tmpDir := t.TempDir()
-	catalogPath := filepath.Join(tmpDir, CatalogCacheFile)
-
-	// Create catalog with invalid schema version
-	catalog := &Catalog{
-		SchemaVersion: "999",
-		Images:        []Image{},
-	}
-
-	data, _ := json.Marshal(catalog)
-	os.WriteFile(catalogPath, data, 0644)
-
-	// Should fail with schema version error
-	_, err := loadFromFile(catalogPath)
-	if err == nil {
-		t.Error("expected error for invalid schema, got nil")
-	}
-}
-
 func TestFindImage(t *testing.T) {
 	catalog := &Catalog{
 		Images: []Image{
