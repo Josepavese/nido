@@ -367,7 +367,8 @@ func fetchGithubRelease(src Source, strat Strategy) ([]image.Version, error) {
 
 		// Regex to parse asset name: flavour-<name>-<version>-amd64.qcow2.<part>
 		// or flavour-<name>-<version>-amd64.qcow2.sha256
-		assetRegex := regexp.MustCompile(`flavour-(.+)-(.+)-amd64\.qcow2(\..+)?`)
+		// We use greedy match for the name and enforce 'v' followed by digits for the version to disambiguate.
+		assetRegex := regexp.MustCompile(`flavour-(.+)-(v\d+\..+)-amd64\.qcow2(\..+)?`)
 
 		for _, asset := range rel.Assets {
 			matches := assetRegex.FindStringSubmatch(asset.Name)

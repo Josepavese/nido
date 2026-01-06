@@ -67,10 +67,10 @@ sources:
         checksum_type: "sha256"
         regex: "cirros-{version}-x86_64-disk.img"
 
-  - name: xfce-dev
+  - name: ubuntu-24.04-lubuntu-minimal
     registry: nido
     provider: "Nido Premium Flavours"
-    description: "XFCE Desktop with Go, Python and Docker pre-installed."
+    description: "Lubuntu 24.04 - Lightweight LXQt Desktop with Go and Python pre-installed."
     homepage: "https://github.com/Josepavese/nido"
     strategies:
       - type: "github-release"
