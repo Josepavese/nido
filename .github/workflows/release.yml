@@ -216,6 +216,5 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          fail_on_unresolved_entities: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
