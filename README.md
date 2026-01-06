@@ -1,52 +1,52 @@
 # 🪺 nido
 
-**Where your local VMs come to life.**
+Hatch a VM, do the work, let it fly away. Your AI agents will feel at home.
 
-_"Why did the VM cross the road? To get to the other hypervisor. But with nido, it just spawns there instantly."_ 🐣
+Nido is a **fast, lightweight, AI-first VM automation tool**.
+
+You install it in seconds, get a clean CLI, and AI agents can start spawning **real virtual machines** immediately.
+No clusters. No dashboards. No babysitting.
+
+Built on QEMU and hardware acceleration, Nido feels like a small CLI —
+but it gives agents what containers can’t: **a full operating system, on demand**.
+
+Think of it as a nest 🪺 for automation:
+machines hatch 🐣, do their job, and fly away 🐦.
+
+If your AI workflows need a real OS with zero friction, Nido stays out of the way and lets them run.
 
 ---
 
-`nido` is a minimal, automation-friendly toolkit to manage local virtual machines on **Linux, macOS, and Windows**. It's designed for developers and AI agents who need a fast, simple, and robust way to spawn and control local VMs for testing, development, and sandboxing.
-
-It combines a simple CLI for human operators with a powerful **Model Context Protocol (MCP) Server**, making it the first local-first, AI-native VM manager.
-
 ## Philosophy
 
-nido is built around **compressed template backups**. Templates are stored as highly compressed `.compact.qcow2` files, and new VMs are created by rapidly expanding a template into a fresh disk. This keeps storage usage minimal while allowing for near-instant VM deployment.
+**Automation first. Agents first. Speed first.**
 
-Think of it as a bird's nest ("nido") where your VMs hatch quickly and fly away when done. 🐦
+- ⚡ **Fast by default**  
+  Install fast, spawn fast, clean up fast. Heavy workflows are a bug.
+
+- 🤖 **AI-first, not human-first**  
+  The CLI is friendly, but the real contract is machine-to-machine.
+
+- 🐣 **Ephemeral is the happy path**  
+  VMs hatch, run, and disappear. Cleanup is part of the lifecycle.
+
+- 🪺 **Workflows over infrastructure**  
+  Agent → environment → action → result → cleanup.  
+  The VM is just the execution surface.
+
+- 🧠 **Small and opinionated**  
+  No cloud cosplay. No feature bloat. Strong defaults only.
+
+---
 
 ## Features
 
-Legend: ✅ Done | 🚧 In Progress | 📋 Planned
-
-### Core VM Management ✅
-
-- **Instant Spawn:** Deploy VMs from compressed templates in seconds
-- **Lifecycle Control:** Start, stop, delete VMs with simple commands
-- **Template System:** Archive running VMs into reusable templates
-- **SSH Integration:** Automatic SSH connection strings
-- **Health Checks:** Built-in diagnostics (`nido doctor`)
-- **Cross-Platform:** Native QEMU support on Linux (KVM), macOS (HVF), and Windows (WHPX)
-
-### AI Integration ✅
-
-- **MCP Server:** Full Model Context Protocol implementation
-- **19 MCP Tools:** Complete VM management via AI agents (including GUI/VNC and cache management!)
-  - **VM Lifecycle**: `vm_list`, `vm_create`, `vm_start`, `vm_stop`, `vm_delete`, `vm_info`, `vm_ssh`, `vm_prune`
-  - **Images**: `vm_images_list`, `vm_images_pull`, `vm_images_update`
-  - **Cache**: `vm_cache_list`, `vm_cache_info`, `vm_cache_remove`, `vm_cache_prune`
-  - **Templates**: `vm_template_list`, `vm_template_create`
-  - **System**: `vm_config_get`, `vm_doctor`
-- **Claude Desktop Ready:** Works out of the box with `nido register`
-- **Antigravity Compatible:** Seamless integration with modern AI coding assistants
-
-### Developer Experience ✅
-
-- **Zero Dependencies:** No `libvirt` or `virsh` required. Pure QEMU.
-- **Configuration Management:** Simple `.env` file for all settings
-- **Port Forwarding:** Automatic SSH port mapping (no root needed!)
-- **Compressed Storage:** Templates use `.compact.qcow2` format
+- ⚡ **Fast & lightweight** — install in seconds, no background services  
+- 🐣 **Real VMs on demand** — full OS via QEMU, hardware acceleration when available  
+- 🤖 **Built for AI agents** — clean CLI + native MCP server  
+- 🧺 **Templates** — reproducible environments, no interactive provisioning  
+- 🧹 **Automatic cleanup** — create → run → destroy, crash-safe  
+- 🪶 **Cross-platform & local-first** — Linux, macOS, Windows
 
 ## Quick Start
 
@@ -128,7 +128,6 @@ nido info my-vm                    # Inspect neural links (IP, Port)
 nido doctor                        # Run system health check
 nido config                        # View current genetics
 
-# AI agent setup
 # AI agent setup
 nido register                      # Get MCP config for Claude/Antigravity
 

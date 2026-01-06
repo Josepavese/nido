@@ -12,61 +12,72 @@ Nido is **AI-centric and automation-first**: a focused execution surface for age
 ## Current State (Now)
 
 ### Core VM Engine
+
 - Cross-platform QEMU lifecycle: spawn/start/stop/delete/list/info/prune.
 - Compressed templates (`.compact.qcow2`) and fast cloning.
 - SSH access + VNC toggle for GUI sessions.
 - Built-in diagnostics (`nido doctor`).
 
 ### Agentic Interface (MCP)
+
 - MCP server with full VM lifecycle coverage.
 - Image tools: list/pull/update and cache inspection/pruning.
 - Template tools + config lookup.
 - AI-friendly defaults and consistent responses.
 
 ### Image Registry
+
 - Catalog-based image system with cache + checksum verification.
 - Registry sources already structured (`registry/sources.yaml`).
 - Registry builder logic implemented (strategy-based fetching).
 
 ### Flavours
+
 - Community-friendly flavours concept (compressed, split distribution).
 - Early support for desktop flavours via images and VNC.
 
-## Next Up (v3.1–v3.2)
+## Next Up
 
 ### 1) Image Registry: Finish the Loop
+
 - CLI parity for image management: `image info`, `image remove`, cache commands.
 - Registry automation: ship `registry-builder` CLI + GitHub Action updates.
 - Expand catalog coverage (Tier 1 official + Tier 2 conversion).
 
 ### 2) Cloud-Init & First Boot UX
+
 - Standardize cloud-init behavior for image-based spawn.
 - Make user-data injection first-class in CLI + MCP.
 - Tighten docs + defaults so agents can log in without guessing.
 
 ### 3) Flavours Pipeline
+
 - Define minimal “agent-ready” flavours (headless GUI, lightweight desktop).
 - cloud-init bootstrap for zero-touch GUI sessions.
 - Add flavour entries to registry with split distribution support.
 
 ### 4) MCP Polish
+
 - HTTP/SSE transport for remote agents.
 - Tool annotations for safety and confirmations.
 - Better structured outputs (typed JSON over raw text).
 
-## Later (v3.3+)
+## Later
 
 ### Automation & Orchestration
+
 - REST API + webhooks.
 - CI/CD integrations (GitHub Actions, GitLab).
 - Fleet operations (batch spawn/stop/prune).
 
 ### VM Superpowers
+
 - Snapshots (create/restore/list).
 - Advanced networking (custom NAT, port rules).
 - Template marketplace and sharing flow.
 
 ### DX & Reliability
+
 - Interactive TUI.
 - Self-healing + auto-recovery.
 - Hardening and long-run stability testing.
