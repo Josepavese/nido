@@ -72,6 +72,22 @@ Flavours are pre-configured environments optimized for Nido.
     ./bin/publish-flavour.sh my_image.qcow2 ubuntu-24.04-lubuntu-minimal v3.0.0
     ```
 
+### 📡 Syncing Tool (Automated Upload)
+
+- **Path**: `bin/upload-flavours.sh`
+- **Purpose**: Sequentially uploads flavour chunks to a GitHub Release.
+- **Key Features**:
+  - **Idempotent**: Checks remote assets and skips files already present.
+  - **Live Monitoring**: Shows a progress bar for each 1GB chunk using terminal UI.
+  - **Dry Run**: Use `--dry-run` to see what would be uploaded without sending data.
+- **Usage**:
+
+    ```bash
+    ./bin/upload-flavours.sh [release_tag] [--dry-run]
+    ```
+
+- **Example**: `./bin/upload-flavours.sh v4.0.0`
+
 ---
 
 ## 🤖 CI/CD Workflows
