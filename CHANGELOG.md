@@ -5,6 +5,26 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2026-01-07 "The Autonomous Nest" 🪺✨
+
+### 🎉 Major Features
+
+- **Zero-Touch Flavour Discovery:** The `registry-builder` now scans GitHub Releases automatically. No more manual JSON edits when publishing new flavours. 🤖
+- **Segmented Integrity:** Full support for multi-part downloads with automated `.sha256` verification. 🧩
+- **Release-Driven Synchronization:** GitHub Actions now sync the registry in real-time whenever a new flavour is published or an existing one is updated.
+
+### 🎨 UI & UX
+
+- **Branded Provenance:** Nido Flavours are now grouped and highlighted with a bold `[PRECONFIGURED]` badge. Know exactly what's optimized for your agents.
+- **Categorized Registry:** Clear separation in `nido image list` between official upstream proxies and Nido's premium environments.
+
+### 🔧 Bug Fixes & Reliability
+
+- **Hardened CirrOS Support:** Resolved fragile `cloud-init` issues by implementing a smart shell-script fallback for minimal metadata collectors.
+- **Per-Image SSH Users:** Support for `ssh_user` overrides in the registry (e.g., `cirros` for CirrOS images).
+- **Persistent State Management:** QEMU provider now ensures state directories exist before spawning, preventing silent status failures during first-time setup.
+- **Better Diagnostics:** Added serial console logging to captured files for easier boot-time debugging.
+
 ## [4.0.1] - 2026-01-06 "The Delivery Drone" 🛸
 
 ### 🔧 Maintenance & Reliability

@@ -146,9 +146,10 @@ Nido Flavours are pre-built, optimized VM environments (like Lubuntu, XFCE, or s
 
 To bypass storage limits and ensure fast downloads:
 
-- **High Compression:** All flavours are optimized for size before distribution.
-- **Split Distribution:** Large images (>2GiB) are automatically distributed in segments via GitHub Releases.
-- **Auto-Reassembly:** `nido` automatically handles multi-part downloads and reassembles images on the fly.
+- **Zero-Touch Registry:** Flavours are automatically discovered from GitHub Releases using our smart scanning strategy. No manual registration needed. 🤖
+- **Split Distribution:** Large images (>2GiB) are automatically distributed in segments via GitHub Releases to ensure high availability.
+- **Auto-Reassembly:** `nido` handles multi-part downloads and reassembles images on the fly.
+- **Trusted Provenance:** Recognized flavours are marked with a bold `[PRECONFIGURED]` badge in `nido image list`.
 
 ## Shell Completion 🆕
 
@@ -240,7 +241,7 @@ Found a bug? Have a feature idea? Want to teach the bird new tricks?
 
 1. Open an issue on GitHub
 2. Fork, hack, and submit a PR
-3. Follow the [tone of voice guidelines](.tonodivoce) (keep it fun!)
+3. Follow the [tone of voice guidelines](docs/.tone_of_voice.md) (keep it fun!)
 
 ## License
 
