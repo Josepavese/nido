@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-01-06T23:27:29.689647595Z",
+  "updated_at": "2026-01-06T23:54:53.528089463Z",
   "images": [
     {
       "name": "ubuntu",
@@ -173,6 +173,30 @@
             "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.002",
             "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.003",
             "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.004"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ubuntu-24.04-xfce-development",
+      "registry": "nido",
+      "description": "XFCE Desktop with Go, Python and Docker pre-installed.",
+      "homepage": "https://github.com/Josepavese/nido",
+      "versions": [
+        {
+          "version": "v4.1.1",
+          "aliases": [
+            "v4.1.1"
+          ],
+          "arch": "amd64",
+          "url": "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.001",
+          "checksum_type": "sha256",
+          "checksum": "887c85a9835a216eac079a50a646349fd404619c63e6c8d6a19dd9c8cd033d16",
+          "size_bytes": 1071513600,
+          "format": "qcow2",
+          "part_urls": [
+            "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.001",
+            "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.002"
           ]
         }
       ]

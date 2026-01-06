@@ -77,6 +77,16 @@ sources:
         owner: "Josepavese"
         repo: "nido"
 
+  - name: ubuntu-24.04-xfce-development
+    registry: nido
+    provider: "Nido Premium Flavours"
+    description: "XFCE Desktop with Go, Python and Docker pre-installed."
+    homepage: "https://github.com/Josepavese/nido"
+    strategies:
+      - type: "github-release"
+        owner: "Josepavese"
+        repo: "nido"
+
   - name: server-hardened
     registry: nido
     provider: "Nido Premium Flavours"
