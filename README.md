@@ -17,6 +17,27 @@ If your AI workflows need a real OS with zero friction, Nido stays out of the wa
 
 ---
 
+## Use case: hatch, fix, fly away
+
+Say a CI agent needs a clean OS to reproduce a bug, apply a patch, and leave nothing behind.  
+With Nido, it hatches a VM from an image **even if it isn't local yet**, does the job, and lets it fly away. 🐣🐦
+
+```bash
+# 1) See what's in the nest (no download yet)
+nido images list
+
+# 2) Hatch fast: Nido pulls the image on the fly if it's not cached
+nido spawn bugfix-vm --image ubuntu:24.04
+
+# 3) (optional) hop in and do the work
+nido ssh bugfix-vm
+
+# 4) Cleanup at light speed
+nido delete bugfix-vm
+```
+
+Bottom line: a real OS as an execution surface for agents, minus the babysitting.
+
 ## Philosophy
 
 **Automation first. Agents first. Speed first.**
