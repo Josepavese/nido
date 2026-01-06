@@ -32,11 +32,12 @@ Legend: ✅ Done | 🚧 In Progress | 📋 Planned
 ### AI Integration ✅
 
 - **MCP Server:** Full Model Context Protocol implementation
-- **12 MCP Tools:** Complete VM management via AI agents
-  - `vm_list`, `vm_create`, `vm_start`, `vm_stop`, `vm_delete`
-  - `vm_info`, `vm_ssh`, `vm_prune`
-  - `template_list`, `template_create`
-  - `config_get`, `doctor`
+- **19 MCP Tools:** Complete VM management via AI agents (including GUI/VNC and cache management!)
+  - **VM Lifecycle**: `vm_list`, `vm_create`, `vm_start`, `vm_stop`, `vm_delete`, `vm_info`, `vm_ssh`, `vm_prune`
+  - **Images**: `vm_images_list`, `vm_images_pull`, `vm_images_update`
+  - **Cache**: `vm_cache_list`, `vm_cache_info`, `vm_cache_remove`, `vm_cache_prune`
+  - **Templates**: `vm_template_list`, `vm_template_create`
+  - **System**: `vm_config_get`, `vm_doctor`
 - **Claude Desktop Ready:** Works out of the box with `nido register`
 - **Antigravity Compatible:** Seamless integration with modern AI coding assistants
 
@@ -51,33 +52,60 @@ Legend: ✅ Done | 🚧 In Progress | 📋 Planned
 
 ### 1. Installation
 
-#### Linux
+> **⚡ Lightning-Fast Install** - Just ~4MB download. No Git required!
+
+#### Linux & macOS
 
 ```bash
-git clone https://github.com/Josepavese/nido
-cd nido
-bash bin/install.sh
-source ~/.bashrc
+curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.sh | bash
+source ~/.bashrc  # or ~/.zshrc
+nido version
 ```
 
-#### macOS
-
-```bash
-brew install qemu
-curl -L https://github.com/Josepavese/nido/releases/latest/download/nido-darwin-amd64 -o nido
-chmod +x nido
-sudo mv nido /usr/local/bin/
-```
-
-#### Windows
+#### Windows (PowerShell)
 
 ```powershell
-choco install qemu
-# Download from https://github.com/Josepavese/nido/releases
-# Extract and add to PATH
+irm https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.ps1 | iex
+# Restart terminal, then:
+nido version
 ```
 
-> **Beta Testers Wanted!** macOS and Windows support is fresh. See [TESTING.md](TESTING.md) for details.
+> **📖 More Options:** See [`installers/README.md`](installers/README.md) for alternative installation methods, including a lightweight build-from-source option for tinkerers who want bleeding-edge features without cloning the entire repository.
+
+#### Manual Installation (All Platforms)
+
+Download the latest binary from [GitHub Releases](https://github.com/Josepavese/nido/releases/latest):
+
+```bash
+# Linux
+curl -L https://github.com/Josepavese/nido/releases/latest/download/nido-linux-amd64 -o nido
+chmod +x nido && sudo mv nido /usr/local/bin/
+
+# macOS (Intel)
+curl -L https://github.com/Josepavese/nido/releases/latest/download/nido-darwin-amd64 -o nido
+chmod +x nido && sudo mv nido /usr/local/bin/
+
+# macOS (Apple Silicon)
+curl -L https://github.com/Josepavese/nido/releases/latest/download/nido-darwin-arm64 -o nido
+chmod +x nido && sudo mv nido /usr/local/bin/
+```
+
+#### Install QEMU (Required)
+
+Nido needs QEMU to run VMs:
+
+```bash
+# Linux (Debian/Ubuntu)
+sudo apt install qemu-system-x86 qemu-utils
+
+# macOS
+brew install qemu
+
+# Windows
+choco install qemu
+```
+
+> **💡 Tip:** Run `nido doctor` after installation to verify your setup!
 
 ### 2. Usage
 
@@ -105,17 +133,42 @@ nido config                        # View current genetics
 nido register                      # Get MCP config for Claude/Antigravity
 
 # Image Management 🆕
-nido image list                    # Browse available cloud images
-nido image pull ubuntu:24.04       # Download official Ubuntu image
-nido spawn my-vm --image ubuntu:24.04  # Spawn directly from image
+nido images list                    # Browse cloud images (shows file sizes)
+nido images pull ubuntu:24.04       # Pull official Ubuntu 24.04 image
+nido spawn my-vm --image ubuntu:24.04  # Spawn directly from any cloud image
+nido spawn build-vm --user-data config.yaml # Spawn with custom cloud-init (Cook your own flavour!)
+
+# Nido Flavours 🧁
+nido spawn desk --image lubuntu:24.04 # Spawn a pre-built Lubuntu Minimal desktop
+nido spawn code --image xfce:24.04    # Spawn an XFCE development environment
+```
+
+## Nido Flavours & Split Distribution 🧁📦
+
+Nido Flavours are pre-built, optimized VM environments (like Lubuntu, XFCE, or specialized dev stacks) maintained by the community.
+
+To bypass storage limits and ensure fast downloads:
+
+- **High Compression:** All flavours are optimized for size before distribution.
+- **Split Distribution:** Large images (>2GiB) are automatically distributed in segments via GitHub Releases.
+- **Auto-Reassembly:** `nido` automatically handles multi-part downloads and reassembles images on the fly.
+
+## Shell Completion 🆕
+
+`nido` now supports full shell completion for **Bash** and **Zsh**. Never guess a command or template name again!
+
+```bash
+# Generate completion script
+nido completion bash > ~/.nido/bash_completion
+echo "source ~/.nido/bash_completion" >> ~/.bashrc
 ```
 
 ## Commands
 
 | Command | What it does | Example |
 |---------|--------------|---------|
-| `spawn <name> [--image <img/tpl>]` | Create and start a VM | `nido spawn vm1 --image ubuntu:24.04` |
-| `start <name>` | Revive a stopped VM | `nido start test-vm` |
+| `spawn <name> [--image <img> --gui]` | Create and start a VM with optional GUI | `nido spawn vm1 --image xfce:24.04 --gui` |
+| `start <name> [--gui]` | Revive a stopped VM with optional GUI | `nido start test-vm --gui` |
 | `stop <name>` | Put VM into deep sleep | `nido stop test-vm` |
 | `delete <name>` | Evict VM permanently | `nido delete test-vm` |
 | `prune` | Remove all stopped VMs | `nido prune` |
@@ -130,9 +183,16 @@ nido spawn my-vm --image ubuntu:24.04  # Spawn directly from image
 | `config` | View configuration | `nido config` |
 | `register` | MCP setup helper | `nido register` |
 
+### GUI Support (VNC)
+
+Nido can expose a graphical interface for VMs:
+
+- Use the `--gui` flag with `spawn` or `start`.
+- Run `nido info <name>` to see the VNC endpoint.
+- Connect with any VNC client to `127.0.0.1:5900X`.
+
 ### Automation
 
-The registry (`registry/images.json`) is automatically updated daily by a GitHub Action.
 To add a new image source, submit a PR to `registry/sources.yaml`. The `registry-builder` tool will automatically fetch the latest versions and checksums.
 
 ### Configuration
