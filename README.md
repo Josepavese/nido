@@ -232,32 +232,7 @@ Want to hatch a bird inside a whale? Nido doesn't judge your technical curiositi
 
 ## Roadmap
 
-### Phase 3: Integration & Ecosystem 📋
-
-Building the whole tree
-
-- REST API Server (CRUD endpoints, webhooks)
-- CI/CD Integration (GitHub Actions, GitLab CI)
-- File operations (`vm_upload`, `vm_download`)
-
-### Phase 4: Advanced Features 📋
-
-The bird learns new tricks
-
-- Snapshot management (create, restore, list)
-- Advanced networking (custom configs)
-- Template marketplace/registry
-- Fleet management (multiple VMs)
-- Interactive TUI
-
-### Phase 5: Polish & DX 📋
-
-Making it shine
-
-- Self-healing and auto-recovery
-- AI-powered troubleshooting
-- Comprehensive documentation
-- Plugin system
+The single source of truth lives here: `docs/ROADMAP.md`.
 
 ## Contributing
 
