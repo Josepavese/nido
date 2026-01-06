@@ -3,10 +3,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/image"
@@ -16,7 +20,7 @@ import (
 )
 
 // Version is injected at build time
-var Version = "v4.1.0"
+var Version = "v4.1.1"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -46,6 +50,8 @@ func main() {
 	switch cmd {
 	case "version":
 		cmdVersion()
+	case "update":
+		cmdUpdate(nidoDir)
 	case "mcp-json-list":
 		cmdMcpJsonList(prov)
 	case "ls", "list":
@@ -354,12 +360,23 @@ func main() {
 }
 
 func cmdCompletion(bashOrZsh string) {
-	bash := `_nido_completions() {
+	if bashOrZsh == "bash" {
+		fmt.Print(getBashCompletion())
+	} else if bashOrZsh == "zsh" {
+		fmt.Print(getZshCompletion())
+	} else {
+		ui.Error("Unsupported shell: %s. Only bash and zsh are supported.", bashOrZsh)
+		os.Exit(1)
+	}
+}
+
+func getBashCompletion() string {
+	return `_nido_completions() {
     local cur prev opts
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="ls spawn start ssh info stop images cache template config register version delete doctor prune completion"
+    opts="ls spawn start ssh info stop images cache template config register version delete doctor prune completion update"
 
     case "${prev}" in
         spawn)
@@ -406,7 +423,10 @@ func cmdCompletion(bashOrZsh string) {
 }
 complete -F _nido_completions nido
 `
-	zsh := `_nido_completion() {
+}
+
+func getZshCompletion() string {
+	return `_nido_completion() {
   local -a commands
   commands=(
     'ssh:Connect to a VM via SSH bridge'
@@ -422,6 +442,7 @@ complete -F _nido_completions nido
     'version:Check evolutionary state'
     'doctor:Run a system health check'
     'completion:Generate shell completions'
+    'update:Ascend to the latest evolutionary state'
   )
 
   _arguments -C \
@@ -472,14 +493,6 @@ complete -F _nido_completions nido
 }
 compdef _nido_completion nido
 `
-	if bashOrZsh == "bash" {
-		fmt.Print(bash)
-	} else if bashOrZsh == "zsh" {
-		fmt.Print(zsh)
-	} else {
-		ui.Error("Unsupported shell: %s. Only bash and zsh are supported.", bashOrZsh)
-		os.Exit(1)
-	}
 }
 
 func cmdSsh(prov provider.VMProvider, name string, args []string) {
@@ -561,6 +574,7 @@ func printUsage() {
 	fmt.Printf("  %-10s %sPrepare the MCP handshake for AI agents%s\n", "register", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sCheck the evolutionary state of Nido%s\n", "version", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sGenerate shell completion scripts%s\n", "completion", ui.Dim, ui.Reset)
+	fmt.Printf("  %-10s %sAscend to the latest evolutionary state (Update)%s\n", "update", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sManage cloud image catalog%s\n", "images", ui.Dim, ui.Reset)
 
 	fmt.Printf("\n%s\"It's not a VM, it's a lifestyle.\"%s\n\n", ui.Dim, ui.Reset)
@@ -604,6 +618,158 @@ func cmdMcpJsonList(prov provider.VMProvider) {
 func cmdVersion() {
 	fmt.Printf("%sNido %s%s%s (State: Evolved)\n", ui.Dim, ui.Reset, ui.Bold, Version)
 	ui.Ironic("Hypervisor handshake protocol v3.0 stable.")
+
+	// Check for updates asynchronously (fast)
+	go func() {
+		latest, err := getLatestVersion()
+		if err == nil && latest != "" && latest != Version {
+			fmt.Printf("\n%s✨ A new evolutionary state is available: %s%s (current: %s)\n", ui.Yellow, ui.Bold, latest, Version)
+			ui.Info("Run 'nido update' to ascend to the next level.")
+		}
+	}()
+	// Give a tiny bit of time for the goroutine to potentially output,
+	// but don't block. For cmdVersion, we can wait 100ms.
+	time.Sleep(100 * time.Millisecond)
+}
+
+func getLatestVersion() (string, error) {
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("https://api.github.com/repos/Josepavese/nido/releases/latest")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var release struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return "", err
+	}
+	return release.TagName, nil
+}
+
+func cmdUpdate(nidoDir string) {
+	ui.Header("Nido Evolutionary Ascent")
+	ui.Ironic("Scanning the horizon for newer genetic sequences...")
+
+	latest, err := getLatestVersion()
+	if err != nil {
+		ui.Error("Failed to reach the mother nest: %v", err)
+		os.Exit(1)
+	}
+
+	if latest == Version {
+		ui.Success("You are already at the peak of evolution (%s).", Version)
+		return
+	}
+
+	ui.Info("Found new version: %s (current: %s)", latest, Version)
+	ui.Ironic("Downloading new binary from the cloud...")
+
+	// Determine binary name based on platform
+	binaryName := fmt.Sprintf("nido-%s-%s", runtime.GOOS, runtime.GOARCH)
+	if runtime.GOOS == "windows" {
+		binaryName += ".exe"
+	}
+
+	// Fetch release assets to find the URL
+	resp, err := http.Get("https://api.github.com/repos/Josepavese/nido/releases/latest")
+	if err != nil {
+		ui.Error("Failed to fetch release details: %v", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	var release struct {
+		Assets []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		} `json:"assets"`
+	}
+	json.NewDecoder(resp.Body).Decode(&release)
+
+	downloadURL := ""
+	for _, asset := range release.Assets {
+		if asset.Name == binaryName {
+			downloadURL = asset.BrowserDownloadURL
+			break
+		}
+	}
+
+	if downloadURL == "" {
+		ui.Error("Binary %s not found in latest release assets.", binaryName)
+		ui.Info("You might need to build it from source or wait for the release to finalize.")
+		os.Exit(1)
+	}
+
+	// Get current executable path
+	exePath, err := os.Executable()
+	if err != nil {
+		ui.Error("Failed to locate current binary: %v", err)
+		os.Exit(1)
+	}
+
+	// Download to temp file
+	tmpPath := exePath + ".tmp"
+	out, err := os.Create(tmpPath)
+	if err != nil {
+		ui.Error("Failed to create temporary file: %v", err)
+		os.Exit(1)
+	}
+	defer os.Remove(tmpPath)
+
+	resp, err = http.Get(downloadURL)
+	if err != nil {
+		ui.Error("Download failed: %v", err)
+		out.Close()
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	out.Close()
+	if err != nil {
+		ui.Error("Failed to save binary: %v", err)
+		os.Exit(1)
+	}
+
+	// Set permissions
+	os.Chmod(tmpPath, 0755)
+
+	// Atomic replace (on Linux/Unix)
+	// On Windows, you can't replace a running binary easily, but we'll try rename dance
+	bakPath := exePath + ".bak"
+	os.Remove(bakPath)
+	if err := os.Rename(exePath, bakPath); err != nil {
+		ui.Error("Migration failed (failed to backup current binary): %v", err)
+		os.Exit(1)
+	}
+
+	if err := os.Rename(tmpPath, exePath); err != nil {
+		ui.Error("Migration failed (failed to install new binary): %v", err)
+		// Try to restore backup
+		os.Rename(bakPath, exePath)
+		os.Exit(1)
+	}
+
+	ui.Success("Nido has successfully evolved to %s! 🕊️", latest)
+	ui.Ironic("Updating shell completion scripts...")
+
+	// Re-run completion generation to ensure latest aliases are present
+	// We'll detect the shell from env if possible, or just generate both for the config dir
+	home, _ := os.UserHomeDir()
+	nidoHome := filepath.Join(home, ".nido")
+
+	bashPath := filepath.Join(nidoHome, "bash_completion")
+	zshPath := filepath.Join(nidoHome, "zsh_completion")
+
+	// Save them as strings for convenience
+	os.WriteFile(bashPath, []byte(getBashCompletion()), 0644)
+	os.WriteFile(zshPath, []byte(getZshCompletion()), 0644)
+
+	ui.Info("Shell completions updated in %s.", nidoHome)
+	ui.Info("Please restart your terminal or source your config to see changes.")
 }
 
 // cmdCache handles image cache management commands.

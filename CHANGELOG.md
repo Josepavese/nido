@@ -5,6 +5,24 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.1] - 2026-01-07 "The Self-Ascending Nest" 🕊️✨
+
+### 🎉 Major Features
+
+- **Self-Update Protocol:** Introduced `nido update`. The nest can now scan for newer genetic sequences on GitHub and ascend to the latest evolutionary state automatically. 🤖
+- **Automated Version Awareness:** `nido version` now performs a non-blocking check for updates and notifies you if a newer version is available.
+
+### 🔧 CLI & UX Refinements
+
+- **Consistent Aliases:** Fixed `nido images ls` (and `nido cache ls`) to align with top-level command patterns. UX friction reduced. 🛸
+- **Dynamic Completions:** The `update` process now synchronizes your shell completion scripts automatically, ensuring new commands are always under your fingertips.
+- **Better Guidance:** Updated `printUsage` to reflect the new system operations.
+
+### 🐛 Bug Fixes
+
+- **Doc Link Restoration:** Fixed the broken link to the Tone of Voice guidelines in the README.
+- **Compiler Discipline:** Refactored completion logic to resolve undefined symbol errors during build.
+
 ## [4.1.0] - 2026-01-07 "The Autonomous Nest" 🪺✨
 
 ### 🎉 Major Features

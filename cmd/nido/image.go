@@ -21,7 +21,7 @@ func cmdImage(nidoDir string, args []string) {
 	subcommand := args[0]
 
 	switch subcommand {
-	case "list":
+	case "list", "ls":
 		cmdImageList(nidoDir, args[1:])
 	case "pull":
 		cmdImagePull(nidoDir, args[1:])
