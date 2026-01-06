@@ -218,3 +218,19 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote Flavour Assets
+        run: |
+          # Get current tag
+          TAG=${GITHUB_REF#refs/tags/}
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 $TAG^ 2>/dev/null || echo "")
+          
+          if [ -n "$PREV_TAG" ]; then
+            echo "🛸 Promoting flavour assets from $PREV_TAG to $TAG..."
+            bash bin/promote-assets.sh "$PREV_TAG" "$TAG"
+          else
+            echo "ℹ️ No previous tag found. Skipping asset promotion."
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
