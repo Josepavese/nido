@@ -16,7 +16,7 @@ import (
 )
 
 // Version is injected at build time
-var Version = "v4.0.1"
+var Version = "v4.1.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -42,8 +42,6 @@ func main() {
 
 	cfg, _ := config.LoadConfig(cfgPath)
 	prov := provider.NewQemuProvider(nidoDir, cfg)
-
-	var err error
 
 	switch cmd {
 	case "version":
@@ -117,13 +115,26 @@ func main() {
 			}
 		}
 
+		customSshUser := ""
 		if imageTag != "" {
 			// Resolve image
 			imgDir := filepath.Join(nidoDir, "images")
-			catalog, err := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
-			if err != nil {
-				ui.Error("Failed to load catalog: %v", err)
-				os.Exit(1)
+
+			// For development: prefer local registry/images.json if it exists in CWD
+			var catalog *image.Catalog
+			localRegistry := filepath.Join(cwd, "registry", "images.json")
+			if _, err := os.Stat(localRegistry); err == nil {
+				catalog, err = image.LoadCatalogFromFile(localRegistry)
+				if err != nil {
+					ui.Error("Failed to load local registry: %v", err)
+					os.Exit(1)
+				}
+			} else {
+				catalog, err = image.LoadCatalog(imgDir, image.DefaultCacheTTL)
+				if err != nil {
+					ui.Error("Failed to load catalog: %v", err)
+					os.Exit(1)
+				}
 			}
 
 			pName, pVer := imageTag, ""
@@ -137,6 +148,7 @@ func main() {
 				ui.Error("Image %s not found in catalog.", imageTag)
 				os.Exit(1)
 			}
+			customSshUser = img.SSHUser
 
 			imgPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
 
@@ -199,7 +211,12 @@ func main() {
 		}
 
 		ui.Ironic("Initiating hypervisor handshake...")
-		if err := prov.Spawn(name, provider.VMOptions{DiskPath: tpl, UserDataPath: userDataPath, Gui: gui}); err != nil {
+		if err := prov.Spawn(name, provider.VMOptions{
+			DiskPath:     tpl,
+			UserDataPath: userDataPath,
+			Gui:          gui,
+			SSHUser:      customSshUser,
+		}); err != nil {
 			ui.Error("Hatch failure for %s: %v", name, err)
 			os.Exit(1)
 		}
@@ -333,10 +350,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err != nil {
-		ui.Error("Unexpected fault: %v", err)
-		os.Exit(1)
-	}
+	// Note: errors are handled within each case
 }
 
 func cmdCompletion(bashOrZsh string) {

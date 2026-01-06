@@ -100,9 +100,10 @@ func cmdImageList(nidoDir string, args []string) {
 					downloaded = fmt.Sprintf(" %s[downloaded]%s", ui.Green, ui.Reset)
 				}
 
-				fmt.Printf("  %s%-20s%s %s%s%s%s\n",
+				fmt.Printf("  %s%-20s%s %s%s%s%s %s[PRECONFIGURED]%s\n",
 					ui.Magenta, fmt.Sprintf("%s:%s", img.Name, v.Version), ui.Reset,
-					ui.Dim, ui.HumanSize(v.SizeBytes), ui.Reset, downloaded)
+					ui.Dim, ui.HumanSize(v.SizeBytes), ui.Reset, downloaded,
+					ui.Bold+ui.Magenta, ui.Reset)
 			}
 		}
 		fmt.Println("")
