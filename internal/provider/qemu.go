@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Josepavese/nido/internal/cli"
 	"github.com/Josepavese/nido/internal/config"
 )
 
@@ -159,11 +160,15 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, runDir)
 
 	cmd := exec.Command("qemu-system-x86_64", args...)
-	fmt.Fprintf(os.Stderr, "⚡ Debug: Running QEMU: qemu-system-x86_64 %s\n", strings.Join(args, " "))
+	if !cli.IsJSONMode() {
+		fmt.Fprintf(os.Stderr, "⚡ Debug: Running QEMU: qemu-system-x86_64 %s\n", strings.Join(args, " "))
+	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "❌ QEMU Error Output: %s\n", stderr.String())
+		if !cli.IsJSONMode() {
+			fmt.Fprintf(os.Stderr, "❌ QEMU Error Output: %s\n", stderr.String())
+		}
 		return fmt.Errorf("QEMU failed to start: %w (stderr: %s)", err, stderr.String())
 	}
 
@@ -171,14 +176,22 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	// We send "Enter" key via QMP to skip any guest countdowns (Alpine, GRUB, etc.)
 	go p.skipBootloader(name)
 
-	// 5. Record PID
+	// 5. Read daemon PID from QEMU pidfile
 	pidFile := filepath.Join(runDir, name+".pid")
-	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", cmd.Process.Pid)), 0644); err != nil {
-		return fmt.Errorf("failed to write pid file: %w", err)
+	pid := 0
+	for i := 0; i < 10; i++ {
+		pidData, err := os.ReadFile(pidFile)
+		if err == nil {
+			fmt.Sscanf(string(pidData), "%d", &pid)
+			if pid > 0 {
+				break
+			}
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 
-	// 6. Update State with PID
-	p.saveState(name, cmd.Process.Pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser)
+	// 6. Update State with PID (0 if unknown)
+	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser)
 
 	return nil
 }
@@ -323,9 +336,15 @@ func (p *QemuProvider) Stop(name string, graceful bool) error {
 	if pid > 0 {
 		process, _ := os.FindProcess(pid)
 		process.Signal(os.Interrupt)
-		os.Remove(pidFile)
-		os.Remove(filepath.Join(runDir, name+".qmp"))
+		for i := 0; i < 50; i++ {
+			if process.Signal(syscall.Signal(0)) != nil {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
+	os.Remove(pidFile)
+	os.Remove(filepath.Join(runDir, name+".qmp"))
 	return nil
 }
 
@@ -374,6 +393,9 @@ func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
 	vmsDir := filepath.Join(p.RootDir, "vms")
 	os.MkdirAll(vmsDir, 0755)
 	target := filepath.Join(vmsDir, name+".qcow2")
+	if _, err := os.Stat(target); err == nil {
+		return fmt.Errorf("disk already exists: %s", target)
+	}
 
 	args := []string{"create", "-f", "qcow2"}
 	if tpl != "" {
