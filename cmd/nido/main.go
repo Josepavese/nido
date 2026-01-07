@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	clijson "github.com/Josepavese/nido/internal/cli"
 	"github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/mcp"
@@ -49,13 +50,49 @@ func main() {
 
 	switch cmd {
 	case "version":
-		cmdVersion()
+		jsonOut, _ := consumeJSONFlag(args)
+		cmdVersion(jsonOut)
 	case "update":
 		cmdUpdate(nidoDir)
 	case "mcp-json-list":
 		cmdMcpJsonList(prov)
 	case "ls", "list":
-		vms, _ := prov.List()
+		jsonOut, _ := consumeJSONFlag(args)
+		vms, err := prov.List()
+		if jsonOut {
+			if err != nil {
+				resp := clijson.NewResponseError("ls", "ERR_INTERNAL", "List failed", err.Error(), "Try again or run nido doctor for diagnostics.", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
+
+			type vmJSON struct {
+				Name    string `json:"name"`
+				State   string `json:"state"`
+				PID     int    `json:"pid"`
+				SSHPort int    `json:"ssh_port"`
+				VNCPort int    `json:"vnc_port"`
+				SSHUser string `json:"ssh_user,omitempty"`
+			}
+
+			items := make([]vmJSON, 0, len(vms))
+			for _, vm := range vms {
+				items = append(items, vmJSON{
+					Name:    vm.Name,
+					State:   vm.State,
+					PID:     vm.PID,
+					SSHPort: vm.SSHPort,
+					VNCPort: vm.VNCPort,
+					SSHUser: vm.SSHUser,
+				})
+			}
+
+			resp := clijson.NewResponseOK("ls", map[string]interface{}{
+				"vms": items,
+			})
+			_ = clijson.PrintJSON(resp)
+			return
+		}
 		if len(vms) == 0 {
 			ui.Info("The nest is quiet. No VMs are currently making noise.")
 		} else {
@@ -77,16 +114,37 @@ func main() {
 		}
 		cmdSsh(prov, args[0], args[1:])
 	case "doctor":
-		cmdDoctor(prov)
+		jsonOut, _ := consumeJSONFlag(args)
+		cmdDoctor(prov, jsonOut)
 	case "info":
-		if len(args) < 1 {
+		jsonOut, rest := consumeJSONFlag(args)
+		if len(rest) < 1 {
 			fmt.Println("Usage: nido info <name>")
 			os.Exit(1)
 		}
-		info, err := prov.Info(args[0])
+		info, err := prov.Info(rest[0])
 		if err != nil {
-			ui.Error("Failed to probe %s: %v", args[0], err)
+			if jsonOut {
+				resp := clijson.NewResponseError("info", "ERR_NOT_FOUND", "VM not found", err.Error(), "Check the VM name and try again.", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
+			ui.Error("Failed to probe %s: %v", rest[0], err)
 			os.Exit(1)
+		}
+		if jsonOut {
+			resp := clijson.NewResponseOK("info", map[string]interface{}{
+				"vm": map[string]interface{}{
+					"name":     info.Name,
+					"state":    info.State,
+					"ip":       info.IP,
+					"ssh_user": info.SSHUser,
+					"ssh_port": info.SSHPort,
+					"vnc_port": info.VNCPort,
+				},
+			})
+			_ = clijson.PrintJSON(resp)
+			return
 		}
 		ui.Header("VM Profile: " + info.Name)
 		ui.FancyLabel("State", info.State)
@@ -97,27 +155,33 @@ func main() {
 		}
 		fmt.Println("")
 	case "spawn":
-		if len(args) < 1 {
+		jsonOut, rest := consumeJSONFlag(args)
+		if len(rest) < 1 {
+			if jsonOut {
+				resp := clijson.NewResponseError("spawn", "ERR_INVALID_ARGS", "Missing VM name", "No VM name provided.", "Usage: nido spawn <name> [--image <name:tag> | <template>] [--user-data <file>] [--gui] [--json]", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
 			fmt.Println("Usage: nido spawn <name> [--image <name:tag> | <template>]")
 			os.Exit(1)
 		}
-		name := args[0]
+		name := rest[0]
 		tpl := ""
 		imageTag := ""
 		userDataPath := ""
 		gui := false
 
-		for i := 1; i < len(args); i++ {
-			if args[i] == "--image" && i+1 < len(args) {
-				imageTag = args[i+1]
+		for i := 1; i < len(rest); i++ {
+			if rest[i] == "--image" && i+1 < len(rest) {
+				imageTag = rest[i+1]
 				i++
-			} else if args[i] == "--user-data" && i+1 < len(args) {
-				userDataPath = args[i+1]
+			} else if rest[i] == "--user-data" && i+1 < len(rest) {
+				userDataPath = rest[i+1]
 				i++
-			} else if args[i] == "--gui" {
+			} else if rest[i] == "--gui" {
 				gui = true
 			} else if tpl == "" {
-				tpl = args[i]
+				tpl = rest[i]
 			}
 		}
 
@@ -132,12 +196,22 @@ func main() {
 			if _, err := os.Stat(localRegistry); err == nil {
 				catalog, err = image.LoadCatalogFromFile(localRegistry)
 				if err != nil {
+					if jsonOut {
+						resp := clijson.NewResponseError("spawn", "ERR_IO", "Registry load failed", err.Error(), "Check your local registry file and try again.", nil)
+						_ = clijson.PrintJSON(resp)
+						os.Exit(1)
+					}
 					ui.Error("Failed to load local registry: %v", err)
 					os.Exit(1)
 				}
 			} else {
 				catalog, err = image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 				if err != nil {
+					if jsonOut {
+						resp := clijson.NewResponseError("spawn", "ERR_IO", "Catalog load failed", err.Error(), "Check your network connection and try again.", nil)
+						_ = clijson.PrintJSON(resp)
+						os.Exit(1)
+					}
 					ui.Error("Failed to load catalog: %v", err)
 					os.Exit(1)
 				}
@@ -151,6 +225,11 @@ func main() {
 
 			img, ver, err := catalog.FindImage(pName, pVer)
 			if err != nil {
+				if jsonOut {
+					resp := clijson.NewResponseError("spawn", "ERR_NOT_FOUND", "Image not found", err.Error(), "Run 'nido image list' to see available images.", nil)
+					_ = clijson.PrintJSON(resp)
+					os.Exit(1)
+				}
 				ui.Error("Image %s not found in catalog.", imageTag)
 				os.Exit(1)
 			}
@@ -160,8 +239,10 @@ func main() {
 
 			// Auto-pull if missing
 			if _, err := os.Stat(imgPath); os.IsNotExist(err) {
-				ui.Info("Image not found locally. Pulling %s:%s...", img.Name, ver.Version)
-				downloader := image.Downloader{}
+				if !jsonOut {
+					ui.Info("Image not found locally. Pulling %s:%s...", img.Name, ver.Version)
+				}
+				downloader := image.Downloader{Quiet: jsonOut}
 
 				// Check if the URL points to a compressed file
 				downloadPath := imgPath
@@ -178,6 +259,11 @@ func main() {
 				}
 
 				if downloadErr != nil {
+					if jsonOut {
+						resp := clijson.NewResponseError("spawn", "ERR_IO", "Download failed", downloadErr.Error(), "Check your network connection and try again.", nil)
+						_ = clijson.PrintJSON(resp)
+						os.Exit(1)
+					}
 					ui.Error("Download failed: %v", downloadErr)
 					os.Exit(1)
 				}
@@ -185,30 +271,53 @@ func main() {
 				// Decompress first if it's a tarball
 				if isCompressed {
 					// We verify the archive integrity first
-					ui.Ironic("Verifying genetic integrity (archive)...")
+					if !jsonOut {
+						ui.Ironic("Verifying genetic integrity (archive)...")
+					}
 					if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
-						ui.Error("Verification failed: %v", err)
+						if jsonOut {
+							resp := clijson.NewResponseError("spawn", "ERR_IO", "Verification failed", err.Error(), "Retry the download or choose a different image.", nil)
+							_ = clijson.PrintJSON(resp)
+						} else {
+							ui.Error("Verification failed: %v", err)
+						}
 						os.Remove(downloadPath)
 						os.Exit(1)
 					}
 
 					if err := downloader.Decompress(downloadPath, imgPath); err != nil {
-						ui.Error("Decompression failed: %v", err)
+						if jsonOut {
+							resp := clijson.NewResponseError("spawn", "ERR_IO", "Decompression failed", err.Error(), "Retry the download or choose a different image.", nil)
+							_ = clijson.PrintJSON(resp)
+						} else {
+							ui.Error("Decompression failed: %v", err)
+						}
 						os.Remove(downloadPath)
 						os.Exit(1)
 					}
 					// Cleanup the archive
 					os.Remove(downloadPath)
-					ui.Success("Image extracted successfully.")
+					if !jsonOut {
+						ui.Success("Image extracted successfully.")
+					}
 				} else {
 					// Standard verify for direct qcow2
-					ui.Ironic("Verifying genetic integrity...")
+					if !jsonOut {
+						ui.Ironic("Verifying genetic integrity...")
+					}
 					if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
-						ui.Error("Verification failed: %v", err)
+						if jsonOut {
+							resp := clijson.NewResponseError("spawn", "ERR_IO", "Verification failed", err.Error(), "Retry the download or choose a different image.", nil)
+							_ = clijson.PrintJSON(resp)
+						} else {
+							ui.Error("Verification failed: %v", err)
+						}
 						os.Remove(downloadPath)
 						os.Exit(1)
 					}
-					ui.Success("Image prepared successfully.")
+					if !jsonOut {
+						ui.Success("Image prepared successfully.")
+					}
 				}
 			}
 
@@ -216,13 +325,24 @@ func main() {
 			tpl = imgPath
 		}
 
-		ui.Ironic("Initiating hypervisor handshake...")
+		if !jsonOut {
+			ui.Ironic("Initiating hypervisor handshake...")
+		}
 		if err := prov.Spawn(name, provider.VMOptions{
 			DiskPath:     tpl,
 			UserDataPath: userDataPath,
 			Gui:          gui,
 			SSHUser:      customSshUser,
 		}); err != nil {
+			if jsonOut {
+				code := "ERR_INTERNAL"
+				if isAlreadyExistsErr(err) {
+					code = "ERR_ALREADY_EXISTS"
+				}
+				resp := clijson.NewResponseError("spawn", code, "Spawn failed", err.Error(), "Check the template or image and try again.", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
 			ui.Error("Hatch failure for %s: %v", name, err)
 			os.Exit(1)
 		}
@@ -231,40 +351,136 @@ func main() {
 		if imageTag != "" {
 			source = "image " + imageTag
 		}
+		if jsonOut {
+			resp := clijson.NewResponseOK("spawn", map[string]interface{}{
+				"action": map[string]interface{}{
+					"name":      name,
+					"result":    "spawned",
+					"source":    source,
+					"gui":       gui,
+					"user_data": userDataPath,
+					"image_tag": imageTag,
+				},
+			})
+			_ = clijson.PrintJSON(resp)
+			return
+		}
 		ui.Success("VM %s hatched successfully from %s.", name, source)
 	case "start":
-		name := args[0]
+		jsonOut, rest := consumeJSONFlag(args)
+		if len(rest) < 1 {
+			if jsonOut {
+				resp := clijson.NewResponseError("start", "ERR_INVALID_ARGS", "Missing VM name", "No VM name provided.", "Usage: nido start <name> [--gui] [--json]", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
+			fmt.Println("Usage: nido start <name> [--gui]")
+			os.Exit(1)
+		}
+		name := rest[0]
 		gui := false
-		for i := 1; i < len(args); i++ {
-			if args[i] == "--gui" {
+		for i := 1; i < len(rest); i++ {
+			if rest[i] == "--gui" {
 				gui = true
 			}
 		}
 
-		ui.Ironic("Reviving digital consciousness...")
+		if !jsonOut {
+			ui.Ironic("Reviving digital consciousness...")
+		}
 		if err := prov.Start(name, provider.VMOptions{Gui: gui}); err != nil {
+			if jsonOut {
+				resp := clijson.NewResponseError("start", "ERR_INTERNAL", "Start failed", err.Error(), "Check the VM state and try again.", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
 			ui.Error("Neural jumpstart failure for %s: %v", name, err)
 			os.Exit(1)
 		}
+		if jsonOut {
+			resp := clijson.NewResponseOK("start", map[string]interface{}{
+				"action": map[string]interface{}{
+					"name":   name,
+					"result": "started",
+					"gui":    gui,
+				},
+			})
+			_ = clijson.PrintJSON(resp)
+			return
+		}
 		ui.Success("VM %s is now active.", name)
 	case "stop":
-		if len(args) < 1 {
+		jsonOut, rest := consumeJSONFlag(args)
+		if len(rest) < 1 {
+			if jsonOut {
+				resp := clijson.NewResponseError("stop", "ERR_INVALID_ARGS", "Missing VM name", "No VM name provided.", "Usage: nido stop <name> [--json]", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
 			fmt.Println("Usage: nido stop <name>")
 			os.Exit(1)
 		}
-		ui.Ironic("Sending stop signal to nerves...")
-		if err := prov.Stop(args[0], true); err != nil {
-			ui.Error("Deep sleep rejection for %s: %v", args[0], err)
+		if !jsonOut {
+			ui.Ironic("Sending stop signal to nerves...")
+		}
+		if err := prov.Stop(rest[0], true); err != nil {
+			if jsonOut {
+				resp := clijson.NewResponseError("stop", "ERR_INTERNAL", "Stop failed", err.Error(), "Check the VM state and try again.", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
+			ui.Error("Deep sleep rejection for %s: %v", rest[0], err)
 			os.Exit(1)
 		}
-		ui.Success("VM %s is now resting.", args[0])
+		if jsonOut {
+			resp := clijson.NewResponseOK("stop", map[string]interface{}{
+				"action": map[string]interface{}{
+					"name":   rest[0],
+					"result": "stopped",
+				},
+			})
+			_ = clijson.PrintJSON(resp)
+			return
+		}
+		ui.Success("VM %s is now resting.", rest[0])
 	case "template":
-		if len(args) == 0 || args[0] == "list" {
-			ui.Header("Nido Templates (Grave)")
+		jsonOut, rest := consumeJSONFlag(args)
+		if len(rest) == 0 || rest[0] == "list" {
+			if !jsonOut {
+				ui.Header("Nido Templates (Grave)")
+			}
 			templates, err := prov.ListTemplates()
 			if err != nil {
+				if jsonOut {
+					resp := clijson.NewResponseError("template list", "ERR_IO", "Template list failed", err.Error(), "Check your storage path and try again.", nil)
+					_ = clijson.PrintJSON(resp)
+					os.Exit(1)
+				}
 				ui.Error("Failed to access graveyard: %v", err)
 				os.Exit(1)
+			}
+			if jsonOut {
+				type tplJSON struct {
+					Name      string `json:"name"`
+					SizeBytes int64  `json:"size_bytes"`
+				}
+				items := make([]tplJSON, 0, len(templates))
+				for _, name := range templates {
+					size := int64(0)
+					tplPath := filepath.Join(cfg.BackupDir, name+".compact.qcow2")
+					if info, err := os.Stat(tplPath); err == nil {
+						size = info.Size()
+					}
+					items = append(items, tplJSON{
+						Name:      name,
+						SizeBytes: size,
+					})
+				}
+				resp := clijson.NewResponseOK("template list", map[string]interface{}{
+					"templates": items,
+				})
+				_ = clijson.PrintJSON(resp)
+				return
 			}
 			if len(templates) == 0 {
 				ui.Info("The graveyard is empty. No templates found.")
@@ -278,64 +494,168 @@ func main() {
 					fmt.Printf("  %s%-20s%s %s(%s)%s\n", ui.Cyan, name, ui.Reset, ui.Dim, ui.HumanSize(size), ui.Reset)
 				}
 			}
-			fmt.Println("")
+			if !jsonOut {
+				fmt.Println("")
+			}
 			return
 		}
-		subCmd := args[0]
+		subCmd := rest[0]
 		if subCmd == "create" {
-			if len(args) < 3 {
+			if len(rest) < 3 {
 				ui.Error("Missing parameters. Usage: nido template create <vm-name> <template-name>")
 				os.Exit(1)
 			}
-			vmName := args[1]
-			tplName := args[2]
-			ui.Ironic("Encrypting genetic data into template...")
+			vmName := rest[1]
+			tplName := rest[2]
+			if !jsonOut {
+				ui.Ironic("Encrypting genetic data into template...")
+			}
 			path, err := prov.CreateTemplate(vmName, tplName)
 			if err != nil {
+				if jsonOut {
+					resp := clijson.NewResponseError("template create", "ERR_IO", "Template create failed", err.Error(), "Check VM name and storage permissions.", nil)
+					_ = clijson.PrintJSON(resp)
+					os.Exit(1)
+				}
 				ui.Error("Cloning evolution failed: %v", err)
 				os.Exit(1)
 			}
+			if jsonOut {
+				resp := clijson.NewResponseOK("template create", map[string]interface{}{
+					"action": map[string]interface{}{
+						"name": tplName,
+						"path": path,
+					},
+				})
+				_ = clijson.PrintJSON(resp)
+				return
+			}
 			ui.Success("New species '"+tplName+"' archived at: %s", path)
 		} else if subCmd == "delete" {
-			if len(args) < 2 {
+			if len(rest) < 2 {
 				ui.Error("Missing parameters. Usage: nido template delete <template-name>")
 				os.Exit(1)
 			}
-			tplName := args[1]
-			ui.Ironic("Vaporizing genetic archive...")
+			tplName := rest[1]
+			if !jsonOut {
+				ui.Ironic("Vaporizing genetic archive...")
+			}
 			if err := prov.DeleteTemplate(tplName); err != nil {
+				if isNotFoundErr(err) {
+					if jsonOut {
+						resp := clijson.NewResponseOK("template delete", map[string]interface{}{
+							"action": map[string]interface{}{
+								"name":   tplName,
+								"result": "not_found",
+							},
+						})
+						_ = clijson.PrintJSON(resp)
+						return
+					}
+					ui.Info("Template '%s' is already gone.", tplName)
+					return
+				}
+				if jsonOut {
+					resp := clijson.NewResponseError("template delete", "ERR_IO", "Template delete failed", err.Error(), "Check the template name and try again.", nil)
+					_ = clijson.PrintJSON(resp)
+					os.Exit(1)
+				}
 				ui.Error("Failed to destroy template: %v", err)
 				os.Exit(1)
+			}
+			if jsonOut {
+				resp := clijson.NewResponseOK("template delete", map[string]interface{}{
+					"action": map[string]interface{}{
+						"name":   tplName,
+						"result": "deleted",
+					},
+				})
+				_ = clijson.PrintJSON(resp)
+				return
 			}
 			ui.Success("Template '%s' has been eradicated.", tplName)
 		} else {
 			ui.Error("Unknown template action: %s", subCmd)
 		}
 	case "config":
-		cmdConfig(cfg, cfgPath)
+		jsonOut, _ := consumeJSONFlag(args)
+		cmdConfig(cfg, cfgPath, jsonOut)
 	case "register":
-		cmdRegister()
+		jsonOut, _ := consumeJSONFlag(args)
+		cmdRegister(jsonOut)
 	case "cache":
 		cmdCache(nidoDir, args, prov)
 	case "image", "images":
 		cmdImage(nidoDir, args)
 	case "delete", "destroy":
-		if len(args) < 1 {
+		jsonOut, rest := consumeJSONFlag(args)
+		if len(rest) < 1 {
+			if jsonOut {
+				resp := clijson.NewResponseError("delete", "ERR_INVALID_ARGS", "Missing VM name", "No VM name provided.", "Usage: nido delete <name> [--json]", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
 			fmt.Println("Usage: nido delete <name>")
 			os.Exit(1)
 		}
-		ui.Ironic("Vaporizing digital footprint...")
-		if err := prov.Delete(args[0]); err != nil {
+		if !jsonOut {
+			ui.Ironic("Vaporizing digital footprint...")
+		}
+		if err := prov.Delete(rest[0]); err != nil {
+			if isNotFoundErr(err) {
+				if jsonOut {
+					resp := clijson.NewResponseOK("delete", map[string]interface{}{
+						"action": map[string]interface{}{
+							"name":   rest[0],
+							"result": "not_found",
+						},
+					})
+					_ = clijson.PrintJSON(resp)
+					return
+				}
+				ui.Info("VM %s is already gone.", rest[0])
+				return
+			}
+			if jsonOut {
+				resp := clijson.NewResponseError("delete", "ERR_INTERNAL", "Delete failed", err.Error(), "Check the VM name and try again.", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
 			ui.Error("Eviction failed: %v", err)
 			os.Exit(1)
 		}
-		ui.Success("VM %s has left the nest (permanently).", args[0])
+		if jsonOut {
+			resp := clijson.NewResponseOK("delete", map[string]interface{}{
+				"action": map[string]interface{}{
+					"name":   rest[0],
+					"result": "deleted",
+				},
+			})
+			_ = clijson.PrintJSON(resp)
+			return
+		}
+		ui.Success("VM %s has left the nest (permanently).", rest[0])
 	case "prune":
-		ui.Ironic("Cleaning up the graveyard...")
+		jsonOut, _ := consumeJSONFlag(args)
+		if !jsonOut {
+			ui.Ironic("Cleaning up the graveyard...")
+		}
 		count, err := prov.Prune()
 		if err != nil {
+			if jsonOut {
+				resp := clijson.NewResponseError("prune", "ERR_INTERNAL", "Prune failed", err.Error(), "Try again or run nido doctor.", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
 			ui.Error("Pruning failed: %v", err)
 			os.Exit(1)
+		}
+		if jsonOut {
+			resp := clijson.NewResponseOK("prune", map[string]interface{}{
+				"removed_count": count,
+			})
+			_ = clijson.PrintJSON(resp)
+			return
 		}
 		ui.Success("Vaporized %d stopped life forms.", count)
 	case "mcp":
@@ -407,23 +727,31 @@ func getBashCompletion() string {
 
     case "${prev}" in
         spawn)
-            COMPREPLY=( $(compgen -W "$(nido completion list-templates) --image --user-data --gui" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "$(nido completion list-templates) --image --user-data --gui --json" -- ${cur}) )
             return 0
             ;;
         start)
-            COMPREPLY=( $(compgen -W "$(nido completion list-vms) --gui" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "$(nido completion list-vms) --gui --json" -- ${cur}) )
             return 0
             ;;
-        ssh|info|stop|delete)
+        ssh)
             COMPREPLY=( $(compgen -W "$(nido completion list-vms)" -- ${cur}) )
             return 0
             ;;
+        info|stop|delete)
+            COMPREPLY=( $(compgen -W "$(nido completion list-vms) --json" -- ${cur}) )
+            return 0
+            ;;
+        ls|list|version|prune|doctor|config|register)
+            COMPREPLY=( $(compgen -W "--json" -- ${cur}) )
+            return 0
+            ;;
         template)
-            COMPREPLY=( $(compgen -W "create list delete" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "create list delete --json" -- ${cur}) )
             return 0
             ;;
         images)
-            COMPREPLY=( $(compgen -W "ls list pull update info remove" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "ls list pull update info remove --json" -- ${cur}) )
             return 0
             ;;
         pull|info|remove)
@@ -433,7 +761,7 @@ func getBashCompletion() string {
             fi
             ;;
         cache)
-            COMPREPLY=( $(compgen -W "ls list info rm remove prune --unused" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "ls list info rm remove prune --unused --json" -- ${cur}) )
             return 0
             ;;
             fi
@@ -505,19 +833,30 @@ func getZshCompletion() string {
             '1:template:$(nido completion list-templates)' \
             '--image[Cloud image to use]:image:($(nido completion list-images))' \
             '--user-data[Cloud-init user-data file]:file:_files' \
-            '--gui[Enable GUI (VNC)]'
+            '--gui[Enable GUI (VNC)]' \
+            '--json[Structured JSON output]'
           ;;
         start)
           _arguments \
             '1:vm:$(nido completion list-vms)' \
-            '--gui[Enable GUI (VNC)]'
+            '--gui[Enable GUI (VNC)]' \
+            '--json[Structured JSON output]'
           ;;
-        ssh|info|stop|delete)
+        ssh)
           _values 'vms' $(nido completion list-vms)
+          ;;
+        info|stop|delete)
+          _arguments \
+            '1:vm:$(nido completion list-vms)' \
+            '--json[Structured JSON output]'
+          ;;
+        ls|version|prune|doctor|config|register)
+          _arguments \
+            '--json[Structured JSON output]'
           ;;
         template)
           if (( CURRENT == 2 )); then
-            _values 'actions' 'create' 'list' 'delete'
+            _values 'actions' 'create' 'list' 'delete' '--json'
           elif (( CURRENT == 3 )) && [[ $words[2] == "create" ]]; then
             _values 'vms' $(nido completion list-vms)
           elif (( CURRENT == 3 )) && [[ $words[2] == "delete" ]]; then
@@ -526,14 +865,14 @@ func getZshCompletion() string {
           ;;
         images)
           if (( CURRENT == 2 )); then
-            _values 'actions' 'list' 'ls' 'pull' 'update' 'info' 'remove'
+            _values 'actions' 'list' 'ls' 'pull' 'update' 'info' 'remove' '--json'
           elif (( CURRENT == 3 )) && [[ $words[2] =~ ^(pull|update|info|remove)$ ]]; then
             _values 'images' $(nido completion list-images)
           fi
           ;;
         cache)
           if (( CURRENT == 2 )); then
-            _values 'actions' 'ls' 'list' 'info' 'rm' 'remove' 'prune'
+            _values 'actions' 'ls' 'list' 'info' 'rm' 'remove' 'prune' '--json'
           fi
           ;;
       esac
@@ -581,9 +920,28 @@ func cmdSsh(prov provider.VMProvider, name string, args []string) {
 	}
 }
 
-func cmdDoctor(prov provider.VMProvider) {
-	ui.Header("Nido System Diagnostics")
+func cmdDoctor(prov provider.VMProvider, jsonOut bool) {
 	reports := prov.Doctor()
+	if jsonOut {
+		failCount := 0
+		for _, r := range reports {
+			if strings.Contains(r, "[FAIL]") {
+				failCount++
+			}
+		}
+		resp := clijson.NewResponseOK("doctor", map[string]interface{}{
+			"reports": reports,
+			"summary": map[string]interface{}{
+				"total":  len(reports),
+				"failed": failCount,
+				"passed": len(reports) - failCount,
+			},
+		})
+		_ = clijson.PrintJSON(resp)
+		return
+	}
+
+	ui.Header("Nido System Diagnostics")
 	for _, r := range reports {
 		// Parse report for UI coloring
 		icon := ui.IconSuccess
@@ -599,12 +957,13 @@ func cmdDoctor(prov provider.VMProvider) {
 func printUsage() {
 	ui.Header("Nido: The Universal Nest")
 	fmt.Printf("Usage: %snido %s<command>%s [args...]\n\n", ui.Bold, ui.Cyan, ui.Reset)
+	fmt.Printf("%sOutput:%s add --json for structured output on supported commands (ls, info, spawn, start, stop, delete, prune, template, images, cache, version, doctor, config, register).\n\n", ui.Dim, ui.Reset)
 
 	fmt.Printf("%sVM MANAGEMENT%s\n", ui.Bold, ui.Reset)
 	fmt.Printf("  %-10s %sCreate and hatch a new VM%s\n", "spawn", ui.Dim, ui.Reset)
-	fmt.Printf("    %sFlags: --image <tag>, --user-data <file>, --gui%s\n", ui.Dim, ui.Reset)
+	fmt.Printf("    %sFlags: --image <tag>, --user-data <file>, --gui, --json%s\n", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sRevive a VM from deep sleep%s\n", "start", ui.Dim, ui.Reset)
-	fmt.Printf("    %sFlags: --gui%s\n", ui.Dim, ui.Reset)
+	fmt.Printf("    %sFlags: --gui, --json%s\n", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sConnect to a VM via SSH bridge%s\n", "ssh", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sList all life forms currently in the nest%s\n", "ls", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sInspect a specific VM's neural links%s\n", "info", ui.Dim, ui.Reset)
@@ -629,7 +988,18 @@ func printUsage() {
 	fmt.Printf("\n%s\"It's not a VM, it's a lifestyle.\"%s\n\n", ui.Dim, ui.Reset)
 }
 
-func cmdConfig(cfg *config.Config, path string) {
+func cmdConfig(cfg *config.Config, path string, jsonOut bool) {
+	if jsonOut {
+		resp := clijson.NewResponseOK("config", map[string]interface{}{
+			"config_path": path,
+			"backup_dir":  cfg.BackupDir,
+			"default_tpl": cfg.TemplateDefault,
+			"ssh_user":    cfg.SSHUser,
+		})
+		_ = clijson.PrintJSON(resp)
+		return
+	}
+
 	ui.Header("Nido Genetic Configuration")
 	ui.FancyLabel("Config Path", path)
 	fmt.Println("")
@@ -638,8 +1008,21 @@ func cmdConfig(cfg *config.Config, path string) {
 	ui.FancyLabel("SSH User", cfg.SSHUser)
 }
 
-func cmdRegister() {
+func cmdRegister(jsonOut bool) {
 	exe, _ := os.Executable()
+	if jsonOut {
+		resp := clijson.NewResponseOK("register", map[string]interface{}{
+			"mcpServers": map[string]interface{}{
+				"nido-local-vm-manager": map[string]interface{}{
+					"command": exe,
+					"args":    []string{"mcp"},
+				},
+			},
+		})
+		_ = clijson.PrintJSON(resp)
+		return
+	}
+
 	ui.Header("MCP Handshake Protocol")
 	ui.Info("To authorize your AI Agent (Claude, Antigravity) to access the Nest,")
 	ui.Info("copy the following JSON blob into your agent's configuration file:")
@@ -664,7 +1047,17 @@ func cmdMcpJsonList(prov provider.VMProvider) {
 	fmt.Println(string(data))
 }
 
-func cmdVersion() {
+func cmdVersion(jsonOut bool) {
+	if jsonOut {
+		resp := clijson.NewResponseOK("version", map[string]interface{}{
+			"version":  Version,
+			"state":    "Evolved",
+			"protocol": "v3.0",
+		})
+		_ = clijson.PrintJSON(resp)
+		return
+	}
+
 	fmt.Printf("%sNido %s%s%s (State: Evolved)\n", ui.Dim, ui.Reset, ui.Bold, Version)
 	ui.Ironic("Hypervisor handshake protocol v3.0 stable.")
 
@@ -679,6 +1072,39 @@ func cmdVersion() {
 	// Give a tiny bit of time for the goroutine to potentially output,
 	// but don't block. For cmdVersion, we can wait 100ms.
 	time.Sleep(100 * time.Millisecond)
+}
+
+func consumeJSONFlag(args []string) (bool, []string) {
+	jsonOut := false
+	rest := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == "--json" {
+			jsonOut = true
+			clijson.SetJSONMode(true)
+			continue
+		}
+		rest = append(rest, arg)
+	}
+	return jsonOut, rest
+}
+
+func isNotFoundErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if os.IsNotExist(err) {
+		return true
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "not found") || strings.Contains(lower, "no such file")
+}
+
+func isAlreadyExistsErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "already exists") || strings.Contains(lower, "file exists")
 }
 
 func getLatestVersion() (string, error) {
@@ -824,7 +1250,8 @@ func cmdUpdate(nidoDir string) {
 // cmdCache handles image cache management commands.
 // Provides transparency and control over cached cloud images.
 func cmdCache(nidoDir string, args []string, prov provider.VMProvider) {
-	if len(args) < 1 {
+	jsonOut, rest := consumeJSONFlag(args)
+	if len(rest) < 1 {
 		ui.Error("Usage: nido cache <ls|info|rm|prune>")
 		os.Exit(1)
 	}
@@ -832,22 +1259,62 @@ func cmdCache(nidoDir string, args []string, prov provider.VMProvider) {
 	imgDir := filepath.Join(nidoDir, "images")
 	catalog, err := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 	if err != nil {
+		if jsonOut {
+			resp := clijson.NewResponseError("cache", "ERR_IO", "Catalog load failed", err.Error(), "Check your network connection and try again.", nil)
+			_ = clijson.PrintJSON(resp)
+			os.Exit(1)
+		}
 		ui.Error("Failed to load catalog: %v", err)
 		os.Exit(1)
 	}
 
-	subCmd := args[0]
+	subCmd := rest[0]
 	switch subCmd {
 	case "ls", "list":
 		// List all cached images with sizes
 		cached, err := catalog.GetCachedImages(imgDir)
 		if err != nil {
+			if jsonOut {
+				resp := clijson.NewResponseError("cache ls", "ERR_IO", "Cache list failed", err.Error(), "Check your cache path and try again.", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
 			ui.Error("Failed to list cache: %v", err)
 			os.Exit(1)
 		}
 
 		if len(cached) == 0 {
+			if jsonOut {
+				resp := clijson.NewResponseOK("cache ls", map[string]interface{}{
+					"cache": []interface{}{},
+				})
+				_ = clijson.PrintJSON(resp)
+				return
+			}
 			ui.Info("Cache is empty. No images downloaded yet.")
+			return
+		}
+
+		if jsonOut {
+			type cacheJSON struct {
+				Name       string `json:"name"`
+				Version    string `json:"version"`
+				SizeBytes  int64  `json:"size_bytes"`
+				ModifiedAt string `json:"modified_at"`
+			}
+			items := make([]cacheJSON, 0, len(cached))
+			for _, img := range cached {
+				items = append(items, cacheJSON{
+					Name:       img.Name,
+					Version:    img.Version,
+					SizeBytes:  img.Size,
+					ModifiedAt: img.ModTime.UTC().Format(time.RFC3339),
+				})
+			}
+			resp := clijson.NewResponseOK("cache ls", map[string]interface{}{
+				"cache": items,
+			})
+			_ = clijson.PrintJSON(resp)
 			return
 		}
 
@@ -865,12 +1332,40 @@ func cmdCache(nidoDir string, args []string, prov provider.VMProvider) {
 		// Show cache statistics
 		stats, err := catalog.GetCacheStats(imgDir)
 		if err != nil {
+			if jsonOut {
+				resp := clijson.NewResponseError("cache info", "ERR_IO", "Cache stats failed", err.Error(), "Check your cache path and try again.", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
 			ui.Error("Failed to get cache stats: %v", err)
 			os.Exit(1)
 		}
 
 		if stats.TotalImages == 0 {
+			if jsonOut {
+				resp := clijson.NewResponseOK("cache info", map[string]interface{}{
+					"stats": map[string]interface{}{
+						"total_images": 0,
+						"total_size":   0,
+					},
+				})
+				_ = clijson.PrintJSON(resp)
+				return
+			}
 			ui.Info("Cache is empty.")
+			return
+		}
+
+		if jsonOut {
+			resp := clijson.NewResponseOK("cache info", map[string]interface{}{
+				"stats": map[string]interface{}{
+					"total_images": stats.TotalImages,
+					"total_size":   stats.TotalSize,
+					"oldest":       stats.OldestImage.UTC().Format(time.RFC3339),
+					"newest":       stats.NewestImage.UTC().Format(time.RFC3339),
+				},
+			})
+			_ = clijson.PrintJSON(resp)
 			return
 		}
 
@@ -883,13 +1378,13 @@ func cmdCache(nidoDir string, args []string, prov provider.VMProvider) {
 
 	case "rm", "remove":
 		// Remove specific cached image
-		if len(args) < 2 {
+		if len(rest) < 2 {
 			ui.Error("Usage: nido cache rm <image:version>")
 			os.Exit(1)
 		}
 
 		// Parse image:version
-		parts := strings.Split(args[1], ":")
+		parts := strings.Split(rest[1], ":")
 		if len(parts) != 2 {
 			ui.Error("Invalid format. Use: <image>:<version>")
 			os.Exit(1)
@@ -897,8 +1392,40 @@ func cmdCache(nidoDir string, args []string, prov provider.VMProvider) {
 
 		name, version := parts[0], parts[1]
 		if err := catalog.RemoveCachedImage(imgDir, name, version); err != nil {
+			if isNotFoundErr(err) {
+				if jsonOut {
+					resp := clijson.NewResponseOK("cache rm", map[string]interface{}{
+						"action": map[string]interface{}{
+							"name":    name,
+							"version": version,
+							"result":  "not_found",
+						},
+					})
+					_ = clijson.PrintJSON(resp)
+					return
+				}
+				ui.Info("Cache entry %s:%s is already gone.", name, version)
+				return
+			}
+			if jsonOut {
+				resp := clijson.NewResponseError("cache rm", "ERR_IO", "Cache remove failed", err.Error(), "Check the image name and try again.", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
 			ui.Error("Failed to remove image: %v", err)
 			os.Exit(1)
+		}
+
+		if jsonOut {
+			resp := clijson.NewResponseOK("cache rm", map[string]interface{}{
+				"action": map[string]interface{}{
+					"name":    name,
+					"version": version,
+					"result":  "removed",
+				},
+			})
+			_ = clijson.PrintJSON(resp)
+			return
 		}
 
 		ui.Success("Removed %s:%s from cache", name, version)
@@ -906,7 +1433,7 @@ func cmdCache(nidoDir string, args []string, prov provider.VMProvider) {
 	case "prune":
 		// Prune cache (all or unused only)
 		unusedOnly := false
-		for _, arg := range args[1:] {
+		for _, arg := range rest[1:] {
 			if arg == "--unused" {
 				unusedOnly = true
 			}
@@ -921,11 +1448,27 @@ func cmdCache(nidoDir string, args []string, prov provider.VMProvider) {
 			}
 		}
 
-		ui.Ironic("Cleaning the cache...")
+		if !jsonOut {
+			ui.Ironic("Cleaning the cache...")
+		}
 		removed, err := catalog.PruneCache(imgDir, unusedOnly, activeVMs)
 		if err != nil {
+			if jsonOut {
+				resp := clijson.NewResponseError("cache prune", "ERR_IO", "Cache prune failed", err.Error(), "Check your cache path and try again.", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
 			ui.Error("Pruning failed: %v", err)
 			os.Exit(1)
+		}
+
+		if jsonOut {
+			resp := clijson.NewResponseOK("cache prune", map[string]interface{}{
+				"removed_count": removed,
+				"unused_only":   unusedOnly,
+			})
+			_ = clijson.PrintJSON(resp)
+			return
 		}
 
 		if removed == 0 {

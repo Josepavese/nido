@@ -7,30 +7,32 @@ import (
 	"strings"
 	"time"
 
+	clijson "github.com/Josepavese/nido/internal/cli"
 	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/ui"
 )
 
 // cmdImage handles all image subcommands
 func cmdImage(nidoDir string, args []string) {
-	if len(args) == 0 {
+	jsonOut, rest := consumeJSONFlag(args)
+	if len(rest) == 0 {
 		ui.Error("Usage: nido image <list|pull|info|remove|update>")
 		os.Exit(1)
 	}
 
-	subcommand := args[0]
+	subcommand := rest[0]
 
 	switch subcommand {
 	case "list", "ls":
-		cmdImageList(nidoDir, args[1:])
+		cmdImageList(nidoDir, rest[1:], jsonOut)
 	case "pull":
-		cmdImagePull(nidoDir, args[1:])
+		cmdImagePull(nidoDir, rest[1:], jsonOut)
 	case "info":
-		cmdImageInfo(nidoDir, args[1:])
+		cmdImageInfo(nidoDir, rest[1:], jsonOut)
 	case "remove":
-		cmdImageRemove(nidoDir, args[1:])
+		cmdImageRemove(nidoDir, rest[1:], jsonOut)
 	case "update":
-		cmdImageUpdate(nidoDir, args[1:])
+		cmdImageUpdate(nidoDir, rest[1:], jsonOut)
 	default:
 		ui.Error("Unknown image subcommand: %s", subcommand)
 		os.Exit(1)
@@ -38,15 +40,56 @@ func cmdImage(nidoDir string, args []string) {
 }
 
 // cmdImageList displays all available images from the catalog
-func cmdImageList(nidoDir string, args []string) {
+func cmdImageList(nidoDir string, args []string, jsonOut bool) {
 	// Determine image directory
 	imageDir := filepath.Join(nidoDir, "images")
 
 	// Load catalog
 	catalog, err := image.LoadCatalog(imageDir, image.DefaultCacheTTL)
 	if err != nil {
+		if jsonOut {
+			resp := clijson.NewResponseError("image list", "ERR_IO", "Catalog load failed", err.Error(), "Check your network connection and try again.", nil)
+			_ = clijson.PrintJSON(resp)
+			os.Exit(1)
+		}
 		ui.Error("Failed to load image catalog: %v", err)
 		os.Exit(1)
+	}
+
+	if jsonOut {
+		type imageJSON struct {
+			Name       string   `json:"name"`
+			Version    string   `json:"version"`
+			Registry   string   `json:"registry"`
+			SizeBytes  int64    `json:"size_bytes"`
+			Aliases    []string `json:"aliases,omitempty"`
+			Downloaded bool     `json:"downloaded"`
+		}
+
+		items := []imageJSON{}
+		for _, img := range catalog.Images {
+			for _, v := range img.Versions {
+				imagePath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.qcow2", img.Name, v.Version))
+				downloaded := false
+				if _, err := os.Stat(imagePath); err == nil {
+					downloaded = true
+				}
+				items = append(items, imageJSON{
+					Name:       img.Name,
+					Version:    v.Version,
+					Registry:   img.Registry,
+					SizeBytes:  v.SizeBytes,
+					Aliases:    v.Aliases,
+					Downloaded: downloaded,
+				})
+			}
+		}
+
+		resp := clijson.NewResponseOK("image list", map[string]interface{}{
+			"images": items,
+		})
+		_ = clijson.PrintJSON(resp)
+		return
 	}
 
 	// Display header
@@ -145,7 +188,7 @@ func formatDuration(d time.Duration) string {
 }
 
 // Stubs for other commands (Phase 2+)
-func cmdImagePull(nidoDir string, args []string) {
+func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 	if len(args) < 1 {
 		ui.Error("Usage: nido image pull <name>[:version]")
 		os.Exit(1)
@@ -167,6 +210,11 @@ func cmdImagePull(nidoDir string, args []string) {
 	// Load catalog
 	catalog, err := image.LoadCatalog(imageDir, image.DefaultCacheTTL)
 	if err != nil {
+		if jsonOut {
+			resp := clijson.NewResponseError("image pull", "ERR_IO", "Catalog load failed", err.Error(), "Check your network connection and try again.", nil)
+			_ = clijson.PrintJSON(resp)
+			os.Exit(1)
+		}
 		ui.Error("Failed to load catalog: %v", err)
 		os.Exit(1)
 	}
@@ -174,6 +222,11 @@ func cmdImagePull(nidoDir string, args []string) {
 	// Find image
 	img, ver, err := catalog.FindImage(name, version)
 	if err != nil {
+		if jsonOut {
+			resp := clijson.NewResponseError("image pull", "ERR_NOT_FOUND", "Image not found", err.Error(), "Run 'nido image list' to see available images.", nil)
+			_ = clijson.PrintJSON(resp)
+			os.Exit(1)
+		}
 		ui.Error("Image not found: %s", target)
 		ui.Info("Try 'nido image list' to see available images.")
 		os.Exit(1)
@@ -186,17 +239,30 @@ func cmdImagePull(nidoDir string, args []string) {
 	// Note: Ideally we'd verify checksum here too, but that's slow.
 	// We assume if file exists at final path, it's good.
 	if _, err := os.Stat(destPath); err == nil {
+		if jsonOut {
+			resp := clijson.NewResponseOK("image pull", map[string]interface{}{
+				"action": map[string]interface{}{
+					"name":    img.Name,
+					"version": ver.Version,
+					"result":  "already_present",
+				},
+			})
+			_ = clijson.PrintJSON(resp)
+			return
+		}
 		ui.Success("Image %s:%s is already downloaded.", img.Name, ver.Version)
 		return
 	}
 
 	// Announce download
-	ui.Header(fmt.Sprintf("Pulling %s:%s", img.Name, ver.Version))
-	ui.Info("Source: %s", ver.URL)
-	ui.Info("Size:   %s", ui.HumanSize(ver.SizeBytes))
+	if !jsonOut {
+		ui.Header(fmt.Sprintf("Pulling %s:%s", img.Name, ver.Version))
+		ui.Info("Source: %s", ver.URL)
+		ui.Info("Size:   %s", ui.HumanSize(ver.SizeBytes))
+	}
 
 	// Download
-	downloader := image.Downloader{}
+	downloader := image.Downloader{Quiet: jsonOut}
 	var downloadErr error
 	if len(ver.PartURLs) > 0 {
 		downloadErr = downloader.DownloadMultiPart(ver.PartURLs, destPath, ver.SizeBytes)
@@ -205,39 +271,80 @@ func cmdImagePull(nidoDir string, args []string) {
 	}
 
 	if downloadErr != nil {
+		if jsonOut {
+			resp := clijson.NewResponseError("image pull", "ERR_IO", "Download failed", downloadErr.Error(), "Check your connection and try again.", nil)
+			_ = clijson.PrintJSON(resp)
+			os.Exit(1)
+		}
 		ui.Error("Download failed: %v", downloadErr)
 		os.Exit(1)
 	}
 
 	// Verify Checksum
-	ui.Ironic("Verifying genetic integrity...")
+	if !jsonOut {
+		ui.Ironic("Verifying genetic integrity...")
+	}
 	if err := image.VerifyChecksum(destPath, ver.Checksum, ver.ChecksumType); err != nil {
-		ui.Error("Checksum verification failed: %v", err)
-		ui.Warn("The downloaded file may be corrupted or tampered with.")
-		ui.Warn("Deleting corrupted file...")
+		if jsonOut {
+			resp := clijson.NewResponseError("image pull", "ERR_IO", "Checksum verification failed", err.Error(), "Retry the download or choose a different image.", nil)
+			_ = clijson.PrintJSON(resp)
+		} else {
+			ui.Error("Checksum verification failed: %v", err)
+			ui.Warn("The downloaded file may be corrupted or tampered with.")
+			ui.Warn("Deleting corrupted file...")
+		}
 		os.Remove(destPath)
 		os.Exit(1)
+	}
+
+	if jsonOut {
+		resp := clijson.NewResponseOK("image pull", map[string]interface{}{
+			"action": map[string]interface{}{
+				"name":    img.Name,
+				"version": ver.Version,
+				"result":  "downloaded",
+			},
+		})
+		_ = clijson.PrintJSON(resp)
+		return
 	}
 
 	ui.Success("Image downloaded and verified successfully! 🐣")
 	ui.Info("You can now spawn a VM using: nido spawn my-vm --image %s:%s", img.Name, ver.Version)
 }
 
-func cmdImageInfo(nidoDir string, args []string) {
+func cmdImageInfo(nidoDir string, args []string, jsonOut bool) {
+	if jsonOut {
+		resp := clijson.NewResponseError("image info", "ERR_NOT_IMPLEMENTED", "Not implemented", "Image info is not available yet.", "Use 'nido image list' to see available images.", nil)
+		_ = clijson.PrintJSON(resp)
+		return
+	}
 	ui.Info("Coming soon! Use 'nido image list' to see available images.")
 }
 
-func cmdImageRemove(nidoDir string, args []string) {
+func cmdImageRemove(nidoDir string, args []string, jsonOut bool) {
+	if jsonOut {
+		resp := clijson.NewResponseError("image remove", "ERR_NOT_IMPLEMENTED", "Not implemented", "Image remove is not available yet.", "Use 'nido cache rm' for cached images.", nil)
+		_ = clijson.PrintJSON(resp)
+		return
+	}
 	ui.Info("Coming soon! This will remove downloaded images.")
 }
 
-func cmdImageUpdate(nidoDir string, args []string) {
-	ui.Ironic("Refreshing the catalog...")
+func cmdImageUpdate(nidoDir string, args []string, jsonOut bool) {
+	if !jsonOut {
+		ui.Ironic("Refreshing the catalog...")
+	}
 	imageDir := filepath.Join(nidoDir, "images")
 	cachePath := filepath.Join(imageDir, image.CatalogCacheFile)
 
 	// Remove cache to force refresh
 	if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
+		if jsonOut {
+			resp := clijson.NewResponseError("image update", "ERR_IO", "Cache clear failed", err.Error(), "Check file permissions and try again.", nil)
+			_ = clijson.PrintJSON(resp)
+			os.Exit(1)
+		}
 		ui.Error("Failed to clear cache: %v", err)
 		os.Exit(1)
 	}
@@ -245,8 +352,23 @@ func cmdImageUpdate(nidoDir string, args []string) {
 	// Reload catalog (will fetch from remote)
 	_, err := image.LoadCatalog(imageDir, 0) // TTL=0 forces refresh
 	if err != nil {
+		if jsonOut {
+			resp := clijson.NewResponseError("image update", "ERR_IO", "Catalog update failed", err.Error(), "Check your network connection and try again.", nil)
+			_ = clijson.PrintJSON(resp)
+			os.Exit(1)
+		}
 		ui.Error("Failed to update catalog: %v", err)
 		os.Exit(1)
+	}
+
+	if jsonOut {
+		resp := clijson.NewResponseOK("image update", map[string]interface{}{
+			"action": map[string]interface{}{
+				"result": "updated",
+			},
+		})
+		_ = clijson.PrintJSON(resp)
+		return
 	}
 
 	ui.Success("Catalog updated successfully! 🐣")
