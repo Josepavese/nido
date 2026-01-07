@@ -20,3 +20,6 @@ bin/nido
 docs/test_log.md
 .actions/
 nohup.out
+
+# gui
+/gui
