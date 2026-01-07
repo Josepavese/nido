@@ -141,6 +141,7 @@ nido delete my-vm                  # Evict VM permanently
 # Template management
 nido template list                 # See what's in cold storage
 nido template create my-vm golden  # Archive VM as reusable template
+nido template delete golden        # Erase template from history
 
 # Power user moves
 nido start my-vm                   # Revive a stopped VM
@@ -198,6 +199,7 @@ echo "source ~/.nido/bash_completion" >> ~/.bashrc
 | `image pull <image>` | Download image | `nido image pull ubuntu:24.04` |
 | `template list` | List templates | `nido template list` |
 | `template create <vm> <tpl>` | Archive VM | `nido template create my-vm golden` |
+| `template delete <name>` | Delete template | `nido template delete golden` |
 | `doctor` | System diagnostics | `nido doctor` |
 | `config` | View configuration | `nido config` |
 | `register` | MCP setup helper | `nido register` |
