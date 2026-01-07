@@ -74,6 +74,9 @@ type VMProvider interface {
 	// ListTemplates returns names of all available templates in cold storage.
 	ListTemplates() ([]string, error)
 
+	// DeleteTemplate removes a template from cold storage.
+	DeleteTemplate(name string) error
+
 	// Prune removes all stopped VMs from the system.
 	// Returns the count of VMs deleted.
 	Prune() (int, error)

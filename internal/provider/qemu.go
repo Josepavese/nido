@@ -362,6 +362,14 @@ func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (strin
 	return targetTemplate, nil
 }
 
+func (p *QemuProvider) DeleteTemplate(name string) error {
+	templatePath := filepath.Join(p.Config.BackupDir, name+".compact.qcow2")
+	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
+		return fmt.Errorf("template not found: %s", name)
+	}
+	return os.Remove(templatePath)
+}
+
 func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
 	vmsDir := filepath.Join(p.RootDir, "vms")
 	os.MkdirAll(vmsDir, 0755)

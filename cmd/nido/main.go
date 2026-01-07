@@ -20,7 +20,7 @@ import (
 )
 
 // Version is injected at build time
-var Version = "v4.1.1"
+var Version = "v4.1.2"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -296,6 +296,18 @@ func main() {
 				os.Exit(1)
 			}
 			ui.Success("New species '"+tplName+"' archived at: %s", path)
+		} else if subCmd == "delete" {
+			if len(args) < 2 {
+				ui.Error("Missing parameters. Usage: nido template delete <template-name>")
+				os.Exit(1)
+			}
+			tplName := args[1]
+			ui.Ironic("Vaporizing genetic archive...")
+			if err := prov.DeleteTemplate(tplName); err != nil {
+				ui.Error("Failed to destroy template: %v", err)
+				os.Exit(1)
+			}
+			ui.Success("Template '%s' has been eradicated.", tplName)
 		} else {
 			ui.Error("Unknown template action: %s", subCmd)
 		}
@@ -349,6 +361,21 @@ func main() {
 			}
 			return
 		}
+		if sub == "list-images" {
+			cachePath := filepath.Join(nidoDir, "images", ".catalog.json")
+			catalog, err := image.LoadCatalogFromFile(cachePath)
+			if err == nil {
+				for _, img := range catalog.Images {
+					for _, ver := range img.Versions {
+						fmt.Printf("%s:%s ", img.Name, ver.Version)
+						for _, alias := range ver.Aliases {
+							fmt.Printf("%s:%s ", img.Name, alias)
+						}
+					}
+				}
+			}
+			return
+		}
 		cmdCompletion(sub)
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
@@ -392,18 +419,30 @@ func getBashCompletion() string {
             return 0
             ;;
         template)
-            COMPREPLY=( $(compgen -W "create list" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "create list delete" -- ${cur}) )
             return 0
             ;;
         images)
             COMPREPLY=( $(compgen -W "ls list pull update info remove" -- ${cur}) )
             return 0
             ;;
+        pull|info|remove)
+            if [[ ${COMP_WORDS[COMP_CWORD-2]} == "images" ]]; then
+                COMPREPLY=( $(compgen -W "$(nido completion list-images)" -- ${cur}) )
+                return 0
+            fi
+            ;;
         cache)
             COMPREPLY=( $(compgen -W "ls list info rm remove prune --unused" -- ${cur}) )
             return 0
             ;;
-        --image|--user-data)
+            fi
+            ;;
+        --image)
+            COMPREPLY=( $(compgen -W "$(nido completion list-images)" -- ${cur}) )
+            return 0
+            ;;
+        --user-data)
             # File completion for these flags
             COMPREPLY=( $(compgen -f -- ${cur}) )
             return 0
@@ -411,6 +450,12 @@ func getBashCompletion() string {
         create)
             if [[ ${COMP_WORDS[COMP_CWORD-2]} == "template" ]]; then
                 COMPREPLY=( $(compgen -W "$(nido completion list-vms)" -- ${cur}) )
+                return 0
+            fi
+            ;;
+        delete)
+             if [[ ${COMP_WORDS[COMP_CWORD-2]} == "template" ]]; then
+                COMPREPLY=( $(compgen -W "$(nido completion list-templates)" -- ${cur}) )
                 return 0
             fi
             ;;
@@ -458,7 +503,7 @@ func getZshCompletion() string {
         spawn)
           _arguments \
             '1:template:$(nido completion list-templates)' \
-            '--image[Cloud image to use]:image:' \
+            '--image[Cloud image to use]:image:($(nido completion list-images))' \
             '--user-data[Cloud-init user-data file]:file:_files' \
             '--gui[Enable GUI (VNC)]'
           ;;
@@ -472,14 +517,18 @@ func getZshCompletion() string {
           ;;
         template)
           if (( CURRENT == 2 )); then
-            _values 'actions' 'create' 'list'
+            _values 'actions' 'create' 'list' 'delete'
           elif (( CURRENT == 3 )) && [[ $words[2] == "create" ]]; then
             _values 'vms' $(nido completion list-vms)
+          elif (( CURRENT == 3 )) && [[ $words[2] == "delete" ]]; then
+            _values 'templates' $(nido completion list-templates)
           fi
           ;;
         images)
           if (( CURRENT == 2 )); then
             _values 'actions' 'list' 'ls' 'pull' 'update' 'info' 'remove'
+          elif (( CURRENT == 3 )) && [[ $words[2] =~ ^(pull|update|info|remove)$ ]]; then
+            _values 'images' $(nido completion list-images)
           fi
           ;;
         cache)

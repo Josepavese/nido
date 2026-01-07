@@ -196,6 +196,17 @@ func (s *Server) handleToolsList(req JSONRPCRequest) {
 			},
 		},
 		{
+			"name":        "vm_template_delete",
+			"description": "Delete a template from cold storage",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{"type": "string", "description": "Name of the template to delete"},
+				},
+				"required": []string{"name"},
+			},
+		},
+		{
 			"name":        "vm_doctor",
 			"description": "Run system diagnostics to check nest health",
 			"inputSchema": map[string]interface{}{
@@ -462,6 +473,16 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			err = e
 		} else {
 			result = fmt.Sprintf("Template created at: %s", path)
+		}
+	case "vm_template_delete":
+		var args struct {
+			Name string `json:"name"`
+		}
+		json.Unmarshal(params.Arguments, &args)
+		if e := s.Provider.DeleteTemplate(args.Name); e != nil {
+			err = e
+		} else {
+			result = fmt.Sprintf("Template '%s' deleted.", args.Name)
 		}
 	case "vm_doctor":
 		reports := s.Provider.Doctor()
