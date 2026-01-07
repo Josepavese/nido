@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/Josepavese/nido/internal/cli"
 )
 
 // Downloader handles downloading files with resumption and progress tracking.
@@ -79,10 +81,12 @@ func (d *Downloader) Download(url, dest string, expectedSize int64) error {
 		totalSize = expectedSize
 	}
 
+	quiet := d.Quiet || cli.IsJSONMode()
+
 	counter := &writeCounter{
 		total:   uint64(totalSize),
 		current: uint64(startByte),
-		quiet:   d.Quiet,
+		quiet:   quiet,
 	}
 
 	// Copy data
@@ -124,7 +128,8 @@ func (d *Downloader) DownloadMultiPart(urls []string, dest string, expectedTotal
 	var parts []string
 	for i, url := range urls {
 		partDest := filepath.Join(tmpDir, fmt.Sprintf("part.%03d", i+1))
-		if !d.Quiet {
+		quiet := d.Quiet || cli.IsJSONMode()
+		if !quiet {
 			fmt.Printf("🌐 Downloading part %d/%d...\n", i+1, len(urls))
 		}
 		if err := d.Download(url, partDest, 0); err != nil {
@@ -133,7 +138,8 @@ func (d *Downloader) DownloadMultiPart(urls []string, dest string, expectedTotal
 		parts = append(parts, partDest)
 	}
 
-	if !d.Quiet {
+	quiet := d.Quiet || cli.IsJSONMode()
+	if !quiet {
 		fmt.Printf("🧩 Reassembling image...\n")
 	}
 
@@ -168,7 +174,8 @@ func (d *Downloader) DownloadMultiPart(urls []string, dest string, expectedTotal
 // Decompress extracts an archive to a destination.
 // Currently supported: .tar.xz (standard for Kali cloud images)
 func (d *Downloader) Decompress(src, dest string) error {
-	if !d.Quiet {
+	quiet := d.Quiet || cli.IsJSONMode()
+	if !quiet {
 		fmt.Printf("📦 Decompressing %s...\n", filepath.Base(src))
 	}
 
