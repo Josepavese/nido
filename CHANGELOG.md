@@ -5,6 +5,26 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.0] - 2026-01-07 "The Synthetic Perception" 🪺👁️
+
+### 🎉 Major Features
+
+- **Structured JSON Output:** Added `--json` support for automation and GUI integrations on core commands (ls, info, spawn, start, stop, delete, prune, template, images, cache, version). 🪺
+
+### 🔧 CLI & UX Refinements
+
+- **Help Output:** CLI usage now highlights the `--json` option and supported commands.
+- **Shell Completions:** Bash/Zsh suggestions include `--json` where applicable.
+
+### 🐛 Bug Fixes
+
+- **QEMU Write‑Lock Fix:** Stop now waits for the real QEMU daemon PID (from the pidfile), preventing stale disk locks on restart. 🛠️
+- **Idempotent Cleanup:** Delete, template delete, and cache remove now handle “already gone” cases gracefully (including JSON mode). 🧹
+
+### 🧩 JSON Coverage
+
+- **Full Diagnostics:** Added JSON output for `doctor`, `config`, and `register`.
+
 ## [4.1.2] - 2026-01-07 "Genetic Pruning" 🧬✂️
 
 ### 🎉 Major Features

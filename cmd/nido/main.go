@@ -21,7 +21,7 @@ import (
 )
 
 // Version is injected at build time
-var Version = "v4.1.2"
+var Version = "v4.2.0"
 
 func main() {
 	if len(os.Args) < 2 {
