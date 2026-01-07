@@ -207,6 +207,18 @@ echo "source ~/.nido/bash_completion" >> ~/.bashrc
 | `cache info` | Show cache statistics | `nido cache info` |
 | `cache prune` | Remove all cached images | `nido cache prune` |
 
+### Structured Output (JSON)
+
+For automation and GUI integrations, Nido can speak JSON. Use `--json` on supported commands to get stable, machine‑readable output (including `doctor`, `config`, and `register`):
+
+```bash
+nido ls --json
+nido info my-vm --json
+nido spawn my-vm --image ubuntu:24.04 --json
+```
+
+It keeps human output friendly for interactive use, and gives scripts a clean, deterministic payload when they need it. 🪺
+
 ### GUI Support (VNC)
 
 Nido can expose a graphical interface for VMs:
