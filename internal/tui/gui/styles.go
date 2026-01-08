@@ -59,7 +59,7 @@ var (
 			Foreground(colors.Text)
 
 	sidebarStyle = lipgloss.NewStyle().
-			Width(22).
+			Width(23).
 			Border(lipgloss.NormalBorder(), false, true, false, false).
 			BorderForeground(colors.SurfaceSubtle)
 
@@ -144,7 +144,7 @@ var (
 	hatchButtonStyle = lipgloss.NewStyle().
 				Foreground(colors.Bg).
 				Background(colors.TextDim).
-				Padding(0, 3).
+				Padding(0, 1).
 				MarginTop(1)
 
 	hatchButtonActiveStyle = hatchButtonStyle.Copy().

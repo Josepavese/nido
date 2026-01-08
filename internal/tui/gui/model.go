@@ -79,7 +79,7 @@ func (i vmItem) String() string      { return i.Title() }
 
 type spawnItem struct{}
 
-func (i spawnItem) Title() string       { return "+ SPAWN" }
+func (i spawnItem) Title() string       { return "+ Spawn new bird (VM)" }
 func (i spawnItem) Description() string { return "" }
 func (i spawnItem) FilterValue() string { return "" }
 func (i spawnItem) String() string      { return i.Title() }
@@ -171,7 +171,7 @@ func (d customDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d customDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
 	// Check for Spawn Item first
 	if _, ok := listItem.(spawnItem); ok {
-		str := "+ SPAWN"
+		str := "+ Spawn new bird (VM)"
 		if index == m.Index() {
 			fmt.Fprint(w, hatchButtonActiveStyle.Render(str))
 		} else {
@@ -320,8 +320,8 @@ func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 	// Use customDelegate to match Config/Hatchery styling (no extra padding)
 	d := customDelegate{}
 
-	// Reduced sidebar width to 20 (minimized)
-	l := list.New(items, d, 20, 10)
+	// Reduced sidebar width to 23 (fit text)
+	l := list.New(items, d, 23, 10)
 	l.SetShowTitle(false)
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
@@ -574,9 +574,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Apply dynamic height to all components
-		m.list.SetSize(20, bodyHeight)             // Fleet
-		m.hatchery.Sidebar.SetSize(20, bodyHeight) // Hatchery
-		m.config.Sidebar.SetSize(20, bodyHeight)   // Config
+		m.list.SetSize(23, bodyHeight)             // Fleet
+		m.hatchery.Sidebar.SetSize(23, bodyHeight) // Hatchery
+		m.config.Sidebar.SetSize(23, bodyHeight)   // Config
 
 		// Logs Viewport
 		m.logViewport.Width = m.width - 8
@@ -1000,8 +1000,8 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// 2. Sidebar Logic (Fleet View)
 	if m.activeTab == tabFleet {
-		// sidebar width (22) + border (1) = 23. Let's use 24 as the barrier.
-		if msg.X < 24 {
+		// sidebar width (23) + border (1) = 24. Let's use 25 as the barrier.
+		if msg.X < 25 {
 			row := msg.Y - 4 // Offset 4 (Header 2 + SubHeader 2)
 			if row >= 0 {
 				pageStart := m.list.Paginator.Page * m.list.Paginator.PerPage
@@ -1025,8 +1025,8 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			// Header(2) + SubHeader(2) + Title(1) + CardPaddingTop(1) + CardContent(6) + CardPaddingBottom(1) = 13
 			// Buttons start after line 13. So Y >= 14 seems correct.
 			if msg.Y >= 14 && msg.Y <= 18 {
-				// Sidebar(23) + MainPadding(2) = 25 offset
-				localX := msg.X - 25
+				// Sidebar(24) + MainPadding(2) = 26 offset
+				localX := msg.X - 26
 				if sel := m.list.SelectedItem(); sel != nil {
 					if item, ok := sel.(vmItem); ok {
 						if localX >= 0 && localX < 14 { // [ENTER] START/STOP (~14 chars)
@@ -1448,8 +1448,8 @@ func (m model) renderDiskLine() string {
 	if m.detail.DiskMissing {
 		path = errorStyle.Render(fmt.Sprintf("MISSING (%s)", m.detail.DiskPath))
 	}
-	// Sidebar(22) + Padding(6) + Label(12) = 40 -> Safety 47
-	avail := m.width - 47
+	// Sidebar(23) + Padding(6) + Label(12) = 41 -> Safety 48
+	avail := m.width - 48
 	if avail < 10 {
 		avail = 10
 	}
