@@ -1040,7 +1040,7 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			// Y Calculation:
 			// Header(2) + SubHeader(2) + Title(1) + CardPaddingTop(1) + CardContent(6) + CardPaddingBottom(1) = 13
 			// Buttons start after line 13. So Y >= 14.
-			availWidth := m.width - 21
+			availWidth := m.width - 20
 			isCompact := availWidth < 46
 
 			if isCompact {
@@ -1048,7 +1048,7 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 				// Button 1: Y 14-16
 				// Button 2: Y 17-19
 				// Button 3: Y 20-22
-				localX := msg.X - 21
+				localX := msg.X - 20
 				if localX >= 0 { // Check X bounds? Buttons align left, so X > 0 is enough if we don't care about max width click
 					if sel := m.list.SelectedItem(); sel != nil {
 						if item, ok := sel.(vmItem); ok {
@@ -1076,8 +1076,8 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			} else {
 				// HORIZONTAL LAYOUT
 				if msg.Y >= 14 && msg.Y <= 18 {
-					// Sidebar(19) + MainPadding(2) = 21 offset
-					localX := msg.X - 21
+					// Sidebar(19) + MainPadding(1) = 20 offset
+					localX := msg.X - 20
 					if sel := m.list.SelectedItem(); sel != nil {
 						if item, ok := sel.(vmItem); ok {
 							if localX >= 0 && localX < 14 { // [ENTER] START/STOP (~14 chars)
@@ -1482,8 +1482,8 @@ func (m model) renderFleet(height int) string {
 		redButtonStyle.Render("[DEL] DELETE"),
 	)
 
-	// Sidebar(18) + Border(1) + Padding(2) = 21
-	availWidth := m.width - 21
+	// Sidebar(18) + Border(1) + Padding(1) = 20
+	availWidth := m.width - 20
 	// Buttons Width approx: 14 + 12 + 18 + margins = ~45
 	if availWidth < 46 {
 		// Switch to Vertical Layout
@@ -1527,8 +1527,8 @@ func (m model) renderDiskLine() string {
 	if m.detail.DiskMissing {
 		path = errorStyle.Render(fmt.Sprintf("MISSING (%s)", m.detail.DiskPath))
 	}
-	// Sidebar(18) + Padding(6) + Label(12) = 36 -> Safety 43
-	avail := m.width - 43
+	// Sidebar(18) + Padding(6) + Label(12) = 36 -> Safety 42
+	avail := m.width - 42
 	if avail < 10 {
 		avail = 10
 	}

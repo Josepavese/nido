@@ -64,7 +64,7 @@ var (
 			BorderForeground(colors.SurfaceSubtle)
 
 	mainContentStyle = lipgloss.NewStyle().
-				Padding(0, 2)
+				Padding(0, 1)
 
 	headerStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder(), false, false, true, false).
