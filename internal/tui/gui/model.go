@@ -151,8 +151,9 @@ func (i hatchTypeItem) Description() string { return i.desc }
 func (i hatchTypeItem) FilterValue() string { return i.title }
 
 type configItem struct {
-	key string
-	val string
+	key  string
+	val  string
+	desc string
 }
 
 func (i configItem) String() string      { return fmt.Sprintf("%-18s", i.key) }
@@ -345,7 +346,6 @@ func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 
 	// Initialize Viewport for Logs
 	vp := viewport.New(0, 9)
-	vp.Style = dimStyle
 	vp.SetContent(strings.Join([]string{"Nido GUI ready. Systems nominal."}, "\n"))
 
 	return model{
@@ -493,11 +493,31 @@ type listItem string
 
 func getConfigItems(cfg *config.Config) []list.Item {
 	return []list.Item{
-		configItem{key: "LINKED_CLONES", val: fmt.Sprintf("%v", cfg.LinkedClones)},
-		configItem{key: "SSH_USER", val: cfg.SSHUser},
-		configItem{key: "BACKUP_DIR", val: cfg.BackupDir},
-		configItem{key: "TEMPLATE_DEFAULT", val: cfg.TemplateDefault},
-		configItem{key: "IMAGE_DIR", val: cfg.ImageDir},
+		configItem{
+			key:  "LINKED_CLONES",
+			val:  fmt.Sprintf("%v", cfg.LinkedClones),
+			desc: "Use Copy-on-Write for disk efficiency.",
+		},
+		configItem{
+			key:  "SSH_USER",
+			val:  cfg.SSHUser,
+			desc: "Default user for SSH connections.",
+		},
+		configItem{
+			key:  "BACKUP_DIR",
+			val:  cfg.BackupDir,
+			desc: "Path to store template backups.",
+		},
+		configItem{
+			key:  "TEMPLATE_DEFAULT",
+			val:  cfg.TemplateDefault,
+			desc: "Default source template for new VMs.",
+		},
+		configItem{
+			key:  "IMAGE_DIR",
+			val:  cfg.ImageDir,
+			desc: "Directory for cached cloud images.",
+		},
 	}
 }
 
@@ -620,6 +640,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.detail = provider.VMDetail{}
 			}
 			m.logs = append(m.logs, fmt.Sprintf("Info failed: %v", msg.err))
+			m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+			m.logViewport.GotoBottom()
 		} else if msg.name == m.detailName {
 			m.detail = msg.detail
 		}
@@ -627,6 +649,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		if msg.err != nil {
 			m.logs = append(m.logs, fmt.Sprintf("Failed to load sources: %v", msg.err))
+			m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+			m.logViewport.GotoBottom()
 		} else {
 			m.hatchery.SourceList.SetItems(msg.items)
 			m.hatchery.IsSelecting = true
@@ -643,11 +667,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.logs = append(m.logs, fmt.Sprintf("Operation %s complete.", msg.op))
 		}
+		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+		m.logViewport.GotoBottom()
 		m.op = opNone
 		cmds = append(cmds, m.refreshCmd())
 	case configSavedMsg:
 		m.loading = false
+		m.loading = false
 		m.logs = append(m.logs, fmt.Sprintf("Config %s updated to %s", msg.key, msg.value))
+		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+		m.logViewport.GotoBottom()
 		// Refresh sidebar items to reflect new state (e.g. toggles)
 		idx := m.config.Sidebar.Index()
 		m.config.Sidebar.SetItems(getConfigItems(m.cfg))
@@ -1067,10 +1096,14 @@ func (m model) submitHatchery() (tea.Model, tea.Cmd) {
 
 	if name == "" {
 		m.logs = append(m.logs, "Hatchery: Name is required to spawn!")
+		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+		m.logViewport.GotoBottom()
 		return m, nil
 	}
 	if source == "" {
 		m.logs = append(m.logs, "Hatchery: Source (Image/Template) is required!")
+		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+		m.logViewport.GotoBottom()
 		return m, nil
 	}
 
@@ -1318,6 +1351,8 @@ func (m model) renderConfig(h int) string {
 				form.WriteString(dimStyle.Render("[↵] EDIT SEQUENCE"))
 			}
 		}
+		// Helper text at the bottom
+		form.WriteString("\n" + dimStyle.Italic(true).Render(item.desc))
 	} else {
 		form.WriteString(dimStyle.Render("Select a key from the sidebar to edit."))
 	}
@@ -1490,7 +1525,9 @@ func (m model) renderTabs() string {
 }
 
 func (m model) renderLogs(height int) string {
-	// Use Viewport
+	// Restore card style but match viewport height strictly
+	// Viewport height is set to 9 in Update.
+	// We wrap it in a card that allows it to show.
 	return lipgloss.JoinVertical(lipgloss.Left,
 		cardStyle.Width(m.width-4).Height(height).Render(m.logViewport.View()),
 	)
