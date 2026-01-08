@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath" // Added sort package
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -89,13 +91,14 @@ func (i spawnItem) String() string      { return i.Title() }
 type operation string
 
 const (
-	opNone    operation = ""
-	opSpawn   operation = "spawn"
-	opStart   operation = "start"
-	opStop    operation = "stop"
-	opDelete  operation = "delete"
-	opRefresh operation = "refresh"
-	opInfo    operation = "info"
+	opNone           operation = ""
+	opSpawn          operation = "spawn"
+	opStart          operation = "start"
+	opStop           operation = "stop"
+	opDelete         operation = "delete"
+	opRefresh        operation = "refresh"
+	opInfo           operation = "info"
+	opCreateTemplate operation = "create-template"
 )
 
 type tickMsg struct{}
@@ -105,8 +108,9 @@ type logMsg struct {
 	text  string
 }
 type opResultMsg struct {
-	op  operation
-	err error
+	op   operation
+	err  error
+	path string // Optional: for templates
 }
 type detailMsg struct {
 	name   string
@@ -114,25 +118,59 @@ type detailMsg struct {
 	err    error
 }
 
-type spawnState struct {
-	gui        bool
-	inputs     []textinput.Model
-	focusIndex int
-	errorMsg   string
+type updateCheckMsg struct {
+	current string
+	latest  string
+	err     error
+}
+
+type cacheListMsg struct {
+	items []CacheItem
+	err   error
+}
+
+type cacheStatsMsg struct {
+	stats CacheStats
+	err   error
+}
+
+type cachePruneMsg struct {
+	err error
+}
+
+func (m model) isInputFocused() bool {
+	if m.activeTab == tabHatchery && m.hatcheryFocus == focusHatchForm && m.hatchery.FocusIndex == 0 {
+		return true
+	}
+	if m.activeTab == tabConfig && m.configFocus == focusConfigForm {
+		return true
+	}
+	return false
 }
 
 type hatcheryState struct {
 	// Sidebar
 	Sidebar list.Model
 
-	// Inputs
-	Inputs     []textinput.Model
+	// Unified state for form navigation
 	FocusIndex int
 
-	// Source Selection
-	SelectedSource string     // The chosen value (e.g. "ubuntu:24.04" or "my-template")
-	IsSelecting    bool       // Modal is open
-	SourceList     list.Model // The list for the modal
+	// Mode 0: SPAWN
+	SpawnInputs    []textinput.Model
+	SpawnSource    string
+	SpawnSelecting bool
+
+	// Mode 1: CREATE TEMPLATE
+	TemplateInputs    []textinput.Model
+	TemplateSource    string
+	TemplateSelecting bool
+
+	// Shared Source Modal state
+	IsSelecting bool       // Global modal open flag
+	SourceList  list.Model // The list for the modal
+
+	// Options
+	GUI bool
 }
 
 type configState struct {
@@ -140,6 +178,30 @@ type configState struct {
 	Input     textinput.Model
 	ActiveKey string
 	ErrorMsg  string
+
+	// Update state
+	CurrentVersion string
+	LatestVersion  string
+	UpdateChecking bool
+	UpdateRunning  bool
+
+	// Cache state
+	CacheList  []CacheItem
+	CacheStats CacheStats
+}
+
+type CacheItem struct {
+	Name     string
+	Version  string
+	Size     string
+	Modified string
+}
+
+type CacheStats struct {
+	TotalImages int
+	TotalSize   string
+	Oldest      string
+	Newest      string
 }
 
 type hatchTypeItem struct {
@@ -216,7 +278,6 @@ type model struct {
 	detailName string
 	detail     provider.VMDetail
 
-	spawn         spawnState
 	hatchery      hatcheryState
 	hatcheryFocus hatcheryFocus
 	config        configState
@@ -230,6 +291,14 @@ type model struct {
 	downloading      bool
 	downloadProgress float64
 	downloadChan     chan float64
+
+	// Quick Actions UI state
+	highlightSSH bool
+	highlightVNC bool
+}
+
+type resetHighlightMsg struct {
+	action string
 }
 
 func newHatcheryState(cfg *config.Config) hatcheryState {
@@ -246,32 +315,33 @@ func newHatcheryState(cfg *config.Config) hatcheryState {
 	sb.SetShowHelp(false)
 	sb.SetShowStatusBar(false)
 	sb.SetShowPagination(false) // Disable aggressive pagination for small lists
-	sb.SetShowTitle(false)
-	sb.SetShowHelp(false)
-	sb.SetShowStatusBar(false)
 
-	// Inputs
-	name := textinput.New()
-	name.Placeholder = ""
-	name.CharLimit = 50
-	name.Focus()
+	// Spawn: Inputs
+	nameSpawn := textinput.New()
+	nameSpawn.Placeholder = "vm-name"
+	nameSpawn.Prompt = ""
+	nameSpawn.CharLimit = 50
+	nameSpawn.Focus()
 
-	// Initial List for Modal
-	mDelegate := list.NewDefaultDelegate()
-	mDelegate.ShowDescription = true
-	mDelegate.Styles.SelectedTitle = sidebarItemSelectedStyle.Foreground(lipgloss.Color("#00FFFF"))
+	// Template: Inputs
+	nameTemplate := textinput.New()
+	nameTemplate.Placeholder = "template-name"
+	nameTemplate.Prompt = ""
+	nameTemplate.CharLimit = 50
 
-	l := list.New([]list.Item{}, mDelegate, 40, 10)
-	l.SetShowTitle(false)
-	l.SetShowHelp(false)
-	l.SetShowStatusBar(false)
+	// Source List for Modal (Shared)
+	sl := list.New([]list.Item{}, d, 28, 10)
+	sl.SetShowTitle(false)
+	sl.SetShowHelp(false)
+	sl.SetShowStatusBar(false)
 
 	return hatcheryState{
 		Sidebar:        sb,
-		Inputs:         []textinput.Model{name},
 		FocusIndex:     0,
-		SelectedSource: "", // Empty initially
-		SourceList:     l,
+		SpawnInputs:    []textinput.Model{nameSpawn},
+		TemplateInputs: []textinput.Model{nameTemplate},
+		SourceList:     sl,
+		GUI:            true, // Default to GUI enabled
 	}
 }
 
@@ -295,33 +365,6 @@ func newConfigState(cfg *config.Config) configState {
 	return configState{
 		Sidebar: sb,
 		Input:   ti,
-	}
-}
-
-// Deprecated: newSpawnState kept for now until full migration
-func newSpawnState(cfg *config.Config) spawnState {
-	name := textinput.New()
-	name.Placeholder = "vm-name"
-	name.Prompt = "" // Handled purely by gui layout
-	name.CharLimit = 50
-
-	template := textinput.New()
-	template.Placeholder = cfg.TemplateDefault
-	template.Prompt = ""
-	template.CharLimit = 120
-
-	userData := textinput.New()
-	userData.Placeholder = "(optional path)"
-	userData.Prompt = ""
-	userData.CharLimit = 200
-
-	inputs := []textinput.Model{name, template, userData}
-	inputs[0].Focus()
-
-	return spawnState{
-		gui:        true,
-		inputs:     inputs,
-		focusIndex: 0,
 	}
 }
 
@@ -349,7 +392,7 @@ func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 	spin.Style = accentStyle
 
 	prog := progress.New(progress.WithScaledGradient(string(colors.AccentStrong), string(colors.Accent)))
-	prog.ShowPercentage = false
+	prog.ShowPercentage = true
 
 	// Initialize Viewport for Logs
 	vp := viewport.New(0, 9)
@@ -366,7 +409,6 @@ func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 		loading:     bool(false),
 		logs:        []string{fmt.Sprintf("[%s] Nido GUI ready. Systems nominal.", time.Now().Format("15:04:05"))},
 		logViewport: vp,
-		spawn:       newSpawnState(cfg),
 		hatchery:    newHatcheryState(cfg),
 		config:      newConfigState(cfg),
 	}
@@ -455,6 +497,13 @@ func (m model) startCmd(name string) tea.Cmd {
 	}
 }
 
+func (m model) createTemplateCmd(vmName, templateName string) tea.Cmd {
+	return func() tea.Msg {
+		path, err := m.prov.CreateTemplate(vmName, templateName)
+		return opResultMsg{op: "create-template", err: err, path: path}
+	}
+}
+
 func (m model) stopCmd(name string) tea.Cmd {
 	return func() tea.Msg {
 		err := m.prov.Stop(name, true)
@@ -466,6 +515,61 @@ func (m model) deleteCmd(name string) tea.Cmd {
 	return func() tea.Msg {
 		err := m.prov.Delete(name)
 		return opResultMsg{op: opDelete, err: err}
+	}
+}
+
+func (m model) checkUpdateCmd() tea.Cmd {
+	return func() tea.Msg {
+		// Get current version
+		out, err := exec.Command("nido", "version").Output()
+		if err != nil {
+			return updateCheckMsg{err: err}
+		}
+		current := strings.TrimSpace(string(out))
+		// Extract version number (e.g., "Nido v4.3.6 (State: Evolved)" -> "v4.3.6")
+		parts := strings.Fields(current)
+		if len(parts) >= 2 {
+			current = parts[1]
+		}
+		return updateCheckMsg{current: current, latest: current} // TODO: Check GitHub for latest
+	}
+}
+
+func (m model) cacheListCmd() tea.Cmd {
+	return func() tea.Msg {
+		items, err := m.prov.ListCachedImages()
+		if err != nil {
+			return cacheListMsg{err: err}
+		}
+		var cacheItems []CacheItem
+		for _, img := range items {
+			cacheItems = append(cacheItems, CacheItem{
+				Name:    img.Name,
+				Version: img.Version,
+				Size:    img.Size,
+			})
+		}
+		return cacheListMsg{items: cacheItems}
+	}
+}
+
+func (m model) cacheStatsCmd() tea.Cmd {
+	return func() tea.Msg {
+		info, err := m.prov.CacheInfo()
+		if err != nil {
+			return cacheStatsMsg{err: err}
+		}
+		return cacheStatsMsg{stats: CacheStats{
+			TotalImages: info.Count,
+			TotalSize:   info.TotalSize,
+		}}
+	}
+}
+
+func (m model) cachePruneCmd() tea.Cmd {
+	return func() tea.Msg {
+		err := m.prov.CachePrune(true) // unused only
+		return cachePruneMsg{err: err}
 	}
 }
 
@@ -506,6 +610,28 @@ type listItem string
 
 func getConfigItems(cfg *config.Config) []list.Item {
 	items := []list.Item{
+		// System actions (at top)
+		configItem{
+			key:  "UPDATE",
+			val:  "",
+			desc: "Check for updates and upgrade Nido.",
+		},
+		configItem{
+			key:  "CACHE",
+			val:  "",
+			desc: "Manage cached cloud images.",
+		},
+		// Config values
+		configItem{
+			key:  "BACKUP_DIR",
+			val:  cfg.BackupDir,
+			desc: "Path to store template backups.",
+		},
+		configItem{
+			key:  "IMAGE_DIR",
+			val:  cfg.ImageDir,
+			desc: "Directory for cached cloud images.",
+		},
 		configItem{
 			key:  "LINKED_CLONES",
 			val:  fmt.Sprintf("%v", cfg.LinkedClones),
@@ -517,30 +643,16 @@ func getConfigItems(cfg *config.Config) []list.Item {
 			desc: "Default user for SSH connections.",
 		},
 		configItem{
-			key:  "BACKUP_DIR",
-			val:  cfg.BackupDir,
-			desc: "Path to store template backups.",
-		},
-		configItem{
 			key:  "TEMPLATE_DEFAULT",
 			val:  cfg.TemplateDefault,
 			desc: "Default source template for new VMs.",
 		},
-		configItem{
-			key:  "IMAGE_DIR",
-			val:  cfg.ImageDir,
-			desc: "Directory for cached cloud images.",
-		},
 	}
-
-	// Sort Config Items Alphabetically by Key
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].(configItem).key < items[j].(configItem).key
-	})
 
 	return items
 }
 
+func (i listItem) String() string      { return string(i) }
 func (i listItem) FilterValue() string { return string(i) }
 func (i listItem) Title() string       { return string(i) }
 func (i listItem) Description() string { return "Source Image / Template" }
@@ -572,8 +684,18 @@ func (m model) fetchSources(action int) tea.Cmd {
 			for _, img := range images {
 				srcList = append(srcList, fmt.Sprintf("[IMAGE] %s", img))
 			}
-		} else { // Create Template
-			return sourcesLoadedMsg{items: []list.Item{}}
+		} else { // Create Template -> List VMs
+			vms, err := m.prov.List()
+			if err != nil {
+				return sourcesLoadedMsg{err: err}
+			}
+			// Sort VMs
+			sort.Slice(vms, func(i, j int) bool {
+				return vms[i].Name < vms[j].Name
+			})
+			for _, vm := range vms {
+				srcList = append(srcList, fmt.Sprintf("[VM] %s", vm.Name))
+			}
 		}
 
 		if len(srcList) == 0 {
@@ -616,11 +738,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
 
 		// Resume Spawn
-		name := m.hatchery.Inputs[0].Value()
+		// Resume Spawn
+		name := m.hatchery.SpawnInputs[0].Value()
 		m.activeTab = tabFleet
 		m.op = opSpawn
 		m.loading = true
-		return m, m.spawnCmd(name, msg.path, "", m.spawn.gui)
+		return m, m.spawnCmd(name, msg.path, "", m.hatchery.GUI)
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -647,9 +770,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, tea.Tick(time.Millisecond*80, func(time.Time) tea.Msg { return tickMsg{} }))
 
 		// Update inputs for blink
-		for i := range m.hatchery.Inputs {
+		// Update inputs for blink
+		for i := range m.hatchery.SpawnInputs {
 			var cmd tea.Cmd
-			m.hatchery.Inputs[i], cmd = m.hatchery.Inputs[i].Update(msg)
+			m.hatchery.SpawnInputs[i], cmd = m.hatchery.SpawnInputs[i].Update(msg)
+			cmds = append(cmds, cmd)
+		}
+		for i := range m.hatchery.TemplateInputs {
+			var cmd tea.Cmd
+			m.hatchery.TemplateInputs[i], cmd = m.hatchery.TemplateInputs[i].Update(msg)
 			cmds = append(cmds, cmd)
 		}
 	case vmListMsg:
@@ -691,6 +820,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.hatchery.SourceList.SetItems(msg.items)
 			m.hatchery.IsSelecting = true
 		}
+	case resetHighlightMsg:
+		if msg.action == "ssh" {
+			m.highlightSSH = false
+		} else {
+			m.highlightVNC = false
+		}
 	case logMsg:
 		m.logs = append(m.logs, fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), msg.text))
 		// Update Viewport Content
@@ -709,7 +844,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.refreshCmd())
 	case configSavedMsg:
 		m.loading = false
-		m.loading = false
 		m.logs = append(m.logs, fmt.Sprintf("[%s] Config %s updated to %s", time.Now().Format("15:04:05"), msg.key, msg.value))
 		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
 		m.logViewport.GotoBottom()
@@ -717,6 +851,45 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		idx := m.config.Sidebar.Index()
 		m.config.Sidebar.SetItems(getConfigItems(m.cfg))
 		m.config.Sidebar.Select(idx)
+	case updateCheckMsg:
+		m.config.UpdateChecking = false
+		if msg.err != nil {
+			m.logs = append(m.logs, fmt.Sprintf("[%s] Update check failed: %v", time.Now().Format("15:04:05"), msg.err))
+		} else {
+			m.config.CurrentVersion = msg.current
+			m.config.LatestVersion = msg.latest
+			m.logs = append(m.logs, fmt.Sprintf("[%s] Version check complete: %s", time.Now().Format("15:04:05"), msg.current))
+		}
+		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+		m.logViewport.GotoBottom()
+	case cacheListMsg:
+		m.loading = false
+		if msg.err != nil {
+			m.logs = append(m.logs, fmt.Sprintf("[%s] Cache list failed: %v", time.Now().Format("15:04:05"), msg.err))
+		} else {
+			m.config.CacheList = msg.items
+		}
+		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+		m.logViewport.GotoBottom()
+	case cacheStatsMsg:
+		m.loading = false
+		if msg.err != nil {
+			m.logs = append(m.logs, fmt.Sprintf("[%s] Cache info failed: %v", time.Now().Format("15:04:05"), msg.err))
+		} else {
+			m.config.CacheStats = msg.stats
+		}
+		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+		m.logViewport.GotoBottom()
+	case cachePruneMsg:
+		m.loading = false
+		if msg.err != nil {
+			m.logs = append(m.logs, fmt.Sprintf("[%s] Cache prune failed: %v", time.Now().Format("15:04:05"), msg.err))
+		} else {
+			m.logs = append(m.logs, fmt.Sprintf("[%s] Cache pruned successfully", time.Now().Format("15:04:05")))
+			cmds = append(cmds, m.cacheListCmd(), m.cacheStatsCmd()) // Refresh cache view
+		}
+		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+		m.logViewport.GotoBottom()
 	case tea.KeyMsg:
 		// Hatchery Modal Interaction
 		if m.activeTab == tabHatchery && m.hatchery.IsSelecting {
@@ -727,7 +900,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				sel := m.hatchery.SourceList.SelectedItem()
 				if sel != nil {
-					m.hatchery.SelectedSource = sel.FilterValue()
+					item := sel.(listItem)
+					if m.hatchery.Sidebar.Index() == 0 { // Spawn VM
+						m.hatchery.SpawnSource = string(item)
+					} else { // Create Template
+						m.hatchery.TemplateSource = string(item)
+					}
 					// Move to next field after selection
 					m.hatchery.IsSelecting = false
 					m.hatchery.FocusIndex++
@@ -759,12 +937,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return newModel, cmd
 	}
 
-	if m.activeTab == tabHatchery {
-		for i := range m.spawn.inputs {
-			var cmd tea.Cmd
-			m.spawn.inputs[i], cmd = m.spawn.inputs[i].Update(msg)
-			cmds = append(cmds, cmd)
+	// Handle Hatchery Input Updates
+	if m.activeTab == tabHatchery && m.hatcheryFocus == focusHatchForm {
+		var inputCmds []tea.Cmd
+		if m.hatchery.Sidebar.Index() == 0 { // Spawn VM
+			if m.hatchery.FocusIndex < len(m.hatchery.SpawnInputs) {
+				var cmd tea.Cmd
+				m.hatchery.SpawnInputs[m.hatchery.FocusIndex], cmd = m.hatchery.SpawnInputs[m.hatchery.FocusIndex].Update(msg)
+				inputCmds = append(inputCmds, cmd)
+			}
+		} else { // Create Template
+			if m.hatchery.FocusIndex < len(m.hatchery.TemplateInputs) {
+				var cmd tea.Cmd
+				m.hatchery.TemplateInputs[m.hatchery.FocusIndex], cmd = m.hatchery.TemplateInputs[m.hatchery.FocusIndex].Update(msg)
+				inputCmds = append(inputCmds, cmd)
+			}
 		}
+		// Append these commands to the main cmds slice
+		cmds = append(cmds, inputCmds...)
 	} else if m.activeTab == tabFleet {
 		prev := m.detailName
 		var cmd tea.Cmd
@@ -791,24 +981,47 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	// 1. Global Shortcuts
 	switch msg.String() {
-	case "q", "ctrl+c":
+	case "q":
+		if m.isInputFocused() {
+			return m, nil, false
+		}
+		return m, tea.Quit, true
+	case "ctrl+c":
 		return m, tea.Quit, true
 	case "1":
+		if m.isInputFocused() {
+			return m, nil, false
+		}
 		m.activeTab = tabFleet
 		return m, nil, true
 	case "2":
+		if m.isInputFocused() {
+			return m, nil, false
+		}
 		m.activeTab = tabHatchery
 		return m, nil, true
 	case "3":
+		if m.isInputFocused() {
+			return m, nil, false
+		}
 		m.activeTab = tabLogs
 		return m, nil, true
 	case "4":
+		if m.isInputFocused() {
+			return m, nil, false
+		}
 		m.activeTab = tabConfig
 		return m, nil, true
 	case "5", "h":
+		if m.isInputFocused() {
+			return m, nil, false
+		}
 		m.activeTab = tabHelp
 		return m, nil, true
 	case "r":
+		if m.isInputFocused() {
+			return m, nil, false
+		}
 		m.loading = true
 		m.op = opRefresh
 		return m, m.refreshCmd(), true
@@ -837,8 +1050,6 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			m.hatcheryFocus = focusHatchSidebar
 		} else if m.activeTab == tabConfig {
 			m.configFocus = focusConfigSidebar
-		} else if m.activeTab == tabConfig {
-			m.configFocus = focusConfigSidebar
 		}
 		return m, nil, true
 	}
@@ -864,19 +1075,26 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			return m, cmd, true
 		} else {
 			// Form Interaction
-			maxIndex := 3
+			maxIndex := 3 // Spawn: Name, Source, GUI, Button
 			if m.hatchery.Sidebar.Index() == 1 {
-				maxIndex = 2
+				maxIndex = 2 // Template: Name, Source, Button
 			}
 
 			switch msg.String() {
-			case "tab", "down":
-				m.hatchery.FocusIndex++
+			case "tab", "shift+tab":
+				if msg.String() == "tab" {
+					m.hatchery.FocusIndex++
+				} else {
+					m.hatchery.FocusIndex--
+				}
 				if m.hatchery.FocusIndex > maxIndex {
 					m.hatchery.FocusIndex = 0
+				} else if m.hatchery.FocusIndex < 0 {
+					m.hatchery.FocusIndex = maxIndex
 				}
 				m.updateHatcheryFocus()
 				return m, nil, true
+
 			case "up":
 				m.hatchery.FocusIndex--
 				if m.hatchery.FocusIndex < 0 {
@@ -884,20 +1102,33 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				}
 				m.updateHatcheryFocus()
 				return m, nil, true
-			case "shift+tab", "left", "esc":
+			case "down":
+				m.hatchery.FocusIndex++
+				if m.hatchery.FocusIndex > maxIndex {
+					m.hatchery.FocusIndex = 0
+				}
+				m.updateHatcheryFocus()
+				return m, nil, true
+			case "left", "esc":
 				m.hatcheryFocus = focusHatchSidebar
 				return m, nil, true
-			case "enter":
-				// Button Trigger
+			case "enter", " ":
+				if m.hatchery.FocusIndex == 1 {
+					// Source Trigger
+					m.loading = true
+					return m, m.fetchSources(m.hatchery.Sidebar.Index()), true
+				}
+				// GUI Toggle Trigger
+				if m.hatchery.FocusIndex == 2 && m.hatchery.Sidebar.Index() == 0 {
+					m.hatchery.GUI = !m.hatchery.GUI
+					return m, nil, true
+				}
+				// Submit Button Trigger
 				if m.hatchery.FocusIndex == maxIndex {
 					newM, cmd := m.submitHatchery()
 					return newM, cmd, true
 				}
-				// Source Trigger
-				if m.hatchery.FocusIndex == 1 {
-					m.loading = true
-					return m, m.fetchSources(m.hatchery.Sidebar.Index()), true
-				}
+
 				// Next field
 				m.hatchery.FocusIndex++
 				m.updateHatcheryFocus()
@@ -906,7 +1137,11 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 			// Input Handling
 			if m.hatchery.FocusIndex == 0 {
 				var cmd tea.Cmd
-				m.hatchery.Inputs[0], cmd = m.hatchery.Inputs[0].Update(msg)
+				if m.hatchery.Sidebar.Index() == 0 {
+					m.hatchery.SpawnInputs[0], cmd = m.hatchery.SpawnInputs[0].Update(msg)
+				} else {
+					m.hatchery.TemplateInputs[0], cmd = m.hatchery.TemplateInputs[0].Update(msg)
+				}
 				return m, cmd, true
 			}
 		}
@@ -917,6 +1152,18 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				sel := m.config.Sidebar.SelectedItem()
 				if sel != nil {
 					item := sel.(configItem)
+
+					// UPDATE action
+					if item.key == "UPDATE" {
+						m.config.UpdateChecking = true
+						return m, m.checkUpdateCmd(), true
+					}
+
+					// CACHE action
+					if item.key == "CACHE" {
+						m.configFocus = focusConfigForm
+						return m, nil, true // Prune on second Enter in form
+					}
 
 					// Boolean Toggle Logic
 					if item.key == "LINKED_CLONES" {
@@ -949,11 +1196,49 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 					item := sel.(configItem)
 					m.config.ActiveKey = item.key
 					m.config.Input.SetValue(item.val)
+
+					// Load cache data when CACHE is selected
+					if item.key == "CACHE" {
+						m.loading = true
+						return m, tea.Batch(cmd, m.cacheListCmd(), m.cacheStatsCmd()), true
+					}
 				}
 			}
 			return m, cmd, true
 		} else {
-			// Key Editor
+			// Key Editor / Form interaction
+			sel := m.config.Sidebar.SelectedItem()
+			if sel != nil {
+				item := sel.(configItem)
+
+				// CACHE form: Enter triggers prune
+				if item.key == "CACHE" {
+					switch msg.String() {
+					case "esc", "shift+tab", "left":
+						m.configFocus = focusConfigSidebar
+						return m, nil, true
+					case "enter":
+						m.loading = true
+						return m, m.cachePruneCmd(), true
+					}
+					return m, nil, true
+				}
+
+				// UPDATE form: Enter triggers check
+				if item.key == "UPDATE" {
+					switch msg.String() {
+					case "esc", "shift+tab", "left":
+						m.configFocus = focusConfigSidebar
+						return m, nil, true
+					case "enter":
+						m.config.UpdateChecking = true
+						return m, m.checkUpdateCmd(), true
+					}
+					return m, nil, true
+				}
+			}
+
+			// Standard key editor
 			switch msg.String() {
 			case "esc", "shift+tab": // Removed "left" to allow cursor navigation
 				m.configFocus = focusConfigSidebar
@@ -1024,16 +1309,6 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
-func (m *model) updateFocus() {
-	for i := range m.spawn.inputs {
-		if i == m.spawn.focusIndex {
-			m.spawn.inputs[i].Focus()
-		} else {
-			m.spawn.inputs[i].Blur()
-		}
-	}
-}
-
 func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if msg.Action != tea.MouseActionPress {
 		return m, nil
@@ -1079,11 +1354,6 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 					}
 				} else if index >= len(m.list.Items()) && index <= len(m.list.Items())+3 {
 					// Check if the previous item (the last one) is a spawnItem that wrapped
-					// Because of MarginTop(1) and Wrapping, spawnItem can take 3-4 visual lines.
-					// Row N: Margin (Empty) -> Triggers Index N (Caught above)
-					// Row N+1: Line 1 -> Triggers Index N+1
-					// Row N+2: Line 2 -> Triggers Index N+2
-					// Row N+3: Margin Bottom? -> Triggers Index N+3
 					lastIdx := len(m.list.Items()) - 1
 					if lastIdx >= 0 {
 						if _, ok := m.list.Items()[lastIdx].(spawnItem); ok {
@@ -1096,81 +1366,101 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 		} else {
 			// Main Area Interactions (Buttons)
-			// Y Calculation:
-			// Header(2) + SubHeader(2) + Title(1) + CardPaddingTop(1) + CardContent(6) + CardPaddingBottom(1) = 13
-			// Buttons start after line 13. So Y >= 14.
-			availWidth := m.width - 20
-			isCompact := availWidth < 46
-
-			if isCompact {
-				// VERTICAL LAYOUT
-				// Button 1: Y 14-16
-				// Button 2: Y 17-19
-				// Button 3: Y 20-22
-				localX := msg.X - 20
-				if localX >= 0 { // Check X bounds? Buttons align left, so X > 0 is enough if we don't care about max width click
-					if sel := m.list.SelectedItem(); sel != nil {
-						if item, ok := sel.(vmItem); ok {
-							if msg.Y >= 14 && msg.Y <= 16 {
-								if item.state == "running" {
-									m.loading = true
-									m.op = opStop
-									return m, m.stopCmd(item.name)
-								}
-								m.loading = true
-								m.op = opStart
-								return m, m.startCmd(item.name)
-							} else if msg.Y >= 17 && msg.Y <= 19 {
+			// Y Calculation: Header(2) + SubHeader(2) + Title(1) + CardPaddingTop(1) + CardContent(6) + CardPaddingBottom(1) = 13
+			// Buttons start after line 13.
+			localX := msg.X - 20
+			if msg.Y >= 14 && msg.Y <= 22 {
+				if sel := m.list.SelectedItem(); sel != nil {
+					if item, ok := sel.(vmItem); ok {
+						if localX >= 0 && localX < 14 { // [ENTER] START/STOP
+							if item.state == "running" {
 								m.loading = true
 								m.op = opStop
 								return m, m.stopCmd(item.name)
-							} else if msg.Y >= 20 && msg.Y <= 22 {
-								m.loading = true
-								m.op = opDelete
-								return m, m.deleteCmd(item.name)
 							}
+							m.loading = true
+							m.op = opStart
+							return m, m.startCmd(item.name)
+						} else if localX >= 14 && localX < 26 { // [X] KILL
+							m.loading = true
+							m.op = opStop
+							return m, m.stopCmd(item.name)
+						} else if localX >= 26 && localX < 44 { // [DEL] DELETE
+							m.loading = true
+							m.op = opDelete
+							return m, m.deleteCmd(item.name)
 						}
 					}
 				}
-			} else {
-				// HORIZONTAL LAYOUT
-				if msg.Y >= 14 && msg.Y <= 18 {
-					// Sidebar(19) + MainPadding(1) = 20 offset
-					localX := msg.X - 20
-					if sel := m.list.SelectedItem(); sel != nil {
-						if item, ok := sel.(vmItem); ok {
-							if localX >= 0 && localX < 14 { // [ENTER] START/STOP (~14 chars)
-								if item.state == "running" {
-									m.loading = true
-									m.op = opStop
-									return m, m.stopCmd(item.name)
-								}
-								m.loading = true
-								m.op = opStart
-								return m, m.startCmd(item.name)
-							} else if localX >= 14 && localX < 26 { // [X] KILL (~12 chars)
-								m.loading = true
-								m.op = opStop
-								return m, m.stopCmd(item.name)
-							} else if localX >= 26 && localX < 44 { // [DEL] DELETE (~18 chars)
-								m.loading = true
-								m.op = opDelete
-								return m, m.deleteCmd(item.name)
-							}
-						}
-					}
+			} else if msg.Y == 7 && localX >= 2 && m.detail.State == "running" && m.detail.SSHPort > 0 {
+				// CLICK ON SSH LINE
+				m.highlightSSH = true
+				sshCmd := fmt.Sprintf("ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p %d %s@%s", m.detail.SSHPort, m.detail.SSHUser, m.detail.IP)
+				if m.detail.IP == "" || m.detail.IP == "—" {
+					sshCmd = fmt.Sprintf("ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p %d %s@127.0.0.1", m.detail.SSHPort, m.detail.SSHUser)
 				}
+				return m, tea.Batch(
+					m.openTerminalCmd(sshCmd),
+					tea.Tick(time.Millisecond*500, func(t time.Time) tea.Msg {
+						return resetHighlightMsg{action: "ssh"}
+					}),
+				)
+			} else if msg.Y == 8 && localX >= 2 && m.detail.VNCPort > 0 {
+				// CLICK ON VNC LINE
+				m.highlightVNC = true
+				vncAddr := fmt.Sprintf("%s:%d", m.detail.IP, m.detail.VNCPort)
+				return m, tea.Batch(
+					m.openVNCCmd(vncAddr),
+					tea.Tick(time.Millisecond*500, func(t time.Time) tea.Msg {
+						return resetHighlightMsg{action: "vnc"}
+					}),
+				)
 			}
 		}
 	}
 
-	// 3. Hatchery Sidebar Logic
-	if m.activeTab == tabHatchery && msg.X < 28 {
-		row := msg.Y - 5
-		if row >= 0 && row < len(m.hatchery.Sidebar.Items()) {
-			m.hatchery.Sidebar.Select(row)
-			m.hatcheryFocus = focusHatchSidebar
-			return m, nil
+	// 3. Hatchery Click logic
+	if m.activeTab == tabHatchery {
+		if msg.X < 28 {
+			// Sidebar Click
+			row := msg.Y - 4
+			if row >= 0 && row <= 1 {
+				m.hatchery.Sidebar.Select(row)
+				m.hatcheryFocus = focusHatchSidebar
+				return m, nil
+			}
+		} else {
+			// Form Click
+			row := msg.Y - 4
+			if row == 0 { // Name Input
+				m.hatcheryFocus = focusHatchForm
+				m.hatchery.FocusIndex = 0
+				m.updateHatcheryFocus()
+				return m, nil
+			} else if row == 2 { // Source Select
+				m.hatcheryFocus = focusHatchForm
+				m.hatchery.FocusIndex = 1
+				m.updateHatcheryFocus()
+				m.loading = true
+				return m, m.fetchSources(m.hatchery.Sidebar.Index())
+			} else if row == 4 { // GUI Toggle (Spawn) or Button (Template)
+				m.hatcheryFocus = focusHatchForm
+				if m.hatchery.Sidebar.Index() == 0 {
+					m.hatchery.FocusIndex = 2
+					m.hatchery.GUI = !m.hatchery.GUI
+					m.updateHatcheryFocus()
+					return m, nil
+				} else {
+					m.hatchery.FocusIndex = 2
+					m.updateHatcheryFocus()
+					return m.submitHatchery()
+				}
+			} else if row == 6 && m.hatchery.Sidebar.Index() == 0 { // Button (Spawn)
+				m.hatcheryFocus = focusHatchForm
+				m.hatchery.FocusIndex = 3
+				m.updateHatcheryFocus()
+				return m.submitHatchery()
+			}
 		}
 	}
 
@@ -1188,18 +1478,26 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) submitHatchery() (tea.Model, tea.Cmd) {
-	name := m.hatchery.Inputs[0].Value()
-	source := m.hatchery.SelectedSource
+	isSpawn := m.hatchery.Sidebar.Index() == 0
+	var name, source string
+
+	if isSpawn {
+		name = m.hatchery.SpawnInputs[0].Value()
+		source = m.hatchery.SpawnSource
+	} else {
+		name = m.hatchery.TemplateInputs[0].Value()
+		source = m.hatchery.TemplateSource
+	}
 
 	// Input Validation
 	if name == "" {
-		m.logs = append(m.logs, fmt.Sprintf("[%s] Hatchery: Name is required to spawn!", time.Now().Format("15:04:05")))
+		m.logs = append(m.logs, fmt.Sprintf("[%s] Hatchery: Name is required!", time.Now().Format("15:04:05")))
 		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
 		m.logViewport.GotoBottom()
 		return m, nil
 	}
 	if source == "" {
-		m.logs = append(m.logs, fmt.Sprintf("[%s] Hatchery: Source (Image/Template) is required!", time.Now().Format("15:04:05")))
+		m.logs = append(m.logs, fmt.Sprintf("[%s] Hatchery: Source is required!", time.Now().Format("15:04:05")))
 		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
 		m.logViewport.GotoBottom()
 		return m, nil
@@ -1208,7 +1506,7 @@ func (m model) submitHatchery() (tea.Model, tea.Cmd) {
 	m.loading = true
 	m.activeTab = tabFleet // Switch back to view progress
 
-	if m.hatchery.Sidebar.Index() == 0 {
+	if isSpawn {
 		// SPAWN
 		m.op = opSpawn
 
@@ -1267,21 +1565,30 @@ func (m model) submitHatchery() (tea.Model, tea.Cmd) {
 			realSource = strings.TrimSpace(realSource)
 		}
 
-		return m, m.spawnCmd(name, realSource, "", m.spawn.gui)
+		return m, m.spawnCmd(name, realSource, "", m.hatchery.GUI)
 	} else {
 		// CREATE TEMPLATE
-		return m, func() tea.Msg {
-			return opResultMsg{op: "create-template", err: nil} // TODO: Implement
-		}
+		m.op = "create-template"
+		vmName := strings.TrimPrefix(source, "[VM] ")
+		vmName = strings.TrimSpace(vmName)
+		return m, m.createTemplateCmd(vmName, name)
 	}
 }
 
 func (m *model) updateHatcheryFocus() {
-	// Only Input[0] (Name) can be focused text input
+	isSpawn := m.hatchery.Sidebar.Index() == 0
 	if m.hatchery.FocusIndex == 0 {
-		m.hatchery.Inputs[0].Focus()
+		if isSpawn {
+			m.hatchery.SpawnInputs[0].Focus()
+		} else {
+			m.hatchery.TemplateInputs[0].Focus()
+		}
 	} else {
-		m.hatchery.Inputs[0].Blur()
+		if isSpawn {
+			m.hatchery.SpawnInputs[0].Blur()
+		} else {
+			m.hatchery.TemplateInputs[0].Blur()
+		}
 	}
 }
 
@@ -1412,15 +1719,28 @@ func (m model) renderHatchery(h int) string {
 	form := strings.Builder{}
 
 	// Input: Name
+	isSpawn := m.hatchery.Sidebar.Index() == 0
 	labelColor := dimStyle
 	if m.hatcheryFocus == focusHatchForm && m.hatchery.FocusIndex == 0 {
 		labelColor = accentStyle
 	}
-	form.WriteString(fmt.Sprintf("%-15s %s\n\n", labelColor.Render("Name:"), m.hatchery.Inputs[0].View()))
+	inputView := ""
+	if isSpawn {
+		inputView = m.hatchery.SpawnInputs[0].View()
+	} else {
+		inputView = m.hatchery.TemplateInputs[0].View()
+	}
+	form.WriteString(fmt.Sprintf("%-15s %s\n\n", labelColor.Render("Name:"), inputView))
 
 	// Input: Source
 	labelColor = dimStyle
-	sourceVal := m.hatchery.SelectedSource
+	sourceVal := ""
+	if isSpawn {
+		sourceVal = m.hatchery.SpawnSource
+	} else {
+		sourceVal = m.hatchery.TemplateSource
+	}
+
 	if sourceVal == "" {
 		sourceVal = "( Select Source... )"
 	}
@@ -1436,7 +1756,7 @@ func (m model) renderHatchery(h int) string {
 	maxIndex := 3
 	if m.hatchery.Sidebar.Index() == 0 {
 		guiCheck := "[ ]"
-		if m.spawn.gui {
+		if m.hatchery.GUI {
 			guiCheck = "[x]"
 		}
 		labelColor = dimStyle
@@ -1477,9 +1797,54 @@ func (m model) renderConfig(h int) string {
 	sel := m.config.Sidebar.SelectedItem()
 	if sel != nil {
 		item := sel.(configItem)
-		form.WriteString(fmt.Sprintf("%-15s %s\n", dimStyle.Render("Key:"), accentStyle.Render(item.key)))
 
-		if item.key == "LINKED_CLONES" {
+		// Special views for UPDATE and CACHE
+		if item.key == "UPDATE" {
+			if m.config.UpdateChecking {
+				form.WriteString(fmt.Sprintf("%s Checking for updates...\n", m.spinner.View()))
+			} else {
+				currentVer := m.config.CurrentVersion
+				if currentVer == "" {
+					currentVer = "unknown"
+				}
+				form.WriteString(fmt.Sprintf("%-18s %s\n", dimStyle.Render("Current Version:"), accentStyle.Render(currentVer)))
+				form.WriteString(fmt.Sprintf("%-18s %s\n\n", dimStyle.Render("GitHub:"), "https://github.com/Josepavese/nido"))
+
+				if m.configFocus == focusConfigForm {
+					form.WriteString(activeTabStyle.Render("[ CHECK FOR UPDATES ]"))
+				} else {
+					form.WriteString(dimStyle.Render("[ CHECK FOR UPDATES ]"))
+				}
+			}
+			form.WriteString("\n\n" + dimStyle.Italic(true).Render("Press Enter to check for updates."))
+
+		} else if item.key == "CACHE" {
+			if m.loading {
+				form.WriteString(fmt.Sprintf("%s Loading cache info...\n", m.spinner.View()))
+			} else {
+				stats := m.config.CacheStats
+				form.WriteString(fmt.Sprintf("%-15s %d images (%s)\n\n", dimStyle.Render("Total:"), stats.TotalImages, stats.TotalSize))
+
+				// List cached images
+				for i, img := range m.config.CacheList {
+					if i >= 5 {
+						form.WriteString(dimStyle.Render(fmt.Sprintf("  ... and %d more\n", len(m.config.CacheList)-5)))
+						break
+					}
+					form.WriteString(fmt.Sprintf("  %-15s %-20s %s\n", img.Name, img.Version, dimStyle.Render(img.Size)))
+				}
+				form.WriteString("\n")
+
+				if m.configFocus == focusConfigForm {
+					form.WriteString(activeTabStyle.Render("[ PRUNE UNUSED ]"))
+				} else {
+					form.WriteString(dimStyle.Render("[ PRUNE UNUSED ]"))
+				}
+			}
+			form.WriteString("\n\n" + dimStyle.Italic(true).Render("Press Enter to prune unused cached images."))
+
+		} else if item.key == "LINKED_CLONES" {
+			form.WriteString(fmt.Sprintf("%-15s %s\n", dimStyle.Render("Key:"), accentStyle.Render(item.key)))
 			// Boolean Toggle View
 			state := "DISABLED"
 			color := dimStyle
@@ -1494,8 +1859,10 @@ func (m model) renderConfig(h int) string {
 			toggle := fmt.Sprintf("[ %s ]", color.Render(state))
 			form.WriteString(fmt.Sprintf("%-15s %s\n\n", dimStyle.Render("Value:"), toggle))
 			form.WriteString(dimStyle.Render("Press Enter/Tab on sidebar to toggle immediately."))
+			form.WriteString("\n" + dimStyle.Italic(true).Render(item.desc))
 
 		} else {
+			form.WriteString(fmt.Sprintf("%-15s %s\n", dimStyle.Render("Key:"), accentStyle.Render(item.key)))
 			// Status Bar / Footer
 			// If Downloading, show progress bar
 			if m.downloading {
@@ -1518,9 +1885,9 @@ func (m model) renderConfig(h int) string {
 					form.WriteString(dimStyle.Render("[↵] EDIT SEQUENCE"))
 				}
 			}
+			// Helper text at the bottom
+			form.WriteString("\n" + dimStyle.Italic(true).Render(item.desc))
 		}
-		// Helper text at the bottom
-		form.WriteString("\n" + dimStyle.Italic(true).Render(item.desc))
 	} else {
 		form.WriteString(dimStyle.Render("Select a key from the sidebar to edit."))
 	}
@@ -1588,10 +1955,20 @@ func (m model) renderFleet(height int) string {
 		vncLine = fmt.Sprintf("127.0.0.1:%d", m.detail.VNCPort)
 	}
 
+	sshVal := fmt.Sprintf("ssh -p %d %s@%s", m.detail.SSHPort, m.detail.SSHUser, m.detail.IP)
+	if m.highlightSSH {
+		sshVal = accentStyle.Render(sshVal)
+	}
+
+	vncVal := vncLine
+	if m.highlightVNC {
+		vncVal = accentStyle.Render(vncVal)
+	}
+
 	infoCard := cardStyle.Render(lipgloss.JoinVertical(lipgloss.Left,
 		m.renderDetailLine("Status", statusColor.Render(m.detail.State)),
-		m.renderDetailLine("SSH", fmt.Sprintf("ssh -p %d %s@%s", m.detail.SSHPort, m.detail.SSHUser, m.detail.IP)),
-		m.renderDetailLine("VNC", vncLine),
+		m.renderDetailLine("SSH", sshVal),
+		m.renderDetailLine("VNC", vncVal),
 		m.renderDetailLine("Disk", m.renderDiskLine()),
 		m.renderDetailLine("Backing", m.renderBackingLine()),
 		m.renderDetailLine("PID", fmt.Sprintf("%d", m.detail.PID)),
@@ -1759,6 +2136,20 @@ func (m model) renderFooter() string {
 
 	// "🟢 NOMINAL"
 	leftText := "🟢 NOMINAL"
+
+	if m.downloading {
+		// Calculate available width for bar
+		// Footer full width minus label "Downloading..." (approx 15)
+		w := m.width - 20
+		if w < 10 {
+			w = 10
+		}
+		m.progress.Width = w
+		bar := m.progress.ViewAs(m.downloadProgress)
+		status := fmt.Sprintf(" %s Downloading... %s", m.spinner.View(), bar)
+		return footerStyle.Width(m.width).Render(status)
+	}
+
 	if m.loading {
 		// Just render simplified loading state if loading, or keep alignment?
 		// Loading spinner varies. Let's just keep the old full-width style for loading to avoid flicker.
@@ -1800,6 +2191,90 @@ func (m model) renderFooter() string {
 }
 
 // Run starts the TUI with given provider/config.
+func (m model) openTerminalCmd(sshCmd string) tea.Cmd {
+	return func() tea.Msg {
+		var cmd *exec.Cmd
+		switch runtime.GOOS {
+		case "linux":
+			// Try common terminals
+			terms := []string{"x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal", "xterm"}
+			var termFound string
+			for _, t := range terms {
+				if _, err := exec.LookPath(t); err == nil {
+					termFound = t
+					break
+				}
+			}
+
+			if termFound != "" {
+				// Wrap command to keep terminal open on error
+				// Use a more robust bash wrapper
+				wrappedCmd := fmt.Sprintf("%s || (echo ''; echo '----------------------------------------'; echo '⚠️  SSH SESSION FAILED'; echo '----------------------------------------'; echo 'Press Enter to close this terminal...'; read)", sshCmd)
+
+				switch termFound {
+				case "gnome-terminal", "xfce4-terminal":
+					cmd = exec.Command(termFound, "--", "bash", "-c", wrappedCmd)
+				case "konsole":
+					cmd = exec.Command(termFound, "-e", "bash", "-c", wrappedCmd)
+				default:
+					cmd = exec.Command(termFound, "-e", "bash", "-c", wrappedCmd)
+				}
+			} else {
+				return logMsg{text: "No terminal emulator found"}
+			}
+		case "darwin":
+			// macOS: Use osascript to open Terminal
+			appleScript := fmt.Sprintf(`tell application "Terminal" to do script "%s"`, sshCmd)
+			cmd = exec.Command("osascript", "-e", appleScript)
+		case "windows":
+			// Windows: Open cmd and run ssh
+			cmd = exec.Command("cmd", "/c", "start", "cmd", "/k", sshCmd)
+		default:
+			return logMsg{text: fmt.Sprintf("Quick SSH not supported on %s", runtime.GOOS)}
+		}
+
+		if cmd != nil {
+			err := cmd.Start()
+			if err != nil {
+				return logMsg{text: fmt.Sprintf("Failed to open terminal: %v", err)}
+			}
+		}
+		return nil
+	}
+}
+
+func (m model) openVNCCmd(vncAddr string) tea.Cmd {
+	return func() tea.Msg {
+		var cmd *exec.Cmd
+		switch runtime.GOOS {
+		case "linux":
+			// Use xdg-open for vnc:// or try common viewers
+			if _, err := exec.LookPath("xdg-open"); err == nil {
+				cmd = exec.Command("xdg-open", "vnc://"+vncAddr)
+			} else if _, err := exec.LookPath("gvncviewer"); err == nil {
+				cmd = exec.Command("gvncviewer", vncAddr)
+			} else if _, err := exec.LookPath("vncviewer"); err == nil {
+				cmd = exec.Command("vncviewer", vncAddr)
+			}
+		case "darwin":
+			cmd = exec.Command("open", "vnc://"+vncAddr)
+		case "windows":
+			// Windows: vnc:// might not be registered by default, but we can try
+			cmd = exec.Command("cmd", "/c", "start", "vnc://"+vncAddr)
+		}
+
+		if cmd != nil {
+			err := cmd.Start()
+			if err != nil {
+				return logMsg{text: fmt.Sprintf("Failed to open VNC: %v", err)}
+			}
+		} else {
+			return logMsg{text: "No VNC viewer or xdg-open found"}
+		}
+		return nil
+	}
+}
+
 func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) error {
 	p := tea.NewProgram(initialModel(prov, cfg), tea.WithContext(ctx), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
