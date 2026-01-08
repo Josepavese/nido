@@ -346,7 +346,7 @@ func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 
 	// Initialize Viewport for Logs
 	vp := viewport.New(0, 9)
-	vp.SetContent(strings.Join([]string{"Nido GUI ready. Systems nominal."}, "\n"))
+	vp.SetContent(strings.Join([]string{fmt.Sprintf("[%s] Nido GUI ready. Systems nominal.", time.Now().Format("15:04:05"))}, "\n"))
 
 	return model{
 		prov:        prov,
@@ -357,7 +357,7 @@ func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 		spinner:     spin,
 		progress:    prog,
 		loading:     bool(false),
-		logs:        []string{"Nido GUI ready. Systems nominal."},
+		logs:        []string{fmt.Sprintf("[%s] Nido GUI ready. Systems nominal.", time.Now().Format("15:04:05"))},
 		logViewport: vp,
 		spawn:       newSpawnState(cfg),
 		hatchery:    newHatcheryState(cfg),
@@ -639,7 +639,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.detailName = ""
 				m.detail = provider.VMDetail{}
 			}
-			m.logs = append(m.logs, fmt.Sprintf("Info failed: %v", msg.err))
+			m.logs = append(m.logs, fmt.Sprintf("[%s] Info failed: %v", time.Now().Format("15:04:05"), msg.err))
 			m.logViewport.SetContent(strings.Join(m.logs, "\n"))
 			m.logViewport.GotoBottom()
 		} else if msg.name == m.detailName {
@@ -648,7 +648,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sourcesLoadedMsg:
 		m.loading = false
 		if msg.err != nil {
-			m.logs = append(m.logs, fmt.Sprintf("Failed to load sources: %v", msg.err))
+			m.logs = append(m.logs, fmt.Sprintf("[%s] Failed to load sources: %v", time.Now().Format("15:04:05"), msg.err))
 			m.logViewport.SetContent(strings.Join(m.logs, "\n"))
 			m.logViewport.GotoBottom()
 		} else {
@@ -656,16 +656,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.hatchery.IsSelecting = true
 		}
 	case logMsg:
-		m.logs = append(m.logs, msg.text)
+		m.logs = append(m.logs, fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), msg.text))
 		// Update Viewport Content
 		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
 		m.logViewport.GotoBottom()
 	case opResultMsg:
 		m.loading = false
 		if msg.err != nil {
-			m.logs = append(m.logs, fmt.Sprintf("Operation %s failed: %v", msg.op, msg.err))
+			m.logs = append(m.logs, fmt.Sprintf("[%s] Operation %s failed: %v", time.Now().Format("15:04:05"), msg.op, msg.err))
 		} else {
-			m.logs = append(m.logs, fmt.Sprintf("Operation %s complete.", msg.op))
+			m.logs = append(m.logs, fmt.Sprintf("[%s] Operation %s complete.", time.Now().Format("15:04:05"), msg.op))
 		}
 		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
 		m.logViewport.GotoBottom()
@@ -674,7 +674,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case configSavedMsg:
 		m.loading = false
 		m.loading = false
-		m.logs = append(m.logs, fmt.Sprintf("Config %s updated to %s", msg.key, msg.value))
+		m.logs = append(m.logs, fmt.Sprintf("[%s] Config %s updated to %s", time.Now().Format("15:04:05"), msg.key, msg.value))
 		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
 		m.logViewport.GotoBottom()
 		// Refresh sidebar items to reflect new state (e.g. toggles)
@@ -1099,14 +1099,15 @@ func (m model) submitHatchery() (tea.Model, tea.Cmd) {
 	name := m.hatchery.Inputs[0].Value()
 	source := m.hatchery.SelectedSource
 
+	// Input Validation
 	if name == "" {
-		m.logs = append(m.logs, "Hatchery: Name is required to spawn!")
+		m.logs = append(m.logs, fmt.Sprintf("[%s] Hatchery: Name is required to spawn!", time.Now().Format("15:04:05")))
 		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
 		m.logViewport.GotoBottom()
 		return m, nil
 	}
 	if source == "" {
-		m.logs = append(m.logs, "Hatchery: Source (Image/Template) is required!")
+		m.logs = append(m.logs, fmt.Sprintf("[%s] Hatchery: Source (Image/Template) is required!", time.Now().Format("15:04:05")))
 		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
 		m.logViewport.GotoBottom()
 		return m, nil
