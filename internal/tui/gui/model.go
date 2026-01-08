@@ -75,6 +75,7 @@ func (i vmItem) Title() string {
 }
 func (i vmItem) Description() string { return i.state }
 func (i vmItem) FilterValue() string { return i.name }
+func (i vmItem) String() string      { return i.Title() }
 
 type spawnItem struct{}
 
@@ -316,12 +317,8 @@ func newSpawnState(cfg *config.Config) spawnState {
 
 func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 	items := []list.Item{}
-	d := list.NewDefaultDelegate()
-	d.ShowDescription = false
-	d.Styles.SelectedTitle = sidebarItemSelectedStyle
-	d.Styles.NormalTitle = sidebarItemStyle
-
-	d.Styles.NormalTitle = sidebarItemStyle
+	// Use customDelegate to match Config/Hatchery styling (no extra padding)
+	d := customDelegate{}
 
 	// Reduced sidebar width to 24 as requested
 	l := list.New(items, d, 24, 10)
