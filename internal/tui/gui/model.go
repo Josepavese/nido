@@ -1152,7 +1152,27 @@ func (m model) submitHatchery() (tea.Model, tea.Cmd) {
 	if m.hatchery.Sidebar.Index() == 0 {
 		// SPAWN
 		m.op = opSpawn
-		return m, m.spawnCmd(name, source, "", m.spawn.gui)
+
+		// Resolve Source Path
+		realSource := source
+		if strings.Contains(source, "[IMAGE]") {
+			// Extract filename
+			filename := strings.TrimPrefix(source, "[IMAGE] ")
+			filename = strings.TrimSpace(filename)
+
+			// Resolve full path
+			imgDir := m.cfg.ImageDir
+			if imgDir == "" {
+				home, _ := os.UserHomeDir()
+				imgDir = filepath.Join(home, ".nido", "images")
+			}
+			realSource = filepath.Join(imgDir, filename)
+		} else if strings.Contains(source, "[TEMPLATE]") {
+			realSource = strings.TrimPrefix(source, "[TEMPLATE] ")
+			realSource = strings.TrimSpace(realSource)
+		}
+
+		return m, m.spawnCmd(name, realSource, "", m.spawn.gui)
 	} else {
 		// CREATE TEMPLATE
 		return m, func() tea.Msg {

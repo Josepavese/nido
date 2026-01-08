@@ -733,7 +733,11 @@ func (p *QemuProvider) execQMP(qmpPath string, command map[string]interface{}) e
 
 // ListImages scans the image directory for cached images.
 func (p *QemuProvider) ListImages() ([]string, error) {
-	imagesDir := filepath.Join(p.RootDir, "images")
+	imagesDir := p.Config.ImageDir
+	if imagesDir == "" {
+		imagesDir = filepath.Join(p.RootDir, "images")
+	}
+
 	var images []string
 
 	entries, err := os.ReadDir(imagesDir)
@@ -745,17 +749,11 @@ func (p *QemuProvider) ListImages() ([]string, error) {
 	}
 
 	for _, e := range entries {
-		if e.IsDir() {
-			name := e.Name()
-			versions, _ := os.ReadDir(filepath.Join(imagesDir, name))
-			for _, v := range versions {
-				if v.IsDir() {
-					// Check if base image exists inside
-					if _, err := os.Stat(filepath.Join(imagesDir, name, v.Name(), "disk.qcow2")); err == nil {
-						images = append(images, fmt.Sprintf("%s:%s", name, v.Name()))
-					}
-				}
-			}
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".qcow2") && !strings.HasSuffix(e.Name(), ".compact.qcow2") {
+			// Simply return the filename related to the image
+			// main.go saves them as name-version.qcow2
+			// We can strip .qcow2 if we want, but keeping it ensures clarity
+			images = append(images, e.Name())
 		}
 	}
 	return images, nil
