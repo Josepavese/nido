@@ -1622,9 +1622,9 @@ GLOBAL
 }
 
 func (m model) renderFooter() string {
-	status := "SYSTEMS NOMINAL 🟢 | 🪺  Happy Hatching! | v1.0"
+	status := "🟢 SYSTEMS NOMINAL | 🪺  Powered by Bird Seed | github.com/Josepavese"
 	if m.loading {
-		status = fmt.Sprintf(" %s EXECUTING %s... ", m.spinner.View(), strings.ToUpper(string(m.op)))
+		status = fmt.Sprintf("%s EXECUTING %s... ", m.spinner.View(), strings.ToUpper(string(m.op)))
 	}
 
 	return footerStyle.Width(m.width).Render(status)
