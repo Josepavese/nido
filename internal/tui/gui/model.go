@@ -1018,8 +1018,13 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 							return m, nil
 						}
 					}
-				} else if index == len(m.list.Items()) {
+				} else if index >= len(m.list.Items()) && index <= len(m.list.Items())+3 {
 					// Check if the previous item (the last one) is a spawnItem that wrapped
+					// Because of MarginTop(1) and Wrapping, spawnItem can take 3-4 visual lines.
+					// Row N: Margin (Empty) -> Triggers Index N (Caught above)
+					// Row N+1: Line 1 -> Triggers Index N+1
+					// Row N+2: Line 2 -> Triggers Index N+2
+					// Row N+3: Margin Bottom? -> Triggers Index N+3
 					lastIdx := len(m.list.Items()) - 1
 					if lastIdx >= 0 {
 						if _, ok := m.list.Items()[lastIdx].(spawnItem); ok {
@@ -1034,29 +1039,65 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			// Main Area Interactions (Buttons)
 			// Y Calculation:
 			// Header(2) + SubHeader(2) + Title(1) + CardPaddingTop(1) + CardContent(6) + CardPaddingBottom(1) = 13
-			// Buttons start after line 13. So Y >= 14 seems correct.
-			if msg.Y >= 14 && msg.Y <= 18 {
-				// Sidebar(19) + MainPadding(2) = 21 offset
+			// Buttons start after line 13. So Y >= 14.
+			availWidth := m.width - 21
+			isCompact := availWidth < 46
+
+			if isCompact {
+				// VERTICAL LAYOUT
+				// Button 1: Y 14-16
+				// Button 2: Y 17-19
+				// Button 3: Y 20-22
 				localX := msg.X - 21
-				if sel := m.list.SelectedItem(); sel != nil {
-					if item, ok := sel.(vmItem); ok {
-						if localX >= 0 && localX < 14 { // [ENTER] START/STOP (~14 chars)
-							if item.state == "running" {
+				if localX >= 0 { // Check X bounds? Buttons align left, so X > 0 is enough if we don't care about max width click
+					if sel := m.list.SelectedItem(); sel != nil {
+						if item, ok := sel.(vmItem); ok {
+							if msg.Y >= 14 && msg.Y <= 16 {
+								if item.state == "running" {
+									m.loading = true
+									m.op = opStop
+									return m, m.stopCmd(item.name)
+								}
+								m.loading = true
+								m.op = opStart
+								return m, m.startCmd(item.name)
+							} else if msg.Y >= 17 && msg.Y <= 19 {
 								m.loading = true
 								m.op = opStop
 								return m, m.stopCmd(item.name)
+							} else if msg.Y >= 20 && msg.Y <= 22 {
+								m.loading = true
+								m.op = opDelete
+								return m, m.deleteCmd(item.name)
 							}
-							m.loading = true
-							m.op = opStart
-							return m, m.startCmd(item.name)
-						} else if localX >= 14 && localX < 26 { // [X] KILL (~12 chars)
-							m.loading = true
-							m.op = opStop
-							return m, m.stopCmd(item.name)
-						} else if localX >= 26 && localX < 44 { // [DEL] DELETE (~18 chars)
-							m.loading = true
-							m.op = opDelete
-							return m, m.deleteCmd(item.name)
+						}
+					}
+				}
+			} else {
+				// HORIZONTAL LAYOUT
+				if msg.Y >= 14 && msg.Y <= 18 {
+					// Sidebar(19) + MainPadding(2) = 21 offset
+					localX := msg.X - 21
+					if sel := m.list.SelectedItem(); sel != nil {
+						if item, ok := sel.(vmItem); ok {
+							if localX >= 0 && localX < 14 { // [ENTER] START/STOP (~14 chars)
+								if item.state == "running" {
+									m.loading = true
+									m.op = opStop
+									return m, m.stopCmd(item.name)
+								}
+								m.loading = true
+								m.op = opStart
+								return m, m.startCmd(item.name)
+							} else if localX >= 14 && localX < 26 { // [X] KILL (~12 chars)
+								m.loading = true
+								m.op = opStop
+								return m, m.stopCmd(item.name)
+							} else if localX >= 26 && localX < 44 { // [DEL] DELETE (~18 chars)
+								m.loading = true
+								m.op = opDelete
+								return m, m.deleteCmd(item.name)
+							}
 						}
 					}
 				}
@@ -1440,6 +1481,33 @@ func (m model) renderFleet(height int) string {
 		redButtonStyle.Render("[X] KILL"),
 		redButtonStyle.Render("[DEL] DELETE"),
 	)
+
+	// Sidebar(18) + Border(1) + Padding(2) = 21
+	availWidth := m.width - 21
+	// Buttons Width approx: 14 + 12 + 18 + margins = ~45
+	if availWidth < 46 {
+		// Switch to Vertical Layout
+		// Remove right margins for vertical stack alignment? Button style has MarginRight(1).
+		// Render items individually to control margins precisely if needed, or just stack.
+		// If we stack, MarginRight doesn't hurt, but MarginTop might be needed for spacing.
+		// Current buttonStyle has no MarginTop.
+		// We can add a spacer or use a style with margin.
+		vButtonStyle := buttonStyle.Copy().MarginRight(0).MarginBottom(1)
+		vRedStyle := redButtonStyle.Copy().MarginRight(0).MarginBottom(1)
+
+		btnStartStopV := vButtonStyle.Render("[↵] START")
+		if m.detail.State == "running" {
+			btnStartStopV = vButtonStyle.BorderForeground(colors.Error).Foreground(colors.Error).Render("[↵] STOP")
+		} else {
+			btnStartStopV = vButtonStyle.BorderForeground(colors.Success).Foreground(colors.Success).Render("[↵] START")
+		}
+
+		actions = lipgloss.JoinVertical(lipgloss.Left,
+			btnStartStopV,
+			vRedStyle.Render("[X] KILL"),
+			vRedStyle.Render("[DEL] DELETE"),
+		)
+	}
 
 	mainContent := lipgloss.JoinVertical(lipgloss.Left,
 		title,
