@@ -6,7 +6,7 @@ Starting from v3.1.0, Nido includes a built-in Image Registry to easily find, do
 
 - **Catalog**: A JSON manifest of verified images from official sources (Ubuntu, Debian, Alpine).
 - **Image**: A read-only OS disk image (qcow2 format).
-- **Backing File**: When you spawn a VM from an image, Nido creates a "Clone" (overlay) of the image. The original image remains untouched.
+- **Backing File (Linked Clones)**: When you spawn a VM from an image, Nido creates a "Clone" (overlay) using QCOW2 backing files. The original image remains untouched and read-only, while your VM only stores the differences. 🧬
 
 ## Commands
 
@@ -55,14 +55,18 @@ nido image update
 
 ### Cloud-Init
 
-Most cloud images (Ubuntu Cloud, Debian Cloud) require **Cloud-Init** to set the default user password or inject SSH keys.
+Most cloud images (Ubuntu Cloud, Debian Cloud, Alpine) require **Cloud-Init** to set the default user password or inject SSH keys.
 
-Currently, `nido` does not auto-generate cloud-init ISOs (Planned for v3.2.0).
+Nido fully supports **Zero-Touch Cloud-Init** injection:
+
+1. Pass your user-data file via `--user-data <file>`.
+2. Nido automatically creates a transient ISO, attaches it to the VM, and handles the handshake.
+3. The default user is typically `vmuser` (configurable in `nido config`).
 **Workaround:**
 
-1. Use images that allow empty passwords (rare).
-2. Or use `guestfish` or `virt-customize` to modify the image password before spawning.
-3. Or use a custom template (the "old way") which is pre-configured.
+4. Use images that allow empty passwords (rare).
+5. Or use `guestfish` or `virt-customize` to modify the image password before spawning.
+6. Or use a custom template (the "old way") which is pre-configured.
 
 ### Alpine Linux
 

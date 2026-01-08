@@ -149,18 +149,52 @@ nido prune                         # Vaporize all stopped VMs
 nido info my-vm                    # Inspect neural links (IP, Port)
 nido doctor                        # Run system health check
 nido config                        # View current genetics
+nido help                          # Show detailed usage instructions
 
 # AI agent setup
 nido register                      # Get MCP config for Claude/Antigravity
 
 # Image & Cache Management 🆕
+
 nido images list                    # Browse cloud images (shows file sizes)
 nido images pull ubuntu:24.04       # Pull official Ubuntu 24.04 image
 nido cache ls                       # List cached images and their sizes
 nido cache info                     # Show cache stats (total size, age)
 nido spawn my-vm --image ubuntu:24.04  # Spawn directly from any cloud image
-nido spawn test-vm --no-cache       # Spawn without saving image to local cache
+
+## Killer Feature: Linked Clones 🧬
+
+This is Nido's secret weapon for speed and efficiency.
+
+By default, Nido uses **Linked Clones** technology (QCOW2 `backing_file` backing).
+When you spawn a VM from an image (e.g., `ubuntu:24.04`), Nido **does not copy the whole 2GB file**.
+
+Instead, it creates a tiny overlay file that only stores the *changes* you make.
+
+### Space Savings Simulation
+
+| Setup | Traditional VM / Full Copy | Nido Linked Clones |
+| :--- | :--- | :--- |
+| **Base Image** | 2.5 GB | 2.5 GB (Stored once) |
+| **VM 1** | 2.5 GB | **< 1 MB** (Overlay) |
+| **VM 2** | 2.5 GB | **< 1 MB** (Overlay) |
+| **VM 10** | 2.5 GB | **< 1 MB** (Overlay) |
+| **Total for 10 VMs** | **~27.5 GB** 😱 | **~2.6 GB** 🚀 |
+
+### Smart Cache Protection 🛡️
+
+Because VMs depend on the base image, you might worry about deleting it.
+Don't. Nido's `cache prune` command is smart: **it refuses to delete any image that is active**.
+
+### Configuration
+
+If you prefer completely independent VMs (e.g., for exporting a single file), you can disable this:
+
+```bash
+nido config set LINKED_CLONES false
 ```
+
+When disabled, Nido performs a full copy of the image and deletes the downloaded cache file to save space (since the data is now in the VM disk).
 
 ## Nido Flavours & Split Distribution 🧁📦
 
@@ -178,9 +212,15 @@ To bypass storage limits and ensure fast downloads:
 `nido` now supports full shell completion for **Bash** and **Zsh**. Never guess a command or template name again!
 
 ```bash
-# Generate completion script
+# Generate completion script (Bash)
 nido completion bash > ~/.nido/bash_completion
 echo "source ~/.nido/bash_completion" >> ~/.bashrc
+
+# Generate completion script (Zsh)
+mkdir -p ~/.zsh/completion
+nido completion zsh > ~/.zsh/completion/_nido
+echo "fpath=(~/.zsh/completion \$fpath)" >> ~/.zshrc
+echo "autoload -Uz compinit && compinit" >> ~/.zshrc
 ```
 
 ## Commands
@@ -206,6 +246,7 @@ echo "source ~/.nido/bash_completion" >> ~/.bashrc
 | `cache ls` | List cached images | `nido cache ls` |
 | `cache info` | Show cache statistics | `nido cache info` |
 | `cache prune` | Remove all cached images | `nido cache prune` |
+| `help` | Show usage information | `nido help` |
 
 ### Structured Output (JSON)
 
@@ -226,6 +267,12 @@ Nido can expose a graphical interface for VMs:
 - Use the `--gui` flag with `spawn` or `start`.
 - Run `nido info <name>` to see the VNC endpoint.
 - Connect with any VNC client to `127.0.0.1:5900X`.
+
+### Interactive TUI (Bubble Tea)
+
+- Launch: `nido gui`
+- Keyboard: `r` refresh · `n` spawn modal · `Enter` start/stop · `del` delete · `i` refresh info · `q` quit.
+- Includes progress/loader rail, VM list + detail pane, and spawn form (name, template, user-data, GUI toggle).
 
 ### Automation
 

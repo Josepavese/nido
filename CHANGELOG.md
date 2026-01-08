@@ -5,7 +5,27 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [4.2.0] - 2026-01-07 "The Synthetic Perception" 🪺👁️
+## [4.3.0] - 2026-01-08 "The Elegant Nest" 🪺✨
+
+### 🎉 Major Features
+
+- **Killer Feature: Linked Clones:** Refactored image caching into a proper "Linked Clones" system. VMs now use QCOW2 backing files for near-instant spawning and massive space savings. 🧬
+- **Smart Cache Protection:** Implemented intelligent protection that prevents base images from being deleted if any VM is currently using them as a backing file. 🛡️
+- **Zero-Config Source Cycling:** In the TUI Hatchery, users can now cycle through available image/template sources using **Left/Right arrow keys** when the source field is focused. ⌨️
+- **Integrated Help System:** Added `nido help` command for high-level guidance directly in the terminal.
+
+### 🎨 TUI & UX Refinements
+
+- **Visual Cues:** Destructive actions (Kill, Delete) in the Fleet View are now styled in aggressive red. 🔴
+- **State Management:** Fixed selection persistent and detail pane clearing after VM deletion.
+- **Hatchery UI Polish:** Removed confusing placeholders and fixed arrow-key conflicts in the spawn form.
+
+### 🔧 CLI & Maintenance
+
+- **Conflicting Flag Consolidation:** Deprecated `CACHE_IMAGES` in favor of `LINKED_CLONES` (with backward compatibility) to resolve download redundancy.
+- **Shell Completion v2:** Suggestions are now fully synchronized with the 4.3.0 feature set, including `help` and `LINKED_CLONES` configuration.
+- **Codebase Purification:** Decimated legacy binaries, redundant temporary artifacts, and dead code paths. 🧹
+- **Narrative Documentation:** Standardized English code comments with a "Senior Engineer" tone, explaining the *why* behind the magic.
 
 ### 🎉 Major Features
 
@@ -261,5 +281,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[4.3.0]: https://github.com/Josepavese/nido/compare/v4.2.0...v4.3.0
 [2.0.0]: https://github.com/Josepavese/nido/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/Josepavese/nido/releases/tag/v1.0.0

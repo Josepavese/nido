@@ -1,4 +1,4 @@
-# Beta Testing Guide for Nido v3
+# Beta Testing Guide for Nido v4.3.0
 
 Thank you for helping test Nido's cross-platform support! This guide will help you test Nido on macOS and Windows.
 
@@ -63,6 +63,7 @@ Please test the following commands and report any issues:
 - [ ] `nido config` - Shows configuration
 - [ ] `nido template list` - Lists templates (may be empty)
 - [ ] `nido ls` - Lists VMs (may be empty)
+- [ ] `nido help` - See guidance directly in the terminal
 
 ### ✅ VM Lifecycle (If you have a template)
 
@@ -74,10 +75,16 @@ Please test the following commands and report any issues:
 - [ ] `nido start test-vm` - Restart the VM
 - [ ] `nido delete test-vm` - Remove the VM
 
-### ✅ MCP Server (Advanced)
-
-- [ ] `nido register` - Shows MCP configuration
 - [ ] Test MCP server with Claude/Antigravity
+
+### ✅ Image & Cache Operations (New!)
+
+- [ ] `nido images list` - Browse the registry
+- [ ] `nido images pull cirros:0.6.3` - Pull a small test image
+- [ ] `nido cache ls` - Verify image is in cache
+- [ ] `nido spawn test-img --image cirros:0.6.3` - Spawn from cloud image
+- [ ] `nido cache prune --unused` - Verify "Smart Protection" (active image should stay)
+- [ ] `nido config set LINKED_CLONES false` - Test Full Copy mode
 
 ## Known Limitations
 

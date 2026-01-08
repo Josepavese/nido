@@ -16,6 +16,8 @@ Nido is **AI-centric and automation-first**: a focused execution surface for age
 - Cross-platform QEMU lifecycle: spawn/start/stop/delete/list/info/prune.
 - Compressed templates (`.compact.qcow2`) and fast cloning.
 - SSH access + VNC toggle for GUI sessions.
+- Linked Clones (QCOW2 backing files) for instant spawning and space savings. 🧬
+- Smart Cache Protection against accidental base image deletion. 🛡️
 - Built-in diagnostics (`nido doctor`).
 
 ### Agentic Interface (MCP)
@@ -38,9 +40,9 @@ Nido is **AI-centric and automation-first**: a focused execution surface for age
 
 ## Next Up
 
-### 1) Image Registry: Finish the Loop
+### 1) Image Registry: Finish the Loop ✅
 
-- CLI parity for image management: `image info`, `image remove`, cache commands.
+- CLI parity for image management: `image info`, `image remove`, cache commands (`ls`, `info`, `prune`).
 - Registry automation: ship `registry-builder` CLI + GitHub Action updates.
 - Expand catalog coverage (Tier 1 official + Tier 2 conversion).
 
@@ -78,7 +80,7 @@ Nido is **AI-centric and automation-first**: a focused execution surface for age
 
 ### DX & Reliability
 
-- Interactive TUI.
+- Interactive TUI (Fleet View + Hatchery). ✅
 - Self-healing + auto-recovery.
 - Hardening and long-run stability testing.
 
