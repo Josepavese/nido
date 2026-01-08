@@ -714,6 +714,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If not handled, fall through to component updates
 		m = newModel.(model)
 	case tea.MouseMsg:
+		if m.activeTab == tabLogs {
+			var cmd tea.Cmd
+			m.logViewport, cmd = m.logViewport.Update(msg)
+			return m, cmd
+		}
 		newModel, cmd := m.handleMouse(msg)
 		return newModel, cmd
 	}
