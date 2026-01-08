@@ -171,6 +171,7 @@ func (d customDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d customDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
 	// Check for Spawn Item first
 	if _, ok := listItem.(spawnItem); ok {
+
 		str := "+ Spawn new bird (VM)"
 		if index == m.Index() {
 			fmt.Fprint(w, hatchButtonActiveStyle.Render(str))
@@ -1013,6 +1014,16 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 							m.detailName = v.name
 							return m, m.infoCmd(m.detailName)
 						} else if _, ok := sel.(spawnItem); ok {
+							m.activeTab = tabHatchery
+							return m, nil
+						}
+					}
+				} else if index == len(m.list.Items()) {
+					// Check if the previous item (the last one) is a spawnItem that wrapped
+					lastIdx := len(m.list.Items()) - 1
+					if lastIdx >= 0 {
+						if _, ok := m.list.Items()[lastIdx].(spawnItem); ok {
+							m.list.Select(lastIdx)
 							m.activeTab = tabHatchery
 							return m, nil
 						}
