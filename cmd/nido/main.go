@@ -21,8 +21,10 @@ import (
 )
 
 // Version is injected at build time
-var Version = "v4.2.0"
+var Version = "v4.3.0"
 
+// main is the brain of the Nido CLI. It handles command line parsing,
+// configuration loading, and dispatches requests to the appropriate handlers.
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -38,7 +40,7 @@ func main() {
 
 	cwd, _ := os.Getwd()
 
-	// Load Config
+	// Load the genetic configuration for our nest
 	cfgPath := filepath.Join(nidoDir, "config.env")
 	// For dev, check local project config first if nidoDir doesn't have it
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
@@ -46,17 +48,24 @@ func main() {
 	}
 
 	cfg, _ := config.LoadConfig(cfgPath)
+	// Hatch a QMP-enabled QEMU provider
 	prov := provider.NewQemuProvider(nidoDir, cfg)
 
 	switch cmd {
 	case "version":
 		jsonOut, _ := consumeJSONFlag(args)
 		cmdVersion(jsonOut)
+	case "help":
+		printUsage()
+	case "gui":
+		cmdGUI(prov, cfg)
 	case "update":
 		cmdUpdate(nidoDir)
 	case "mcp-json-list":
+		// Secret handshake for MCP servers to list VMs efficiently
 		cmdMcpJsonList(prov)
 	case "ls", "list":
+		// Scan the nest and report all detected life forms
 		jsonOut, _ := consumeJSONFlag(args)
 		vms, err := prov.List()
 		if jsonOut {
@@ -155,6 +164,7 @@ func main() {
 		}
 		fmt.Println("")
 	case "spawn":
+		// The main hatching event. Can spawn from images, templates, or defaults.
 		jsonOut, rest := consumeJSONFlag(args)
 		if len(rest) < 1 {
 			if jsonOut {
@@ -166,6 +176,16 @@ func main() {
 			os.Exit(1)
 		}
 		name := rest[0]
+		if strings.HasPrefix(name, "--") {
+			if jsonOut {
+				resp := clijson.NewResponseError("spawn", "ERR_INVALID_ARGS", "Missing VM name", "First argument must be a VM name, not a flag.", "Usage: nido spawn <name> ...", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
+			ui.Error("Invalid VM name '%s'. It looks like a flag.", name)
+			fmt.Println("Usage: nido spawn <name> [--image <name:tag> | <template>]")
+			os.Exit(1)
+		}
 		tpl := ""
 		imageTag := ""
 		userDataPath := ""
@@ -237,7 +257,7 @@ func main() {
 
 			imgPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
 
-			// Auto-pull if missing
+			// Auto-pull if the species is not yet in our local cache
 			if _, err := os.Stat(imgPath); os.IsNotExist(err) {
 				if !jsonOut {
 					ui.Info("Image not found locally. Pulling %s:%s...", img.Name, ver.Version)
@@ -328,6 +348,7 @@ func main() {
 		if !jsonOut {
 			ui.Ironic("Initiating hypervisor handshake...")
 		}
+		// Dispatch the hatching command to the provider
 		if err := prov.Spawn(name, provider.VMOptions{
 			DiskPath:     tpl,
 			UserDataPath: userDataPath,
@@ -366,6 +387,17 @@ func main() {
 			return
 		}
 		ui.Success("VM %s hatched successfully from %s.", name, source)
+
+		// Cleanup if linked clones are disabled (we don't need the cache file)
+		if !cfg.LinkedClones && imageTag != "" && tpl != "" {
+			if err := os.Remove(tpl); err != nil {
+				if !jsonOut {
+					ui.Error("Failed to cleanup image cache: %v", err)
+				}
+			} else if !jsonOut {
+				ui.Ironic("Linked Clones disabled: Downloaded image incinerated.")
+			}
+		}
 	case "start":
 		jsonOut, rest := consumeJSONFlag(args)
 		if len(rest) < 1 {
@@ -444,6 +476,7 @@ func main() {
 		}
 		ui.Success("VM %s is now resting.", rest[0])
 	case "template":
+		// Management of the "Grave": where cold storage images reside.
 		jsonOut, rest := consumeJSONFlag(args)
 		if len(rest) == 0 || rest[0] == "list" {
 			if !jsonOut {
@@ -578,8 +611,9 @@ func main() {
 			ui.Error("Unknown template action: %s", subCmd)
 		}
 	case "config":
-		jsonOut, _ := consumeJSONFlag(args)
-		cmdConfig(cfg, cfgPath, jsonOut)
+		// View or modify the genetic code of your Nido environment.
+		jsonOut, rest := consumeJSONFlag(args)
+		cmdConfig(cfg, cfgPath, jsonOut, rest)
 	case "register":
 		jsonOut, _ := consumeJSONFlag(args)
 		cmdRegister(jsonOut)
@@ -659,9 +693,11 @@ func main() {
 		}
 		ui.Success("Vaporized %d stopped life forms.", count)
 	case "mcp":
+		// Enter MCP mode: speak directly to AI agents via machine language.
 		server := mcp.NewServer(prov)
 		server.Serve()
 	case "completion":
+		// Generate shell artifacts to help humans type faster.
 		if len(args) < 1 {
 			fmt.Println("Usage: nido completion <bash|zsh>")
 			os.Exit(1)
@@ -723,7 +759,7 @@ func getBashCompletion() string {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="ls spawn start ssh info stop images cache template config register version delete doctor prune completion update"
+    opts="ls spawn start ssh info stop images cache template config register version delete doctor prune completion update help"
 
     case "${prev}" in
         spawn)
@@ -742,8 +778,22 @@ func getBashCompletion() string {
             COMPREPLY=( $(compgen -W "$(nido completion list-vms) --json" -- ${cur}) )
             return 0
             ;;
-        ls|list|version|prune|doctor|config|register)
+        ls|list|version|prune|doctor|register)
             COMPREPLY=( $(compgen -W "--json" -- ${cur}) )
+            return 0
+            ;;
+        config)
+            COMPREPLY=( $(compgen -W "set --json" -- ${cur}) )
+            return 0
+            ;;
+        set)
+            if [[ ${COMP_WORDS[COMP_CWORD-2]} == "config" ]]; then
+                COMPREPLY=( $(compgen -W "BACKUP_DIR TEMPLATE_DEFAULT SSH_USER IMAGE_DIR LINKED_CLONES" -- ${cur}) )
+                return 0
+            fi
+            ;;
+        LINKED_CLONES)
+            COMPREPLY=( $(compgen -W "true false" -- ${cur}) )
             return 0
             ;;
         template)
@@ -763,8 +813,6 @@ func getBashCompletion() string {
         cache)
             COMPREPLY=( $(compgen -W "ls list info rm remove prune --unused --json" -- ${cur}) )
             return 0
-            ;;
-            fi
             ;;
         --image)
             COMPREPLY=( $(compgen -W "$(nido completion list-images)" -- ${cur}) )
@@ -810,7 +858,7 @@ func getZshCompletion() string {
     'cache:Manage cached cloud images'
     'delete:Evict VM from the nest'
     'prune:Vaporize all stopped life forms'
-    'config:Dump genetic configuration'
+    'config:Modify genetic configuration'
     'register:Prepare MCP handshake'
     'version:Check evolutionary state'
     'doctor:Run a system health check'
@@ -850,9 +898,21 @@ func getZshCompletion() string {
             '1:vm:$(nido completion list-vms)' \
             '--json[Structured JSON output]'
           ;;
-        ls|version|prune|doctor|config|register)
+        ls|version|prune|doctor|register)
           _arguments \
             '--json[Structured JSON output]'
+          ;;
+        config)
+          if (( CURRENT == 2 )); then
+            _values 'actions' 'set' '--json'
+          elif (( CURRENT == 3 )) && [[ $words[2] == "set" ]]; then
+            _values 'keys' 'BACKUP_DIR' 'TEMPLATE_DEFAULT' 'SSH_USER' 'IMAGE_DIR' 'LINKED_CLONES'
+          elif (( CURRENT == 4 )) && [[ $words[2] == "set" ]]; then
+             case $words[3] in
+                LINKED_CLONES) _values 'bool' 'true' 'false' ;;
+                *) ;;
+             esac
+          fi
           ;;
         template)
           if (( CURRENT == 2 )); then
@@ -988,13 +1048,56 @@ func printUsage() {
 	fmt.Printf("\n%s\"It's not a VM, it's a lifestyle.\"%s\n\n", ui.Dim, ui.Reset)
 }
 
-func cmdConfig(cfg *config.Config, path string, jsonOut bool) {
+func cmdConfig(cfg *config.Config, path string, jsonOut bool, args []string) {
+	if len(args) > 0 {
+		if args[0] == "set" {
+			if len(args) < 3 {
+				ui.Error("Usage: nido config set <key> <value>")
+				os.Exit(1)
+			}
+			key := strings.ToUpper(args[1])
+			val := args[2]
+
+			// Validate keys
+			validKeys := map[string]bool{
+				"BACKUP_DIR": true, "TEMPLATE_DEFAULT": true, "SSH_USER": true, "IMAGE_DIR": true, "LINKED_CLONES": true,
+			}
+			if !validKeys[key] {
+				ui.Error("Invalid config key: %s", key)
+				os.Exit(1)
+			}
+
+			if err := config.UpdateConfig(path, key, val); err != nil {
+				if jsonOut {
+					resp := clijson.NewResponseError("config set", "ERR_IO", "Update failed", err.Error(), "Check permissions.", nil)
+					_ = clijson.PrintJSON(resp)
+					os.Exit(1)
+				}
+				ui.Error("Failed to update config: %v", err)
+				os.Exit(1)
+			}
+
+			if jsonOut {
+				resp := clijson.NewResponseOK("config set", map[string]interface{}{
+					"action": "set",
+					"key":    key,
+					"value":  val,
+				})
+				_ = clijson.PrintJSON(resp)
+				return
+			}
+			ui.Success("Updated %s = %s", key, val)
+			return
+		}
+	}
+
 	if jsonOut {
 		resp := clijson.NewResponseOK("config", map[string]interface{}{
-			"config_path": path,
-			"backup_dir":  cfg.BackupDir,
-			"default_tpl": cfg.TemplateDefault,
-			"ssh_user":    cfg.SSHUser,
+			"config_path":   path,
+			"backup_dir":    cfg.BackupDir,
+			"default_tpl":   cfg.TemplateDefault,
+			"ssh_user":      cfg.SSHUser,
+			"linked_clones": cfg.LinkedClones,
 		})
 		_ = clijson.PrintJSON(resp)
 		return
@@ -1002,10 +1105,15 @@ func cmdConfig(cfg *config.Config, path string, jsonOut bool) {
 
 	ui.Header("Nido Genetic Configuration")
 	ui.FancyLabel("Config Path", path)
-	fmt.Println("")
+	// fmt.Println("") // Removed based on user feedback
 	ui.FancyLabel("Backup Dir", cfg.BackupDir)
 	ui.FancyLabel("Default Tpl", cfg.TemplateDefault)
 	ui.FancyLabel("SSH User", cfg.SSHUser)
+	cloneStatus := "Enabled (Space Saving)"
+	if !cfg.LinkedClones {
+		cloneStatus = "Disabled (Full Copy)"
+	}
+	ui.FancyLabel("Linked Clones", cloneStatus)
 }
 
 func cmdRegister(jsonOut bool) {
@@ -1247,8 +1355,8 @@ func cmdUpdate(nidoDir string) {
 	ui.Info("Please restart your terminal or source your config to see changes.")
 }
 
-// cmdCache handles image cache management commands.
-// Provides transparency and control over cached cloud images.
+// cmdCache handles the transparent management of downloaded cloud images.
+// It ensures Smart Cache Protection is active during pruning.
 func cmdCache(nidoDir string, args []string, prov provider.VMProvider) {
 	jsonOut, rest := consumeJSONFlag(args)
 	if len(rest) < 1 {
@@ -1431,50 +1539,73 @@ func cmdCache(nidoDir string, args []string, prov provider.VMProvider) {
 		ui.Success("Removed %s:%s from cache", name, version)
 
 	case "prune":
-		// Prune cache (all or unused only)
-		unusedOnly := false
-		for _, arg := range rest[1:] {
-			if arg == "--unused" {
-				unusedOnly = true
-			}
+		// Removing unused images with Smart Protection
+		// We ignore --unused flag because we ALWAYS want to protect used images now.
+		// Previously --unused might have meant "not in a running VM".
+		// Now we define "used" as "is a backing file for ANY VM (stopped or running)".
+
+		cached, err := catalog.GetCachedImages(imgDir)
+		if err != nil {
+			ui.Error("Failed to list cache: %v", err)
+			os.Exit(1)
 		}
 
-		// Get list of active VMs to check usage
-		var activeVMs []string
-		if unusedOnly {
-			vms, _ := prov.List()
-			for _, vm := range vms {
-				activeVMs = append(activeVMs, vm.Name)
-			}
+		usedFiles, err := prov.GetUsedBackingFiles()
+		if err != nil {
+			ui.Error("Failed to determine used backing files: %v", err)
+			ui.Error("Aborting to prevent breakage.")
+			os.Exit(1)
+		}
+
+		isUsed := make(map[string]bool)
+		for _, f := range usedFiles {
+			isUsed[f] = true
 		}
 
 		if !jsonOut {
-			ui.Ironic("Cleaning the cache...")
+			ui.Ironic("Cleaning the cache (safely)...")
 		}
-		removed, err := catalog.PruneCache(imgDir, unusedOnly, activeVMs)
-		if err != nil {
-			if jsonOut {
-				resp := clijson.NewResponseError("cache prune", "ERR_IO", "Cache prune failed", err.Error(), "Check your cache path and try again.", nil)
-				_ = clijson.PrintJSON(resp)
-				os.Exit(1)
+
+		count := 0
+		reclaimed := int64(0)
+		for _, img := range cached {
+			// Construct absolute path for check
+			// Catalog stores Name/Version. File is <imgDir>/<Name>-<Version>.qcow2
+			fullPath, _ := filepath.Abs(filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, img.Version)))
+
+			if isUsed[fullPath] {
+				if !jsonOut {
+					ui.Info("Skipping %s:%s (backing file for existing VM)", img.Name, img.Version)
+				}
+				continue
 			}
-			ui.Error("Pruning failed: %v", err)
-			os.Exit(1)
+
+			if err := catalog.RemoveCachedImage(imgDir, img.Name, img.Version); err == nil {
+				count++
+				reclaimed += img.Size // Corrected field name
+				if !jsonOut {
+					ui.Success("Removed %s:%s", img.Name, img.Version)
+				}
+			} else {
+				ui.Error("Failed to remove %s:%s: %v", img.Name, img.Version, err)
+			}
 		}
 
 		if jsonOut {
 			resp := clijson.NewResponseOK("cache prune", map[string]interface{}{
-				"removed_count": removed,
-				"unused_only":   unusedOnly,
+				"stats": map[string]interface{}{
+					"count":     count,
+					"reclaimed": reclaimed,
+				},
 			})
 			_ = clijson.PrintJSON(resp)
 			return
 		}
 
-		if removed == 0 {
-			ui.Info("No images to remove.")
+		if count == 0 {
+			ui.Info("Nothing to prune.")
 		} else {
-			ui.Success("Removed %d cached image(s)", removed)
+			ui.Success("Pruned %d images, reclaimed %s.", count, image.FormatBytes(reclaimed))
 		}
 
 	default:

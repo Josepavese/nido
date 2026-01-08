@@ -13,16 +13,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Josepavese/nido/internal/cli"
 	"github.com/Josepavese/nido/internal/config"
 )
 
 // QemuProvider implements VMProvider using raw QEMU.
 type QemuProvider struct {
+	// RootDir is the base path for VM state and disks (usually ~/.nido)
 	RootDir string
-	Config  *config.Config
+	// Config holds the genetic makeup of our nest
+	Config *config.Config
 }
 
+// NewQemuProvider hatches a new provider, ready to manage lifecycle events.
 func NewQemuProvider(rootDir string, cfg *config.Config) *QemuProvider {
 	return &QemuProvider{
 		RootDir: rootDir,
@@ -30,6 +32,8 @@ func NewQemuProvider(rootDir string, cfg *config.Config) *QemuProvider {
 	}
 }
 
+// Spawn brings a new VM to life. It handles template resolution, disk creation,
+// and saves the initial state before handing over to Start.
 func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	// 1. Template Resolution
 	tpl := opts.DiskPath
@@ -115,6 +119,8 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	return p.Start(name, opts)
 }
 
+// Start revives a VM from its deep sleep. It handles port allocation,
+// builds platform-specific QEMU arguments, and launches the process.
 func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	// 0. Check if already running
 	if status, err := p.Info(name); err == nil && status.State == "running" {
@@ -143,6 +149,12 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 			SSHUser: p.Config.SSHUser,
 		}
 	}
+
+	// We honor the requested GUI flag even if the previously saved state
+	// had it disabled. Evolution in action.
+	if opts.Gui && !state.Gui {
+		state.Gui = true
+	}
 	updated := false
 	if state.SSHPort == 0 {
 		state.SSHPort = p.findAvailablePort(50022)
@@ -160,23 +172,23 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, runDir)
 
 	cmd := exec.Command("qemu-system-x86_64", args...)
-	if !cli.IsJSONMode() {
-		fmt.Fprintf(os.Stderr, "⚡ Debug: Running QEMU: qemu-system-x86_64 %s\n", strings.Join(args, " "))
-	}
+	// In TUI mode, we should NOT print to stderr/stdout as it corrupts the UI.
+	// We rely on returning errors to be logged by the caller.
+
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		if !cli.IsJSONMode() {
-			fmt.Fprintf(os.Stderr, "❌ QEMU Error Output: %s\n", stderr.String())
-		}
 		return fmt.Errorf("QEMU failed to start: %w (stderr: %s)", err, stderr.String())
 	}
 
 	// 4. Skip Bootloader (Background)
 	// We send "Enter" key via QMP to skip any guest countdowns (Alpine, GRUB, etc.)
+	// because agents don't have time to wait for timers.
 	go p.skipBootloader(name)
 
 	// 5. Read daemon PID from QEMU pidfile
+	// QEMU daemonizes itself, so we wait for it to write its PID to disk
+	// so we can keep track of our hatchlings.
 	pidFile := filepath.Join(runDir, name+".pid")
 	pid := 0
 	for i := 0; i < 10; i++ {
@@ -196,7 +208,9 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	return nil
 }
 
-// buildQemuArgs constructs QEMU arguments based on the host OS.
+// buildQemuArgs constructs the heavy-duty command line arguments for QEMU.
+// It detects the host OS to enable hardware acceleration: KVM for Linux,
+// HVF for macOS, and WHPX for Windows.
 func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort int, runDir string) []string {
 	args := []string{
 		"-name", name,
@@ -260,18 +274,23 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 	return args
 }
 
+// List scans the nest and identifies all existing VMs and their current state.
 func (p *QemuProvider) List() ([]VMStatus, error) {
-	runDir := filepath.Join(p.RootDir, "run")
-	files, err := os.ReadDir(runDir)
+	vmsDir := filepath.Join(p.RootDir, "vms")
+	files, err := os.ReadDir(vmsDir)
 	if err != nil {
 		return nil, err
 	}
 
 	var results []VMStatus
 	for _, f := range files {
-		if filepath.Ext(f.Name()) == ".pid" {
-			name := f.Name()[0 : len(f.Name())-4]
-			pidData, _ := os.ReadFile(filepath.Join(runDir, f.Name()))
+		// We only care about base qcow2 images (excluding templates/isos if naming convention strictly follows vmname.qcow2)
+		if filepath.Ext(f.Name()) == ".qcow2" && !strings.HasSuffix(f.Name(), ".compact.qcow2") {
+			name := strings.TrimSuffix(f.Name(), ".qcow2")
+
+			// Check runtime state
+			pidFile := filepath.Join(p.RootDir, "run", name+".pid")
+			pidData, _ := os.ReadFile(pidFile)
 			pid := 0
 			fmt.Sscanf(string(pidData), "%d", &pid)
 
@@ -283,7 +302,10 @@ func (p *QemuProvider) List() ([]VMStatus, error) {
 				}
 			}
 
-			// Load port from JSON state
+			// Load state if exists (for ports etc)
+			// If stopped, state json might persist or not?
+			// Stop() removes pid/qmp but currently leaves json? No, Stop() doesn't remove json in qemu.go currently.
+			// Let's check Stop implementation. It removes pid, qmp. It does NOT remove json.
 			vmState, _ := p.loadState(name)
 
 			results = append(results, VMStatus{
@@ -292,16 +314,31 @@ func (p *QemuProvider) List() ([]VMStatus, error) {
 				PID:     pid,
 				SSHPort: vmState.SSHPort,
 				SSHUser: vmState.SSHUser,
+				VNCPort: vmState.VNCPort, // Added VNCPort to struct if available
 			})
 		}
 	}
 	return results, nil
 }
 
+// Info dives deep into a VM's neural links, returning detailed state,
+// networking information, and disk health (including backing file integrity).
 func (p *QemuProvider) Info(name string) (VMDetail, error) {
 	state, err := p.loadState(name)
 	if err != nil {
-		return VMDetail{}, err
+		// If no state file, assume VM is stopped and has no active ports
+		diskPath := filepath.Join(p.RootDir, "vms", name+".qcow2")
+		_, statErr := os.Stat(diskPath)
+		backingPath, backingMissing := backingInfo(diskPath)
+		return VMDetail{
+			Name:           name,
+			State:          "stopped",
+			IP:             "127.0.0.1",
+			DiskPath:       diskPath,
+			DiskMissing:    statErr != nil,
+			BackingPath:    backingPath,
+			BackingMissing: backingMissing,
+		}, nil
 	}
 
 	// Check liveness for state string
@@ -316,16 +353,49 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 		}
 	}
 
+	diskPath := filepath.Join(p.RootDir, "vms", name+".qcow2")
+	_, statErr := os.Stat(diskPath)
+	backingPath, backingMissing := backingInfo(diskPath)
+
 	return VMDetail{
-		Name:    name,
-		State:   liveness,
-		IP:      "127.0.0.1",
-		SSHUser: state.SSHUser,
-		SSHPort: state.SSHPort,
-		VNCPort: state.VNCPort,
+		Name:           name,
+		State:          liveness,
+		PID:            pid,
+		IP:             "127.0.0.1",
+		SSHUser:        state.SSHUser,
+		SSHPort:        state.SSHPort,
+		VNCPort:        state.VNCPort,
+		DiskPath:       diskPath,
+		DiskMissing:    statErr != nil,
+		BackingPath:    backingPath,
+		BackingMissing: backingMissing,
 	}, nil
 }
 
+// backingInfo returns backing filename and whether it's missing.
+func backingInfo(diskPath string) (string, bool) {
+	if diskPath == "" {
+		return "", false
+	}
+	type info struct {
+		Backing string `json:"backing-filename"`
+	}
+	out, err := exec.Command("qemu-img", "info", "-U", "--output=json", diskPath).Output()
+	if err != nil {
+		return "", false
+	}
+	var meta info
+	if json.Unmarshal(out, &meta) != nil || meta.Backing == "" {
+		return "", false
+	}
+	if _, err := os.Stat(meta.Backing); err != nil {
+		return meta.Backing, true
+	}
+	return meta.Backing, false
+}
+
+// Stop gracefully asks the VM to go into deep sleep using an interrupt signal.
+// We clean up QMP and PID artifacts to keep the run directory tidy.
 func (p *QemuProvider) Stop(name string, graceful bool) error {
 	runDir := filepath.Join(p.RootDir, "run")
 	pidFile := filepath.Join(runDir, name+".pid")
@@ -348,6 +418,7 @@ func (p *QemuProvider) Stop(name string, graceful bool) error {
 	return nil
 }
 
+// Delete evicts a VM from the nest permanently. No going back.
 func (p *QemuProvider) Delete(name string) error {
 	p.Stop(name, false)
 	vmsDir := filepath.Join(p.RootDir, "vms")
@@ -357,6 +428,8 @@ func (p *QemuProvider) Delete(name string) error {
 	return os.Remove(diskPath)
 }
 
+// CreateTemplate archives a VM into "cold storage" (a compressed qcow2).
+// This is how we preserve perfected environments for future hatchlings.
 func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (string, error) {
 	// 1. Ensure VM is stopped
 	p.Stop(vmName, true)
@@ -389,6 +462,8 @@ func (p *QemuProvider) DeleteTemplate(name string) error {
 	return os.Remove(templatePath)
 }
 
+// CreateDisk prepares the execution surface (the qcow2 file).
+// It supports both standalone "Full Copies" and space-saving "Linked Clones".
 func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
 	vmsDir := filepath.Join(p.RootDir, "vms")
 	os.MkdirAll(vmsDir, 0755)
@@ -397,6 +472,21 @@ func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
 		return fmt.Errorf("disk already exists: %s", target)
 	}
 
+	// 1. Full Copy Mode (No Cache)
+	// If LinkedClones is disabled and we have a template, create a standalone copy.
+	if !p.Config.LinkedClones && tpl != "" {
+		// Convert (Full Copy)
+		if out, err := exec.Command("qemu-img", "convert", "-O", "qcow2", tpl, target).CombinedOutput(); err != nil {
+			return fmt.Errorf("create(convert) failed: %v (%s)", err, string(out))
+		}
+		// Resize to target size
+		if out, err := exec.Command("qemu-img", "resize", target, size).CombinedOutput(); err != nil {
+			return fmt.Errorf("create(resize) failed: %v (%s)", err, string(out))
+		}
+		return nil
+	}
+
+	// 2. Linked Clone Mode (Default)
 	args := []string{"create", "-f", "qcow2"}
 	if tpl != "" {
 		// Autodetect template format
@@ -534,6 +624,49 @@ func (p *QemuProvider) Doctor() []string {
 
 	return reports
 }
+
+func (p *QemuProvider) GetUsedBackingFiles() ([]string, error) {
+	vmsDir := filepath.Join(p.RootDir, "vms")
+	files, err := os.ReadDir(vmsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	used := make(map[string]bool)
+	for _, f := range files {
+		if !f.IsDir() && strings.HasSuffix(f.Name(), ".qcow2") {
+			diskPath := filepath.Join(vmsDir, f.Name())
+			backing, exists := backingInfo(diskPath)
+			if !exists && backing != "" {
+				// Backing file is set but might be missing, still record it
+				// backingInfo returns true if missing, false if present.
+				// Actually backingInfo returns (path, missing bool).
+				// We want the path regardless.
+			}
+			if backing != "" {
+				abs, err := filepath.Abs(backing)
+				if err == nil {
+					used[abs] = true
+				} else {
+					used[backing] = true
+				}
+			}
+		}
+	}
+
+	var result []string
+	for path := range used {
+		result = append(result, path)
+	}
+	return result, nil
+}
+
+// skipBootloader is our secret weapon for speed. It connects via QMP
+// and mashes the "Enter" key while the VM is starting up to bypass
+// guest bootloader menus.
 func (p *QemuProvider) skipBootloader(name string) {
 	qmpPath := filepath.Join(p.RootDir, "run", name+".qmp")
 	if runtime.GOOS == "windows" {
@@ -596,4 +729,34 @@ func (p *QemuProvider) execQMP(qmpPath string, command map[string]interface{}) e
 	data, _ := json.Marshal(command)
 	fmt.Fprintf(conn, "%s\n", data)
 	return decoder.Decode(&greeting)
+}
+
+// ListImages scans the image directory for cached images.
+func (p *QemuProvider) ListImages() ([]string, error) {
+	imagesDir := filepath.Join(p.RootDir, "images")
+	var images []string
+
+	entries, err := os.ReadDir(imagesDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+
+	for _, e := range entries {
+		if e.IsDir() {
+			name := e.Name()
+			versions, _ := os.ReadDir(filepath.Join(imagesDir, name))
+			for _, v := range versions {
+				if v.IsDir() {
+					// Check if base image exists inside
+					if _, err := os.Stat(filepath.Join(imagesDir, name, v.Name(), "disk.qcow2")); err == nil {
+						images = append(images, fmt.Sprintf("%s:%s", name, v.Name()))
+					}
+				}
+			}
+		}
+	}
+	return images, nil
 }

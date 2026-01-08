@@ -12,7 +12,8 @@ import (
 	"github.com/Josepavese/nido/internal/ui"
 )
 
-// cmdImage handles all image subcommands
+// cmdImage is the primary dispatcher for all image-related subcommands.
+// It bridges the gap between the image registry and local cache.
 func cmdImage(nidoDir string, args []string) {
 	jsonOut, rest := consumeJSONFlag(args)
 	if len(rest) == 0 {
@@ -39,7 +40,8 @@ func cmdImage(nidoDir string, args []string) {
 	}
 }
 
-// cmdImageList displays all available images from the catalog
+// cmdImageList identifies all species currently documented in the catalog
+// and identifies which ones have already been pulle to our local nest.
 func cmdImageList(nidoDir string, args []string, jsonOut bool) {
 	// Determine image directory
 	imageDir := filepath.Join(nidoDir, "images")
@@ -188,6 +190,8 @@ func formatDuration(d time.Duration) string {
 }
 
 // Stubs for other commands (Phase 2+)
+// cmdImagePull initiates the retrieval of a specific image species.
+// It handles resume logic, multi-part downloads, and verification.
 func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 	if len(args) < 1 {
 		ui.Error("Usage: nido image pull <name>[:version]")
@@ -313,6 +317,7 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 	ui.Info("You can now spawn a VM using: nido spawn my-vm --image %s:%s", img.Name, ver.Version)
 }
 
+// cmdImageInfo probes an image for metadata. Currently a fledgling command.
 func cmdImageInfo(nidoDir string, args []string, jsonOut bool) {
 	if jsonOut {
 		resp := clijson.NewResponseError("image info", "ERR_NOT_IMPLEMENTED", "Not implemented", "Image info is not available yet.", "Use 'nido image list' to see available images.", nil)

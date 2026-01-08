@@ -26,10 +26,19 @@ type VMOptions struct {
 type VMDetail struct {
 	Name    string
 	State   string
+	PID     int
 	IP      string
 	SSHUser string
 	SSHPort int
 	VNCPort int
+	// DiskPath is the absolute path to the VM disk image.
+	DiskPath string
+	// DiskMissing indicates the disk file is missing on disk.
+	DiskMissing bool
+	// BackingPath is the backing file path if the disk uses one.
+	BackingPath string
+	// BackingMissing indicates the backing file is missing on disk.
+	BackingMissing bool
 }
 
 // VMProvider defines the contract for OS-specific hypervisor management.
@@ -73,6 +82,12 @@ type VMProvider interface {
 
 	// ListTemplates returns names of all available templates in cold storage.
 	ListTemplates() ([]string, error)
+
+	// ListImages returns names/tags of all available cloud images in cache.
+	ListImages() ([]string, error)
+
+	// GetUsedBackingFiles identifies all backing files currently in use by VMs.
+	GetUsedBackingFiles() ([]string, error)
 
 	// DeleteTemplate removes a template from cold storage.
 	DeleteTemplate(name string) error
