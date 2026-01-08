@@ -59,7 +59,7 @@ var (
 			Foreground(colors.Text)
 
 	sidebarStyle = lipgloss.NewStyle().
-			Width(30).
+			Width(22).
 			Border(lipgloss.NormalBorder(), false, true, false, false).
 			BorderForeground(colors.SurfaceSubtle)
 

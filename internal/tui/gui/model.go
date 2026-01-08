@@ -320,8 +320,8 @@ func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 	// Use customDelegate to match Config/Hatchery styling (no extra padding)
 	d := customDelegate{}
 
-	// Reduced sidebar width to 24 as requested
-	l := list.New(items, d, 24, 10)
+	// Reduced sidebar width to 20 (minimized)
+	l := list.New(items, d, 20, 10)
 	l.SetShowTitle(false)
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
@@ -574,9 +574,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Apply dynamic height to all components
-		m.list.SetSize(28, bodyHeight)             // Fleet
-		m.hatchery.Sidebar.SetSize(28, bodyHeight) // Hatchery
-		m.config.Sidebar.SetSize(28, bodyHeight)   // Config
+		m.list.SetSize(20, bodyHeight)             // Fleet
+		m.hatchery.Sidebar.SetSize(20, bodyHeight) // Hatchery
+		m.config.Sidebar.SetSize(20, bodyHeight)   // Config
 
 		// Logs Viewport
 		m.logViewport.Width = m.width - 8
@@ -1000,8 +1000,8 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// 2. Sidebar Logic (Fleet View)
 	if m.activeTab == tabFleet {
-		// sidebar width (30) + border (1) = 31. Let's use 32 as the barrier.
-		if msg.X < 32 {
+		// sidebar width (22) + border (1) = 23. Let's use 24 as the barrier.
+		if msg.X < 24 {
 			row := msg.Y - 4 // Offset 4 (Header 2 + SubHeader 2)
 			if row >= 0 {
 				pageStart := m.list.Paginator.Page * m.list.Paginator.PerPage
@@ -1025,8 +1025,8 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			// Header(2) + SubHeader(2) + Title(1) + CardPaddingTop(1) + CardContent(6) + CardPaddingBottom(1) = 13
 			// Buttons start after line 13. So Y >= 14 seems correct.
 			if msg.Y >= 14 && msg.Y <= 18 {
-				// Sidebar(31) + MainPadding(2) = 33 offset
-				localX := msg.X - 33
+				// Sidebar(23) + MainPadding(2) = 25 offset
+				localX := msg.X - 25
 				if sel := m.list.SelectedItem(); sel != nil {
 					if item, ok := sel.(vmItem); ok {
 						if localX >= 0 && localX < 14 { // [ENTER] START/STOP (~14 chars)
@@ -1448,8 +1448,8 @@ func (m model) renderDiskLine() string {
 	if m.detail.DiskMissing {
 		path = errorStyle.Render(fmt.Sprintf("MISSING (%s)", m.detail.DiskPath))
 	}
-	// Sidebar(30) + Padding(6) + Label(12) = 48 -> Safety 55
-	avail := m.width - 55
+	// Sidebar(22) + Padding(6) + Label(12) = 40 -> Safety 47
+	avail := m.width - 47
 	if avail < 10 {
 		avail = 10
 	}
