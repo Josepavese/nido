@@ -223,6 +223,13 @@ type model struct {
 	configFocus   configFocus
 	logs          []string
 	logViewport   viewport.Model
+
+	// New fields from the instruction
+	quitting         bool
+	err              error
+	downloading      bool
+	downloadProgress float64
+	downloadChan     chan float64
 }
 
 func newHatcheryState(cfg *config.Config) hatcheryState {
@@ -585,6 +592,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+
+	case downloadProgressMsg:
+		if m.downloading {
+			m.downloadProgress = float64(msg)
+			return m, waitForDownloadProgress(m.downloadChan)
+		}
+
+	case downloadFinishedMsg:
+		m.downloading = false
+		m.loading = false // Reset loading state
+		if msg.err != nil {
+			m.logs = append(m.logs, fmt.Sprintf("[%s] Download failed: %v", time.Now().Format("15:04:05"), msg.err))
+			m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+			m.logViewport.GotoBottom()
+			return m, nil
+		}
+		m.logs = append(m.logs, fmt.Sprintf("[%s] Download complete for %s.", time.Now().Format("15:04:05"), msg.name))
+		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+
+		// Resume Spawn
+		name := m.hatchery.Inputs[0].Value()
+		m.activeTab = tabFleet
+		m.op = opSpawn
+		m.loading = true
+		return m, m.spawnCmd(name, msg.path, "", m.spawn.gui)
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -1198,42 +1235,26 @@ func (m model) submitHatchery() (tea.Model, tea.Cmd) {
 				// Check if exists
 				if _, err := os.Stat(imgPath); os.IsNotExist(err) {
 					// Need download!
-					// Load catalog to find URL
-					// Note: This blocks UI! Ideally should be an async cmd.
-					// But for robust fix we'll do it synchronously here or log and fail?
-					// Let's try synchronous download but log to UI.
-					// Actually, long running task inside Update will freeze UI.
-					// For now, let's just Log and Fail if missing, pointing user to CLI?
-					// NO, user wants it to work like CLI spawn.
-					// Let's try to locate the catalog entry.
 					catalog, err := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 					if err == nil {
 						_, verEntry, err := catalog.FindImage(name, ver)
 						if err == nil {
-							// Download!
-							m.logs = append(m.logs, fmt.Sprintf("[%s] Downloading %s:%s...", time.Now().Format("15:04:05"), name, ver))
+							// START ASYNC DOWNLOAD
+							m.downloading = true
+							m.downloadProgress = 0
+							m.downloadChan = make(chan float64)
+							m.logs = append(m.logs, fmt.Sprintf("[%s] Starting download for %s:%s...", time.Now().Format("15:04:05"), name, ver))
 							m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+							m.logViewport.GotoBottom()
 
-							dl := image.Downloader{Quiet: true}
-							destPath := imgPath
-							// Handle tar.xz logic?
-							// Simplified: just download direct qcow2 if URL suggests, or handle archive.
-							// Reusing main.go logic is hard without duplication.
-							// For MVP robust fix:
-							// Just download verEntry.URL to destPath
-							err := dl.Download(verEntry.URL, destPath, verEntry.SizeBytes)
-							if err != nil {
-								// Log error
-								m.logs = append(m.logs, fmt.Sprintf("[%s] Download failed: %v", time.Now().Format("15:04:05"), err))
-								// Cleanup
-								os.Remove(destPath)
-								return m, nil
-							}
-
-							// Verify? skipping for speed/UI responsiveness risk reduction in single thread
-							m.logs = append(m.logs, fmt.Sprintf("[%s] Download complete.", time.Now().Format("15:04:05")))
+							// Return batch: start download routine AND start listener routine
+							return m, tea.Batch(
+								m.downloadImageCmd(verEntry.URL, imgPath, name, verEntry.SizeBytes, m.downloadChan),
+								waitForDownloadProgress(m.downloadChan),
+							)
 						}
 					}
+					// If catalog/image not found, proceed and let spawn fail naturally or use fallback
 				}
 
 				realSource = imgPath
@@ -1475,13 +1496,27 @@ func (m model) renderConfig(h int) string {
 			form.WriteString(dimStyle.Render("Press Enter/Tab on sidebar to toggle immediately."))
 
 		} else {
-			// Standard Text Input
-			form.WriteString(fmt.Sprintf("%-15s %s\n\n", dimStyle.Render("Value:"), m.config.Input.View()))
-
-			if m.configFocus == focusConfigForm {
-				form.WriteString(activeTabStyle.Render("[↵] SAVE SEQUENCE"))
+			// Status Bar / Footer
+			// If Downloading, show progress bar
+			if m.downloading {
+				// Calculate available width for bar
+				w := m.width - 20
+				m.progress.Width = w
+				bar := m.progress.ViewAs(m.downloadProgress)
+				form.WriteString(fmt.Sprintf("\n %s Downloading... %s\n", m.spinner.View(), bar))
+			} else if m.loading {
+				form.WriteString(fmt.Sprintf("\n %s Working...\n", m.spinner.View()))
+			} else if m.err != nil {
+				form.WriteString(fmt.Sprintf("\n ❌ Error: %v\n", m.err))
 			} else {
-				form.WriteString(dimStyle.Render("[↵] EDIT SEQUENCE"))
+				// Standard Text Input
+				form.WriteString(fmt.Sprintf("%-15s %s\n\n", dimStyle.Render("Value:"), m.config.Input.View()))
+
+				if m.configFocus == focusConfigForm {
+					form.WriteString(activeTabStyle.Render("[↵] SAVE SEQUENCE"))
+				} else {
+					form.WriteString(dimStyle.Render("[↵] EDIT SEQUENCE"))
+				}
 			}
 		}
 		// Helper text at the bottom
@@ -1769,4 +1804,52 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) erro
 	p := tea.NewProgram(initialModel(prov, cfg), tea.WithContext(ctx), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
 	return err
+}
+
+// Messages for download progress
+type downloadProgressMsg float64
+type downloadFinishedMsg struct {
+	err  error
+	path string
+	name string
+}
+
+func waitForDownloadProgress(sub chan float64) tea.Cmd {
+	return func() tea.Msg {
+		if sub == nil {
+			return nil
+		}
+		p, ok := <-sub
+		if !ok {
+			return nil
+		}
+		return downloadProgressMsg(p)
+	}
+}
+
+func (m model) downloadImageCmd(url, dest, name string, size int64, sub chan float64) tea.Cmd {
+	return func() tea.Msg {
+		dl := image.Downloader{
+			Quiet: true,
+			OnProgress: func(current, total int64) {
+				if total > 0 {
+					// Non-blocking send
+					select {
+					case sub <- float64(current) / float64(total):
+					default:
+					}
+				}
+			},
+		}
+
+		err := dl.Download(url, dest, size)
+		close(sub) // Close channel when done
+		return downloadFinishedMsg{err: err, path: dest, name: name}
+	}
+}
+
+// Helper to check if file exists
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

@@ -17,6 +17,8 @@ import (
 type Downloader struct {
 	// Quiet suppresses progress output if true
 	Quiet bool
+	// OnProgress is an optional callback for progress updates (current, total)
+	OnProgress func(current, total int64)
 }
 
 // Download downloads a file from url to dest.
@@ -84,9 +86,10 @@ func (d *Downloader) Download(url, dest string, expectedSize int64) error {
 	quiet := d.Quiet || cli.IsJSONMode()
 
 	counter := &writeCounter{
-		total:   uint64(totalSize),
-		current: uint64(startByte),
-		quiet:   quiet,
+		total:      uint64(totalSize),
+		current:    uint64(startByte),
+		quiet:      quiet,
+		onProgress: d.OnProgress,
 	}
 
 	// Copy data
@@ -214,12 +217,12 @@ func (d *Downloader) Decompress(src, dest string) error {
 	return fmt.Errorf("unsupported compression format for %s", src)
 }
 
-// writeCounter counts bytes written and prints progress
 type writeCounter struct {
-	total   uint64
-	current uint64
-	quiet   bool
-	lastUpd time.Time
+	total      uint64
+	current    uint64
+	quiet      bool
+	lastUpd    time.Time
+	onProgress func(current, total int64)
 }
 
 func (wc *writeCounter) Write(p []byte) (int, error) {
@@ -230,6 +233,11 @@ func (wc *writeCounter) Write(p []byte) (int, error) {
 }
 
 func (wc *writeCounter) Print() {
+	// Always call callback if present
+	if wc.onProgress != nil {
+		wc.onProgress(int64(wc.current), int64(wc.total))
+	}
+
 	if wc.quiet {
 		return
 	}
@@ -258,6 +266,9 @@ func (wc *writeCounter) Print() {
 }
 
 func (wc *writeCounter) Finish() {
+	if wc.onProgress != nil {
+		wc.onProgress(int64(wc.current), int64(wc.total))
+	}
 	if !wc.quiet {
 		fmt.Println()
 	}
