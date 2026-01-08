@@ -271,7 +271,7 @@ Nido can expose a graphical interface for VMs:
 ### Interactive TUI (Bubble Tea)
 
 - Launch: `nido gui`
-- Keyboard: `r` refresh · `n` spawn modal · `Enter` start/stop · `del` delete · `i` refresh info · `q` quit.
+- Keyboard: `r` refresh · `n` spawn modal · `↵` start/stop · `del` delete · `i` refresh info · `q` quit.
 - Includes progress/loader rail, VM list + detail pane, and spawn form (name, template, user-data, GUI toggle).
 
 ### Automation

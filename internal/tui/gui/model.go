@@ -307,11 +307,16 @@ func (m model) fetchSources(action int) tea.Cmd {
 			if err != nil {
 				return sourcesLoadedMsg{err: err}
 			}
+			for _, img := range images {
+				srcList = append(srcList, fmt.Sprintf("[IMAGE] %s", img))
+			}
 			templates, err := m.prov.ListTemplates()
 			if err != nil {
 				return sourcesLoadedMsg{err: err}
 			}
-			srcList = append(images, templates...)
+			for _, tpl := range templates {
+				srcList = append(srcList, fmt.Sprintf("[TEMPLATE] %s", tpl))
+			}
 		} else { // Create Template
 			// For creating a template, source usually isn't relevant in this wizard flow yet
 			return sourcesLoadedMsg{items: []list.Item{}}
@@ -818,6 +823,26 @@ func (m model) View() string {
 }
 
 func (m model) renderHatcheryFullScreen(w, h int) string {
+	if m.hatchery.IsSelecting {
+		// Set list dimensions slightly smaller than screen
+		lw, lh := 60, 20
+		if w < 60 {
+			lw = w - 4
+		}
+		if h < 20 {
+			lh = h - 4
+		}
+		m.hatchery.SourceList.SetSize(lw, lh)
+		m.hatchery.SourceList.Title = "Select Source"
+
+		modal := cardStyle.BorderForeground(lipgloss.Color("39")).Render(m.hatchery.SourceList.View())
+
+		return lipgloss.Place(w, h,
+			lipgloss.Center, lipgloss.Center,
+			modal,
+		)
+	}
+
 	// 1. Action Selector (Tabs)
 	actionStyle := dimStyle
 	selectedActionStyle := activeTabStyle
@@ -896,33 +921,8 @@ func (m model) renderHatcheryFullScreen(w, h int) string {
 		btn,
 	)
 
-	// Centered Card
-	baseView := lipgloss.Place(w, h,
-		lipgloss.Center, lipgloss.Center,
-		cardStyle.Render(formContent),
-	)
-
-	if m.hatchery.IsSelecting {
-		// Set list dimensions slightly smaller than screen
-		lw, lh := 60, 20
-		if w < 60 {
-			lw = w - 4
-		}
-		if h < 20 {
-			lh = h - 4
-		}
-		m.hatchery.SourceList.SetSize(lw, lh)
-		m.hatchery.SourceList.Title = "Select Source"
-
-		modal := cardStyle.BorderForeground(lipgloss.Color("39")).Render(m.hatchery.SourceList.View())
-
-		return lipgloss.Place(w, h,
-			lipgloss.Center, lipgloss.Center,
-			modal,
-		)
-	}
-
-	return baseView
+	// Left-aligned view with standard padding
+	return containerStyle.Padding(2, 4).Render(formContent)
 }
 
 // Deprecated: renderHatchery logic moved to renderHatcheryFullScreen
@@ -986,11 +986,11 @@ func (m model) renderFleet() string {
 	))
 
 	// Dynamic Button 1
-	btnStartStop := buttonStyle.Render("[ENTER] START")
+	btnStartStop := buttonStyle.Render("[↵] START")
 	if m.detail.State == "running" {
-		btnStartStop = buttonStyle.BorderForeground(colors.Error).Foreground(colors.Error).Render("[ENTER] STOP")
+		btnStartStop = buttonStyle.BorderForeground(colors.Error).Foreground(colors.Error).Render("[↵] STOP")
 	} else {
-		btnStartStop = buttonStyle.BorderForeground(colors.Success).Foreground(colors.Success).Render("[ENTER] START")
+		btnStartStop = buttonStyle.BorderForeground(colors.Success).Foreground(colors.Success).Render("[↵] START")
 	}
 
 	actions := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -1084,8 +1084,8 @@ func (m model) renderHelp() string {
 	title := titleStyle.Render("❓ COMMAND CENTER HELP")
 
 	text := `Tabs: 1 Fleet · 2 Hatchery · 3 Logs · 4 Help
-Fleet: click or ↑/↓ to select, Enter start/stop, X kill, Del delete.
-Hatchery: Tab through fields, g toggles GUI, Enter on the button to spawn.
+Fleet: click or ↑/↓ select · ↵ start/stop · x kill · del delete
+Hatchery: tab through fields · ←/→ cycle · ↵ hatch
 Mouse: click tabs, list rows, and action buttons.`
 
 	// Ensure transparency

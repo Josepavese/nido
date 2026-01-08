@@ -137,4 +137,7 @@ var (
 
 	redButtonStyle = buttonStyle.Copy().
 			Foreground(colors.Error)
+
+	containerStyle = lipgloss.NewStyle().
+			Foreground(colors.Text)
 )
