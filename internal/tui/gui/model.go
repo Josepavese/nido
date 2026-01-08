@@ -568,43 +568,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		// Safer height calculation to prevent navbar push-off.
-		// Header(2) + SubHeader(2) + Footer(1) + Spacing(2) = 7 minimum. Using 8 for safety.
-		// User requested strict pagination of 4 items.
-		// Item Height = 2 (DefaultDelegate) * 4 items = 8 lines.
-		// Pagination/Overhead = ~2 lines.
-		// Total required = 10 lines.
-		listH := 10
-		// Ensure we don't overflow window if it's very small
-		if m.height-8 < listH {
-			listH = m.height - 8
-		}
-		if listH < 1 {
-			listH = 1
-		}
-		m.list.SetSize(28, listH)
 
-		// Recalculate bodyHeight for viewport
-		// Header(2) + SubHeader(2) + Footer(1) = 5
-		bodyHeight := m.height - 5
+		// Calculate available height for content
+		// Header(2) + SubHeader(2) + Footer(1) + Spacing(3) = 8
+		bodyHeight := m.height - 8
 		if bodyHeight < 1 {
 			bodyHeight = 1
 		}
 
-		// Dynamic resize for Hatchery sidebar
-		hHeight := 5
-		if bodyHeight > 5 {
-			hHeight = bodyHeight
-		}
-		m.hatchery.Sidebar.SetSize(28, hHeight)
-
-		// Keep Config constrained to 4 items as requested (Height 10)
-		m.config.Sidebar.SetSize(28, 10)
+		// Apply dynamic height to all components
+		m.list.SetSize(28, bodyHeight)             // Fleet
+		m.hatchery.Sidebar.SetSize(28, bodyHeight) // Hatchery
+		m.config.Sidebar.SetSize(28, bodyHeight)   // Config
 
 		// Logs Viewport
-		// User requested 9 lines per page.
-		m.logViewport.Width = m.width - 8 // -4 for margin, -4 for card padding
-		m.logViewport.Height = 9          // Strict 9 lines as requested
+		m.logViewport.Width = m.width - 8
+		m.logViewport.Height = bodyHeight
 
 	case tickMsg:
 		m.spinner, _ = m.spinner.Update(msg)
