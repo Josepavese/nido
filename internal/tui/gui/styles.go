@@ -144,7 +144,8 @@ var (
 	hatchButtonStyle = lipgloss.NewStyle().
 				Foreground(colors.Bg).
 				Background(colors.TextDim).
-				Padding(0, 1).
+				Width(23).
+				Align(lipgloss.Center).
 				MarginTop(1)
 
 	hatchButtonActiveStyle = hatchButtonStyle.Copy().
