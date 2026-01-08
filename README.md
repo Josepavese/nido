@@ -155,12 +155,12 @@ nido help                          # Show detailed usage instructions
 nido register                      # Get MCP config for Claude/Antigravity
 
 # Image & Cache Management 🆕
-
 nido images list                    # Browse cloud images (shows file sizes)
 nido images pull ubuntu:24.04       # Pull official Ubuntu 24.04 image
 nido cache ls                       # List cached images and their sizes
 nido cache info                     # Show cache stats (total size, age)
 nido spawn my-vm --image ubuntu:24.04  # Spawn directly from any cloud image
+```
 
 ## Killer Feature: Linked Clones 🧬
 
