@@ -5,6 +5,12 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.1] - 2026-01-08
+
+### 🐛 Bug Fixes
+
+- **README:** Fixed a markdown formatting error in the Usage section that caused subsequent text to be rendered incorrectly.
+
 ## [4.3.0] - 2026-01-08 "The Elegant Nest" 🪺✨
 
 ### 🎉 Major Features
@@ -13,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Smart Cache Protection:** Implemented intelligent protection that prevents base images from being deleted if any VM is currently using them as a backing file. 🛡️
 - **Zero-Config Source Cycling:** In the TUI Hatchery, users can now cycle through available image/template sources using **Left/Right arrow keys** when the source field is focused. ⌨️
 - **Integrated Help System:** Added `nido help` command for high-level guidance directly in the terminal.
+- **Structured JSON Output:** Added `--json` support for automation and GUI integrations on core commands (ls, info, spawn, start, stop, delete, prune, template, images, cache, version). 🪺
+- **Full JSON Coverage:** Added JSON output for `doctor`, `config`, and `register`.
 
 ### 🎨 TUI & UX Refinements
 
@@ -26,24 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Shell Completion v2:** Suggestions are now fully synchronized with the 4.3.0 feature set, including `help` and `LINKED_CLONES` configuration.
 - **Codebase Purification:** Decimated legacy binaries, redundant temporary artifacts, and dead code paths. 🧹
 - **Narrative Documentation:** Standardized English code comments with a "Senior Engineer" tone, explaining the *why* behind the magic.
-
-### 🎉 Major Features
-
-- **Structured JSON Output:** Added `--json` support for automation and GUI integrations on core commands (ls, info, spawn, start, stop, delete, prune, template, images, cache, version). 🪺
-
-### 🔧 CLI & UX Refinements
-
-- **Help Output:** CLI usage now highlights the `--json` option and supported commands.
-- **Shell Completions:** Bash/Zsh suggestions include `--json` where applicable.
+- **Improved UX Guidance:** CLI usage and completion now prominently highlight the `--json` option and supported commands.
 
 ### 🐛 Bug Fixes
 
 - **QEMU Write‑Lock Fix:** Stop now waits for the real QEMU daemon PID (from the pidfile), preventing stale disk locks on restart. 🛠️
 - **Idempotent Cleanup:** Delete, template delete, and cache remove now handle “already gone” cases gracefully (including JSON mode). 🧹
-
-### 🧩 JSON Coverage
-
-- **Full Diagnostics:** Added JSON output for `doctor`, `config`, and `register`.
 
 ## [4.1.2] - 2026-01-07 "Genetic Pruning" 🧬✂️
 
