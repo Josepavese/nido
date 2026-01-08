@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Josepavese/nido/internal/config"
+	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/provider"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/paginator"
@@ -1177,17 +1178,69 @@ func (m model) submitHatchery() (tea.Model, tea.Cmd) {
 		// Resolve Source Path
 		realSource := source
 		if strings.Contains(source, "[IMAGE]") {
-			// Extract filename
-			filename := strings.TrimPrefix(source, "[IMAGE] ")
-			filename = strings.TrimSpace(filename)
+			// Extract Name:Version
+			tag := strings.TrimPrefix(source, "[IMAGE] ")
+			tag = strings.TrimSpace(tag)
 
-			// Resolve full path
+			// Resolve image directory
 			imgDir := m.cfg.ImageDir
 			if imgDir == "" {
 				home, _ := os.UserHomeDir()
 				imgDir = filepath.Join(home, ".nido", "images")
 			}
-			realSource = filepath.Join(imgDir, filename)
+
+			// Parse tag
+			parts := strings.Split(tag, ":")
+			if len(parts) == 2 {
+				name, ver := parts[0], parts[1]
+				imgPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", name, ver))
+
+				// Check if exists
+				if _, err := os.Stat(imgPath); os.IsNotExist(err) {
+					// Need download!
+					// Load catalog to find URL
+					// Note: This blocks UI! Ideally should be an async cmd.
+					// But for robust fix we'll do it synchronously here or log and fail?
+					// Let's try synchronous download but log to UI.
+					// Actually, long running task inside Update will freeze UI.
+					// For now, let's just Log and Fail if missing, pointing user to CLI?
+					// NO, user wants it to work like CLI spawn.
+					// Let's try to locate the catalog entry.
+					catalog, err := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
+					if err == nil {
+						_, verEntry, err := catalog.FindImage(name, ver)
+						if err == nil {
+							// Download!
+							m.logs = append(m.logs, fmt.Sprintf("[%s] Downloading %s:%s...", time.Now().Format("15:04:05"), name, ver))
+							m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+
+							dl := image.Downloader{Quiet: true}
+							destPath := imgPath
+							// Handle tar.xz logic?
+							// Simplified: just download direct qcow2 if URL suggests, or handle archive.
+							// Reusing main.go logic is hard without duplication.
+							// For MVP robust fix:
+							// Just download verEntry.URL to destPath
+							err := dl.Download(verEntry.URL, destPath, verEntry.SizeBytes)
+							if err != nil {
+								// Log error
+								m.logs = append(m.logs, fmt.Sprintf("[%s] Download failed: %v", time.Now().Format("15:04:05"), err))
+								// Cleanup
+								os.Remove(destPath)
+								return m, nil
+							}
+
+							// Verify? skipping for speed/UI responsiveness risk reduction in single thread
+							m.logs = append(m.logs, fmt.Sprintf("[%s] Download complete.", time.Now().Format("15:04:05")))
+						}
+					}
+				}
+
+				realSource = imgPath
+			} else {
+				// Fallback for simple names if any (legacy flat files?)
+				realSource = filepath.Join(imgDir, tag)
+			}
 		} else if strings.Contains(source, "[TEMPLATE]") {
 			realSource = strings.TrimPrefix(source, "[TEMPLATE] ")
 			realSource = strings.TrimSpace(realSource)

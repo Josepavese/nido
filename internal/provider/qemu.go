@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Josepavese/nido/internal/config"
+	"github.com/Josepavese/nido/internal/image"
 )
 
 // QemuProvider implements VMProvider using raw QEMU.
@@ -738,22 +739,17 @@ func (p *QemuProvider) ListImages() ([]string, error) {
 		imagesDir = filepath.Join(p.RootDir, "images")
 	}
 
-	var images []string
-
-	entries, err := os.ReadDir(imagesDir)
+	// Load Catalog (handles local cache if network is down)
+	catalog, err := image.LoadCatalog(imagesDir, image.DefaultCacheTTL)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return []string{}, nil
-		}
+		// If catalog fails, we can't show much. Return error.
 		return nil, err
 	}
 
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".qcow2") && !strings.HasSuffix(e.Name(), ".compact.qcow2") {
-			// Simply return the filename related to the image
-			// main.go saves them as name-version.qcow2
-			// We can strip .qcow2 if we want, but keeping it ensures clarity
-			images = append(images, e.Name())
+	var images []string
+	for _, img := range catalog.Images {
+		for _, ver := range img.Versions {
+			images = append(images, fmt.Sprintf("%s:%s", img.Name, ver.Version))
 		}
 	}
 	return images, nil
