@@ -1628,7 +1628,8 @@ func (m model) renderFooter() string {
 	// Left Block: 1 Padding + 17 Chars = 18.
 	// "🟢SYSTEMS NOMINAL" is 2 (Runes) + 15 (Chars) = 17 Chars. Perfect.
 
-	leftText := "🟢SYSTEMS NOMINAL"
+	// "🟢 NOMINAL"
+	leftText := "🟢 NOMINAL"
 	if m.loading {
 		// Just render simplified loading state if loading, or keep alignment?
 		// Loading spinner varies. Let's just keep the old full-width style for loading to avoid flicker.
@@ -1639,12 +1640,18 @@ func (m model) renderFooter() string {
 	link := fmt.Sprintf("\x1b]8;;https://github.com/Josepavese\x1b\\%s\x1b]8;;\x1b\\", "github.com/Josepavese")
 	rightText := fmt.Sprintf("🏠 There is no place like 127.0.0.1 | %s", link)
 
-	// Left Block: Width 18. Padding Left 1. (Total 18 occupied, text 17).
-	// We construct it manually to ensure no unwanted padding.
-	// Using Sidebar Item Style for consistent color? Or footer style?
-	// Footer style has Foreground(TextDim).
+	// Left Block: Width 18. Padding Left 1.
+	// We use Width(18) to ensure the separator stays aligned even with shorter text.
+	// IMPORTANT: Width includes padding if set? No, usually Width is content width.
+	// But let's try setting Width(18) and PaddingLeft(1).
+	// If it sums up, we might overshoot.
+	// Ideally: Padding(1) + Content(17).
+	// Let's use Width(17) + PaddingLeft(1) logic manually or relying on lipgloss.
+	// Safest: Width(18) with PaddingLeft(1). Lipgloss usually handles "Width is total" vs "Width is content" vaguely.
+	// Let's test Width(18).
 	leftBlock := lipgloss.NewStyle().
 		Foreground(colors.TextDim).
+		Width(18).           // Force total width
 		Padding(0, 0, 0, 1). // Left 1
 		Render(leftText)
 
