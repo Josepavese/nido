@@ -186,7 +186,7 @@ Instead, it creates a tiny overlay file that only stores the *changes* you make.
 Because VMs depend on the base image, you might worry about deleting it.
 Don't. Nido's `cache prune` command is smart: **it refuses to delete any image that is active**.
 
-### Configuration
+### Quick Configuration
 
 If you prefer completely independent VMs (e.g., for exporting a single file), you can disable this:
 
@@ -278,7 +278,7 @@ Nido can expose a graphical interface for VMs:
 
 To add a new image source, submit a PR to `registry/sources.yaml`. The `registry-builder` tool will automatically fetch the latest versions and checksums.
 
-### Configuration
+### Custom Storage
 
 By default, images are stored in `~/.nido/images/`. You can change this via an environment variable:
 
