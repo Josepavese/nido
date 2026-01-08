@@ -66,10 +66,10 @@ func (i vmItem) Title() string {
 		indicator = "🟢"
 	}
 	name := i.name
-	// Truncate name if too long for 24-char sidebar:
-	// Sidebar Width (24) - Indicator (2) - Space (1) - Padding (2) approx = 19 chars safe
-	if len(name) > 17 {
-		name = name[:16] + "..."
+	// Truncate name if too long for 18-char sidebar:
+	// Sidebar Width (18) - Indicator (2) - Space (1) - Padding (2) = 13 chars safe
+	if len(name) > 13 {
+		name = name[:12] + "..."
 	}
 	return fmt.Sprintf("%s %s", indicator, name)
 }
@@ -320,8 +320,8 @@ func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 	// Use customDelegate to match Config/Hatchery styling (no extra padding)
 	d := customDelegate{}
 
-	// Reduced sidebar width to 23 (fit text)
-	l := list.New(items, d, 23, 10)
+	// Extra reduced sidebar width to 18
+	l := list.New(items, d, 18, 10)
 	l.SetShowTitle(false)
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
@@ -574,9 +574,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Apply dynamic height to all components
-		m.list.SetSize(23, bodyHeight)             // Fleet
-		m.hatchery.Sidebar.SetSize(23, bodyHeight) // Hatchery
-		m.config.Sidebar.SetSize(23, bodyHeight)   // Config
+		m.list.SetSize(18, bodyHeight)             // Fleet
+		m.hatchery.Sidebar.SetSize(18, bodyHeight) // Hatchery
+		m.config.Sidebar.SetSize(18, bodyHeight)   // Config
 
 		// Logs Viewport
 		m.logViewport.Width = m.width - 8
@@ -1000,8 +1000,8 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// 2. Sidebar Logic (Fleet View)
 	if m.activeTab == tabFleet {
-		// sidebar width (23) + border (1) = 24. Let's use 25 as the barrier.
-		if msg.X < 25 {
+		// sidebar width (18) + border (1) = 19. Let's use 20 as the barrier.
+		if msg.X < 20 {
 			row := msg.Y - 4 // Offset 4 (Header 2 + SubHeader 2)
 			if row >= 0 {
 				pageStart := m.list.Paginator.Page * m.list.Paginator.PerPage
@@ -1025,8 +1025,8 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			// Header(2) + SubHeader(2) + Title(1) + CardPaddingTop(1) + CardContent(6) + CardPaddingBottom(1) = 13
 			// Buttons start after line 13. So Y >= 14 seems correct.
 			if msg.Y >= 14 && msg.Y <= 18 {
-				// Sidebar(24) + MainPadding(2) = 26 offset
-				localX := msg.X - 26
+				// Sidebar(19) + MainPadding(2) = 21 offset
+				localX := msg.X - 21
 				if sel := m.list.SelectedItem(); sel != nil {
 					if item, ok := sel.(vmItem); ok {
 						if localX >= 0 && localX < 14 { // [ENTER] START/STOP (~14 chars)
@@ -1448,8 +1448,8 @@ func (m model) renderDiskLine() string {
 	if m.detail.DiskMissing {
 		path = errorStyle.Render(fmt.Sprintf("MISSING (%s)", m.detail.DiskPath))
 	}
-	// Sidebar(23) + Padding(6) + Label(12) = 41 -> Safety 48
-	avail := m.width - 48
+	// Sidebar(18) + Padding(6) + Label(12) = 36 -> Safety 43
+	avail := m.width - 43
 	if avail < 10 {
 		avail = 10
 	}
