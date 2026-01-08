@@ -1622,7 +1622,10 @@ GLOBAL
 }
 
 func (m model) renderFooter() string {
-	status := "🟢 SYSTEMS NOMINAL | 🪺  Powered by Bird Seed | github.com/Josepavese"
+	// OSC 8 Hyperlink support for the terminal
+	link := fmt.Sprintf("\x1b]8;;https://github.com/Josepavese\x1b\\%s\x1b]8;;\x1b\\", "github.com/Josepavese")
+	status := fmt.Sprintf("🟢 SYSTEMS NOMINAL | 🏠 There is no place like 127.0.0.1 | %s", link)
+
 	if m.loading {
 		status = fmt.Sprintf("%s EXECUTING %s... ", m.spinner.View(), strings.ToUpper(string(m.op)))
 	}
