@@ -61,16 +61,9 @@ func LoadConfig(path string) (*Config, error) {
 			} else {
 				cfg.LinkedClones = true
 			}
-		// Backwards compatibility for old config
-		case "CACHE_IMAGES":
-			if val == "false" || val == "0" {
-				cfg.LinkedClones = false
-			} else {
-				cfg.LinkedClones = true
-			}
+
 		}
 	}
-
 	return cfg, nil
 }
 

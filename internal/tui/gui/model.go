@@ -3,6 +3,9 @@ package gui
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,6 +16,7 @@ import (
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -23,6 +27,7 @@ const (
 	tabFleet tab = iota
 	tabHatchery
 	tabLogs
+	tabConfig
 	tabHelp
 )
 
@@ -30,7 +35,20 @@ type fleetFocus int
 
 const (
 	focusList fleetFocus = iota
-	focusHatch
+)
+
+type hatcheryFocus int
+
+const (
+	focusHatchSidebar hatcheryFocus = iota
+	focusHatchForm
+)
+
+type configFocus int
+
+const (
+	focusConfigSidebar configFocus = iota
+	focusConfigForm
 )
 
 type vmItem struct {
@@ -47,10 +65,23 @@ func (i vmItem) Title() string {
 	if i.state == "running" {
 		indicator = "🟢"
 	}
-	return fmt.Sprintf("%s %s", indicator, i.name)
+	name := i.name
+	// Truncate name if too long for 24-char sidebar:
+	// Sidebar Width (24) - Indicator (2) - Space (1) - Padding (2) approx = 19 chars safe
+	if len(name) > 17 {
+		name = name[:16] + "..."
+	}
+	return fmt.Sprintf("%s %s", indicator, name)
 }
 func (i vmItem) Description() string { return i.state }
 func (i vmItem) FilterValue() string { return i.name }
+
+type spawnItem struct{}
+
+func (i spawnItem) Title() string       { return "+ Spawn new bird (VM)" }
+func (i spawnItem) Description() string { return "" }
+func (i spawnItem) FilterValue() string { return "" }
+func (i spawnItem) String() string      { return i.Title() }
 
 type operation string
 
@@ -88,8 +119,8 @@ type spawnState struct {
 }
 
 type hatcheryState struct {
-	// 0: Spawn VM, 1: Create Template
-	Action int
+	// Sidebar
+	Sidebar list.Model
 
 	// Inputs
 	Inputs     []textinput.Model
@@ -99,6 +130,67 @@ type hatcheryState struct {
 	SelectedSource string     // The chosen value (e.g. "ubuntu:24.04" or "my-template")
 	IsSelecting    bool       // Modal is open
 	SourceList     list.Model // The list for the modal
+}
+
+type configState struct {
+	Sidebar   list.Model
+	Input     textinput.Model
+	ActiveKey string
+	ErrorMsg  string
+}
+
+type hatchTypeItem struct {
+	title string
+	desc  string
+}
+
+// Custom Stringer methods for items
+func (i hatchTypeItem) String() string      { return i.title }
+func (i hatchTypeItem) Title() string       { return i.title }
+func (i hatchTypeItem) Description() string { return i.desc }
+func (i hatchTypeItem) FilterValue() string { return i.title }
+
+type configItem struct {
+	key string
+	val string
+}
+
+func (i configItem) String() string      { return fmt.Sprintf("%-18s", i.key) }
+func (i configItem) Title() string       { return fmt.Sprintf("%-18s", i.key) }
+func (i configItem) Description() string { return "" }
+func (i configItem) FilterValue() string { return i.key }
+
+// customDelegate for Sidebar items to prevent padding shifts
+type customDelegate struct{}
+
+func (d customDelegate) Height() int                             { return 1 }
+func (d customDelegate) Spacing() int                            { return 0 }
+func (d customDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+func (d customDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+	// Check for Spawn Item first
+	if _, ok := listItem.(spawnItem); ok {
+		str := "+ Spawn new bird (VM)"
+		if index == m.Index() {
+			fmt.Fprint(w, hatchButtonActiveStyle.Render(str))
+		} else {
+			fmt.Fprint(w, hatchButtonStyle.Render(str))
+		}
+		return
+	}
+
+	str, ok := listItem.(fmt.Stringer)
+	if !ok {
+		return
+	}
+
+	// Check if this item is selected
+	if index == m.Index() {
+		// Just render the string with the selected style, NO extra padding/margins
+		fmt.Fprint(w, sidebarItemSelectedStyle.Render(str.String()))
+	} else {
+		// Render normal
+		fmt.Fprint(w, sidebarItemStyle.Render(str.String()))
+	}
 }
 
 type model struct {
@@ -118,14 +210,34 @@ type model struct {
 
 	detailName string
 	detail     provider.VMDetail
-	fleetFocus fleetFocus
 
-	spawn    spawnState
-	hatchery hatcheryState // New Full-screen Hatchery State
-	logs     []string
+	spawn         spawnState
+	hatchery      hatcheryState
+	hatcheryFocus hatcheryFocus
+	config        configState
+	configFocus   configFocus
+	logs          []string
+	logViewport   viewport.Model
 }
 
 func newHatcheryState(cfg *config.Config) hatcheryState {
+	// Custom Delegate to prevent "jumping" (remove default padding/borders)
+	d := customDelegate{}
+
+	items := []list.Item{
+		hatchTypeItem{title: "SPAWN VM"},
+		hatchTypeItem{title: "CREATE TEMPLATE"},
+	}
+
+	sb := list.New(items, d, 28, 5) // Matches active view width
+	sb.SetShowTitle(false)
+	sb.SetShowHelp(false)
+	sb.SetShowStatusBar(false)
+	sb.SetShowPagination(false) // Disable aggressive pagination for small lists
+	sb.SetShowTitle(false)
+	sb.SetShowHelp(false)
+	sb.SetShowStatusBar(false)
+
 	// Inputs
 	name := textinput.New()
 	name.Placeholder = ""
@@ -133,23 +245,44 @@ func newHatcheryState(cfg *config.Config) hatcheryState {
 	name.Focus()
 
 	// Initial List for Modal
-	// Delegate (minimal)
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = true
-	delegate.Styles.SelectedTitle = sidebarItemSelectedStyle.Foreground(lipgloss.Color("#00FFFF")) // Cyan selection
+	mDelegate := list.NewDefaultDelegate()
+	mDelegate.ShowDescription = true
+	mDelegate.Styles.SelectedTitle = sidebarItemSelectedStyle.Foreground(lipgloss.Color("#00FFFF"))
 
-	l := list.New([]list.Item{}, delegate, 40, 10)
+	l := list.New([]list.Item{}, mDelegate, 40, 10)
 	l.SetShowTitle(false)
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
 
 	return hatcheryState{
-		Action:         0, // 0=Spawn
+		Sidebar:        sb,
 		Inputs:         []textinput.Model{name},
 		FocusIndex:     0,
 		SelectedSource: "", // Empty initially
 		SourceList:     l,
-		IsSelecting:    false,
+	}
+}
+
+func newConfigState(cfg *config.Config) configState {
+	// Custom Delegate to prevent "jumping"
+	d := customDelegate{}
+
+	items := getConfigItems(cfg)
+
+	// User requested pagination to 4 elements.
+	// Re-enable visual pagination (dots) as requested.
+	sb := list.New(items, d, 28, 10)
+	sb.SetShowPagination(true)
+	sb.SetShowTitle(false)
+	sb.SetShowHelp(false)
+	sb.SetShowStatusBar(false)
+
+	ti := textinput.New()
+	ti.CharLimit = 100
+
+	return configState{
+		Sidebar: sb,
+		Input:   ti,
 	}
 }
 
@@ -182,18 +315,21 @@ func newSpawnState(cfg *config.Config) spawnState {
 
 func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 	items := []list.Item{}
-	delegate := list.NewDefaultDelegate()
-	delegate.ShowDescription = false
-	delegate.Styles.SelectedTitle = sidebarItemSelectedStyle
-	delegate.Styles.NormalTitle = sidebarItemStyle
+	d := list.NewDefaultDelegate()
+	d.ShowDescription = false
+	d.Styles.SelectedTitle = sidebarItemSelectedStyle
+	d.Styles.NormalTitle = sidebarItemStyle
 
-	l := list.New(items, delegate, 28, 10)
-	l.SetShowTitle(false) // Disable title
+	d.Styles.NormalTitle = sidebarItemStyle
+
+	// Reduced sidebar width to 24 as requested
+	l := list.New(items, d, 24, 10)
+	l.SetShowTitle(false)
 	l.SetShowHelp(false)
-	l.SetShowStatusBar(false) // Hide status bar to prevent duplicate "No items"
+	l.SetShowStatusBar(false)
 	l.DisableQuitKeybindings()
 	l.SetFilteringEnabled(false)
-	l.SetShowPagination(false)
+	l.SetShowPagination(true)
 
 	pg := paginator.New()
 	pg.Type = paginator.Dots
@@ -202,24 +338,48 @@ func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 	pg.ActiveDot = accentStyle.Render("◉")
 
 	spin := spinner.New()
-	spin.Spinner = spinner.Dot
 	spin.Style = accentStyle
 
 	prog := progress.New(progress.WithScaledGradient(string(colors.AccentStrong), string(colors.Accent)))
 	prog.ShowPercentage = false
 
+	// Initialize Viewport for Logs
+	vp := viewport.New(0, 9)
+	vp.Style = dimStyle
+
 	return model{
-		prov:      prov,
-		cfg:       cfg,
-		activeTab: tabFleet,
-		list:      l,
-		page:      pg,
-		spinner:   spin,
-		progress:  prog,
-		logs:      []string{"Nido GUI ready. Systems nominal."},
-		spawn:     newSpawnState(cfg),
-		hatchery:  newHatcheryState(cfg),
+		prov:        prov,
+		cfg:         cfg,
+		activeTab:   tabFleet,
+		list:        l,
+		page:        pg,
+		spinner:     spin,
+		progress:    prog,
+		loading:     bool(false),
+		logs:        []string{"Nido GUI ready. Systems nominal."},
+		logViewport: vp,
+		spawn:       newSpawnState(cfg),
+		hatchery:    newHatcheryState(cfg),
+		config:      newConfigState(cfg),
 	}
+}
+
+// Helper to get inactive delegate (visual deselect)
+func getInactiveDelegate() list.DefaultDelegate {
+	d := list.NewDefaultDelegate()
+	d.ShowDescription = false
+	d.Styles.SelectedTitle = sidebarItemStyle // Render selected as normal
+	d.Styles.NormalTitle = sidebarItemStyle
+	return d
+}
+
+// Helper to get active delegate
+func getActiveDelegate() list.DefaultDelegate {
+	d := list.NewDefaultDelegate()
+	d.ShowDescription = false
+	d.Styles.SelectedTitle = sidebarItemSelectedStyle
+	d.Styles.NormalTitle = sidebarItemStyle
+	return d
 }
 
 func (m model) Init() tea.Cmd {
@@ -248,6 +408,8 @@ func (m model) refreshCmd() tea.Cmd {
 				sshUser: v.SSHUser,
 			})
 		}
+		// Append Spawn Item at the end
+		items = append(items, spawnItem{})
 		return vmListMsg{items: items}
 	}
 }
@@ -293,14 +455,50 @@ func (m model) deleteCmd(name string) tea.Cmd {
 	}
 }
 
+func (m model) saveConfigCmd(key, value string) tea.Cmd {
+	return func() tea.Msg {
+		// Find config file path
+		home, _ := os.UserHomeDir()
+		path := filepath.Join(home, ".nido", "config.env")
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			cwd, _ := os.Getwd()
+			path = filepath.Join(cwd, "config", "config.env")
+		}
+
+		err := config.UpdateConfig(path, key, value)
+		if err != nil {
+			return logMsg{level: "error", text: fmt.Sprintf("Save failed: %v", err)}
+		}
+
+		// Reload config into memory
+		newCfg, _ := config.LoadConfig(path)
+		*m.cfg = *newCfg
+
+		return configSavedMsg{key: key, value: value}
+	}
+}
+
 // Custom message for loading sources (Images/Templates)
 type sourcesLoadedMsg struct {
 	items []list.Item
 	err   error
 }
 
+// Custom message for config saved
+type configSavedMsg struct{ key, value string }
+
 // Simple string item for list
 type listItem string
+
+func getConfigItems(cfg *config.Config) []list.Item {
+	return []list.Item{
+		configItem{key: "LINKED_CLONES", val: fmt.Sprintf("%v", cfg.LinkedClones)},
+		configItem{key: "SSH_USER", val: cfg.SSHUser},
+		configItem{key: "BACKUP_DIR", val: cfg.BackupDir},
+		configItem{key: "TEMPLATE_DEFAULT", val: cfg.TemplateDefault},
+		configItem{key: "IMAGE_DIR", val: cfg.ImageDir},
+	}
+}
 
 func (i listItem) FilterValue() string { return string(i) }
 func (i listItem) Title() string       { return string(i) }
@@ -310,6 +508,7 @@ func (m model) fetchSources(action int) tea.Cmd {
 	return func() tea.Msg {
 		var srcList []string
 
+		// Use the passed action explicitly
 		if action == 0 { // Spawn VM -> List Images AND Templates
 			images, err := m.prov.ListImages()
 			if err != nil {
@@ -326,13 +525,17 @@ func (m model) fetchSources(action int) tea.Cmd {
 				srcList = append(srcList, fmt.Sprintf("[TEMPLATE] %s", tpl))
 			}
 		} else { // Create Template
-			// For creating a template, source usually isn't relevant in this wizard flow yet
 			return sourcesLoadedMsg{items: []list.Item{}}
+		}
+
+		if len(srcList) == 0 {
+			// Add a dummy entry if nothing found to avoid blank modal
+			return sourcesLoadedMsg{err: fmt.Errorf("no images or templates found")}
 		}
 
 		items := make([]list.Item, len(srcList))
 		for i, s := range srcList {
-			items[i] = listItem(s) // Use simple string item wrapper
+			items[i] = listItem(s)
 		}
 		return sourcesLoadedMsg{items: items}
 	}
@@ -344,7 +547,48 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.list.SetSize(28, m.height-6)
+		// Safer height calculation to prevent navbar push-off.
+		// Header(2) + SubHeader(2) + Footer(1) + Spacing(2) = 7 minimum. Using 8 for safety.
+		// User requested strict pagination of 4 items.
+		// Item Height = 2 (DefaultDelegate) * 4 items = 8 lines.
+		// Pagination/Overhead = ~2 lines.
+		// Total required = 10 lines.
+		listH := 10
+		// Ensure we don't overflow window if it's very small
+		if m.height-8 < listH {
+			listH = m.height - 8
+		}
+		if listH < 1 {
+			listH = 1
+		}
+		m.list.SetSize(28, listH)
+
+		// Recalculate bodyHeight for viewport
+		// Header(2) + SubHeader(2) + Footer(1) = 5
+		bodyHeight := m.height - 5
+		if bodyHeight < 1 {
+			bodyHeight = 1
+		}
+
+		// Dynamic resize for Hatchery sidebar
+		hHeight := 5
+		if bodyHeight > 5 {
+			hHeight = bodyHeight
+		}
+		m.hatchery.Sidebar.SetSize(28, hHeight)
+
+		// Keep Config constrained to 4 items as requested (Height 10)
+		m.config.Sidebar.SetSize(28, 10)
+
+		// Logs Viewport
+		// User requested 9 lines per page.
+		// We set height to 9 regardless of window size to respect the request strictly?
+		// Or we set it to available height?
+		// "rendi i logs paginabili 9 riche per pagina" -> imply the view HEIGHT should be 9.
+		m.logViewport.Width = m.width - 4
+		m.logViewport.Height = 9 // Strict 9 lines as requested
+		// If window is smaller, viewport will clip, which is expected.
+
 	case tickMsg:
 		m.spinner, _ = m.spinner.Update(msg)
 		cmds = append(cmds, tea.Tick(time.Millisecond*80, func(time.Time) tea.Msg { return tickMsg{} }))
@@ -366,8 +610,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if len(msg.items) > 0 {
 			// Initial selection
 			if sel := m.list.SelectedItem(); sel != nil {
-				m.detailName = sel.(vmItem).name
-				cmds = append(cmds, m.infoCmd(m.detailName))
+				if v, ok := sel.(vmItem); ok {
+					m.detailName = v.name
+					cmds = append(cmds, m.infoCmd(m.detailName))
+				}
 			}
 		}
 	case detailMsg:
@@ -390,6 +636,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case logMsg:
 		m.logs = append(m.logs, msg.text)
+		// Update Viewport Content
+		m.logViewport.SetContent(strings.Join(m.logs, "\n"))
+		m.logViewport.GotoBottom()
 	case opResultMsg:
 		m.loading = false
 		if msg.err != nil {
@@ -399,6 +648,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.op = opNone
 		cmds = append(cmds, m.refreshCmd())
+	case configSavedMsg:
+		m.loading = false
+		m.logs = append(m.logs, fmt.Sprintf("Config %s updated to %s", msg.key, msg.value))
+		// Refresh sidebar items to reflect new state (e.g. toggles)
+		idx := m.config.Sidebar.Index()
+		m.config.Sidebar.SetItems(getConfigItems(m.cfg))
+		m.config.Sidebar.Select(idx)
 	case tea.KeyMsg:
 		// Hatchery Modal Interaction
 		if m.activeTab == tabHatchery && m.hatchery.IsSelecting {
@@ -443,35 +699,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	} else if m.activeTab == tabFleet {
-		if m.fleetFocus == focusList {
-			prev := m.detailName
-			var cmd tea.Cmd
-			m.list, cmd = m.list.Update(msg)
-			cmds = append(cmds, cmd)
-			if sel := m.list.SelectedItem(); sel != nil {
+		prev := m.detailName
+		var cmd tea.Cmd
+		m.list, cmd = m.list.Update(msg)
+		cmds = append(cmds, cmd)
+
+		if sel := m.list.SelectedItem(); sel != nil {
+			if _, ok := sel.(spawnItem); ok {
+				// Special Case: Spawn Item Selected
+				m.detailName = ""
+				m.detail = provider.VMDetail{} // Clear detail view
+			} else {
+				// VM Item Selected
 				m.detailName = sel.(vmItem).name
 				if m.detailName != prev {
 					cmds = append(cmds, m.infoCmd(m.detailName))
-				}
-			}
-
-			// Capture key for focus switching
-			if keyMsg, ok := msg.(tea.KeyMsg); ok {
-				if keyMsg.String() == "down" {
-					if m.list.Index() == len(m.list.Items())-1 {
-						m.fleetFocus = focusHatch
-					}
-				}
-			}
-		} else {
-			// Button is focused
-			if keyMsg, ok := msg.(tea.KeyMsg); ok {
-				switch keyMsg.String() {
-				case "up":
-					m.fleetFocus = focusList
-				case "enter":
-					m.activeTab = tabHatchery
-					m.fleetFocus = focusList // reset for next time
 				}
 			}
 		}
@@ -493,7 +735,10 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	case "3":
 		m.activeTab = tabLogs
 		return m, nil, true
-	case "4", "h":
+	case "4":
+		m.activeTab = tabConfig
+		return m, nil, true
+	case "5", "h":
 		m.activeTab = tabHelp
 		return m, nil, true
 	case "r":
@@ -503,150 +748,210 @@ func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	}
 
 	// 2. Navigation (Arrows)
-	// We want to handle Left/Right for Tab switching, BUT NOT if we are in Hatchery inputs or Fleet list?
-	// Actually, user wants Left/Right to switch tabs generally, unless focused on input?
-	// Existing logic checked for Hatchery input focus.
-
 	if msg.String() == "left" || msg.String() == "right" {
-		// Exception: In Hatchery AND focused on Name (0) or Source (1) -> let component handle it
-		if m.activeTab == tabHatchery && m.hatchery.FocusIndex <= 1 {
-			return m, nil, false // Let component handle it
+		// Exception: In Hatchery AND focused on Form AND in input field -> let form handle arrows
+		if m.activeTab == tabHatchery && m.hatcheryFocus == focusHatchForm && m.hatchery.FocusIndex == 0 {
+			return m, nil, false
+		}
+		// Exception: In Config AND focused on Form -> let form handle arrows
+		if m.activeTab == tabConfig && m.configFocus == focusConfigForm {
+			return m, nil, false
 		}
 
 		// Perform Switch
-		prevTab := m.activeTab
 		if msg.String() == "left" {
-			m.activeTab = (m.activeTab - 1 + 4) % 4
+			m.activeTab = (m.activeTab - 1 + 5) % 5
 		} else {
-			m.activeTab = (m.activeTab + 1) % 4
+			m.activeTab = (m.activeTab + 1) % 5
 		}
 
-		// Trap Fix: If we just entered Hatchery via arrows, focus the button (neutral)
-		if m.activeTab == tabHatchery && prevTab != tabHatchery {
-			m.spawn.focusIndex = len(m.spawn.inputs) // focus on button
-			m.updateFocus()
+		// Reset focus when entering tabs
+		if m.activeTab == tabHatchery {
+			m.hatcheryFocus = focusHatchSidebar
+		} else if m.activeTab == tabConfig {
+			m.configFocus = focusConfigSidebar
+		} else if m.activeTab == tabConfig {
+			m.configFocus = focusConfigSidebar
 		}
 		return m, nil, true
 	}
 
 	// 3. Tab Specific Logic
 	if m.activeTab == tabHatchery {
-		// Shortcuts for Action Switching
-		if msg.String() == "1" {
-			m.hatchery.Action = 0
-			return m, nil, true
-		} else if msg.String() == "2" {
-			m.hatchery.Action = 1
-			return m, nil, true
-		}
-
-		maxIndex := 3
-		if m.hatchery.Action == 1 {
-			maxIndex = 2 // No options for template
-		}
-
-		switch msg.String() {
-		case "tab", "down":
-			m.hatchery.FocusIndex++
-			if m.hatchery.FocusIndex > maxIndex {
+		if m.hatcheryFocus == focusHatchSidebar {
+			switch msg.String() {
+			case "right", "tab":
+				m.hatcheryFocus = focusHatchForm
 				m.hatchery.FocusIndex = 0
-			}
-			m.updateHatcheryFocus()
-			return m, nil, true
-		case "shift+tab", "up":
-			m.hatchery.FocusIndex--
-			if m.hatchery.FocusIndex < 0 {
-				m.hatchery.FocusIndex = maxIndex
-			}
-			m.updateHatcheryFocus()
-			return m, nil, true
-		case " ":
-			// Toggle Options (Focus Index 2 is Options in Action 0)
-			if m.hatchery.Action == 0 && m.hatchery.FocusIndex == 2 {
-				m.spawn.gui = !m.spawn.gui // Reuse spawn flag for now
+				m.updateHatcheryFocus()
+				return m, nil, true
+			case "enter":
+				// If on sidebar, clicking enter also enters form (common flow)
+				m.hatcheryFocus = focusHatchForm
+				m.hatchery.FocusIndex = 0
+				m.updateHatcheryFocus()
 				return m, nil, true
 			}
-			return m, nil, false // Space in Name input
-		case "enter":
-			// Button Trigger
-			if m.hatchery.FocusIndex == maxIndex {
-				newM, cmd := m.submitHatchery()
-				return newM, cmd, true
-			}
-			// Source Trigger
-			if m.hatchery.FocusIndex == 1 {
-				m.loading = true // Show spinner while fetching?
-				return m, m.fetchSources(m.hatchery.Action), true
-			}
-
-			// Next field
-			m.hatchery.FocusIndex++
-			m.updateHatcheryFocus()
-			return m, nil, true
-		}
-
-		// Input Handling (Name is at Index 0)
-		if m.hatchery.FocusIndex == 0 {
 			var cmd tea.Cmd
-			m.hatchery.Inputs[0], cmd = m.hatchery.Inputs[0].Update(msg)
+			m.hatchery.Sidebar, cmd = m.hatchery.Sidebar.Update(msg)
+			return m, cmd, true
+		} else {
+			// Form Interaction
+			maxIndex := 3
+			if m.hatchery.Sidebar.Index() == 1 {
+				maxIndex = 2
+			}
+
+			switch msg.String() {
+			case "tab", "down":
+				m.hatchery.FocusIndex++
+				if m.hatchery.FocusIndex > maxIndex {
+					m.hatchery.FocusIndex = 0
+				}
+				m.updateHatcheryFocus()
+				return m, nil, true
+			case "up":
+				m.hatchery.FocusIndex--
+				if m.hatchery.FocusIndex < 0 {
+					m.hatchery.FocusIndex = maxIndex
+				}
+				m.updateHatcheryFocus()
+				return m, nil, true
+			case "shift+tab", "left", "esc":
+				m.hatcheryFocus = focusHatchSidebar
+				return m, nil, true
+			case "enter":
+				// Button Trigger
+				if m.hatchery.FocusIndex == maxIndex {
+					newM, cmd := m.submitHatchery()
+					return newM, cmd, true
+				}
+				// Source Trigger
+				if m.hatchery.FocusIndex == 1 {
+					m.loading = true
+					return m, m.fetchSources(m.hatchery.Sidebar.Index()), true
+				}
+				// Next field
+				m.hatchery.FocusIndex++
+				m.updateHatcheryFocus()
+				return m, nil, true
+			}
+			// Input Handling
+			if m.hatchery.FocusIndex == 0 {
+				var cmd tea.Cmd
+				m.hatchery.Inputs[0], cmd = m.hatchery.Inputs[0].Update(msg)
+				return m, cmd, true
+			}
+		}
+	} else if m.activeTab == tabConfig {
+		if m.configFocus == focusConfigSidebar {
+			switch msg.String() {
+			case "right", "tab", "enter":
+				sel := m.config.Sidebar.SelectedItem()
+				if sel != nil {
+					item := sel.(configItem)
+
+					// Boolean Toggle Logic
+					if item.key == "LINKED_CLONES" {
+						// Toggle immediately
+						current := item.val == "true"
+						newVal := "false"
+						if !current {
+							newVal = "true"
+						}
+						// Save immediately
+						m.loading = true
+						return m, m.saveConfigCmd(item.key, newVal), true
+					}
+
+					m.config.ActiveKey = item.key
+					m.config.Input.SetValue(item.val)
+					m.config.Input.Focus()
+					m.configFocus = focusConfigForm
+				}
+				return m, nil, true
+			}
+			var cmd tea.Cmd
+			prevIdx := m.config.Sidebar.Index()
+			m.config.Sidebar, cmd = m.config.Sidebar.Update(msg)
+
+			// Dynamic Input Update on Scroll
+			if m.config.Sidebar.Index() != prevIdx {
+				sel := m.config.Sidebar.SelectedItem()
+				if sel != nil {
+					item := sel.(configItem)
+					m.config.ActiveKey = item.key
+					m.config.Input.SetValue(item.val)
+				}
+			}
+			return m, cmd, true
+		} else {
+			// Key Editor
+			switch msg.String() {
+			case "esc", "shift+tab": // Removed "left" to allow cursor navigation
+				m.configFocus = focusConfigSidebar
+				m.config.Input.Blur()
+				return m, nil, true
+			case "enter":
+				// Auto-save logic was requested for toggles, implemented via direct toggle in sidebar
+				val := m.config.Input.Value()
+				key := m.config.ActiveKey
+				m.loading = true
+				m.configFocus = focusConfigSidebar
+				m.config.Input.Blur()
+				return m, m.saveConfigCmd(key, val), true
+			}
+			var cmd tea.Cmd
+			m.config.Input, cmd = m.config.Input.Update(msg)
 			return m, cmd, true
 		}
-
-		// Source Cycling (Index 1)
-		if m.hatchery.FocusIndex == 1 {
-			items := m.hatchery.SourceList.Items()
-			if len(items) > 0 {
-				currIdx := -1
-				for i, item := range items {
-					if item.FilterValue() == m.hatchery.SelectedSource {
-						currIdx = i
-						break
-					}
-				}
-				if msg.String() == "left" {
-					currIdx = (currIdx - 1 + len(items)) % len(items)
-					m.hatchery.SelectedSource = items[currIdx].FilterValue()
-					return m, nil, true
-				} else if msg.String() == "right" {
-					currIdx = (currIdx + 1) % len(items)
-					m.hatchery.SelectedSource = items[currIdx].FilterValue()
-					return m, nil, true
-				}
-			}
-		}
-
-		return m, nil, false
+	} else if m.activeTab == tabLogs {
+		// Forward keys to viewport
+		var cmd tea.Cmd
+		m.logViewport, cmd = m.logViewport.Update(msg)
+		return m, cmd, true
 	}
 
 	if m.activeTab == tabFleet {
 		switch msg.String() {
 		case "enter":
 			if sel := m.list.SelectedItem(); sel != nil {
-				item := sel.(vmItem)
-				if item.state == "running" {
+				if _, ok := sel.(spawnItem); ok {
+					m.activeTab = tabHatchery
+					return m, nil, true
+				}
+				if item, ok := sel.(vmItem); ok {
+					if item.state == "running" {
+						m.loading = true
+						m.op = opStop
+						return m, m.stopCmd(item.name), true
+					}
+					m.loading = true
+					m.op = opStart
+					return m, m.startCmd(item.name), true
+				}
+			}
+		case "x":
+			if sel := m.list.SelectedItem(); sel != nil {
+				if item, ok := sel.(vmItem); ok {
 					m.loading = true
 					m.op = opStop
 					return m, m.stopCmd(item.name), true
 				}
-				m.loading = true
-				m.op = opStart
-				return m, m.startCmd(item.name), true
-			}
-		case "x":
-			if sel := m.list.SelectedItem(); sel != nil {
-				m.loading = true
-				m.op = opStop
-				return m, m.stopCmd(sel.(vmItem).name), true
 			}
 		case "delete":
 			if sel := m.list.SelectedItem(); sel != nil {
-				m.loading = true
-				m.op = opDelete
-				return m, m.deleteCmd(sel.(vmItem).name), true
+				if item, ok := sel.(vmItem); ok {
+					m.loading = true
+					m.op = opDelete
+					return m, m.deleteCmd(item.name), true
+				}
 			}
 		}
-		// Allow up/down to fall through to list
-		return m, nil, false
+		// Fallback to list navigation
+		var cmd tea.Cmd
+		m.list, cmd = m.list.Update(msg)
+		return m, cmd, true
 	}
 
 	return m, nil, false
@@ -674,12 +979,12 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-		// Tab Switching
-		availableWidth := m.width - 4
-		tabWidth := availableWidth / 4
+		// Tab Switching (5 tabs)
+		availableWidth := m.width - 6
+		tabWidth := availableWidth / 5
 		if tabWidth > 0 {
 			clickIndex := msg.X / tabWidth
-			if clickIndex >= 0 && clickIndex <= 3 {
+			if clickIndex >= 0 && clickIndex <= 4 {
 				m.activeTab = tab(clickIndex)
 				return m, nil
 			}
@@ -688,71 +993,74 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// 2. Sidebar Logic (Fleet View)
 	if m.activeTab == tabFleet {
-		// Sidebar interactions
 		if msg.X < 34 {
-			row := msg.Y - 5 // Offset 5 (Header 2 + SubHeader 2 + 1 padding)
+			row := msg.Y - 5 // Offset 5
 			if row >= 0 {
 				pageStart := m.list.Paginator.Page * m.list.Paginator.PerPage
 				index := pageStart + row
 				if index >= 0 && index < len(m.list.Items()) {
 					m.list.Select(index)
 					if sel := m.list.SelectedItem(); sel != nil {
-						m.detailName = sel.(vmItem).name
-						return m, m.infoCmd(m.detailName)
+						if v, ok := sel.(vmItem); ok {
+							m.detailName = v.name
+							return m, m.infoCmd(m.detailName)
+						} else if _, ok := sel.(spawnItem); ok {
+							m.activeTab = tabHatchery
+							return m, nil
+						}
 					}
 				}
 			}
 		} else {
 			// Main Area Interactions (Buttons)
-			// Y Offset calculation:
-			// Header (2) + SubHeader (2) = 4
-			// Title (2ish) + Card (6ish) = ~8
-			// Buttons start approx at Y=12 or 13.
-			// Let's broaden the hit area for usability.
 			if msg.Y >= 11 && msg.Y <= 15 {
-				// X Offsets (Rough estimates based on text length + padding)
-				// Sidebar (34)
-				// Buttons: "[ENTER] POWER" (~15), "[X] KILL" (~10), "[DEL] RM" (~10)
-				// Spacing is handled by styles (MarginRight 1).
-				// If JoinHorizontal stacks them:
-				// Btn1: 0 .. ~15
-				// Btn2: 16 .. ~26
-				// Btn3: 27 .. ~37
-				// + Offset 34 => 34..49, 50..60, 61..71
-
 				localX := msg.X - 34 // relative to main content
-
 				if sel := m.list.SelectedItem(); sel != nil {
-					item := sel.(vmItem)
-					if localX >= 0 && localX < 16 { // [ENTER] START/STOP
-						if item.state == "running" {
+					if item, ok := sel.(vmItem); ok {
+						if localX >= 0 && localX < 16 { // [ENTER] START/STOP
+							if item.state == "running" {
+								m.loading = true
+								m.op = opStop
+								return m, m.stopCmd(item.name)
+							}
+							m.loading = true
+							m.op = opStart
+							return m, m.startCmd(item.name)
+						} else if localX >= 16 && localX < 26 { // [X] KILL
 							m.loading = true
 							m.op = opStop
 							return m, m.stopCmd(item.name)
+						} else if localX >= 26 && localX < 45 { // [DEL] DELETE
+							m.loading = true
+							m.op = opDelete
+							return m, m.deleteCmd(item.name)
 						}
-						m.loading = true
-						m.op = opStart
-						return m, m.startCmd(item.name)
-					} else if localX >= 16 && localX < 26 { // [X] KILL
-						m.loading = true
-						m.op = opStop
-						return m, m.stopCmd(item.name)
-					} else if localX >= 26 && localX < 45 { // [DEL] DELETE
-						m.loading = true
-						m.op = opDelete
-						return m, m.deleteCmd(item.name)
 					}
 				}
 			}
-
-			// 3. Speed Hatch Button (Bottom of Fleet Main Area)
-			if msg.Y >= m.height-lipgloss.Height(m.renderFooter())-2 {
-				m.activeTab = tabHatchery
-				m.fleetFocus = focusList // reset
-				return m, nil
-			}
 		}
 	}
+
+	// 3. Hatchery Sidebar Logic
+	if m.activeTab == tabHatchery && msg.X < 28 {
+		row := msg.Y - 5
+		if row >= 0 && row < len(m.hatchery.Sidebar.Items()) {
+			m.hatchery.Sidebar.Select(row)
+			m.hatcheryFocus = focusHatchSidebar
+			return m, nil
+		}
+	}
+
+	// 4. Config Sidebar Logic
+	if m.activeTab == tabConfig && msg.X < 28 {
+		row := msg.Y - 5
+		if row >= 0 && row < len(m.config.Sidebar.Items()) {
+			m.config.Sidebar.Select(row)
+			m.configFocus = focusConfigSidebar
+			return m, nil
+		}
+	}
+
 	return m, nil
 }
 
@@ -772,15 +1080,12 @@ func (m model) submitHatchery() (tea.Model, tea.Cmd) {
 	m.loading = true
 	m.activeTab = tabFleet // Switch back to view progress
 
-	if m.hatchery.Action == 0 {
+	if m.hatchery.Sidebar.Index() == 0 {
 		// SPAWN
 		m.op = opSpawn
-		// Default template to source if not specified?
-		// Actually Source IS the template/image.
-		return m, m.spawnCmd(name, source, "", m.spawn.gui) // Empty UserData for now
+		return m, m.spawnCmd(name, source, "", m.spawn.gui)
 	} else {
 		// CREATE TEMPLATE
-		// Stub
 		return m, func() tea.Msg {
 			return opResultMsg{op: "create-template", err: nil} // TODO: Implement
 		}
@@ -821,14 +1126,37 @@ func (m model) View() string {
 
 	var body string
 
-	if m.activeTab == tabHatchery {
-		// Full Screen Hatchery
-		body = m.renderHatcheryFullScreen(m.width, bodyHeight)
+	if m.activeTab == tabHatchery && m.hatchery.IsSelecting {
+		// Modal overlay for source selection
+		body = m.renderSourceModal(m.width, bodyHeight)
+	} else if m.activeTab == tabLogs || m.activeTab == tabHelp {
+		// Full Width Views (No Sidebar)
+		var content string
+		if m.activeTab == tabLogs {
+			content = m.renderLogs(bodyHeight)
+		} else {
+			content = m.renderHelp()
+		}
+		body = mainContentStyle.
+			Width(m.width - 4).
+			Height(bodyHeight).
+			Render(content)
 	} else {
-		// Standard Split View (Sidebar + Main)
+		// Split View (Sidebar + Main)
+		var sidebarView string
+		switch m.activeTab {
+		case tabHatchery:
+			sidebarView = m.hatchery.Sidebar.View()
+		case tabConfig:
+			sidebarView = m.config.Sidebar.View()
+		default:
+			sidebarView = m.list.View()
+		}
 
-		// Sidebar
-		sidebar := sidebarStyle.Height(bodyHeight).Render(m.list.View())
+		sidebarContent := sidebarView
+		// No manual button adjustment needed anymore!
+
+		sidebar := sidebarStyle.Height(bodyHeight).Render(sidebarContent)
 		sidebarWidth := lipgloss.Width(sidebar)
 
 		// Main Content
@@ -841,10 +1169,10 @@ func (m model) View() string {
 		switch m.activeTab {
 		case tabFleet:
 			content = m.renderFleet(bodyHeight)
-		case tabLogs:
-			content = m.renderLogs(bodyHeight)
-		case tabHelp:
-			content = m.renderHelp()
+		case tabHatchery:
+			content = m.renderHatchery(bodyHeight)
+		case tabConfig:
+			content = m.renderConfig(bodyHeight)
 		}
 
 		mainArea := mainContentStyle.
@@ -859,59 +1187,60 @@ func (m model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, body, footer)
 }
 
-func (m model) renderHatcheryFullScreen(w, h int) string {
-	if m.hatchery.IsSelecting {
-		// Set list dimensions slightly smaller than screen
-		lw, lh := 60, 20
-		if w < 60 {
-			lw = w - 4
-		}
-		if h < 20 {
-			lh = h - 4
-		}
-		m.hatchery.SourceList.SetSize(lw, lh)
-		m.hatchery.SourceList.Title = "Select Source"
+func (m model) renderSourceModal(w, h int) string {
+	// Set list dimensions slightly smaller than screen
+	lw, lh := 60, 20
+	if w < 60 {
+		lw = w - 4
+	}
+	if h < 20 {
+		lh = h - 4
+	}
+	m.hatchery.SourceList.SetSize(lw, lh)
+	m.hatchery.SourceList.Title = "Select Source"
 
-		modal := cardStyle.BorderForeground(lipgloss.Color("39")).Render(m.hatchery.SourceList.View())
-
-		return lipgloss.Place(w, h,
-			lipgloss.Center, lipgloss.Center,
-			modal,
-		)
+	// Ensure list items are set
+	if len(m.hatchery.SourceList.Items()) == 0 {
+		// If empty, fetch immediately (failsafe)
+		// But usually fetchSources sets it.
+		// If purely visual, show placeholder
 	}
 
-	// 1. Action Selector (Tabs)
-	actionStyle := dimStyle
-	selectedActionStyle := activeTabStyle
+	modal := cardStyle.BorderForeground(lipgloss.Color("39")).Render(m.hatchery.SourceList.View())
 
-	spawnBtn := actionStyle.Render(" [1] SPAWN VM ")
-	templateBtn := actionStyle.Render(" [2] CREATE TEMPLATE ")
+	return lipgloss.Place(w, h,
+		lipgloss.Center, lipgloss.Center,
+		modal,
+	)
+}
 
-	if m.hatchery.Action == 0 {
-		spawnBtn = selectedActionStyle.Render(" [1] SPAWN VM ")
-	} else {
-		templateBtn = selectedActionStyle.Render(" [2] CREATE TEMPLATE ")
+func (m model) renderHatchery(h int) string {
+	// Heading
+	titleStr := "🦅 SPAWN NEW BIRD"
+	descStr := "Choose an image or template to incubator a new instance."
+	if m.hatchery.Sidebar.Index() == 1 {
+		titleStr = "❄️  CREATE TEMPLATE"
+		descStr = "Archive a running bird into a reusable template."
 	}
+	title := titleStyle.Render(titleStr)
+	desc := dimStyle.Render(descStr)
 
-	actionBar := lipgloss.JoinHorizontal(lipgloss.Top, spawnBtn, "   ", templateBtn)
-
-	// 2. Form Content
-	var form strings.Builder
+	form := strings.Builder{}
 
 	// Input: Name
 	labelColor := dimStyle
-	if m.hatchery.FocusIndex == 0 {
+	if m.hatcheryFocus == focusHatchForm && m.hatchery.FocusIndex == 0 {
 		labelColor = accentStyle
 	}
 	form.WriteString(fmt.Sprintf("%-15s %s\n\n", labelColor.Render("Name:"), m.hatchery.Inputs[0].View()))
 
-	// Input: Source (Image or Template)
+	// Input: Source
 	labelColor = dimStyle
 	sourceVal := m.hatchery.SelectedSource
 	if sourceVal == "" {
 		sourceVal = "( Select Source... )"
 	}
-	if m.hatchery.FocusIndex == 1 {
+	if m.hatcheryFocus == focusHatchForm && m.hatchery.FocusIndex == 1 {
 		labelColor = accentStyle
 		sourceVal = accentStyle.Render(sourceVal)
 	} else {
@@ -919,51 +1248,93 @@ func (m model) renderHatcheryFullScreen(w, h int) string {
 	}
 	form.WriteString(fmt.Sprintf("%-15s %s\n\n", labelColor.Render("Source:"), sourceVal))
 
-	// Options (Only for Spawn)
-	if m.hatchery.Action == 0 {
+	// Options
+	maxIndex := 3
+	if m.hatchery.Sidebar.Index() == 0 {
 		guiCheck := "[ ]"
-		if m.spawn.gui { // Reuse spawn flag for now
+		if m.spawn.gui {
 			guiCheck = "[x]"
 		}
 		labelColor = dimStyle
-		if m.hatchery.FocusIndex == 2 {
+		if m.hatcheryFocus == focusHatchForm && m.hatchery.FocusIndex == 2 {
 			labelColor = accentStyle
 			guiCheck = accentStyle.Render(guiCheck)
 		}
 		form.WriteString(fmt.Sprintf("%-15s %s Enable GUI (VNC)\n\n", labelColor.Render("Options:"), guiCheck))
+	} else {
+		maxIndex = 2
 	}
 
 	// Submit Button
 	btnText := "[ START INCUBATION ]"
-	if m.hatchery.Action == 1 {
+	if m.hatchery.Sidebar.Index() == 1 {
 		btnText = "[ FREEZE TEMPLATE ]"
 	}
-
 	btn := dimStyle.Render(btnText)
-	// Focus index mapping: 0=Name, 1=Source, 2=Options, 3=Submit
-	targetIndex := 3
-	if m.hatchery.Action == 1 {
-		targetIndex = 2 // No options for template creation
-	}
-
-	if m.hatchery.FocusIndex == targetIndex {
+	if m.hatcheryFocus == focusHatchForm && m.hatchery.FocusIndex == maxIndex {
 		btn = activeTabStyle.Render(btnText)
 	}
+	form.WriteString(btn)
 
-	formContent := lipgloss.JoinVertical(lipgloss.Left,
-		actionBar,
-		"\n\n",
-		form.String(),
-		"\n",
-		btn,
+	mainContent := lipgloss.JoinVertical(lipgloss.Left,
+		title,
+		desc,
+		"",
+		cardStyle.Render(form.String()),
 	)
 
-	// Left-aligned view with standard padding
-	return containerStyle.Padding(2, 4).Render(formContent)
+	return mainContent
 }
 
-// Deprecated: renderHatchery logic moved to renderHatcheryFullScreen
-func (m model) renderHatchery() string { return "" }
+func (m model) renderConfig(h int) string {
+	// Removed Title/Description
+	form := strings.Builder{}
+
+	sel := m.config.Sidebar.SelectedItem()
+	if sel != nil {
+		item := sel.(configItem)
+		form.WriteString(fmt.Sprintf("%-15s %s\n", dimStyle.Render("Key:"), accentStyle.Render(item.key)))
+
+		if item.key == "LINKED_CLONES" {
+			// Boolean Toggle View
+			state := "DISABLED"
+			color := dimStyle
+			if item.val == "true" {
+				state = "ENABLED"
+				color = successStyle
+			} else {
+				color = errorStyle
+			}
+
+			// Visual Toggle
+			toggle := fmt.Sprintf("[ %s ]", color.Render(state))
+			form.WriteString(fmt.Sprintf("%-15s %s\n\n", dimStyle.Render("Value:"), toggle))
+			form.WriteString(dimStyle.Render("Press Enter/Tab on sidebar to toggle immediately."))
+
+		} else {
+			// Standard Text Input
+			form.WriteString(fmt.Sprintf("%-15s %s\n\n", dimStyle.Render("Value:"), m.config.Input.View()))
+
+			if m.configFocus == focusConfigForm {
+				form.WriteString(activeTabStyle.Render("[↵] SAVE SEQUENCE"))
+			} else {
+				form.WriteString(dimStyle.Render("[↵] EDIT SEQUENCE"))
+			}
+		}
+	} else {
+		form.WriteString(dimStyle.Render("Select a key from the sidebar to edit."))
+	}
+
+	if m.config.ErrorMsg != "" {
+		form.WriteString("\n\n" + errorStyle.Render(m.config.ErrorMsg))
+	}
+
+	mainContent := lipgloss.JoinVertical(lipgloss.Left,
+		cardStyle.Render(form.String()),
+	)
+
+	return mainContent
+}
 
 func (m model) renderSubHeader() string {
 	var context, nav string
@@ -979,6 +1350,9 @@ func (m model) renderSubHeader() string {
 	case tabLogs:
 		context = "FLIGHT LOGS"
 		nav = "System activity log. " + arrows
+	case tabConfig:
+		context = "GENETIC CONFIG"
+		nav = "Modify Nido's core DNA. " + arrows
 	case tabHelp:
 		context = "HELP CENTER"
 		nav = "Command reference. " + arrows
@@ -997,15 +1371,7 @@ func (m model) renderFleet(height int) string {
 		title := titleStyle.Render("🦅 THE NEST")
 		content := cardStyle.Render(dimStyle.Render("Select a bird from the nest to inspect its flight data."))
 
-		// Speed Hatch Button even in empty state
-		hStyle := hatchButtonStyle
-		if m.fleetFocus == focusHatch {
-			hStyle = hatchButtonActiveStyle
-		}
-		btnHatch := hStyle.Width(40).Render("[⊕] SPEED HATCH (Spawn new bird)")
-
-		spacer := strings.Repeat("\n", height-lipgloss.Height(title)-lipgloss.Height(content)-lipgloss.Height(btnHatch)-2)
-		return lipgloss.JoinVertical(lipgloss.Left, title, content, spacer, btnHatch)
+		return lipgloss.JoinVertical(lipgloss.Left, title, content)
 	}
 
 	statusEmoji := "💤"
@@ -1045,28 +1411,13 @@ func (m model) renderFleet(height int) string {
 		redButtonStyle.Render("[DEL] DELETE"),
 	)
 
-	// Speed Hatch Button
-	hStyle := hatchButtonStyle
-	if m.fleetFocus == focusHatch {
-		hStyle = hatchButtonActiveStyle
-	}
-	btnHatch := hStyle.Width(40).Render("[⊕] SPEED HATCH (Spawn new bird)")
-
 	mainContent := lipgloss.JoinVertical(lipgloss.Left,
 		title,
 		infoCard,
 		actions,
 	)
 
-	// Calculate vertical gap to push button to the bottom
-	contentHeight := lipgloss.Height(mainContent)
-	gapHeight := height - contentHeight - lipgloss.Height(btnHatch) - 2
-	if gapHeight < 0 {
-		gapHeight = 0
-	}
-	spacer := strings.Repeat("\n", gapHeight)
-
-	return lipgloss.JoinVertical(lipgloss.Left, mainContent, spacer, btnHatch)
+	return mainContent
 }
 
 func (m model) renderDetailLine(label, value string) string {
@@ -1074,31 +1425,49 @@ func (m model) renderDetailLine(label, value string) string {
 }
 
 func (m model) renderDiskLine() string {
+	path := m.detail.DiskPath
 	if m.detail.DiskMissing {
-		return errorStyle.Render(fmt.Sprintf("MISSING (%s)", m.detail.DiskPath))
+		path = errorStyle.Render(fmt.Sprintf("MISSING (%s)", m.detail.DiskPath))
 	}
-	return m.detail.DiskPath
+	// Sidebar(30) + Padding(6) + Label(12) = 48 -> Safety 55
+	avail := m.width - 55
+	if avail < 10 {
+		avail = 10
+	}
+	return m.truncatePath(path, avail)
 }
 
 func (m model) renderBackingLine() string {
+	path := m.detail.BackingPath
 	switch {
 	case m.detail.BackingPath == "":
 		return "—"
 	case m.detail.BackingMissing:
-		return errorStyle.Render(fmt.Sprintf("MISSING (%s)", m.detail.BackingPath))
-	default:
-		return m.detail.BackingPath
+		path = errorStyle.Render(fmt.Sprintf("MISSING (%s)", m.detail.BackingPath))
 	}
+	avail := m.width - 55
+	if avail < 10 {
+		avail = 10
+	}
+	return m.truncatePath(path, avail)
+}
+
+func (m model) truncatePath(path string, maxLen int) string {
+	if len(path) <= maxLen {
+		return path
+	}
+	// Head truncation: .../path/file.img
+	return "..." + path[len(path)-(maxLen-3):]
 }
 
 func (m model) renderTabs() string {
+	// Debug check: ensure active tab is read
+	_ = m.activeTab
 	var tabs []string
-	labels := []string{"1 FLEET", "2 HATCHERY", "3 LOGS", "4 HELP"}
+	labels := []string{"1 FLEET", "2 HATCHERY", "3 LOGS", "4 CONFIG", "5 HELP"}
 
-	// Calculate exact width to ensure button is pinned right
-	// Reserve 6 chars for exit (4 button + 2 padding/safety)
-	availableWidth := m.width - 6
-	tabWidth := availableWidth / 4
+	availableWidth := m.width - 6 // Extra safety for [X]
+	tabWidth := availableWidth / 5
 
 	for i, label := range labels {
 		style := tabStyle.Width(tabWidth).Align(lipgloss.Center)
@@ -1114,8 +1483,7 @@ func (m model) renderTabs() string {
 	exitBtn := errorStyle.Render("[X]")
 	exitWidth := lipgloss.Width(exitBtn)
 
-	// Add spacer to push X to the edge
-	gap := m.width - rowWidth - exitWidth
+	gap := m.width - rowWidth - exitWidth - 1
 	if gap < 0 {
 		gap = 0
 	}
@@ -1125,38 +1493,30 @@ func (m model) renderTabs() string {
 }
 
 func (m model) renderLogs(height int) string {
-	title := titleStyle.Render("📜 FLIGHT LOGS")
-
-	// Constrain logs to body height - title
-	// Use the passed height (bodyHeight) for accurate clipping
-	limit := height - 2
-	if limit < 1 {
-		limit = 1
-	}
-	start := len(m.logs) - limit
-	if start < 0 {
-		start = 0
-	}
-
-	logLines := strings.Join(m.logs[start:], "\n")
-	// Ensure transparency
-	return lipgloss.NewStyle().Render(
-		lipgloss.JoinVertical(lipgloss.Left, title,
-			cardStyle.Width(m.width-36).Height(limit).Render(dimStyle.Render(logLines))),
+	// Use Viewport
+	return lipgloss.JoinVertical(lipgloss.Left,
+		cardStyle.Width(m.width-4).Height(height).Render(m.logViewport.View()),
 	)
 }
 
 func (m model) renderHelp() string {
-	title := titleStyle.Render("❓ COMMAND CENTER HELP")
+	// Removed Title
 
-	text := `Tabs: 1 Fleet · 2 Hatchery · 3 Logs · 4 Help
-Fleet: click or ↑/↓ select · ↵ start/stop · x kill · del delete
-Hatchery: tab through fields · ←/→ cycle · ↵ hatch
-Mouse: click tabs, list rows, and action buttons.`
+	text := `NAVIGATION
+  1-5 Keys   Directly switch between main views
+  ←/→ Arrows cycle through tabs sequentially
+
+VIEW CONTROLS
+  [1] FLEET     ↑/↓ Select  ·  ↵ Start/Stop  ·  [X] Kill  ·  [DEL] Delete
+  [2] HATCHERY  Tab Cycle Fields  ·  Space/↵ Select  ·  ←/→ Cycle Options
+  [4] CONFIG    ↑/↓ Select Key  ·  ↵ Edit/Toggle  ·  Esc Cancel
+
+GLOBAL
+  Mouse supported on all meaningful elements.
+  Press 'q' or Ctrl+C to exit Nido.`
 
 	// Ensure transparency
 	return lipgloss.JoinVertical(lipgloss.Left,
-		title,
 		cardStyle.Width(m.width-4).Render(dimStyle.Render(text)),
 	)
 }

@@ -21,7 +21,7 @@ import (
 )
 
 // Version is injected at build time
-var Version = "v4.3.0"
+var Version = "v4.3.6"
 
 // main is the brain of the Nido CLI. It handles command line parsing,
 // configuration loading, and dispatches requests to the appropriate handlers.
