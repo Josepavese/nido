@@ -1622,15 +1622,45 @@ GLOBAL
 }
 
 func (m model) renderFooter() string {
-	// OSC 8 Hyperlink support for the terminal
-	link := fmt.Sprintf("\x1b]8;;https://github.com/Josepavese\x1b\\%s\x1b]8;;\x1b\\", "github.com/Josepavese")
-	status := fmt.Sprintf("🟢 SYSTEMS NOMINAL | 🏠 There is no place like 127.0.0.1 | %s", link)
+	// Footer Alignment:
+	// Sidebar Width: 18 (Content) + 1 (Border) = 19 Visual Chars.
+	// We want the divider `│` to align with the border (Index 18).
+	// Left Block: 1 Padding + 17 Chars = 18.
+	// "🟢SYSTEMS NOMINAL" is 2 (Runes) + 15 (Chars) = 17 Chars. Perfect.
 
+	leftText := "🟢SYSTEMS NOMINAL"
 	if m.loading {
-		status = fmt.Sprintf("%s EXECUTING %s... ", m.spinner.View(), strings.ToUpper(string(m.op)))
+		// Just render simplified loading state if loading, or keep alignment?
+		// Loading spinner varies. Let's just keep the old full-width style for loading to avoid flicker.
+		status := fmt.Sprintf("%s EXECUTING %s... ", m.spinner.View(), strings.ToUpper(string(m.op)))
+		return footerStyle.Width(m.width).Render(status)
 	}
 
-	return footerStyle.Width(m.width).Render(status)
+	link := fmt.Sprintf("\x1b]8;;https://github.com/Josepavese\x1b\\%s\x1b]8;;\x1b\\", "github.com/Josepavese")
+	rightText := fmt.Sprintf("🏠 There is no place like 127.0.0.1 | %s", link)
+
+	// Left Block: Width 18. Padding Left 1. (Total 18 occupied, text 17).
+	// We construct it manually to ensure no unwanted padding.
+	// Using Sidebar Item Style for consistent color? Or footer style?
+	// Footer style has Foreground(TextDim).
+	leftBlock := lipgloss.NewStyle().
+		Foreground(colors.TextDim).
+		Padding(0, 0, 0, 1). // Left 1
+		Render(leftText)
+
+	// Separator
+	sep := lipgloss.NewStyle().
+		Foreground(colors.SurfaceSubtle). // Match sidebar border color
+		Render("│")
+
+	// Right Block
+	rightBlock := lipgloss.NewStyle().
+		Foreground(colors.TextDim).
+		Padding(0, 0, 0, 1). // Space after separator
+		Render(rightText)
+
+	// Join Horizontal
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, sep, rightBlock)
 }
 
 // Run starts the TUI with given provider/config.
