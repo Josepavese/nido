@@ -346,6 +346,7 @@ func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 	// Initialize Viewport for Logs
 	vp := viewport.New(0, 9)
 	vp.Style = dimStyle
+	vp.SetContent(strings.Join([]string{"Nido GUI ready. Systems nominal."}, "\n"))
 
 	return model{
 		prov:        prov,
@@ -582,12 +583,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Logs Viewport
 		// User requested 9 lines per page.
-		// We set height to 9 regardless of window size to respect the request strictly?
-		// Or we set it to available height?
-		// "rendi i logs paginabili 9 riche per pagina" -> imply the view HEIGHT should be 9.
-		m.logViewport.Width = m.width - 4
-		m.logViewport.Height = 9 // Strict 9 lines as requested
-		// If window is smaller, viewport will clip, which is expected.
+		m.logViewport.Width = m.width - 8 // -4 for margin, -4 for card padding
+		m.logViewport.Height = 9          // Strict 9 lines as requested
 
 	case tickMsg:
 		m.spinner, _ = m.spinner.Update(msg)
