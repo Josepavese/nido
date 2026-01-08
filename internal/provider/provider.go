@@ -41,6 +41,19 @@ type VMDetail struct {
 	BackingMissing bool
 }
 
+// CachedImage represents a cached cloud image.
+type CachedImage struct {
+	Name    string
+	Version string
+	Size    string
+}
+
+// CacheInfoResult contains cache statistics.
+type CacheInfoResult struct {
+	Count     int
+	TotalSize string
+}
+
 // VMProvider defines the contract for OS-specific hypervisor management.
 // Implementations handle VM lifecycle, storage, and connectivity operations.
 type VMProvider interface {
@@ -95,6 +108,18 @@ type VMProvider interface {
 	// Prune removes all stopped VMs from the system.
 	// Returns the count of VMs deleted.
 	Prune() (int, error)
+
+	// Cache operations
+
+	// ListCachedImages returns all cached cloud images.
+	ListCachedImages() ([]CachedImage, error)
+
+	// CacheInfo returns statistics about the image cache.
+	CacheInfo() (CacheInfoResult, error)
+
+	// CachePrune removes cached images. If unusedOnly is true, only removes
+	// images not used by any VM.
+	CachePrune(unusedOnly bool) error
 
 	// Connectivity
 
