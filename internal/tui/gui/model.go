@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
+	"path/filepath" // Added sort package
+	"sort"
 	"strings"
 	"time"
 
@@ -396,6 +397,12 @@ func (m model) refreshCmd() tea.Cmd {
 		if err != nil {
 			return logMsg{level: "error", text: fmt.Sprintf("List failed: %v", err)}
 		}
+
+		// Sort VMs alphabetically by Name
+		sort.Slice(vms, func(i, j int) bool {
+			return strings.ToLower(vms[i].Name) < strings.ToLower(vms[j].Name)
+		})
+
 		items := make([]list.Item, 0, len(vms))
 		for _, v := range vms {
 			items = append(items, vmItem{
@@ -490,7 +497,7 @@ type configSavedMsg struct{ key, value string }
 type listItem string
 
 func getConfigItems(cfg *config.Config) []list.Item {
-	return []list.Item{
+	items := []list.Item{
 		configItem{
 			key:  "LINKED_CLONES",
 			val:  fmt.Sprintf("%v", cfg.LinkedClones),
@@ -517,6 +524,13 @@ func getConfigItems(cfg *config.Config) []list.Item {
 			desc: "Directory for cached cloud images.",
 		},
 	}
+
+	// Sort Config Items Alphabetically by Key
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].(configItem).key < items[j].(configItem).key
+	})
+
+	return items
 }
 
 func (i listItem) FilterValue() string { return string(i) }
@@ -533,15 +547,22 @@ func (m model) fetchSources(action int) tea.Cmd {
 			if err != nil {
 				return sourcesLoadedMsg{err: err}
 			}
-			for _, img := range images {
-				srcList = append(srcList, fmt.Sprintf("[IMAGE] %s", img))
-			}
+			// Sort Images
+			sort.Strings(images)
+
 			templates, err := m.prov.ListTemplates()
 			if err != nil {
 				return sourcesLoadedMsg{err: err}
 			}
+			// Sort Templates
+			sort.Strings(templates)
+
+			// Append Templates FIRST, then Images
 			for _, tpl := range templates {
 				srcList = append(srcList, fmt.Sprintf("[TEMPLATE] %s", tpl))
+			}
+			for _, img := range images {
+				srcList = append(srcList, fmt.Sprintf("[IMAGE] %s", img))
 			}
 		} else { // Create Template
 			return sourcesLoadedMsg{items: []list.Item{}}
