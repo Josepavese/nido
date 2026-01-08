@@ -1000,8 +1000,9 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// 2. Sidebar Logic (Fleet View)
 	if m.activeTab == tabFleet {
-		if msg.X < 34 {
-			row := msg.Y - 5 // Offset 5
+		// sidebar width is 28 + borders? Let's assume 30 for safety margin
+		if msg.X < 30 {
+			row := msg.Y - 5 // Offset 5 (Header height)
 			if row >= 0 {
 				pageStart := m.list.Paginator.Page * m.list.Paginator.PerPage
 				index := pageStart + row
@@ -1020,8 +1021,12 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 		} else {
 			// Main Area Interactions (Buttons)
-			if msg.Y >= 11 && msg.Y <= 15 {
-				localX := msg.X - 34 // relative to main content
+			// Y Calculation:
+			// Header(5) + Title(2) + InfoCard(8) = 15 approx start
+			// Let's verify: Title(~2), Card(2 border + 6 items = 8)
+			// So 5 + 2 + 8 = 15. Buttons start around 15.
+			if msg.Y >= 14 && msg.Y <= 18 {
+				localX := msg.X - 30 // relative to main content (sidebar width)
 				if sel := m.list.SelectedItem(); sel != nil {
 					if item, ok := sel.(vmItem); ok {
 						if localX >= 0 && localX < 16 { // [ENTER] START/STOP
@@ -1033,11 +1038,11 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 							m.loading = true
 							m.op = opStart
 							return m, m.startCmd(item.name)
-						} else if localX >= 16 && localX < 26 { // [X] KILL
+						} else if localX >= 16 && localX < 28 { // [X] KILL
 							m.loading = true
 							m.op = opStop
 							return m, m.stopCmd(item.name)
-						} else if localX >= 26 && localX < 45 { // [DEL] DELETE
+						} else if localX >= 28 && localX < 50 { // [DEL] DELETE
 							m.loading = true
 							m.op = opDelete
 							return m, m.deleteCmd(item.name)
