@@ -111,8 +111,17 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 		fmt.Printf("⚠️  Warning: Failed to generate cloud-init seed: %v\n", err)
 	}
 
-	// 5. Save Initial State (with GUI preference and custom SSH user)
-	if err := p.saveState(name, 0, 0, 0, opts.Gui, sshUser); err != nil {
+	// 5. Port Assignment (at spawn time, not start time)
+	reserved := p.getReservedPorts()
+	sshPort := p.findAvailablePort(50022, reserved)
+	vncPort := 0
+	if opts.Gui {
+		reserved[sshPort] = true // Mark SSH port as reserved before finding VNC
+		vncPort = p.findAvailablePort(59000, reserved)
+	}
+
+	// 6. Save Initial State (with GUI preference, SSH user, and assigned ports)
+	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser); err != nil {
 		return fmt.Errorf("failed to save initial state: %w", err)
 	}
 
@@ -156,13 +165,17 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	if opts.Gui && !state.Gui {
 		state.Gui = true
 	}
+
+	// Legacy fallback: assign ports if missing (for VMs created before this fix)
 	updated := false
 	if state.SSHPort == 0 {
-		state.SSHPort = p.findAvailablePort(50022)
+		reserved := p.getReservedPorts()
+		state.SSHPort = p.findAvailablePort(50022, reserved)
 		updated = true
 	}
 	if state.Gui && state.VNCPort == 0 {
-		state.VNCPort = p.findAvailablePort(59000)
+		reserved := p.getReservedPorts()
+		state.VNCPort = p.findAvailablePort(59000, reserved)
 		updated = true
 	}
 	if updated {
@@ -506,13 +519,47 @@ func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
 	args = append(args, target, size)
 
 	cmd := exec.Command("qemu-img", args...)
-	return cmd.Run()
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("qemu-img create failed: %v (%s)", err, string(out))
+	}
+	return nil
 }
 
 // Helpers
 
-func (p *QemuProvider) findAvailablePort(start int) int {
+func (p *QemuProvider) getReservedPorts() map[int]bool {
+	reserved := make(map[int]bool)
+	runDir := filepath.Join(p.RootDir, "run")
+	files, err := os.ReadDir(runDir)
+	if err != nil {
+		return reserved
+	}
+	for _, f := range files {
+		if !strings.HasSuffix(f.Name(), ".json") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(runDir, f.Name()))
+		if err != nil {
+			continue
+		}
+		var state VMState
+		if json.Unmarshal(data, &state) == nil {
+			if state.SSHPort > 0 {
+				reserved[state.SSHPort] = true
+			}
+			if state.VNCPort > 0 {
+				reserved[state.VNCPort] = true
+			}
+		}
+	}
+	return reserved
+}
+
+func (p *QemuProvider) findAvailablePort(start int, reserved map[int]bool) int {
 	for port := start; port < start+100; port++ {
+		if reserved[port] {
+			continue // Skip ports reserved by other VMs
+		}
 		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err == nil {
 			ln.Close()
@@ -753,4 +800,120 @@ func (p *QemuProvider) ListImages() ([]string, error) {
 		}
 	}
 	return images, nil
+}
+
+// ListCachedImages returns all locally cached cloud images.
+func (p *QemuProvider) ListCachedImages() ([]CachedImage, error) {
+	imagesDir := p.Config.ImageDir
+	if imagesDir == "" {
+		imagesDir = filepath.Join(p.RootDir, "images")
+	}
+
+	files, err := os.ReadDir(imagesDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var items []CachedImage
+	for _, f := range files {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".qcow2") {
+			continue
+		}
+		info, err := f.Info()
+		if err != nil {
+			continue
+		}
+		// Parse name and version from filename (e.g., "ubuntu-24.04.qcow2")
+		name := strings.TrimSuffix(f.Name(), ".qcow2")
+		parts := strings.Split(name, "-")
+		imageName := parts[0]
+		version := ""
+		if len(parts) > 1 {
+			version = strings.Join(parts[1:], "-")
+		}
+		items = append(items, CachedImage{
+			Name:    imageName,
+			Version: version,
+			Size:    formatBytes(info.Size()),
+		})
+	}
+	return items, nil
+}
+
+// CacheInfo returns statistics about the image cache.
+func (p *QemuProvider) CacheInfo() (CacheInfoResult, error) {
+	imagesDir := p.Config.ImageDir
+	if imagesDir == "" {
+		imagesDir = filepath.Join(p.RootDir, "images")
+	}
+
+	files, err := os.ReadDir(imagesDir)
+	if err != nil {
+		return CacheInfoResult{}, err
+	}
+
+	var totalSize int64
+	count := 0
+	for _, f := range files {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".qcow2") {
+			continue
+		}
+		info, err := f.Info()
+		if err != nil {
+			continue
+		}
+		totalSize += info.Size()
+		count++
+	}
+	return CacheInfoResult{
+		Count:     count,
+		TotalSize: formatBytes(totalSize),
+	}, nil
+}
+
+// CachePrune removes cached images.
+func (p *QemuProvider) CachePrune(unusedOnly bool) error {
+	imagesDir := p.Config.ImageDir
+	if imagesDir == "" {
+		imagesDir = filepath.Join(p.RootDir, "images")
+	}
+
+	usedBacking, err := p.GetUsedBackingFiles()
+	if err != nil {
+		return err
+	}
+	usedMap := make(map[string]bool)
+	for _, path := range usedBacking {
+		usedMap[path] = true
+	}
+
+	files, err := os.ReadDir(imagesDir)
+	if err != nil {
+		return err
+	}
+
+	for _, f := range files {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), ".qcow2") {
+			continue
+		}
+		fullPath := filepath.Join(imagesDir, f.Name())
+		if unusedOnly && usedMap[fullPath] {
+			continue // Skip images in use
+		}
+		os.Remove(fullPath)
+	}
+	return nil
+}
+
+func formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
