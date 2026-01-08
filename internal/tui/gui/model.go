@@ -26,6 +26,13 @@ const (
 	tabHelp
 )
 
+type fleetFocus int
+
+const (
+	focusList fleetFocus = iota
+	focusHatch
+)
+
 type vmItem struct {
 	name    string
 	state   string
@@ -111,6 +118,7 @@ type model struct {
 
 	detailName string
 	detail     provider.VMDetail
+	fleetFocus fleetFocus
 
 	spawn    spawnState
 	hatchery hatcheryState // New Full-screen Hatchery State
@@ -435,14 +443,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	} else if m.activeTab == tabFleet {
-		prev := m.detailName
-		var cmd tea.Cmd
-		m.list, cmd = m.list.Update(msg)
-		cmds = append(cmds, cmd)
-		if sel := m.list.SelectedItem(); sel != nil {
-			m.detailName = sel.(vmItem).name
-			if m.detailName != prev {
-				cmds = append(cmds, m.infoCmd(m.detailName))
+		if m.fleetFocus == focusList {
+			prev := m.detailName
+			var cmd tea.Cmd
+			m.list, cmd = m.list.Update(msg)
+			cmds = append(cmds, cmd)
+			if sel := m.list.SelectedItem(); sel != nil {
+				m.detailName = sel.(vmItem).name
+				if m.detailName != prev {
+					cmds = append(cmds, m.infoCmd(m.detailName))
+				}
+			}
+
+			// Capture key for focus switching
+			if keyMsg, ok := msg.(tea.KeyMsg); ok {
+				if keyMsg.String() == "down" {
+					if m.list.Index() == len(m.list.Items())-1 {
+						m.fleetFocus = focusHatch
+					}
+				}
+			}
+		} else {
+			// Button is focused
+			if keyMsg, ok := msg.(tea.KeyMsg); ok {
+				switch keyMsg.String() {
+				case "up":
+					m.fleetFocus = focusList
+				case "enter":
+					m.activeTab = tabHatchery
+					m.fleetFocus = focusList // reset for next time
+				}
 			}
 		}
 	}
@@ -714,6 +744,13 @@ func (m model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
+
+			// 3. Speed Hatch Button (Bottom of Fleet Main Area)
+			if msg.Y >= m.height-lipgloss.Height(m.renderFooter())-2 {
+				m.activeTab = tabHatchery
+				m.fleetFocus = focusList // reset
+				return m, nil
+			}
 		}
 	}
 	return m, nil
@@ -803,7 +840,7 @@ func (m model) View() string {
 		var content string
 		switch m.activeTab {
 		case tabFleet:
-			content = m.renderFleet()
+			content = m.renderFleet(bodyHeight)
 		case tabLogs:
 			content = m.renderLogs(bodyHeight)
 		case tabHelp:
@@ -954,12 +991,21 @@ func (m model) renderSubHeader() string {
 	)
 }
 
-func (m model) renderFleet() string {
+func (m model) renderFleet(height int) string {
 	if m.detailName == "" {
 		// Align empty state with standard layout
 		title := titleStyle.Render("🦅 THE NEST")
 		content := cardStyle.Render(dimStyle.Render("Select a bird from the nest to inspect its flight data."))
-		return lipgloss.JoinVertical(lipgloss.Left, title, content)
+
+		// Speed Hatch Button even in empty state
+		hStyle := hatchButtonStyle
+		if m.fleetFocus == focusHatch {
+			hStyle = hatchButtonActiveStyle
+		}
+		btnHatch := hStyle.Width(40).Render("[⊕] SPEED HATCH (Spawn new bird)")
+
+		spacer := strings.Repeat("\n", height-lipgloss.Height(title)-lipgloss.Height(content)-lipgloss.Height(btnHatch)-2)
+		return lipgloss.JoinVertical(lipgloss.Left, title, content, spacer, btnHatch)
 	}
 
 	statusEmoji := "💤"
@@ -999,8 +1045,28 @@ func (m model) renderFleet() string {
 		redButtonStyle.Render("[DEL] DELETE"),
 	)
 
-	// Removed \n spacer
-	return lipgloss.JoinVertical(lipgloss.Left, title, infoCard, actions)
+	// Speed Hatch Button
+	hStyle := hatchButtonStyle
+	if m.fleetFocus == focusHatch {
+		hStyle = hatchButtonActiveStyle
+	}
+	btnHatch := hStyle.Width(40).Render("[⊕] SPEED HATCH (Spawn new bird)")
+
+	mainContent := lipgloss.JoinVertical(lipgloss.Left,
+		title,
+		infoCard,
+		actions,
+	)
+
+	// Calculate vertical gap to push button to the bottom
+	contentHeight := lipgloss.Height(mainContent)
+	gapHeight := height - contentHeight - lipgloss.Height(btnHatch) - 2
+	if gapHeight < 0 {
+		gapHeight = 0
+	}
+	spacer := strings.Repeat("\n", gapHeight)
+
+	return lipgloss.JoinVertical(lipgloss.Left, mainContent, spacer, btnHatch)
 }
 
 func (m model) renderDetailLine(label, value string) string {

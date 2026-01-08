@@ -5,14 +5,14 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [4.3.3] - 2026-01-08
+## [4.3.4] - 2026-01-08
 
 ### ✨ UI & DX Refinements
 
-- **Hatchery Redesign:** Optimized the Hatchery layout for efficiency. Left-aligned the design and reduced empty space to keep the interface focused. 🛸
-- **Unified Sources:** Spawning now correctly lists both **Images** and **Templates** with clear `[IMAGE]` and `[TEMPLATE]` prefixes. 🧬
-- **Vertical Symbolism:** Replaced the "Enter" key name with the `↵` symbol across the GUI buttons and help text for a more compact and technical aesthetic. ↵
-- **Doc Sync:** Updated the `README.md` keyboard reference to match the new UI symbols.
+- **Fleet Speed Hatch:** Added a prominent blue `[⊕] SPEED HATCH` button at the bottom of the Fleet view. This serves as a quick shortcut to the Hatchery, accessible via keyboard (arrow down from list) or mouse. 🛸
+- **TUI Focus Logic:** Improved the Fleet view to manage focus between the VM list and action buttons.
+
+## [4.3.3] - 2026-01-08
 
 ## [4.3.2] - 2026-01-08
 
