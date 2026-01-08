@@ -1622,7 +1622,7 @@ GLOBAL
 }
 
 func (m model) renderFooter() string {
-	status := " SYSTEMS NOMINAL 🟢 | 🪺 Happy Hatching! | v1.0"
+	status := "SYSTEMS NOMINAL 🟢 | 🪺  Happy Hatching! | v1.0"
 	if m.loading {
 		status = fmt.Sprintf(" %s EXECUTING %s... ", m.spinner.View(), strings.ToUpper(string(m.op)))
 	}
