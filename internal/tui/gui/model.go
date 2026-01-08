@@ -79,7 +79,7 @@ func (i vmItem) String() string      { return i.Title() }
 
 type spawnItem struct{}
 
-func (i spawnItem) Title() string       { return "+ Spawn new bird (VM)" }
+func (i spawnItem) Title() string       { return "+ SPAWN" }
 func (i spawnItem) Description() string { return "" }
 func (i spawnItem) FilterValue() string { return "" }
 func (i spawnItem) String() string      { return i.Title() }
@@ -171,7 +171,7 @@ func (d customDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d customDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
 	// Check for Spawn Item first
 	if _, ok := listItem.(spawnItem); ok {
-		str := "+ Spawn new bird (VM)"
+		str := "+ SPAWN"
 		if index == m.Index() {
 			fmt.Fprint(w, hatchButtonActiveStyle.Render(str))
 		} else {
