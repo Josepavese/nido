@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-01-06T23:54:53.528089463Z",
+  "updated_at": "2026-01-11T08:21:29.633305555Z",
   "images": [
     {
       "name": "ubuntu",
@@ -50,8 +50,8 @@
           "arch": "amd64",
           "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-Cloud.qcow2",
           "checksum_type": "sha256",
-          "checksum": "9ca5e9034525db3bde0047631822183b7fe5b5db363ba0535b2dbafc28b745b6",
-          "size_bytes": 294046720,
+          "checksum": "e7dbb65a0f9bd7acb949c81d9c12d544b80d75efba445691e4ad59ccab086b88",
+          "size_bytes": 295377920,
           "format": "qcow2"
         }
       ]
@@ -163,16 +163,16 @@
             "v3.0.0-dev"
           ],
           "arch": "amd64",
-          "url": "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.001",
+          "url": "https://github.com/Josepavese/nido/releases/download/v4.3.7/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.001",
           "checksum_type": "",
           "checksum": "",
           "size_bytes": 3353804800,
           "format": "qcow2",
           "part_urls": [
-            "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.001",
-            "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.002",
-            "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.003",
-            "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.004"
+            "https://github.com/Josepavese/nido/releases/download/v4.3.7/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.001",
+            "https://github.com/Josepavese/nido/releases/download/v4.3.7/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.002",
+            "https://github.com/Josepavese/nido/releases/download/v4.3.7/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.003",
+            "https://github.com/Josepavese/nido/releases/download/v4.3.7/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.004"
           ]
         }
       ]
@@ -189,14 +189,14 @@
             "v4.1.1"
           ],
           "arch": "amd64",
-          "url": "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.001",
+          "url": "https://github.com/Josepavese/nido/releases/download/v4.3.7/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.001",
           "checksum_type": "sha256",
           "checksum": "887c85a9835a216eac079a50a646349fd404619c63e6c8d6a19dd9c8cd033d16",
           "size_bytes": 1071513600,
           "format": "qcow2",
           "part_urls": [
-            "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.001",
-            "https://github.com/Josepavese/nido/releases/download/v4.1.1/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.002"
+            "https://github.com/Josepavese/nido/releases/download/v4.3.7/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.001",
+            "https://github.com/Josepavese/nido/releases/download/v4.3.7/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.002"
           ]
         }
       ]
