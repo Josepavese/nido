@@ -55,8 +55,8 @@ func LoadConfig(path string) (*Config, error) {
 		ImageDir:        "",   // Will be set to ~/.nido/images if not specified
 		LinkedClones:    true, // Default to true (space saving)
 		TUI: TUIConfig{
-			SidebarWidth:     18,
-			SidebarWideWidth: 28,
+			SidebarWidth:     30,
+			SidebarWideWidth: 38,
 			InsetContent:     4,
 			TabMinWidth:      6,
 			ExitZoneWidth:    4,

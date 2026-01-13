@@ -55,5 +55,5 @@ Context: recent refactors centralized shell/layout/theme, but mouse click/focus 
 ## Minimal Implementation Steps
 1) Add `ShellHitMap` struct and compute it alongside `RenderShell` outputs; use it in header mouse handling.
 2) Add a root-level dispatcher ordering: header → sidebar → viewlet body (with coordinate translation).
-3) Optionally extend `Viewlet` with `HandleMouse`; wire Fleet/Hatchery/Config to delegate to their list/form components.
+3) Optionally extend `Viewlet` with `HandleMouse`; wire Fleet/Hatchery/Config to delegate to their list/form widget.
 4) Add a small shell hit-range test; document mouse handling in `improvements/TUI_CONFIG.md` or `gui/README.md`.
