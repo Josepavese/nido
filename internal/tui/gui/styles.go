@@ -1,50 +1,40 @@
+// Package gui implements the Nido interactive TUI using Bubble Tea.
+// This file defines the visual styles used throughout the interface.
+//
+// All colors and spacing values are derived from the theme package
+// to ensure consistency and support for light/dark modes.
 package gui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/Josepavese/nido/internal/tui/theme"
+	"github.com/charmbracelet/lipgloss"
+)
 
-type palette struct {
-	Accent        lipgloss.Color
-	AccentStrong  lipgloss.Color
-	Surface       lipgloss.Color
-	SurfaceSubtle lipgloss.Color
-	Bg            lipgloss.Color
-	Text          lipgloss.Color
-	TextDim       lipgloss.Color
-	Success       lipgloss.Color
-	Warning       lipgloss.Color
-	Error         lipgloss.Color
-}
+// activeTheme is the current theme, initialized once at startup.
+// This caches the theme detection result for performance.
+var activeTheme = theme.Current()
 
-var colors = palette{
-	Accent:        lipgloss.Color("#76C7FF"),
-	AccentStrong:  lipgloss.Color("#3BA3E6"),
-	Surface:       lipgloss.Color("#151A21"),
-	SurfaceSubtle: lipgloss.Color("#1A2028"),
-	Bg:            lipgloss.Color("#0F1216"),
-	Text:          lipgloss.Color("#E6EBF2"),
-	TextDim:       lipgloss.Color("#707D8C"),
-	Success:       lipgloss.Color("#3DDC84"),
-	Warning:       lipgloss.Color("#F5C26B"),
-	Error:         lipgloss.Color("#F06D79"),
-}
+// colors provides convenient access to the active palette.
+// Legacy alias maintained for compatibility during migration.
+var colors = activeTheme.Palette
 
 var (
 	// Navigation & Tabs
 	tabStyle = lipgloss.NewStyle().
 			Foreground(colors.TextDim).
-			Padding(0, 2)
+			Padding(0, theme.Space.SM)
 
 	activeTabStyle = lipgloss.NewStyle().
 			Foreground(colors.Accent).
-			Padding(0, 2).
+			Padding(0, theme.Space.SM).
 			Bold(true).
 			Underline(true)
 
 	// Sub-Header
 	subHeaderStyle = lipgloss.NewStyle().
 			Height(1).
-			Padding(0, 1).
-			PaddingBottom(1)
+			Padding(0, theme.Space.XS).
+			PaddingBottom(theme.Space.XS)
 
 	subHeaderContextStyle = lipgloss.NewStyle().
 				Foreground(colors.AccentStrong).
@@ -59,12 +49,12 @@ var (
 			Foreground(colors.Text)
 
 	sidebarStyle = lipgloss.NewStyle().
-			Width(18).
+			Width(theme.Width.Sidebar).
 			Border(lipgloss.NormalBorder(), false, true, false, false).
 			BorderForeground(colors.SurfaceSubtle)
 
 	mainContentStyle = lipgloss.NewStyle().
-				Padding(0, 1)
+				Padding(0, theme.Space.XS)
 
 	headerStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder(), false, false, true, false).
@@ -73,42 +63,42 @@ var (
 	footerStyle = lipgloss.NewStyle().
 			Height(1).
 			Foreground(colors.TextDim).
-			Padding(0, 1) // Keep horiz padding
+			Padding(0, theme.Space.XS)
 
 	// Sidebar items
 	sidebarItemStyle = lipgloss.NewStyle().
 				Foreground(colors.Text).
-				Padding(0, 1)
+				Padding(0, theme.Space.XS)
 
 	sidebarItemSelectedStyle = lipgloss.NewStyle().
 					Foreground(colors.Accent).
-					Padding(0, 1).
+					Padding(0, theme.Space.XS).
 					Bold(true)
 
 	// Cards & Sections
 	cardStyle = lipgloss.NewStyle().
-			Padding(1, 2) // Maintain padding for spacing
+			Padding(theme.Space.XS, theme.Space.SM)
 
 	titleStyle = lipgloss.NewStyle().
 			Foreground(colors.AccentStrong).
 			Bold(true).
-			MarginBottom(0) // Remove bottom margin
+			MarginBottom(0)
 
 	// Typography & Badges
 	labelStyle = lipgloss.NewStyle().
 			Foreground(colors.TextDim).
-			Width(12)
+			Width(theme.Width.Label)
 
 	focusedLabelStyle = lipgloss.NewStyle().
 				Foreground(colors.Accent).
 				Bold(true).
-				Width(12)
+				Width(theme.Width.Label)
 
 	valueStyle = lipgloss.NewStyle().
 			Foreground(colors.Text)
 
 	badgeStyle = lipgloss.NewStyle().
-			Padding(0, 1).
+			Padding(0, theme.Space.XS).
 			Bold(true)
 
 	dimStyle = lipgloss.NewStyle().
@@ -132,23 +122,23 @@ var (
 			Foreground(colors.Accent).
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(colors.SurfaceSubtle).
-			Padding(0, 1).
-			MarginRight(1)
+			Padding(0, theme.Space.XS).
+			MarginRight(theme.Space.XS)
 
-	redButtonStyle = buttonStyle.Copy().
+	redButtonStyle = buttonStyle.
 			Foreground(colors.Error)
 
 	containerStyle = lipgloss.NewStyle().
 			Foreground(colors.Text)
 
 	hatchButtonStyle = lipgloss.NewStyle().
-				Foreground(colors.Bg).
+				Foreground(colors.Background).
 				Background(colors.TextDim).
-				Width(18).
+				Width(theme.Width.Sidebar).
 				Align(lipgloss.Center).
-				MarginTop(1)
+				MarginTop(theme.Space.XS)
 
-	hatchButtonActiveStyle = hatchButtonStyle.Copy().
+	hatchButtonActiveStyle = hatchButtonStyle.
 				Background(colors.AccentStrong).
 				Bold(true)
 )
