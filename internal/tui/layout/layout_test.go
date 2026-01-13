@@ -101,8 +101,8 @@ func TestCalculate(t *testing.T) {
 	if dim.SidebarWidth != 18 {
 		t.Errorf("SidebarWidth = %d, want 18", dim.SidebarWidth)
 	}
-	if dim.BodyHeight != 32 { // 40 - 8 = 32
-		t.Errorf("BodyHeight = %d, want 32", dim.BodyHeight)
+	if dim.BodyHeight != 34 { // 40 - 6 = 34
+		t.Errorf("BodyHeight = %d, want 34", dim.BodyHeight)
 	}
 }
 

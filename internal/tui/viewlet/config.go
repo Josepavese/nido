@@ -245,7 +245,7 @@ func (c *Config) Update(msg tea.Msg) (Viewlet, tea.Cmd) {
 // Render logic (View)
 func (c *Config) View() string {
 	// 2 Columns: Sidebar | Form
-	sidebarWidth := 28 // Should match item width
+	sidebarWidth := theme.Width.Sidebar // Standardized width
 	sidebar := cardStyle.Render(c.Sidebar.View())
 
 	// Calculate form width: Total - Sidebar - Gap
@@ -351,7 +351,8 @@ func (c *Config) renderForm(item ConfigItem) string {
 func (c *Config) Resize(width, height int) {
 	c.Width = width
 	c.Height = height
-	c.Sidebar.SetSize(28, height)
+	// Subtract 2 for cardStyle.Padding(1) (Top+Bottom) to prevent overflow
+	c.Sidebar.SetSize(theme.Width.Sidebar, height-2)
 }
 
 func (c *Config) Shortcuts() []Shortcut {

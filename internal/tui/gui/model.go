@@ -34,8 +34,10 @@ func (m model) isInputFocused() bool {
 }
 
 type model struct {
-	prov provider.VMProvider
-	cfg  *config.Config
+	prov    provider.VMProvider
+	cfg     *config.Config
+	strings UIStrings
+	keymap  Keymap
 
 	width  int
 	height int
@@ -97,6 +99,19 @@ func newHatcheryState(cfg *config.Config) hatcheryState {
 }
 
 func initialModel(prov provider.VMProvider, cfg *config.Config) model {
+	// Apply environment overrides for TUI-related settings
+	cfg.ApplyEnvOverrides()
+
+	// Sync theme/layout tokens with config overrides
+	theme.ApplyOverrides(theme.Overrides{
+		SidebarWidth:     cfg.TUI.SidebarWidth,
+		SidebarWideWidth: cfg.TUI.SidebarWideWidth,
+		InsetContent:     cfg.TUI.InsetContent,
+		TabMinWidth:      cfg.TUI.TabMinWidth,
+		ExitZoneWidth:    cfg.TUI.ExitZoneWidth,
+		GapScale:         cfg.TUI.GapScale,
+	})
+
 	items := []list.Item{}
 	// Use customDelegate to match Config/Hatchery styling (no extra padding)
 	d := customDelegate{}
@@ -126,6 +141,16 @@ func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 	lView := viewlet.NewLogs()
 	lView.SetContent(strings.Join([]string{fmt.Sprintf("[%s] Nido GUI ready. Systems nominal.", time.Now().Format("15:04:05"))}, "\n"))
 
+	// Strings (allow future overrides)
+	uiStrings := DefaultStrings()
+	if len(cfg.TUI.TabLabels) >= 5 {
+		uiStrings.TabLabels = cfg.TUI.TabLabels
+	}
+	if cfg.TUI.FooterLink != "" {
+		uiStrings.FooterLink = cfg.TUI.FooterLink
+	}
+	km := DefaultKeymap()
+
 	return model{
 		prov:      prov,
 		cfg:       cfg,
@@ -143,6 +168,8 @@ func initialModel(prov provider.VMProvider, cfg *config.Config) model {
 		helpView:     viewlet.NewHelp(),
 		fleetView:    viewlet.NewFleet(),
 		hatcheryView: viewlet.NewHatchery(),
+		strings:      uiStrings,
+		keymap:       km,
 	}
 }
 
@@ -210,9 +237,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Calculate available height for content
-		// Header(2) + SubHeader(2) + Footer(1) + Spacing(3) = 8
-		bodyHeight := m.height - 8
+		// Calculate available height for content using layout overhead
+		bodyHeight := m.height - layout.SpacingOverhead
 		if bodyHeight < 1 {
 			bodyHeight = 1
 		}
@@ -464,6 +490,7 @@ func (m model) View() string {
 		Width:     m.width,
 		Height:    m.height,
 		ActiveTab: m.activeTab,
+		Strings:   m.strings,
 	}
 
 	footerState := FooterState{
@@ -473,14 +500,20 @@ func (m model) View() string {
 		DownloadProgress: m.downloadProgress,
 		Operation:        string(m.op),
 		SpinnerView:      m.spinner.View(),
+		FooterLink:       m.strings.FooterLink,
 	}
 	if m.downloading {
 		m.progress.Width = m.width - 20
 		footerState.ProgressView = m.progress.ViewAs(m.downloadProgress)
 	}
 
-	// Use BodyHeight from Calculate directly
-	bodyHeight := dim.BodyHeight
+	// Render shell and derive body height (shellHeight includes 1-line gaps)
+	header, subHeader, footer, shellHeight := RenderShell(shellCfg, footerState)
+
+	bodyHeight := m.height - shellHeight
+	if bodyHeight < 0 {
+		bodyHeight = 0
+	}
 
 	var body string
 
@@ -489,19 +522,21 @@ func (m model) View() string {
 		var content string
 		if m.activeTab == tabLogs {
 			// Logs
-			m.logsView.Resize(m.width-4, bodyHeight)
+			m.logsView.Resize(m.width-theme.Inset.TotalContent, bodyHeight)
 			content = m.logsView.View()
 		} else if m.activeTab == tabConfig {
 			// Config
-			m.configView.Resize(m.width-4, bodyHeight)
+			// NOTE: Config viewlet has its own internal sidebar.
+			// Ideally we should expose sidebar control or pass full bodyHeight.
+			m.configView.Resize(m.width-theme.Inset.TotalContent, bodyHeight)
 			content = m.configView.View()
 		} else {
 			// Help
-			m.helpView.Resize(m.width-4, bodyHeight)
+			m.helpView.Resize(m.width-theme.Inset.TotalContent, bodyHeight)
 			content = m.helpView.View()
 		}
 		body = mainContentStyle.
-			Width(m.width - 4).
+			Width(m.width - theme.Inset.TotalContent).
 			Height(bodyHeight).
 			Render(content)
 	} else {
@@ -514,10 +549,12 @@ func (m model) View() string {
 		var sidebarView string
 		switch m.activeTab {
 		case tabHatchery:
+			m.hatchery.Sidebar.SetSize(sidebarW, bodyHeight) // Resize to fit exact body height
 			sidebarView = m.hatchery.Sidebar.View()
 
 		default:
 			// Fleet Sidebar
+			m.list.SetSize(sidebarW, bodyHeight) // Resize to fit exact body height
 			sidebarView = m.list.View()
 		}
 
@@ -532,26 +569,26 @@ func (m model) View() string {
 		var content string
 		switch m.activeTab {
 		case tabFleet:
-			m.fleetView.Resize(mainWidth-4, bodyHeight)
+			m.fleetView.Resize(mainWidth-theme.Inset.TotalContent, bodyHeight)
 			content = m.fleetView.View()
 		case tabHatchery:
-			m.hatcheryView.Resize(mainWidth-4, bodyHeight)
+			m.hatcheryView.Resize(mainWidth-theme.Inset.TotalContent, bodyHeight)
 			content = m.hatcheryView.View()
 		case tabConfig:
-			m.configView.Resize(mainWidth-4, bodyHeight)
+			m.configView.Resize(mainWidth-theme.Inset.TotalContent, bodyHeight)
 			content = m.configView.View()
 		}
 
 		mainArea := mainContentStyle.
-			Width(mainWidth - 4).
+			Width(mainWidth - theme.Inset.TotalContent).
 			Height(bodyHeight).
 			Render(content)
 
 		body = lipgloss.JoinHorizontal(lipgloss.Top, sidebar, mainArea)
 	}
 
-	// Assemble complete shell
-	return RenderShell(shellCfg, footerState, body)
+	// Assemble complete shell with consistent gaps
+	return layout.VStack(theme.Gap(1), header, subHeader, body, footer)
 }
 
 // Run starts the TUI with given provider/config.

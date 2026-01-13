@@ -148,33 +148,17 @@ func (f *Fleet) View() string {
 	// Render Table (Always visible if items exist)
 	tableView := f.table.View()
 
-	// If no detail is selected, show Table + Empty Placeholder
+	// If no detail is selected, just show the Table
 	if f.detail.Name == "" {
-		// Calculate available width for detail panel
-		// Table is approx 55 chars + padding.
-		// Sidebar/Table separation handled by layout.HStack
-		tableWidth := 55 // Fixed sum of columns + padding
-		gap := theme.Space.SM
-		availWidth := f.Width - tableWidth - gap
-		if availWidth < 20 {
-			availWidth = 20
-		}
-
-		emptyDetail := lipgloss.NewStyle().
-			Foreground(t.Palette.TextDim).
-			Padding(theme.Space.MD).
-			Align(lipgloss.Center).
-			Width(availWidth).
-			Render(fmt.Sprintf("%s\n%s",
-				lipgloss.NewStyle().Foreground(t.Palette.AccentStrong).Bold(true).Render("🦅 THE NEST"),
-				"Select a bird from the nest to inspect its flight data."),
-			)
-
-		return layout.HStack(gap, tableView, emptyDetail)
+		return tableView
 	}
 
-	// If Detail is selected, show Table | Detail
-	return layout.HStack(theme.Space.SM, tableView, f.renderDetail())
+	// If Detail is selected, show Table ABOVE Detail (Vertical Split)
+	// Layout:
+	// Table
+	// (Gap)
+	// Detail
+	return layout.VStack(theme.Space.SM, tableView, f.renderDetail())
 }
 
 // renderDetail renders the detail panel for a VM.
@@ -224,13 +208,7 @@ func (f *Fleet) renderDetail() string {
 		if f.detail.DiskMissing {
 			path = errorStyle.Render(fmt.Sprintf("MISSING (%s)", f.detail.DiskPath))
 		}
-		// Approx available width logic: Viewlet width - padding
-		// Table (55) + Gap (~2) + Detail Padding (~4) = approx 62
-		avail := f.Width - 65
-		if avail < 10 {
-			avail = 10
-		}
-		return f.truncatePath(path, avail)
+		return f.truncatePath(path, f.Width-20) // Simple safety margin
 	}
 
 	renderBacking := func() string {
@@ -241,11 +219,7 @@ func (f *Fleet) renderDetail() string {
 		case f.detail.BackingMissing:
 			path = errorStyle.Render(fmt.Sprintf("MISSING (%s)", f.detail.BackingPath))
 		}
-		avail := f.Width - 65
-		if avail < 10 {
-			avail = 10
-		}
-		return f.truncatePath(path, avail)
+		return f.truncatePath(path, f.Width-20)
 
 	}
 
@@ -319,7 +293,21 @@ func (f *Fleet) truncatePath(path string, maxLen int) string {
 // Resize updates the viewlet dimensions.
 func (f *Fleet) Resize(width, height int) {
 	f.BaseViewlet.Resize(width, height)
-	f.table.SetHeight(height - 2)
+
+	// If detail is active, split height.
+	// Detail panel needs approx 10-12 lines + gap.
+	if f.detail.Name != "" {
+		detailHeight := 12
+		gap := theme.Space.SM
+		tableHeight := height - detailHeight - gap
+		if tableHeight < 5 {
+			tableHeight = 5 // Minimum table height
+		}
+		f.table.SetHeight(tableHeight)
+	} else {
+		// Full height for table
+		f.table.SetHeight(height)
+	}
 }
 
 // Shortcuts returns Fleet-specific shortcuts.

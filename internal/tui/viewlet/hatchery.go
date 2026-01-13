@@ -44,8 +44,8 @@ func NewHatchery() *Hatchery {
 	nameInput := textinput.New()
 	nameInput.Placeholder = "vm-name"
 	nameInput.CharLimit = 50
-	nameInput.Width = 30
-	nameInput.Focus() // Initial focus
+	nameInput.Width = theme.Width.SidebarWide // Use wide width as default for input
+	nameInput.Focus()                         // Initial focus
 
 	// Initialize Source List
 	delegate := list.NewDefaultDelegate()

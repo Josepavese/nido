@@ -13,18 +13,20 @@ type Dimensions struct {
 	BodyHeight   int
 }
 
-// HeaderHeight is the fixed height for the header section.
-const HeaderHeight = 2
+// HeaderHeight is the fixed height for the header section (tabs row).
+const HeaderHeight = 1
 
-// TabbarHeight is the fixed height for the tab bar.
+// TabbarHeight is the fixed height for the subheader/context row.
 const TabbarHeight = 1
 
 // FooterHeight is the fixed height for the footer/status bar.
 const FooterHeight = 1
 
-// SpacingOverhead is the total vertical space used by fixed elements.
-// Header(2) + SubHeader(2) + Footer(1) + 3 Gaps = 8
-const SpacingOverhead = 8
+// SpacingOverhead is the total vertical space used by fixed elements when
+// stacking header, subheader, body, footer with a single blank line gap
+// between each section:
+// Header(1) + Gap(1) + SubHeader(1) + Gap(1) + Body + Gap(1) + Footer(1) = 6
+const SpacingOverhead = HeaderHeight + TabbarHeight + FooterHeight + 3
 
 // Calculate returns Dimensions with all layout values computed
 // from the given terminal width and height.

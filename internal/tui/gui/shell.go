@@ -18,35 +18,69 @@ type ShellConfig struct {
 	Width     int
 	Height    int
 	ActiveTab tab
+	Strings   UIStrings
 }
 
-// TabLabels defines the tab names and their shortcut keys.
-var TabLabels = []string{"1 FLEET", "2 HATCHERY", "3 LOGS", "4 CONFIG", "5 HELP"}
+const (
+	headerReserve = 6 // space reserved for exit and spacer
+)
 
 // RenderTabs renders the main tab bar with the active tab highlighted.
-func RenderTabs(width int, activeTab tab) string {
+func RenderTabs(width int, activeTab tab, labels []string) string {
 	t := theme.Current()
 
 	tabStyle := lipgloss.NewStyle().
 		Foreground(t.Palette.TextDim).
-		Padding(0, theme.Space.SM)
+		MaxHeight(1)
+		// Padding added dynamically based on width
 
 	activeTabStyle := lipgloss.NewStyle().
 		Foreground(t.Palette.Accent).
-		Padding(0, theme.Space.SM).
+		Padding(0, theme.Gap(theme.Space.SM)).
 		Bold(true).
-		Underline(true)
+		Underline(true).
+		MaxHeight(1)
 
-	availableWidth := width - 6 // Space for [X] button
-	tabWidth := availableWidth / len(TabLabels)
+	// Calculate tab width dynamically
+	availableWidth := width - headerReserve
+	tabCount := len(labels)
+	if tabCount == 0 {
+		return ""
+	}
+	tabWidth := availableWidth / tabCount
+
+	// Only enforce TabMin if we have plenty of space,
+	// otherwise shrink to fit (prevent wrapping).
+	// Logic: If shrinking below min is better than wrapping.
+	if tabWidth < theme.Width.TabMin {
+		// Checks if we really need to clamp?
+		// Actually, standard behavior should be to FIT.
+		// If tabWidth < 4, it's unusable, but wrapping is worse.
+		// Let's allow shrinking down to 4 chars.
+		if tabWidth < 4 {
+			tabWidth = 4
+		}
+	}
 
 	var tabs []string
-	for i, label := range TabLabels {
+	for i, label := range labels {
 		style := tabStyle.Width(tabWidth).Align(lipgloss.Center)
+
+		// Only add padding if we have enough room (e.g. width > 12)
+		// Otherwise text needs every cell.
+		if tabWidth > 12 {
+			style = style.Padding(0, theme.Gap(theme.Space.SM))
+		}
+
 		if i == int(activeTab) {
 			style = activeTabStyle.Width(tabWidth).Align(lipgloss.Center)
+			if tabWidth > 12 {
+				style = style.Padding(0, theme.Gap(theme.Space.SM))
+			}
 		}
-		tabs = append(tabs, style.Render(label))
+		// Prevent wrapping on spaces by using NBSP
+		safeLabel := strings.ReplaceAll(label, " ", "\u00A0")
+		tabs = append(tabs, style.Render(safeLabel))
 	}
 
 	row := layout.HStack(0, tabs...)
@@ -75,8 +109,8 @@ func SubHeaderContent(activeTab tab) (context, nav string) {
 
 	switch activeTab {
 	case tabFleet:
-		context = "FLEET VIEW"
-		nav = "Monitor and manage active instances. " + arrows
+		context = "THE NEST"
+		nav = "Select a bird to inspect. " + arrows
 	case tabHatchery:
 		context = "HATCHERY"
 		nav = "Spawn new birds. Tab to cycle fields. " + arrows
@@ -123,6 +157,7 @@ type FooterState struct {
 	Operation        string
 	SpinnerView      string
 	ProgressView     string
+	FooterLink       string
 }
 
 // RenderFooter renders the status bar footer.
@@ -135,7 +170,7 @@ func RenderFooter(state FooterState) string {
 		return lipgloss.NewStyle().
 			Height(1).
 			Foreground(t.Palette.TextDim).
-			Padding(0, theme.Space.XS).
+			Padding(0, theme.Gap(theme.Space.XS)).
 			Width(state.Width).
 			Render(status)
 	}
@@ -145,7 +180,7 @@ func RenderFooter(state FooterState) string {
 		return lipgloss.NewStyle().
 			Height(1).
 			Foreground(t.Palette.TextDim).
-			Padding(0, theme.Space.XS).
+			Padding(0, theme.Gap(theme.Space.XS)).
 			Width(state.Width).
 			Render(status)
 	}
@@ -156,14 +191,16 @@ func RenderFooter(state FooterState) string {
 		{Key: "🟢", Label: "NOMINAL"},
 	})
 
-	link := fmt.Sprintf("\x1b]8;;https://github.com/Josepavese\x1b\\%s\x1b]8;;\x1b\\", "github.com/Josepavese")
+	link := fmt.Sprintf("\x1b]8;;%s\x1b\\%s\x1b]8;;\x1b\\", state.FooterLink, state.FooterLink)
 	sb.SetStatus(fmt.Sprintf("🏠 There is no place like 127.0.0.1 | %s", link))
 
 	return sb.View()
 }
 
-// RenderShell renders the complete shell structure including the body.
-func RenderShell(cfg ShellConfig, footerState FooterState, body string) string {
+// RenderShell renders header, subheader, and footer and returns their string
+// forms along with the total shell height, accounting for 1-line gaps between
+// sections (header/subheader/body/footer).
+func RenderShell(cfg ShellConfig, footerState FooterState) (header, subHeader, footer string, totalHeight int) {
 	t := theme.Current()
 
 	headerStyle := lipgloss.NewStyle().
@@ -171,14 +208,19 @@ func RenderShell(cfg ShellConfig, footerState FooterState, body string) string {
 		BorderForeground(t.Palette.SurfaceSubtle)
 
 	subHeaderStyle := lipgloss.NewStyle().
-		Height(1).
-		Padding(0, theme.Space.XS).
-		PaddingBottom(theme.Space.XS)
+		Padding(0, theme.Gap(theme.Space.XS)).
+		PaddingBottom(theme.Gap(theme.Space.XS))
 
-	header := headerStyle.Width(cfg.Width).Render(RenderTabs(cfg.Width, cfg.ActiveTab))
-	subHeader := subHeaderStyle.Width(cfg.Width - 2).Render(RenderSubHeader(cfg.ActiveTab))
-	footer := RenderFooter(footerState)
+	header = headerStyle.Width(cfg.Width).Render(RenderTabs(cfg.Width, cfg.ActiveTab, cfg.Strings.TabLabels))
+	subHeader = subHeaderStyle.Width(cfg.Width - 2).Render(RenderSubHeader(cfg.ActiveTab))
+	footer = RenderFooter(footerState)
 
-	// Ensure consistent vertical layout
-	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, body, footer)
+	headerH := lipgloss.Height(header)
+	subHeaderH := lipgloss.Height(subHeader)
+	footerH := lipgloss.Height(footer)
+
+	// When stacked with a single blank line gap between sections
+	totalHeight = headerH + subHeaderH + footerH + 3
+
+	return header, subHeader, footer, totalHeight
 }

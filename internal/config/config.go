@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -14,6 +15,28 @@ type Config struct {
 	SSHUser         string
 	ImageDir        string // Directory for downloaded images (default: ~/.nido/images)
 	LinkedClones    bool   // Whether to use Copy-on-Write linked clones (default: true)
+	TUI             TUIConfig
+}
+
+// parseInt attempts to parse an integer string, returning the value and a flag.
+func parseInt(val string) (int, bool) {
+	v, err := strconv.Atoi(strings.TrimSpace(val))
+	if err != nil {
+		return 0, false
+	}
+	return v, true
+}
+
+// TUIConfig defines runtime overrides for the TUI layout.
+type TUIConfig struct {
+	SidebarWidth     int
+	SidebarWideWidth int
+	InsetContent     int
+	TabMinWidth      int
+	ExitZoneWidth    int
+	FooterLink       string
+	TabLabels        []string
+	GapScale         int
 }
 
 // LoadConfig reads the genetic configuration from a file.
@@ -31,6 +54,16 @@ func LoadConfig(path string) (*Config, error) {
 		SSHUser:         "vmuser",
 		ImageDir:        "",   // Will be set to ~/.nido/images if not specified
 		LinkedClones:    true, // Default to true (space saving)
+		TUI: TUIConfig{
+			SidebarWidth:     18,
+			SidebarWideWidth: 28,
+			InsetContent:     4,
+			TabMinWidth:      6,
+			ExitZoneWidth:    4,
+			FooterLink:       "https://github.com/Josepavese",
+			TabLabels:        []string{"1 FLEET", "2 HATCHERY", "3 LOGS", "4 CONFIG", "5 HELP"},
+			GapScale:         1,
+		},
 	}
 
 	scanner := bufio.NewScanner(file)
@@ -61,10 +94,72 @@ func LoadConfig(path string) (*Config, error) {
 			} else {
 				cfg.LinkedClones = true
 			}
+		case "TUI_SIDEBAR_WIDTH":
+			if parsed, ok := parseInt(val); ok {
+				cfg.TUI.SidebarWidth = parsed
+			}
+		case "TUI_SIDEBAR_WIDE_WIDTH":
+			if parsed, ok := parseInt(val); ok {
+				cfg.TUI.SidebarWideWidth = parsed
+			}
+		case "TUI_INSET_CONTENT":
+			if parsed, ok := parseInt(val); ok {
+				cfg.TUI.InsetContent = parsed
+			}
+		case "TUI_TAB_MIN_WIDTH":
+			if parsed, ok := parseInt(val); ok {
+				cfg.TUI.TabMinWidth = parsed
+			}
+		case "TUI_EXIT_ZONE_WIDTH":
+			if parsed, ok := parseInt(val); ok {
+				cfg.TUI.ExitZoneWidth = parsed
+			}
+		case "TUI_GAP_SCALE":
+			if parsed, ok := parseInt(val); ok {
+				cfg.TUI.GapScale = parsed
+			}
+		case "TUI_FOOTER_LINK":
+			cfg.TUI.FooterLink = val
+		case "TUI_TAB_LABELS":
+			parts := strings.Split(val, ",")
+			if len(parts) >= 5 {
+				cfg.TUI.TabLabels = parts
+			}
 
 		}
 	}
 	return cfg, nil
+}
+
+// ApplyEnvOverrides updates TUI-related settings from environment variables.
+func (c *Config) ApplyEnvOverrides() {
+	if v, ok := parseInt(os.Getenv("NIDO_TUI_SIDEBAR_WIDTH")); ok {
+		c.TUI.SidebarWidth = v
+	}
+	if v, ok := parseInt(os.Getenv("NIDO_TUI_SIDEBAR_WIDE_WIDTH")); ok {
+		c.TUI.SidebarWideWidth = v
+	}
+	if v, ok := parseInt(os.Getenv("NIDO_TUI_INSET_CONTENT")); ok {
+		c.TUI.InsetContent = v
+	}
+	if v, ok := parseInt(os.Getenv("NIDO_TUI_TAB_MIN_WIDTH")); ok {
+		c.TUI.TabMinWidth = v
+	}
+	if v, ok := parseInt(os.Getenv("NIDO_TUI_EXIT_ZONE_WIDTH")); ok {
+		c.TUI.ExitZoneWidth = v
+	}
+	if v, ok := parseInt(os.Getenv("NIDO_TUI_GAP_SCALE")); ok && v > 0 {
+		c.TUI.GapScale = v
+	}
+	if v := strings.TrimSpace(os.Getenv("NIDO_TUI_FOOTER_LINK")); v != "" {
+		c.TUI.FooterLink = v
+	}
+	if v := strings.TrimSpace(os.Getenv("NIDO_TUI_TAB_LABELS")); v != "" {
+		parts := strings.Split(v, ",")
+		if len(parts) >= 5 {
+			c.TUI.TabLabels = parts
+		}
+	}
 }
 
 // UpdateConfig modifies a single genetic sequence in the configuration file.

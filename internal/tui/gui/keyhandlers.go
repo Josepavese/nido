@@ -4,6 +4,7 @@ package gui
 
 import (
 	"github.com/Josepavese/nido/internal/tui/services"
+	"github.com/Josepavese/nido/internal/tui/theme"
 	"github.com/Josepavese/nido/internal/tui/viewlet"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -123,44 +124,42 @@ func (m model) handleLogsKeys(msg tea.KeyMsg) (model, tea.Cmd, bool) {
 // handleGlobalKeys handles global keyboard shortcuts (quit, tab switching, refresh).
 func (m model) handleGlobalKeys(msg tea.KeyMsg) (model, tea.Cmd, bool) {
 	switch msg.String() {
-	case "q":
+	case m.keymap.Quit, "ctrl+c":
 		if m.isInputFocused() {
 			return m, nil, false
 		}
 		return m, tea.Quit, true
-	case "ctrl+c":
-		return m, tea.Quit, true
-	case "1":
+	case m.keymap.TabSelect[0]:
 		if m.isInputFocused() {
 			return m, nil, false
 		}
 		m.activeTab = tabFleet
 		return m, nil, true
-	case "2":
+	case m.keymap.TabSelect[1]:
 		if m.isInputFocused() {
 			return m, nil, false
 		}
 		m.activeTab = tabHatchery
 		return m, nil, true
-	case "3":
+	case m.keymap.TabSelect[2]:
 		if m.isInputFocused() {
 			return m, nil, false
 		}
 		m.activeTab = tabLogs
 		return m, nil, true
-	case "4":
+	case m.keymap.TabSelect[3]:
 		if m.isInputFocused() {
 			return m, nil, false
 		}
 		m.activeTab = tabConfig
 		return m, nil, true
-	case "5", "h":
+	case m.keymap.TabSelect[4], "h":
 		if m.isInputFocused() {
 			return m, nil, false
 		}
 		m.activeTab = tabHelp
 		return m, nil, true
-	case "r":
+	case m.keymap.Refresh:
 		if m.isInputFocused() {
 			return m, nil, false
 		}
@@ -208,13 +207,13 @@ func (m model) handleHeaderMouse(msg tea.MouseMsg) (model, tea.Cmd, bool) {
 		return m, nil, false
 	}
 
-	// Exit Button Click (Rightmost 4 chars)
-	if msg.X >= m.width-4 {
+	// Exit Button Click (Rightmost configured chars)
+	if msg.X >= m.width-theme.Width.ExitZone {
 		return m, tea.Quit, true
 	}
 
 	// Tab Switching (5 tabs)
-	availableWidth := m.width - 6
+	availableWidth := m.width - headerReserve
 	tabWidth := availableWidth / 5
 	if tabWidth > 0 {
 		clickIndex := msg.X / tabWidth

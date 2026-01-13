@@ -21,7 +21,7 @@ internal/tui/
 Centralized design tokens:
 
 - `palette.go` — Adaptive colors (dark/light + 256c fallback)
-- `spacing.go` — Space scale, radius, widths
+- `spacing.go` — Space scale, radius, widths; supports overrides from config/env
 - `typography.go` — Text style factories
 - `theme.go` — Detection and `NIDO_THEME` override
 
@@ -38,6 +38,7 @@ Declarative layout:
 - `VStack(gap, items...)` — Vertical stacking
 - `Detect(width)` — Breakpoint detection
 - `Calculate(w, h)` — Responsive dimensions
+- `SpacingOverhead` — Single source for header/subheader/footer + gaps
 
 ### components/
 
@@ -61,21 +62,27 @@ Input validation:
 
 ### viewlet/
 
-View implementations (foundation for future refactoring):
+View implementations:
 
 - `Viewlet` — Interface for all views
 - `Fleet` — VM list with table and detail panel
 - `Hatchery` — Spawn/template form
 - `Help` — Keyboard shortcuts
-
-> Note: Viewlets are created but not yet fully wired into `model.go`.
-> Current TUI uses shell.go helpers (RenderTabs, RenderSubHeader, RenderFooter).
+- `Config` — Config editor
+- `Logs` — Logs viewer
 
 ## Environment Variables
 
-| Variable     | Values               | Default |
-|--------------|----------------------|---------|
-| `NIDO_THEME` | `light`, `dark`, `auto` | `auto`  |
+| Variable | Values | Default |
+|----------|--------|---------|
+| `NIDO_THEME` | `light`, `dark`, `auto` | `auto` |
+| `NIDO_TUI_SIDEBAR_WIDTH` | int | `18` |
+| `NIDO_TUI_SIDEBAR_WIDE_WIDTH` | int | `28` |
+| `NIDO_TUI_INSET_CONTENT` | int | `4` |
+| `NIDO_TUI_TAB_MIN_WIDTH` | int | `6` |
+| `NIDO_TUI_EXIT_ZONE_WIDTH` | int | `4` |
+| `NIDO_TUI_FOOTER_LINK` | string URL | `https://github.com/Josepavese` |
+| `NIDO_TUI_TAB_LABELS` | comma-separated 5 labels | `1 FLEET,2 HATCHERY,3 LOGS,4 CONFIG,5 HELP` |
 
 ## Running
 

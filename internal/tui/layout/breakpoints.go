@@ -1,5 +1,7 @@
 package layout
 
+import "github.com/Josepavese/nido/internal/tui/theme"
+
 // Breakpoint represents terminal width categories for responsive layouts.
 type Breakpoint int
 
@@ -56,11 +58,11 @@ func (b Breakpoint) SidebarWidth() int {
 	case Narrow:
 		return 0 // Hidden in narrow mode
 	case Regular:
-		return 18
+		return theme.Width.Sidebar
 	case Wide:
-		return 28
+		return theme.Width.SidebarWide
 	default:
-		return 18
+		return theme.Width.Sidebar
 	}
 }
 
