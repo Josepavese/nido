@@ -121,6 +121,9 @@ type VMProvider interface {
 	// images not used by any VM.
 	CachePrune(unusedOnly bool) error
 
+	// CacheRemove removes a specific cached image by name and version.
+	CacheRemove(name, version string) error
+
 	// Connectivity
 
 	// SSHCommand generates the SSH connection string for a VM.

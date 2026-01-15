@@ -905,6 +905,34 @@ func (p *QemuProvider) CachePrune(unusedOnly bool) error {
 	return nil
 }
 
+// CacheRemove removes a specific cached image.
+func (p *QemuProvider) CacheRemove(name, version string) error {
+	imagesDir := p.Config.ImageDir
+	if imagesDir == "" {
+		imagesDir = filepath.Join(p.RootDir, "images")
+	}
+
+	var filename string
+	if version == "" {
+		filename = fmt.Sprintf("%s.qcow2", name)
+	} else {
+		filename = fmt.Sprintf("%s-%s.qcow2", name, version)
+	}
+	fullPath := filepath.Join(imagesDir, filename)
+
+	// Check usage
+	usedBacking, err := p.GetUsedBackingFiles()
+	if err == nil {
+		for _, path := range usedBacking {
+			if path == fullPath {
+				return fmt.Errorf("cannot remove image %s: in use by a VM", filename)
+			}
+		}
+	}
+
+	return os.Remove(fullPath)
+}
+
 func formatBytes(bytes int64) string {
 	const unit = 1024
 	if bytes < unit {

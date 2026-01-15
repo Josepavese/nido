@@ -14,26 +14,31 @@ package layout
 //	| FOOTER (Fixed)        |
 //	+-----------------------+
 type Grid struct {
-	Header    Rect
-	SubHeader Rect
-	Body      Rect
-	Footer    Rect
+	Header      Rect
+	ActionStack Rect // Dynamic zone (restored)
+	SubHeader   Rect
+	Body        Rect
+	Footer      Rect
 }
 
 const (
-	HeaderHeight    = 2 // 1 line tabs + 1 bottom border
-	SubHeaderHeight = 2 // 1 line text + 1 padding/gap
+	HeaderHeight    = 4 // 1 line padding top + 3 lines bubble tabs
+	SubHeaderHeight = 0 // Removed as per user request (redundant with footer)
 	FooterHeight    = 1 // 1 line status bar
 )
 
 // CalculateGrid computes the grid zones for a given terminal size.
-func CalculateGrid(width, height int) Grid {
+// actionStackHeight is the requested height for the dynamic action stack zone.
+func CalculateGrid(width, height int, actionStackHeight int) Grid {
 	// Clamp inputs
 	if width < 0 {
 		width = 0
 	}
 	if height < 0 {
 		height = 0
+	}
+	if actionStackHeight < 0 {
+		actionStackHeight = 0
 	}
 
 	// Re-approach: Strict Geometry from Top and Bottom
@@ -43,6 +48,7 @@ func CalculateGrid(width, height int) Grid {
 
 	// Reset loop for strict absolute positioning
 	hRect := NewRect(0, 0, width, 0)
+	asRect := NewRect(0, 0, width, 0)
 	shRect := NewRect(0, 0, width, 0)
 	bRect := NewRect(0, 0, width, 0)
 	fRect := NewRect(0, 0, width, 0)
@@ -50,7 +56,7 @@ func CalculateGrid(width, height int) Grid {
 	// Available vertical space
 	availH := height
 
-	// Header
+	// 1. Header (Fixed, Priority 1)
 	allocH := HeaderHeight
 	if allocH > availH {
 		allocH = availH
@@ -58,41 +64,41 @@ func CalculateGrid(width, height int) Grid {
 	hRect = NewRect(0, 0, width, allocH)
 	availH -= allocH
 
-	// SubHeader
+	// 2. Action Stack (Dynamic, Priority 2)
+	// Stacks immediately below Header
+	allocAS := actionStackHeight
+	if allocAS > availH {
+		allocAS = availH
+	}
+	asRect = NewRect(0, hRect.Height, width, allocAS)
+	availH -= allocAS
+
+	// 3. SubHeader (Fixed, Priority 3 - Currently 0)
 	allocSH := SubHeaderHeight
 	if allocSH > availH {
 		allocSH = availH
 	}
-	shRect = NewRect(0, hRect.Height, width, allocSH)
+	shRect = NewRect(0, hRect.Height+asRect.Height, width, allocSH)
 	availH -= allocSH
 
-	// Footer (Bottom Up)
+	// 4. Footer (Fixed, Priority 4)
 	allocF := FooterHeight
 	if allocF > availH {
 		allocF = availH
 	}
-	// Y position of footer is: TotalHeight - allocF
-	// But if we condensed everything (e.g. h=4),
-	// H=3, SH=1, Footer=0?
-	// It's safer to stack them.
-	// But "Grid" implies structural integrity.
-	// If the screen is too small, Body should shrink to 0 first.
-	// Then SubHeader/Footer.
-	// Header usually has priority.
+	// Footer sticks to bottom
+	fRect = NewRect(0, height-allocF, width, allocF)
 
-	// Let's stick to simple top-down stack for H+SH, and bottom-up for F.
-	// Remaining checks are correct.
-
-	fRect = NewRect(0, height-allocF, width, allocF) // Sticks to bottom
-	if fRect.Y < hRect.Height+shRect.Height {
-		// Overlap due to extreme small height?
-		// Ensure Footer starts after SH
-		fRect.Y = hRect.Height + shRect.Height
+	// Safety check: ensure Footer doesn't overlap top content
+	topContentBottom := hRect.Height + asRect.Height + shRect.Height
+	if fRect.Y < topContentBottom {
+		fRect.Y = topContentBottom
 	}
 	availH -= allocF
 
-	// Body takes whatever is left between (Header+SubHeader) and Footer
-	bodyY := hRect.Height + shRect.Height
+	// 5. Body (Flex, Priority 5)
+	// Body takes whatever is left between Top Content and Footer
+	bodyY := topContentBottom
 	bodyH := fRect.Y - bodyY
 	if bodyH < 0 {
 		bodyH = 0
@@ -100,9 +106,10 @@ func CalculateGrid(width, height int) Grid {
 	bRect = NewRect(0, bodyY, width, bodyH)
 
 	return Grid{
-		Header:    hRect,
-		SubHeader: shRect,
-		Body:      bRect,
-		Footer:    fRect,
+		Header:      hRect,
+		ActionStack: asRect,
+		SubHeader:   shRect,
+		Body:        bRect,
+		Footer:      fRect,
 	}
 }

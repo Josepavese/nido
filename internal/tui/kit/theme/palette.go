@@ -18,9 +18,10 @@ import "github.com/charmbracelet/lipgloss"
 // terminal background detection.
 type Palette struct {
 	// Base surfaces
-	Background    lipgloss.AdaptiveColor
-	Surface       lipgloss.AdaptiveColor
-	SurfaceSubtle lipgloss.AdaptiveColor
+	Background       lipgloss.AdaptiveColor
+	Surface          lipgloss.AdaptiveColor
+	SurfaceSubtle    lipgloss.AdaptiveColor
+	SurfaceHighlight lipgloss.AdaptiveColor // Added for card borders/highlights
 
 	// Text hierarchy
 	Text      lipgloss.AdaptiveColor
@@ -46,9 +47,10 @@ type Palette struct {
 // Designed for terminals with dark backgrounds.
 var Dark = Palette{
 	// Base surfaces - dark blue-gray tones
-	Background:    lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0F1216"},
-	Surface:       lipgloss.AdaptiveColor{Light: "#F5F7FA", Dark: "#151A21"},
-	SurfaceSubtle: lipgloss.AdaptiveColor{Light: "#E8ECF0", Dark: "#1A2028"},
+	Background:       lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0F1216"},
+	Surface:          lipgloss.AdaptiveColor{Light: "#F5F7FA", Dark: "#151A21"},
+	SurfaceSubtle:    lipgloss.AdaptiveColor{Light: "#E8ECF0", Dark: "#1A2028"},
+	SurfaceHighlight: lipgloss.AdaptiveColor{Light: "#DCE0E6", Dark: "#2A323C"}, // Slightly lighter than subtle
 
 	// Text hierarchy
 	Text:      lipgloss.AdaptiveColor{Light: "#1A1A1A", Dark: "#E6EBF2"},
@@ -74,9 +76,10 @@ var Dark = Palette{
 // Designed for terminals with light backgrounds.
 var Light = Palette{
 	// Base surfaces
-	Background:    lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#FFFFFF"},
-	Surface:       lipgloss.AdaptiveColor{Light: "#F5F7FA", Dark: "#F5F7FA"},
-	SurfaceSubtle: lipgloss.AdaptiveColor{Light: "#E8ECF0", Dark: "#E8ECF0"},
+	Background:       lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#FFFFFF"},
+	Surface:          lipgloss.AdaptiveColor{Light: "#F5F7FA", Dark: "#F5F7FA"},
+	SurfaceSubtle:    lipgloss.AdaptiveColor{Light: "#E8ECF0", Dark: "#E8ECF0"},
+	SurfaceHighlight: lipgloss.AdaptiveColor{Light: "#DCE0E6", Dark: "#DCE0E6"},
 
 	// Text hierarchy
 	Text:      lipgloss.AdaptiveColor{Light: "#1A1A1A", Dark: "#1A1A1A"},
@@ -101,9 +104,10 @@ var Light = Palette{
 // Palette256 provides 256-color fallback for legacy terminals.
 // Uses ANSI color codes (0-255) for maximum compatibility.
 var Palette256 = Palette{
-	Background:    lipgloss.AdaptiveColor{Light: "231", Dark: "233"}, // white / dark gray
-	Surface:       lipgloss.AdaptiveColor{Light: "255", Dark: "235"}, // bright white / gray
-	SurfaceSubtle: lipgloss.AdaptiveColor{Light: "254", Dark: "236"}, // light gray / dark gray
+	Background:       lipgloss.AdaptiveColor{Light: "231", Dark: "233"}, // white / dark gray
+	Surface:          lipgloss.AdaptiveColor{Light: "255", Dark: "235"}, // bright white / gray
+	SurfaceSubtle:    lipgloss.AdaptiveColor{Light: "254", Dark: "236"}, // light gray / dark gray
+	SurfaceHighlight: lipgloss.AdaptiveColor{Light: "250", Dark: "238"}, // gray / dark gray
 
 	Text:      lipgloss.AdaptiveColor{Light: "232", Dark: "255"}, // black / white
 	TextDim:   lipgloss.AdaptiveColor{Light: "243", Dark: "245"}, // gray / light gray

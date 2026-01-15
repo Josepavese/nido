@@ -2,6 +2,8 @@
 package ops
 
 import (
+	"fmt"
+
 	"github.com/Josepavese/nido/internal/provider"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -77,6 +79,15 @@ func FetchCacheStats(prov provider.VMProvider) tea.Cmd {
 func PruneCache(prov provider.VMProvider) tea.Cmd {
 	return func() tea.Msg {
 		err := prov.CachePrune(true) // unused only
-		return CachePruneMsg{Err: err}
+		return OpResultMsg{Op: "prune", Err: err}
+	}
+}
+
+// DeleteCacheImage removes a specific cached image.
+func DeleteCacheImage(prov provider.VMProvider, name, version string) tea.Cmd {
+	opName := fmt.Sprintf("delete %s", name)
+	return func() tea.Msg {
+		err := prov.CacheRemove(name, version)
+		return OpResultMsg{Op: opName, Err: err}
 	}
 }

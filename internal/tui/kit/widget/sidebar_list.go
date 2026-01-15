@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/Josepavese/nido/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/internal/tui/kit/theme"
 	viewlet "github.com/Josepavese/nido/internal/tui/kit/view"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/paginator"
@@ -44,6 +45,7 @@ type SidebarStyles struct {
 // It enforces strict layout but accepts framework-agnostic styling.
 type SidebarList struct {
 	ListView // Embeds adapter logic
+	focused  bool
 }
 
 // NewSidebarList creates a new SidebarList with provided configuration.
@@ -109,7 +111,9 @@ func (d SidebarDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 	icon := item.Icon()
 
 	if icon != "" {
-		str = fmt.Sprintf("%s %s", icon, str)
+		// Use centralized RenderIcon for robust alignment (4 chars)
+		// This handles feathers, eggs, and DNA with consistent spacing.
+		str = fmt.Sprintf("%s%s", theme.RenderIcon(icon), str)
 	} else {
 		// Use configurable padding for non-icon items
 		if d.NoIconPadding != "" {
@@ -117,12 +121,11 @@ func (d SidebarDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 		}
 	}
 
-	// Truncate function (built-in standards)
-	// We use the known list width.
-	// Allow 2 chars right padding for scrollbar/border breathing room.
-	maxWidth := m.Width() - 2
-	if lipgloss.Width(str) > maxWidth && maxWidth > 0 {
-		str = lipgloss.NewStyle().MaxWidth(maxWidth).Render(str)
+	// Truncate to fit width
+	// Use Width-3 for safety against wide emojis pushing the border
+	maxW := m.Width() - 3
+	if maxW > 0 && lipgloss.Width(str) > maxW {
+		str = lipgloss.NewStyle().MaxWidth(maxW).Render(str)
 	}
 
 	if index == m.Index() {
@@ -189,13 +192,6 @@ func (s *SidebarList) Items() []list.Item {
 }
 
 // SetItemsGeneric allows setting items from generic list.Item slice,
-// filtering out those that don't implement SidebarItem if necessary,
-// or wrapping them?
-// Actually simpler: just type assert and panic/skip if wrong?
-// Or better: SidebarList just needs list.Item internally, but WE want to enforce SidebarItem for rendering.
-// If we pass list.Item that isn't SidebarItem, Render() might fail or look bad.
-// The handler converts vmItem which IS SidebarItem (now).
-// But it passes []list.Item type.
 func (s *SidebarList) SetItemsGeneric(items []list.Item) {
 	s.Model.SetItems(items)
 }
@@ -205,6 +201,15 @@ func (s *SidebarList) Paginator() *paginator.Model {
 }
 
 func (s *SidebarList) Update(msg tea.Msg) (viewlet.Viewlet, tea.Cmd) {
+	// Gate Key Handling: Only process keys if focused
+	if _, ok := msg.(tea.KeyMsg); ok && !s.Focused() {
+		return s, nil
+	}
+	// Gate Mouse Handling: Ignore mouse in Update (rely on HandleMouse or ignore completely)
+	if _, ok := msg.(tea.MouseMsg); ok {
+		return s, nil
+	}
+
 	oldIdx := s.Index()
 	var cmd tea.Cmd
 	newModel, cmd := s.Model.Update(msg)
@@ -221,7 +226,7 @@ func (s *SidebarList) Update(msg tea.Msg) (viewlet.Viewlet, tea.Cmd) {
 
 func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, tea.Cmd, bool) {
 	// Robust manual hit testing to bypass bubbles/list complexity
-	if msg.Action != tea.MouseActionPress {
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
 		return s, nil, false
 	}
 
@@ -249,6 +254,8 @@ func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, 
 	targetIdx := (page * perPage) + y
 
 	if targetIdx >= 0 && targetIdx < len(s.Model.Items()) {
+		// Auto-Focus on Click
+		s.Focus()
 		s.Model.Select(targetIdx)
 		item := s.Model.SelectedItem()
 
@@ -262,8 +269,8 @@ func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, 
 
 // Dummy methods to satisfy Viewlet interface if needed
 func (s *SidebarList) Resize(r layout.Rect) { s.Model.SetSize(r.Width, r.Height) }
-func (s *SidebarList) Focus() tea.Cmd       { return nil }
-func (s *SidebarList) Blur()                {}
-func (s *SidebarList) Focused() bool        { return true }
+func (s *SidebarList) Focus() tea.Cmd       { s.focused = true; return nil }
+func (s *SidebarList) Blur()                { s.focused = false }
+func (s *SidebarList) Focused() bool        { return s.focused }
 func (s *SidebarList) View() string         { return s.Model.View() }
 func (s *SidebarList) Init() tea.Cmd        { return nil }

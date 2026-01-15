@@ -67,6 +67,24 @@ type ConfigSavedMsg struct {
 	Value string
 }
 
+// VMDetailRequestMsg requests details for a VM.
+type VMDetailRequestMsg struct {
+	Name string
+}
+
+// VM Operation Constants
+const (
+	OpStart  = "start"
+	OpStop   = "stop"
+	OpDelete = "delete"
+)
+
+// RequestOpMsg requests a VM operation.
+type RequestOpMsg struct {
+	Op   string
+	Name string
+}
+
 // --- VM Commands ---
 
 // RefreshFleet fetches the current VM list from the provider.
@@ -148,6 +166,14 @@ func CreateTemplate(prov provider.VMProvider, vmName, templateName string) tea.C
 	return func() tea.Msg {
 		path, err := prov.CreateTemplate(vmName, templateName)
 		return OpResultMsg{Op: "create-template", Err: err, Path: path}
+	}
+}
+
+// DeleteTemplate removes a template.
+func DeleteTemplate(prov provider.VMProvider, name string) tea.Cmd {
+	return func() tea.Msg {
+		err := prov.DeleteTemplate(name)
+		return OpResultMsg{Op: "delete-template", Err: err}
 	}
 }
 

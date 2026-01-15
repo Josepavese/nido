@@ -68,3 +68,9 @@ func Center(w int, content string) string {
 func Right(w int, content string) string {
 	return lipgloss.NewStyle().Width(w).Align(lipgloss.Right).Render(content)
 }
+
+// PlaceOverlay centers content both vertically and horizontally within the given dimensions.
+// It is useful for modal dialogs and overlays.
+func PlaceOverlay(w, h int, content string) string {
+	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, content)
+}

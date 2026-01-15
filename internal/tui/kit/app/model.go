@@ -32,6 +32,14 @@ func (a *App) Init() tea.Cmd {
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
+	// Check for blocking viewlet (Modal active)
+	blocking := false
+	if v := a.Shell.ActiveViewlet(); v != nil {
+		if b, ok := v.(interface{ IsModalActive() bool }); ok {
+			blocking = b.IsModalActive()
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -42,11 +50,15 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		// GLOBAL NAV: Intercept Arrow Keys for Tab Switching
 		case "right":
-			a.Shell.NextTab()
-			return a, nil
+			if !blocking {
+				a.Shell.NextTab()
+				return a, nil
+			}
 		case "left":
-			a.Shell.PrevTab()
-			return a, nil
+			if !blocking {
+				a.Shell.PrevTab()
+				return a, nil
+			}
 		}
 	case tea.WindowSizeMsg:
 		a.Shell.Resize(msg.Width, msg.Height)

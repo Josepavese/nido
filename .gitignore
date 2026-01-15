@@ -23,3 +23,6 @@ nohup.out
 
 # gui
 /gui
+
+# logs
+/logs

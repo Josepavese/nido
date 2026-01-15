@@ -3,8 +3,10 @@ package shell
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Josepavese/nido/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/internal/tui/kit/theme"
 	viewlet "github.com/Josepavese/nido/internal/tui/kit/view"
 	"github.com/Josepavese/nido/internal/tui/kit/widget"
 	tea "github.com/charmbracelet/bubbletea"
@@ -36,6 +38,7 @@ type ShellStyles struct {
 	SubHeaderContext lipgloss.Style
 	SubHeaderNav     lipgloss.Style
 	StatusBar        widget.StatusBarStyles
+	BorderColor      lipgloss.TerminalColor
 }
 
 // Shell is the generic container for the TUI.
@@ -56,7 +59,8 @@ type Shell struct {
 	activeRoute   Route
 
 	// Layout State
-	grid layout.Grid
+	grid        layout.Grid
+	ActionStack *widget.ActionStack // New Widget
 
 	// Status & Logging
 	Loading   bool
@@ -72,6 +76,7 @@ type Shell struct {
 func NewShell() Shell {
 	return Shell{
 		routesByKey: make(map[string]viewlet.Viewlet),
+		ActionStack: widget.NewActionStack(),
 	}
 }
 
@@ -83,6 +88,20 @@ func (s *Shell) AddRoute(r Route) {
 	if s.activeKey == "" {
 		s.SwitchTo(r.Key)
 	}
+}
+
+// StartAction starts a unified global action and returns its ID and init Cmd
+func (s *Shell) StartAction(msg string) (string, tea.Cmd) {
+	id := fmt.Sprintf("act-%d", time.Now().UnixNano())
+	cmd := s.ActionStack.Add(id, msg)
+	s.RecalculateLayout() // Force resize to show stack
+	return id, cmd
+}
+
+// FinishAction removes an action from the stack
+func (s *Shell) FinishAction(id string) {
+	s.ActionStack.Remove(id)
+	s.RecalculateLayout() // Force resize to hide stack if empty
 }
 
 // SwitchTo activates a viewlet by key.
@@ -104,9 +123,18 @@ func (s *Shell) SwitchTo(key string) {
 	}
 }
 
-// Init initializes the shell.
+// Init initializes the shell and all registered viewlets.
 func (s *Shell) Init() tea.Cmd {
-	return nil
+	var cmds []tea.Cmd
+	// Initialize ActionStack (starts spinners)
+	cmds = append(cmds, s.ActionStack.Init())
+
+	for _, r := range s.routes {
+		if r.Viewlet != nil {
+			cmds = append(cmds, r.Viewlet.Init())
+		}
+	}
+	return tea.Batch(cmds...)
 }
 
 // NextTab cycles to the next tab.
@@ -144,9 +172,13 @@ func (s *Shell) PrevTab() {
 
 // Update handles shell-level messages (Status, Logs, SwitchTab).
 func (s *Shell) Update(msg tea.Msg) tea.Cmd {
+	var cmds []tea.Cmd
+
+	// 1. Forward updates to ActionStack (Spinner ticks, etc.)
+	cmds = append(cmds, s.ActionStack.Update(msg))
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Global Navigation
 		// Global Navigation
 		// Handled by App (model.go) now to prevent viewlet conflict.
 		// Keeping switch here mostly for future shell-specific shortcuts if needed.
@@ -160,9 +192,25 @@ func (s *Shell) Update(msg tea.Msg) tea.Cmd {
 		}
 
 	case viewlet.StatusMsg:
+		// Convert old StatusMsg to ActionStack calls
 		s.Loading = msg.Loading
 		s.Operation = msg.Operation
 		s.Progress = msg.Progress
+
+		if s.Loading {
+			// Start/Update Action
+			cmd := s.ActionStack.Add("global", s.Operation)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+			s.ActionStack.UpdateProgress("global", s.Progress)
+			s.RecalculateLayout()
+		} else {
+			// Stop Action
+			s.ActionStack.Remove("global")
+			s.RecalculateLayout()
+		}
+
 	case viewlet.LogMsg:
 		s.Logs = append(s.Logs, msg.Text)
 	case viewlet.SwitchTabMsg:
@@ -174,18 +222,34 @@ func (s *Shell) Update(msg tea.Msg) tea.Cmd {
 			s.SwitchTo(s.routes[msg.TabIndex].Key)
 		}
 	}
-	return nil
+	return tea.Batch(cmds...)
 }
 
 // HandleMouse processes mouse events using grid-aware localization.
 // It returns the hit zone, localized coordinates within that zone, a command,
 // and a boolean indicating if the active viewlet handled the event.
 
-// SetStatus manually updates the status bar state.
+// UpdateAction synchronizes an action's state with the stack and returns an init Cmd if new.
+func (s *Shell) UpdateAction(id, message string, progress float64) tea.Cmd {
+	cmd := s.ActionStack.Add(id, message)
+	s.ActionStack.UpdateProgress(id, progress)
+	s.RecalculateLayout()
+	return cmd
+}
+
+// SetStatus manually updates the status bar state and syncs with ActionStack.
 func (s *Shell) SetStatus(loading bool, op string, progress float64) {
 	s.Loading = loading
 	s.Operation = op
 	s.Progress = progress
+
+	if loading {
+		s.ActionStack.Add("global", op)
+		s.ActionStack.UpdateProgress("global", progress)
+	} else {
+		s.ActionStack.Remove("global")
+	}
+	s.RecalculateLayout()
 }
 
 // ActiveViewlet returns the current viewlet.
@@ -193,13 +257,25 @@ func (s *Shell) ActiveViewlet() viewlet.Viewlet {
 	return s.activeViewlet
 }
 
+// RecalculateLayout triggers a grid recalculation based on current state (e.g. stack height)
+func (s *Shell) RecalculateLayout() {
+	if s.Width > 0 && s.Height > 0 {
+		s.Resize(s.Width, s.Height)
+	}
+}
+
 // Resize updates dimensions and propagates to active viewlet.
 func (s *Shell) Resize(w, h int) {
 	s.Width = w
 	s.Height = h
 
-	// Calculate strict layout
-	s.grid = layout.CalculateGrid(w, h)
+	// Calculate strict layout with dynamic stack height
+	stackHeight := 0
+	if s.ActionStack != nil {
+		stackHeight = s.ActionStack.Height()
+	}
+
+	s.grid = layout.CalculateGrid(w, h, stackHeight)
 
 	// Propagate to active viewlet
 	if s.activeViewlet != nil {
@@ -219,7 +295,59 @@ func (s *Shell) View() string {
 	// 1. Render Chrome
 	// We use the cached grid from Resize()
 	header := place(s.grid.Header, s.renderHeader())
-	subHeader := place(s.grid.SubHeader, s.renderSubHeader())
+	// SubHeader removed as per design change (Height=0)
+
+	// Action Stack
+	var stack string
+	if s.grid.ActionStack.Height > 0 {
+		// SMART WIDTH CALCULATION:
+		// User wants the global loader to match the content width (Sidebar + Detail Form).
+		// We calculate what that width would be based on the current terminal width.
+
+		// 1. Sidebar Width (Dynamic based on total width)
+		// We replicate the logic from widget/split_view.go (via layout.Calculate)
+		sidebarW := layout.Calculate(s.Width, s.Height, 25, theme.Width.Sidebar, theme.Width.SidebarWide).SidebarWidth
+
+		// 2. Detail Form Width (Max 60 + Padding)
+		// Available width for detail = Total - Sidebar - SplitDivider(1)
+		availDetail := s.Width - sidebarW - 1
+		padding := theme.Current().Layout.ContainerPadding // 2
+
+		// Logic from registry.go / hatchery.go / fleet.go:
+		// safeWidth := w - (2 * padding)
+		formW := availDetail - (2 * padding)
+
+		// Apply constraints matches viewlets
+		if formW > 60 {
+			formW = 60
+		}
+		if formW < 40 {
+			// Even if available is small, we clamp to min form width
+			// But if avail is REALLY small, we shouldn't overflow?
+			// Viewlets clamp to 40. We should match them.
+			formW = 40
+		}
+
+		// If clamped > available, we must cap at available to avoid overflow artifacts?
+		// Note form logic: if safeWidth < 40 { safeWidth = 40 }. So it forces 40.
+		// If total width is tiny, layout breaks anyway. We stick to matching logic.
+
+		// 3. Target Width
+		// Visual Width = Sidebar + Divider + FormWidth
+		// We do NOT add padding back because viewlets don't render it (flush left),
+		// or if they do (Visual Gap), the user wants the CARD to match the CONTENT, not the whitespace.
+		// The screenshot showed the card being wider than the form.
+		// My previous code added +4 padding.
+		// Removing it should fix "un po piu lunga".
+		targetW := sidebarW + 1 + formW
+
+		if targetW > s.Width {
+			targetW = s.Width
+		}
+
+		stack = place(s.grid.ActionStack, s.ActionStack.View(targetW))
+	}
+
 	footer := place(s.grid.Footer, s.renderFooter())
 
 	// 2. Render Body
@@ -235,42 +363,47 @@ func (s *Shell) View() string {
 	// 3. Stack them
 	return lipgloss.JoinVertical(lipgloss.Left,
 		header,
-		subHeader,
+		stack,
 		body,
 		footer,
 	)
 }
 
 func (s *Shell) renderHeader() string {
-	// Tabs
-	var tabs []string
-	for _, r := range s.routes {
-		style := lipgloss.NewStyle().Padding(0, 1).Foreground(s.Styles.StatusBar.Label.GetForeground())
+	var titles []string
+	var activeIndex int
+
+	for i, r := range s.routes {
+		titles = append(titles, r.Title)
 		if r.Key == s.activeKey {
-			style = style.Bold(true).
-				Foreground(s.Styles.SubHeaderContext.GetForeground()).
-				Reverse(true)
+			activeIndex = i
 		}
-		tabs = append(tabs, style.Render(r.Key))
 	}
-	startTabs := lipgloss.JoinHorizontal(lipgloss.Top, tabs...)
 
-	// Spacer (Push tabs to right if desired, or keep left)
-	// User requested "Remove Branding", implying simpler look.
-	// Let's keep tabs on the LEFT for standard navigation feel, or RIGHT?
-	// Previous code put them on right with spacer.
-	// "return lipgloss.JoinHorizontal(lipgloss.Top, branding, spacer, startTabs)"
-	// If we remove branding and spacer, they are on LEFT.
-	// Let's stick to LEFT alignment for simpler TUI.
+	// Canonical Styles: use matching palette colors
+	t := theme.Current()
+	borderColor := t.Palette.SurfaceHighlight
 
-	// If we want them on RIGHT:
-	// availWidth := s.grid.Header.Width - lipgloss.Width(startTabs)
-	// if availWidth < 0 { availWidth = 0 }
-	// spacer := strings.Repeat(" ", availWidth)
-	// return lipgloss.JoinHorizontal(lipgloss.Top, spacer, startTabs)
+	// Active: Accent (Bright), Inactive: TextDim (Grey)
+	activeFg := t.Palette.Accent
+	inactiveFg := t.Palette.TextDim
 
-	// Returning Left Aligned Tabs:
-	return startTabs
+	// Use the new widget for canonical rendering
+	content := widget.RenderTabs(widget.TabsRenderOptions{
+		Routes:         titles,
+		ActiveIndex:    activeIndex,
+		Width:          s.Width,
+		HighlightColor: activeFg,
+		InactiveColor:  inactiveFg,
+		BorderColor:    borderColor,
+	})
+
+	// Wrap in a height-4 container to match grid allocation
+	container := lipgloss.NewStyle().
+		Height(4).
+		MaxHeight(4)
+
+	return container.Render(content)
 }
 
 func (s *Shell) renderSubHeader() string {
@@ -296,22 +429,59 @@ func (s *Shell) renderFooter() string {
 	if s.Loading {
 		sb.SetStatus(fmt.Sprintf("EXECUTING %s...", strings.ToUpper(s.Operation)))
 	} else {
-		sb.SetStatus("NOMINAL")
+		sb.SetStatus("")
 	}
 
-	// Add shortcuts from active viewlet
+	// 1. Global Navigation Shortcuts
+	var sbItems []widget.StatusBarItem
+	sbItems = append(sbItems, widget.StatusBarItem{
+		Key:   "←/→",
+		Label: "menu",
+	})
+	sbItems = append(sbItems, widget.StatusBarItem{
+		Key:   "q",
+		Label: "quit",
+	})
+
+	// 2. Viewlet Shortcuts
 	if s.activeViewlet != nil {
-		var sbItems []widget.StatusBarItem
 		for _, sc := range s.activeViewlet.Shortcuts() {
 			sbItems = append(sbItems, widget.StatusBarItem{
-				Key:   sc.Key,
+				Key:   prettifyKey(sc.Key),
 				Label: sc.Label,
 			})
 		}
-		sb.SetItems(sbItems)
 	}
+	sb.SetItems(sbItems)
 
 	return sb.View()
+}
+
+func prettifyKey(k string) string {
+	switch strings.ToLower(k) {
+	case "enter":
+		return "↵"
+	case "tab":
+		return "⭾"
+	case "shift+tab":
+		return "⇧⭾"
+	case "up", "arrow up":
+		return "↑"
+	case "down", "arrow down":
+		return "↓"
+	case "left", "arrow left":
+		return "←"
+	case "right", "arrow right":
+		return "→"
+	case "delete", "backspace":
+		return "⌫"
+	case "esc":
+		return "⎋"
+	case "ctrl+c":
+		return "^C"
+	default:
+		return k
+	}
 }
 
 // HandleMouse processes mouse events using grid-aware localization.
@@ -399,4 +569,14 @@ func DebugPlace(r layout.Rect, content string) string {
 		Border(lipgloss.NormalBorder())
 
 	return style.Render(content)
+}
+
+// RouteCount returns the number of registered routes (Debug).
+func (s *Shell) RouteCount() int {
+	return len(s.routes)
+}
+
+// GridHeaderHeight returns the calculated grid header height (Debug).
+func (s *Shell) GridHeaderHeight() int {
+	return s.grid.Header.Height
 }

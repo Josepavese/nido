@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/Josepavese/nido/internal/tui/kit/shell"
 	tea "github.com/charmbracelet/bubbletea"
@@ -31,8 +30,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sh.FooterContent = fmt.Sprintf("FOOTER (%dx%d) - Resize me!", msg.Width, 1)
 
 		// Fill body with pattern
-		m.sh.BodyContent = "BODY CONTENT AREA\nShould flex to fill remaining space.\n" +
-			time.Now().Format(time.RFC3339)
+		// Fill body with pattern
+		// m.sh.BodyContent = "BODY CONTENT AREA\nShould flex to fill remaining space.\n" +
+		// 	time.Now().Format(time.RFC3339)
 	}
 	return m, nil
 }

@@ -20,12 +20,19 @@ type Theme struct {
 
 	// Styles contains pre-defined lipgloss styles
 	Styles Styles
+
+	// Layout contains spacing/sizing metrics
+	Layout Layout
 }
 
 // Styles holds common reusable styles
 type Styles struct {
 	SidebarItem         lipgloss.Style
 	SidebarItemSelected lipgloss.Style
+	Text                lipgloss.Style
+	TextDim             lipgloss.Style
+	Success             lipgloss.Style
+	ButtonActive        lipgloss.Style
 }
 
 // themeMode represents the user's theme preference
@@ -73,6 +80,14 @@ func Current() Theme {
 	styles := Styles{
 		SidebarItem:         lipgloss.NewStyle().Foreground(palette.TextDim),
 		SidebarItemSelected: lipgloss.NewStyle().Foreground(palette.Accent).Bold(true),
+		Text:                lipgloss.NewStyle().Foreground(palette.Text),
+		TextDim:             lipgloss.NewStyle().Foreground(palette.TextDim),
+		Success:             lipgloss.NewStyle().Foreground(palette.Success),
+		ButtonActive:        lipgloss.NewStyle().Foreground(palette.Background).Background(palette.Accent).Bold(true).Padding(0, 2),
+	}
+
+	layout := Layout{
+		ContainerPadding: 2, // Standard symmetry (was 2 implied)
 	}
 
 	return Theme{
@@ -80,7 +95,13 @@ func Current() Theme {
 		Is256:   is256,
 		IsDark:  isDark,
 		Styles:  styles,
+		Layout:  layout,
 	}
+}
+
+// Layout holds metrics for UI spacing and sizing.
+type Layout struct {
+	ContainerPadding int
 }
 
 // parseThemeMode interprets the NIDO_THEME environment variable.

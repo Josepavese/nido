@@ -22,6 +22,7 @@ type SplitView struct {
 
 	// internal state
 	resolvedSidebarWidth int
+	height               int
 }
 
 // NewSplitView creates a new SplitView with a specific border style for the sidebar separator.
@@ -54,28 +55,44 @@ func (s *SplitView) Update(msg tea.Msg) (viewlet.Viewlet, tea.Cmd) {
 // View renders the sidebar and main content side-by-side.
 func (s *SplitView) View() string {
 	sidebarView := s.Sidebar.View()
+	mainView := s.Main.View()
 
 	// Use resolved width from Resize
 	if s.resolvedSidebarWidth <= 0 {
-		return s.Main.View()
+		return mainView
 	}
 
-	// Render Sidebar with right border.
-	// We MUST enforce the width here to prevent the sidebar from shrinking
-	// to the smallest element (especially important for paginated lists).
-	sidebarStyled := s.BorderStyle.Copy().
+	// 1. Sidebar (Content Only)
+	sidebarStyled := lipgloss.NewStyle().
 		Width(s.resolvedSidebarWidth).
 		Render(sidebarView)
+
+	// 2. Separator Column
+	// We create a standalone column that is 0-width but has a Left Border.
+	// We force height to s.height to ensure the line goes all the way down.
+	// Note: Border(Left) adds 1 char width.
+	sepStyle := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true). // Left only
+		BorderForeground(theme.Current().Palette.SurfaceHighlight).
+		Height(s.height)
+
+	separator := sepStyle.Render("")
+
+	// 3. Main Content
+	// No border on main content correctly.
 
 	return lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		sidebarStyled,
-		s.Main.View(),
+		separator,
+		mainView,
 	)
 }
 
 // Resize calculates the layout for sidebar and main content.
 func (s *SplitView) Resize(r layout.Rect) {
+	s.height = r.Height // Persist height for View/Separator
+
 	sw := s.SidebarWidth
 	if sw <= 0 {
 		// Use standard Nido logic if no explicit width provided

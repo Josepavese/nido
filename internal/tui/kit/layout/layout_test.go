@@ -63,7 +63,7 @@ func TestCalculateGrid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g := CalculateGrid(tt.w, tt.h)
+			g := CalculateGrid(tt.w, tt.h, 0)
 
 			if g.Body.Height != tt.wantBodyH {
 				t.Errorf("Body Height mismatch: got %d, want %d", g.Body.Height, tt.wantBodyH)

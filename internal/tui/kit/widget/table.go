@@ -59,7 +59,7 @@ func NewTable(columns []TableColumn, rows []TableRow, height int) Table {
 		Foreground(t.Palette.AccentStrong).
 		Bold(true).
 		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(t.Palette.SurfaceSubtle).
+		BorderForeground(t.Palette.SurfaceHighlight).
 		BorderBottom(true)
 
 	s.Selected = s.Selected.
