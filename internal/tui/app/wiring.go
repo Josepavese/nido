@@ -129,10 +129,25 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ops.RequestOpMsg:
 		n.Shell.Operation = msg.Op
-		// NOTE: VM Ops are quick usually, but if they hang, we shld assume matching OpResultMsg has "start" or "stop"
-		// ops.StartVM returns OpResultMsg{Op: "start"}
-		id, cmd := n.Shell.StartAction(fmt.Sprintf("%s %s", strings.ToUpper(msg.Op), msg.Name))
-		n.activeActions[msg.Op] = id
+
+		// "Fast" Operations: Don't show global ActionStack.
+		// These are handled partially by local spinners (Fleet) or are instant enough.
+		// - Start/Stop: Local spinner in Fleet sidebar.
+		// - Delete: Still showing global for now as per user request (it feels heavy).
+		// - Delete Template: Fast action from Hatchery, kept fast.
+		isFastOp := false
+		if msg.Op == ops.OpStart || msg.Op == ops.OpStop || msg.Op == "delete-template" {
+			isFastOp = true
+		}
+
+		var id string
+		var cmd tea.Cmd
+
+		// Only trigger Global Action Card if NOT fast op
+		if !isFastOp {
+			id, cmd = n.Shell.StartAction(fmt.Sprintf("%s %s", strings.ToUpper(msg.Op), msg.Name))
+			n.activeActions[msg.Op] = id
+		}
 
 		switch msg.Op {
 		case ops.OpStart:
@@ -143,8 +158,10 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return n, tea.Batch(cmd, ops.DeleteVM(n.prov, msg.Name))
 		}
 		// If unknown op, cancel immediately
-		n.Shell.FinishAction(id)
-		delete(n.activeActions, msg.Op)
+		if !isFastOp {
+			n.Shell.FinishAction(id)
+			delete(n.activeActions, msg.Op)
+		}
 
 	case ops.OpResultMsg:
 		// 1. Finish Action

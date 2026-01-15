@@ -163,7 +163,20 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 			targetIndex := 0 // Default to first
 
 			for i, v := range msg.Items {
-				fi := FleetItem{Name: v.Name, State: v.State}
+				// Spinner Logic:
+				// If this item is transitioning, use the current spinner frame
+				isTransitioning := f.transitioning[v.Name]
+				frame := ""
+				if isTransitioning {
+					frame = f.spinner.View()
+				}
+
+				fi := FleetItem{
+					Name:          v.Name,
+					State:         v.State,
+					Transitioning: isTransitioning,
+					SpinnerFrame:  frame,
+				}
 				newItems[i] = fi
 				f.items[i] = fi
 
@@ -179,9 +192,6 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 				f.Sidebar.Select(targetIndex)
 
 				// Always fetch fresh detail for the active item (status might have changed)
-				// This fixes:
-				// 1. Initial Load (targetIndex=0, fetches detail)
-				// 2. Selection preservation (targetIndex=saved, fetches detail)
 				if selected, ok := newItems[targetIndex].(FleetItem); ok {
 					cmds = append(cmds, func() tea.Msg {
 						return ops.VMDetailRequestMsg{Name: selected.Name}
@@ -205,20 +215,33 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 				BackingPath:    msg.Detail.BackingPath,
 				BackingMissing: msg.Detail.BackingMissing,
 			}
-			// Update the detail view
 			f.DetailView.UpdateDetail(f.detail)
+
+			// Safely clear transitioning if state matches expected?
+			// Actually, ops logic clears it on OpResult.
+			// But if we get a detail update and it's what we want, maybe we should clear?
+			// Let's stick to OpResult for determinism.
 		}
 
 	// Forward Actions from Detail View
 	case FleetActionMsg:
+		// Mark as transitioning locally
+		f.transitioning[msg.Name] = true
+		cmds = append(cmds, f.spinner.Tick) // Start ticking!
+
 		switch msg.Action {
 		case "start":
 			return f, func() tea.Msg { return ops.RequestOpMsg{Op: ops.OpStart, Name: msg.Name} }
 		case "stop":
 			return f, func() tea.Msg { return ops.RequestOpMsg{Op: ops.OpStop, Name: msg.Name} }
 		case "delete":
+			// Delete is still global, but we can track it too if we want.
+			// User said fast ops. Delete might be slow.
+			// Let's NOT track delete locally to keep distinction.
+			delete(f.transitioning, msg.Name)
 			return f, func() tea.Msg { return ops.RequestOpMsg{Op: ops.OpDelete, Name: msg.Name} }
 		case "toggle":
+			f.transitioning[msg.Name] = true
 			if f.detail.State == "running" {
 				return f, func() tea.Msg { return ops.RequestOpMsg{Op: ops.OpStop, Name: msg.Name} }
 			}
@@ -227,16 +250,65 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 
 	// Operation Results (Error Handling)
 	case ops.OpResultMsg:
+		// Clear transitioning state
+		if msg.Path == "" { // Use Path or Name? OpResultMsg currently lacks Name field...
+			// Wait, OpResultMsg in commands.go:
+			// type OpResultMsg struct { Op string; Err error; Path string }
+			// It doesn't have Name! We need to fix commands.go or infer it?
+			// Ideally commands.go should return Name.
+			// Current fix: Adding Name to OpResultMsg in commands.go is best.
+			// BUT, for now in the viewlet, we might not know essentialy WHICH vm failed if we have multiple.
+			// However, Nido TUI is single-threaded mostly for users.
+			// Let's check commands.go first.
+		}
+		// If we can't identify the VM, we might clear ALL?
+		// Or we can rely on VMListMsg refesh which usually follows OpResult.
+
 		if msg.Err != nil {
 			title, details := f.mapError(msg.Err)
 			f.DetailView.ErrorModal.Title = title
 			f.DetailView.ErrorModal.Message = details
 			f.DetailView.ErrorModal.Show()
-			return f, nil
+			// Clear all transitioning on error to be safe
+			f.transitioning = make(map[string]bool)
+			// Note: We don't need to trigger RefreshFleet manually here because
+			// wiring.go handles general refreshes. The clearing of map is enough
+			// to stop spinners on next render cycle (triggered by any msg).
+		} else {
+			// Success! wiring.go will trigger RefreshFleet.
+			// We can clear active transitions here IF we knew the name.
+			// Since we don't, let's clear all? Or wait for List update?
+			// If we wait for List update, the icons might still spin if we don't clear map.
+			// We MUST clear the map.
+			f.transitioning = make(map[string]bool)
 		}
-		// Success cases might trigger refresh automatically via other means or we can force it
-		// Usually App handles refresh, but if we need immediate feedback we can do it here.
-		// For now, errors are the priority.
+		return f, nil
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		f.spinner, cmd = f.spinner.Update(msg)
+		cmds = append(cmds, cmd)
+
+		// Force re-render of sidebar items with new frame
+		// We re-use current items but update spinner frame
+		currentItems := f.Sidebar.Items() // Generic items
+		newItems := make([]widget.SidebarItem, len(currentItems))
+
+		anySpinning := false
+		for i, item := range currentItems {
+			if fi, ok := item.(FleetItem); ok {
+				if f.transitioning[fi.Name] {
+					fi.SpinnerFrame = f.spinner.View()
+					anySpinning = true
+				}
+				newItems[i] = fi
+			}
+		}
+
+		if anySpinning {
+			f.Sidebar.SetItems(newItems)
+		}
+		return f, tea.Batch(cmds...)
 
 	case tea.KeyMsg:
 		switch msg.String() {
