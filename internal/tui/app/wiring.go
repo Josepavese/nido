@@ -211,13 +211,13 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) erro
 	kitApp.Shell.Styles = shell.ShellStyles{
 		// Header: Deep background, subtle bottom border in the same grey palette
 		Header:           lipgloss.NewStyle().Background(t.Palette.Surface).Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(t.Palette.SurfaceSubtle),
-		SubHeaderContext: lipgloss.NewStyle().Foreground(t.Palette.TextDim).Bold(true),
+		SubHeaderContext: t.Styles.Label.Copy().Bold(true),
 		// SubHeaderNav: subtle grey
-		SubHeaderNav: lipgloss.NewStyle().Foreground(t.Palette.TextDim),
+		SubHeaderNav: t.Styles.Label.Copy(),
 		StatusBar: widget.StatusBarStyles{
-			Key:    lipgloss.NewStyle().Foreground(t.Palette.TextDim).Bold(true),
-			Label:  lipgloss.NewStyle().Foreground(t.Palette.TextDim),
-			Status: lipgloss.NewStyle().Foreground(t.Palette.TextDim),
+			Key:    t.Styles.Label.Copy().Bold(true),
+			Label:  t.Styles.Label.Copy(),
+			Status: t.Styles.Label.Copy(),
 		},
 		BorderColor: t.Palette.SurfaceHighlight,
 	}

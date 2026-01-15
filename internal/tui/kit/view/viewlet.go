@@ -46,6 +46,9 @@ type Viewlet interface {
 	// HandleMouse processes mouse events at localized coordinates (x, y).
 	// Returns the updated viewlet, a command, and a boolean indicating if the event was handled.
 	HandleMouse(x, y int, msg tea.MouseMsg) (Viewlet, tea.Cmd, bool)
+
+	// IsModalActive returns whether a modal dialog is currently blocking interaction.
+	IsModalActive() bool
 }
 
 // BaseViewlet provides common functionality for viewlets.
@@ -96,6 +99,11 @@ func (b *BaseViewlet) Shortcuts() []Shortcut {
 // HandleMouse provides a default no-op implementation.
 func (b *BaseViewlet) HandleMouse(x, y int, msg tea.MouseMsg) (Viewlet, tea.Cmd, bool) {
 	return nil, nil, false
+}
+
+// IsModalActive provides a default implementation (no modal).
+func (b *BaseViewlet) IsModalActive() bool {
+	return false
 }
 
 // DefaultShortcuts returns common shortcuts shared across viewlets.

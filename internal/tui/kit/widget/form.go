@@ -111,12 +111,11 @@ func (i *Input) View(width int) string {
 			labelWidth = 8
 		}
 
-		labelStyle := lipgloss.NewStyle().
-			Foreground(t.Palette.TextDim).
+		labelStyle := t.Styles.Label.Copy().
 			Width(labelWidth).
 			PaddingRight(1)
 
-		valueStyle := lipgloss.NewStyle().Foreground(t.Palette.Text)
+		valueStyle := t.Styles.Value.Copy()
 		if i.Error != "" {
 			valueStyle = valueStyle.Foreground(t.Palette.Error)
 		}
@@ -365,13 +364,12 @@ func RenderBoxedField(label, content, errorMsg string, focused bool, width int) 
 	}
 
 	// 2. Define Styles
-	labelStyle := lipgloss.NewStyle().
-		Foreground(t.Palette.TextDim).
+	labelStyle := t.Styles.Label.Copy().
 		Width(labelWidth).
 		MaxWidth(labelWidth).
 		Align(lipgloss.Left)
 
-	contentStyle := lipgloss.NewStyle()
+	contentStyle := t.Styles.Value.Copy()
 
 	borderColor := t.Palette.SurfaceHighlight
 	validation := ""

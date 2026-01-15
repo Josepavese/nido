@@ -161,3 +161,7 @@ func (m *MasterDetail) Blur() {
 func (m *MasterDetail) Focused() bool {
 	return m.Sidebar.Focused() || m.Pages.Focused()
 }
+
+func (m *MasterDetail) IsModalActive() bool {
+	return m.Sidebar.IsModalActive() || m.Pages.IsModalActive()
+}

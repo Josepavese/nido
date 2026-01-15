@@ -35,9 +35,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Check for blocking viewlet (Modal active)
 	blocking := false
 	if v := a.Shell.ActiveViewlet(); v != nil {
-		if b, ok := v.(interface{ IsModalActive() bool }); ok {
-			blocking = b.IsModalActive()
-		}
+		blocking = v.IsModalActive()
 	}
 
 	switch msg := msg.(type) {

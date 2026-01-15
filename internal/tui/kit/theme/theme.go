@@ -31,8 +31,19 @@ type Styles struct {
 	SidebarItemSelected lipgloss.Style
 	Text                lipgloss.Style
 	TextDim             lipgloss.Style
+	TextMuted           lipgloss.Style
+	Accent              lipgloss.Style
+	AccentStrong        lipgloss.Style
 	Success             lipgloss.Style
+	Error               lipgloss.Style
+	Warning             lipgloss.Style
 	ButtonActive        lipgloss.Style
+
+	// Semantic components
+	Label  lipgloss.Style
+	Value  lipgloss.Style
+	Title  lipgloss.Style
+	Border lipgloss.Style
 }
 
 // themeMode represents the user's theme preference
@@ -42,6 +53,9 @@ const (
 	themeModeAuto themeMode = iota
 	themeModeDark
 	themeModeLight
+	themeModePink
+	themeModeHighContrast
+	themeModeMatrix
 )
 
 // Current returns the active theme based on:
@@ -69,12 +83,26 @@ func Current() Theme {
 	// Note: AdaptiveColor automatically handles light/dark rendering
 	// The palette contains both Light and Dark values; lipgloss picks the right one
 	var palette Palette
-	if is256 {
-		palette = Palette256
-	} else if isDark {
+	switch mode {
+	case themeModePink:
+		palette = Pink
+	case themeModeHighContrast:
+		palette = HighContrast
+	case themeModeMatrix:
+		palette = Matrix
+	case themeModeDark:
 		palette = Dark
-	} else {
+	case themeModeLight:
 		palette = Light
+	default:
+		// themeModeAuto or fallback
+		if is256 {
+			palette = Palette256
+		} else if isDark {
+			palette = Dark
+		} else {
+			palette = Light
+		}
 	}
 
 	styles := Styles{
@@ -82,8 +110,21 @@ func Current() Theme {
 		SidebarItemSelected: lipgloss.NewStyle().Foreground(palette.Accent).Bold(true),
 		Text:                lipgloss.NewStyle().Foreground(palette.Text),
 		TextDim:             lipgloss.NewStyle().Foreground(palette.TextDim),
+		TextMuted:           lipgloss.NewStyle().Foreground(palette.TextMuted),
+		Accent:              lipgloss.NewStyle().Foreground(palette.Accent),
+		AccentStrong:        lipgloss.NewStyle().Foreground(palette.AccentStrong).Bold(true),
 		Success:             lipgloss.NewStyle().Foreground(palette.Success),
+		Error:               lipgloss.NewStyle().Foreground(palette.Error),
+		Warning:             lipgloss.NewStyle().Foreground(palette.Warning),
 		ButtonActive:        lipgloss.NewStyle().Foreground(palette.Background).Background(palette.Accent).Bold(true).Padding(0, 2),
+
+		// Standardized Component Styles
+		Label: lipgloss.NewStyle().Foreground(palette.TextDim),
+		Value: lipgloss.NewStyle().Foreground(palette.Text),
+		Title: lipgloss.NewStyle().Foreground(palette.Accent).Bold(true),
+		Border: lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(palette.SurfaceHighlight),
 	}
 
 	layout := Layout{
@@ -111,6 +152,12 @@ func parseThemeMode(env string) themeMode {
 		return themeModeLight
 	case "dark":
 		return themeModeDark
+	case "pink":
+		return themeModePink
+	case "high-contrast":
+		return themeModeHighContrast
+	case "matrix":
+		return themeModeMatrix
 	default:
 		return themeModeAuto
 	}

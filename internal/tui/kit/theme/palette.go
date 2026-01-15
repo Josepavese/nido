@@ -124,3 +124,60 @@ var Palette256 = Palette{
 	Hover:    lipgloss.AdaptiveColor{Light: "153", Dark: "237"}, // light blue / dark
 	Disabled: lipgloss.AdaptiveColor{Light: "250", Dark: "240"}, // gray
 }
+
+// Pink is the "Nido Pink Edition" - Cyber-neon aesthetics.
+var Pink = Palette{
+	Background:       lipgloss.AdaptiveColor{Light: "#FFF0F6", Dark: "#0D0208"},
+	Surface:          lipgloss.AdaptiveColor{Light: "#FFDEEB", Dark: "#1A0512"},
+	SurfaceSubtle:    lipgloss.AdaptiveColor{Light: "#FFCCE1", Dark: "#2A0B1E"},
+	SurfaceHighlight: lipgloss.AdaptiveColor{Light: "#FFB3D5", Dark: "#4A1236"},
+	Text:             lipgloss.AdaptiveColor{Light: "#4D002B", Dark: "#FFF1F7"},
+	TextDim:          lipgloss.AdaptiveColor{Light: "#990055", Dark: "#B34D80"},
+	TextMuted:        lipgloss.AdaptiveColor{Light: "#CC6699", Dark: "#661A41"},
+	Accent:           lipgloss.AdaptiveColor{Light: "#E60073", Dark: "#FF71CE"}, // Hot Pink
+	AccentStrong:     lipgloss.AdaptiveColor{Light: "#B30059", Dark: "#FF00FF"},
+	Success:          lipgloss.AdaptiveColor{Light: "#00A3A3", Dark: "#01CDFE"}, // Cyan
+	Warning:          lipgloss.AdaptiveColor{Light: "#D9A300", Dark: "#FFF333"}, // Neon Yellow
+	Error:            lipgloss.AdaptiveColor{Light: "#C40000", Dark: "#B967FF"}, // Purple-ish red
+	Focus:            lipgloss.AdaptiveColor{Light: "#E60073", Dark: "#FF71CE"},
+	Hover:            lipgloss.AdaptiveColor{Light: "#FFE5F0", Dark: "#330A24"},
+	Disabled:         lipgloss.AdaptiveColor{Light: "#CCCCCC", Dark: "#3D1A2E"},
+}
+
+// HighContrast is a high-visibility accessibility theme.
+var HighContrast = Palette{
+	Background:       lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#000000"},
+	Surface:          lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#000000"},
+	SurfaceSubtle:    lipgloss.AdaptiveColor{Light: "#000000", Dark: "#FFFFFF"},
+	SurfaceHighlight: lipgloss.AdaptiveColor{Light: "#000000", Dark: "#FFFFFF"},
+	Text:             lipgloss.AdaptiveColor{Light: "#000000", Dark: "#FFFFFF"},
+	TextDim:          lipgloss.AdaptiveColor{Light: "#000000", Dark: "#FFFFFF"},
+	TextMuted:        lipgloss.AdaptiveColor{Light: "#000000", Dark: "#FFFFFF"},
+	Accent:           lipgloss.AdaptiveColor{Light: "#0000FF", Dark: "#FFFF00"}, // Yellow on Dark, Blue on Light
+	AccentStrong:     lipgloss.AdaptiveColor{Light: "#0000FF", Dark: "#FFFF00"},
+	Success:          lipgloss.AdaptiveColor{Light: "#008000", Dark: "#00FF00"},
+	Warning:          lipgloss.AdaptiveColor{Light: "#808000", Dark: "#FFFF00"},
+	Error:            lipgloss.AdaptiveColor{Light: "#FF0000", Dark: "#FF0000"},
+	Focus:            lipgloss.AdaptiveColor{Light: "#0000FF", Dark: "#FFFF00"},
+	Hover:            lipgloss.AdaptiveColor{Light: "#000000", Dark: "#FFFFFF"},
+	Disabled:         lipgloss.AdaptiveColor{Light: "#808080", Dark: "#808080"},
+}
+
+// Matrix is the "Hackerman" ironic theme.
+var Matrix = Palette{
+	Background:       lipgloss.AdaptiveColor{Light: "#000000", Dark: "#000000"},
+	Surface:          lipgloss.AdaptiveColor{Light: "#000500", Dark: "#000500"},
+	SurfaceSubtle:    lipgloss.AdaptiveColor{Light: "#001000", Dark: "#001000"},
+	SurfaceHighlight: lipgloss.AdaptiveColor{Light: "#003000", Dark: "#003000"},
+	Text:             lipgloss.AdaptiveColor{Light: "#00FF41", Dark: "#00FF41"}, // Matrix Green
+	TextDim:          lipgloss.AdaptiveColor{Light: "#008F11", Dark: "#008F11"},
+	TextMuted:        lipgloss.AdaptiveColor{Light: "#003B00", Dark: "#003B00"},
+	Accent:           lipgloss.AdaptiveColor{Light: "#00FF41", Dark: "#00FF41"},
+	AccentStrong:     lipgloss.AdaptiveColor{Light: "#D1FFD7", Dark: "#D1FFD7"}, // Bright highlight
+	Success:          lipgloss.AdaptiveColor{Light: "#00FF41", Dark: "#00FF41"},
+	Warning:          lipgloss.AdaptiveColor{Light: "#00FF41", Dark: "#00FF41"},
+	Error:            lipgloss.AdaptiveColor{Light: "#FF0000", Dark: "#FF0000"},
+	Focus:            lipgloss.AdaptiveColor{Light: "#D1FFD7", Dark: "#D1FFD7"},
+	Hover:            lipgloss.AdaptiveColor{Light: "#002000", Dark: "#002000"},
+	Disabled:         lipgloss.AdaptiveColor{Light: "#001500", Dark: "#001500"},
+}

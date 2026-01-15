@@ -128,10 +128,8 @@ func (s *ActionStack) View(width int) string {
 	t := theme.Current()
 
 	// Card Style (Compact: 1 line of content)
-	cardStyle := lipgloss.NewStyle().
+	cardStyle := t.Styles.Border.Copy().
 		Width(width-2).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.Palette.SurfaceHighlight).
 		Padding(0, 1)
 
 	for _, a := range s.Items {
@@ -166,7 +164,7 @@ func (s *ActionStack) View(width int) string {
 		progressBar := a.Bar.ViewAs(val)
 
 		// Render on one line
-		titlePart := lipgloss.NewStyle().Width(titleWidth).Render(titleText)
+		titlePart := t.Styles.TextDim.Copy().Width(titleWidth).Render(titleText)
 		content := lipgloss.JoinHorizontal(lipgloss.Center,
 			titlePart,
 			"  ", // Gap

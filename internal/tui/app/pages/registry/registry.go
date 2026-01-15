@@ -307,6 +307,10 @@ func (r *Registry) Shortcuts() []view.Shortcut {
 	return s
 }
 
+func (r *Registry) IsModalActive() bool {
+	return r.ConfirmDelete != nil && r.ConfirmDelete.IsActive()
+}
+
 // --- Detail ---
 
 type RegistryDetail struct {
@@ -413,4 +417,8 @@ func (d *RegistryDetail) View() string {
 func (d *RegistryDetail) Resize(r layout.Rect) {
 	d.BaseViewlet.Resize(r)
 	// Resize form elements if needed? Form.View takes width.
+}
+
+func (d *RegistryDetail) IsModalActive() bool {
+	return false
 }

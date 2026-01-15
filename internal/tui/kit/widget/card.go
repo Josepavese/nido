@@ -32,10 +32,8 @@ func (c *Card) View(width int) string {
 	if width == 0 {
 		width = c.width
 	}
-	style := lipgloss.NewStyle().
-		Width(width - 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(theme.Current().Palette.SurfaceHighlight)
+	style := theme.Current().Styles.Border.Copy().
+		Width(width - 2)
 		// Inherit(c.Style) // This line is commented out as Card struct does not have a Style field.
 
 	// Calculate Available Space for Text
@@ -92,7 +90,7 @@ func (c *Card) View(width int) string {
 	}
 
 	// Render Components
-	titleStyled := lipgloss.NewStyle().Foreground(theme.Current().Palette.AccentStrong).Bold(true).Render(titleRaw)
+	titleStyled := theme.Current().Styles.AccentStrong.Render(titleRaw)
 
 	subStyled := ""
 	if subRaw != "" {

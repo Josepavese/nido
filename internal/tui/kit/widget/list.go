@@ -40,6 +40,7 @@ func (l *ListView) Focus() tea.Cmd                { return nil }
 func (l *ListView) Blur()                         {}
 func (l *ListView) Focused() bool                 { return false }
 func (l *ListView) Shortcuts() []viewlet.Shortcut { return nil }
+func (l *ListView) IsModalActive() bool           { return false }
 
 func (l *ListView) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, tea.Cmd, bool) {
 	msg.X = x

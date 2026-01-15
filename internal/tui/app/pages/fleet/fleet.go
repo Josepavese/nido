@@ -11,14 +11,17 @@ import (
 	"github.com/Josepavese/nido/internal/tui/kit/theme"
 	view "github.com/Josepavese/nido/internal/tui/kit/view"
 	widget "github.com/Josepavese/nido/internal/tui/kit/widget"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 // FleetItem adapter for standard SidebarList
 type FleetItem struct {
-	Name  string
-	State string
+	Name          string
+	State         string
+	Transitioning bool   // New: tracked locally for fast feedback
+	SpinnerFrame  string // New: frame from fleet's spinner
 }
 
 func (i FleetItem) Title() string       { return i.Name }
@@ -26,6 +29,9 @@ func (i FleetItem) Description() string { return i.State }
 func (i FleetItem) FilterValue() string { return i.Name }
 func (i FleetItem) String() string      { return i.Name }
 func (i FleetItem) Icon() string {
+	if i.Transitioning {
+		return i.SpinnerFrame
+	}
 	if i.State == "running" {
 		return theme.IconBird
 	}
@@ -59,18 +65,28 @@ type Fleet struct {
 	MasterDetail *widget.MasterDetail
 
 	// Data
-	items  []FleetItem
-	detail FleetDetail
+	items         []FleetItem
+	detail        FleetDetail
+	transitioning map[string]bool // New: track active fast operations
+	spinner       spinner.Model   // New: local spinner for sidebar
 }
 
 // NewFleet creates the viewlet
 func NewFleet(prov provider.VMProvider) *Fleet {
+	t := theme.Current()
+
+	// Initialize Spinner
+	s := spinner.New()
+	s.Spinner = spinner.MiniDot
+	s.Style = lipgloss.NewStyle().Foreground(t.Palette.Accent)
+
 	f := &Fleet{
-		detail: FleetDetail{},
+		detail:        FleetDetail{},
+		transitioning: make(map[string]bool),
+		spinner:       s,
 	}
 
 	// 1. Sidebar (Empty initially)
-	t := theme.Current()
 	styles := widget.SidebarStyles{
 		Normal:   t.Styles.SidebarItem,
 		Selected: t.Styles.SidebarItemSelected,

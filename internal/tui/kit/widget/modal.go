@@ -139,8 +139,7 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 		contentWidth = 1
 	}
 
-	dialogStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+	dialogStyle := t.Styles.Border.Copy().
 		BorderForeground(borderColor).
 		Padding(1, 2).
 		Width(contentWidth).
@@ -171,7 +170,7 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 	}
 
 	// 3. Layout
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Palette.Accent)
+	titleStyle := t.Styles.Title.Copy()
 	if m.SingleButton {
 		titleStyle = titleStyle.Foreground(t.Palette.Error)
 	}
@@ -179,7 +178,7 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 	content := lipgloss.JoinVertical(lipgloss.Center,
 		titleStyle.Render(m.Title),
 		"",
-		lipgloss.NewStyle().Foreground(t.Palette.Text).Render(m.Message),
+		t.Styles.Text.Render(m.Message),
 		"",
 		buttons,
 	)

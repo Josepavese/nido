@@ -214,6 +214,10 @@ func (i *Incubator) Shortcuts() []fv.Shortcut {
 	}
 }
 
+func (i *Incubator) IsModalActive() bool {
+	return false
+}
+
 // --- Main Container ---
 
 // Hatchery implements the Wizard viewlet.

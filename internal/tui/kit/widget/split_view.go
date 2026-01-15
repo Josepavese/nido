@@ -71,9 +71,8 @@ func (s *SplitView) View() string {
 	// We create a standalone column that is 0-width but has a Left Border.
 	// We force height to s.height to ensure the line goes all the way down.
 	// Note: Border(Left) adds 1 char width.
-	sepStyle := lipgloss.NewStyle().
+	sepStyle := theme.Current().Styles.Border.Copy().
 		Border(lipgloss.NormalBorder(), false, false, false, true). // Left only
-		BorderForeground(theme.Current().Palette.SurfaceHighlight).
 		Height(s.height)
 
 	separator := sepStyle.Render("")
@@ -186,4 +185,14 @@ func (s *SplitView) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, te
 	}
 
 	return s, nil, false
+}
+
+func (s *SplitView) IsModalActive() bool {
+	if s.Sidebar != nil && s.Sidebar.IsModalActive() {
+		return true
+	}
+	if s.Main != nil && s.Main.IsModalActive() {
+		return true
+	}
+	return false
 }

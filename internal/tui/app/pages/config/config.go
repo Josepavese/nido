@@ -24,13 +24,13 @@ const (
 
 // Styles (initialized from theme)
 var (
-	dimStyle                 = lipgloss.NewStyle().Foreground(theme.Current().Palette.TextDim)
-	accentStyle              = lipgloss.NewStyle().Foreground(theme.Current().Palette.Accent)
-	successStyle             = lipgloss.NewStyle().Foreground(theme.Current().Palette.Success)
-	errorStyle               = lipgloss.NewStyle().Foreground(theme.Current().Palette.Error)
-	activeTabStyle           = lipgloss.NewStyle().Foreground(theme.Current().Palette.Accent).Bold(true)
-	sidebarItemStyle         = lipgloss.NewStyle().Foreground(theme.Current().Palette.TextDim)
-	sidebarItemSelectedStyle = lipgloss.NewStyle().Foreground(theme.Current().Palette.Accent).Bold(true)
+	dimStyle                 = theme.Current().Styles.TextDim
+	accentStyle              = theme.Current().Styles.Accent
+	successStyle             = theme.Current().Styles.Success
+	errorStyle               = theme.Current().Styles.Error
+	activeTabStyle           = theme.Current().Styles.AccentStrong
+	sidebarItemStyle         = theme.Current().Styles.SidebarItem
+	sidebarItemSelectedStyle = theme.Current().Styles.SidebarItemSelected
 	cardStyle                = lipgloss.NewStyle().Padding(1) // Simple padding
 )
 

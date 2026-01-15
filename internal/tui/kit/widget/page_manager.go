@@ -126,3 +126,10 @@ func (pm *PageManager) Blur() {
 		p.Blur()
 	}
 }
+
+func (pm *PageManager) IsModalActive() bool {
+	if p, ok := pm.Pages[pm.Active]; ok {
+		return p.IsModalActive()
+	}
+	return false
+}
