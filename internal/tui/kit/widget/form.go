@@ -350,6 +350,9 @@ func (f *Form) PrevField() tea.Cmd {
 func (f *Form) Blur() {
 	for _, el := range f.Elements {
 		el.Blur()
+		if input, ok := el.(*Input); ok {
+			input.Error = ""
+		}
 	}
 	f.FocusIndex = -1 // Reset internal focus tracking
 }
