@@ -30,6 +30,7 @@ type NidoApp struct {
 	prov          provider.VMProvider
 	Hatchery      *hatchery.Hatchery // Keep reference for background updates
 	Registry      *registry.Registry // Keep reference for background updates
+	Config        *configpage.Config // Keep reference for background updates
 	activeActions map[string]string  // Map OpName -> ActionID
 }
 
@@ -53,6 +54,14 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Broadcast to Registry even if not active
 		if n.Registry != nil {
 			_, cmd := n.Registry.Update(msg)
+			cmds = append(cmds, cmd)
+		}
+		// Also broadcast CacheStats to Config if needed, but CacheListMsg is redundant for Config now
+		// unless we want it to refresh as well.
+
+	case ops.UpdateCheckMsg, ops.CacheStatsMsg:
+		if n.Config != nil {
+			_, cmd := n.Config.Update(msg)
 			cmds = append(cmds, cmd)
 		}
 
@@ -99,7 +108,37 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		n.Shell.Operation = opName
 		id, cmd := n.Shell.StartAction(fmt.Sprintf("Deleting template %s", msg.Name))
 		n.activeActions[opName] = id
-		return n, tea.Batch(cmd, ops.DeleteTemplate(n.prov, msg.Name))
+		return n, tea.Batch(cmd, ops.DeleteTemplate(n.prov, msg.Name, msg.Force))
+
+	case ops.RequestUpdateMsg:
+		return n, ops.CheckUpdate()
+
+	case ops.RequestCacheMsg:
+		return n, ops.FetchCacheStats(n.prov)
+
+	case ops.RequestApplyUpdateMsg:
+		opName := "update-nido"
+		n.Shell.Operation = opName
+		id, cmd := n.Shell.StartAction("Ascending to next evolutionary state")
+		n.Shell.ActionStack.UpdateProgress(id, -1)
+		n.activeActions[opName] = id
+		return n, tea.Batch(cmd, ops.ApplyUpdate())
+
+	case ops.ApplyUpdateMsg:
+		if id, ok := n.activeActions["update-nido"]; ok {
+			n.Shell.FinishAction(id)
+			delete(n.activeActions, "update-nido")
+		}
+		// Broadcast to Config for notification modal
+		if n.Config != nil {
+			_, cmd := n.Config.Update(msg)
+			cmds = append(cmds, cmd)
+		}
+		if msg.Err != nil {
+			return n, tea.Batch(cmds...)
+		}
+		// Success
+		return n, tea.Batch(cmds...)
 
 	case ops.ProgressMsg:
 		if msg.Result != nil {
@@ -248,6 +287,7 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) erro
 		prov:          prov,
 		Hatchery:      hView,
 		Registry:      rView,
+		Config:        cView,
 		activeActions: make(map[string]string),
 	}
 

@@ -2,13 +2,17 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/Josepavese/nido/internal/build"
 	"github.com/Josepavese/nido/internal/tui/app/ops"
 	"github.com/Josepavese/nido/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/internal/tui/kit/view"
 	fv "github.com/Josepavese/nido/internal/tui/kit/view"
 	"github.com/Josepavese/nido/internal/tui/kit/widget"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // --- Global Config Form ---
@@ -145,15 +149,37 @@ func (p *ConfigPageGlobalForm) Blur() {
 	p.Form.Blur()
 }
 func (p *ConfigPageGlobalForm) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, tea.Cmd, bool) {
-	return p, nil, false // Standard Form doesn't need custom mouse in detail yet
+	if p.Modal != nil && p.Modal.IsActive() {
+		cmd, handled := p.Modal.HandleMouse(x, y, msg)
+		return p, cmd, handled
+	}
+	return p, nil, false
 }
 
 func (p *ConfigPageGlobalForm) IsModalActive() bool {
 	return p.Modal != nil && p.Modal.IsActive()
 }
 
-func (p *ConfigPageGlobalForm) HasActiveInput() bool {
-	return p.Form != nil && p.Form.HasActiveInput()
+func (p *ConfigPageGlobalForm) HasActiveTextInput() bool {
+	return p.Form != nil && p.Form.HasActiveTextInput()
+}
+
+func (p *ConfigPageGlobalForm) HasActiveFocus() bool {
+	return p.Form != nil && p.Form.HasActiveFocus()
+}
+
+func (p *ConfigPageGlobalForm) Shortcuts() []fv.Shortcut {
+	if p.IsModalActive() {
+		return []fv.Shortcut{
+			{Key: "enter", Label: "engage"},
+			{Key: "esc", Label: "back"},
+		}
+	}
+	return []fv.Shortcut{
+		{Key: "tab", Label: "glide"},
+		{Key: "enter", Label: "engage"},
+		{Key: "esc", Label: "back"},
+	}
 }
 
 // --- Update Page ---
@@ -162,25 +188,47 @@ type ConfigPageUpdate struct {
 	fv.BaseViewlet
 	Parent *Config
 
-	Form        *widget.Form
-	Header      *widget.Card
-	Current     *widget.Input
-	CheckButton *widget.Button
+	Form         *widget.Form
+	Header       *widget.Card
+	Current      *widget.Input
+	Latest       *widget.Input
+	CheckButton  *widget.Button
+	UpdateButton *widget.Button
+	ConfirmModal *widget.Modal
+	ResultModal  *widget.Modal
 }
 
 func NewConfigPageUpdate(parent *Config) *ConfigPageUpdate {
 	p := &ConfigPageUpdate{Parent: parent}
 	p.Header = widget.NewCard(theme.IconTemplate, "Evolution", "Check for newer versions")
 
-	p.Current = widget.NewInput("Current Version", "Loading...", nil)
+	p.Current = widget.NewInput("Current Version", build.Version, nil)
 	p.Current.Disabled = true
+
+	p.Latest = widget.NewInput("Latest Version", "Loading...", nil)
+	p.Latest.Disabled = true
 
 	p.CheckButton = widget.NewSubmitButton("Action", "CHECK", func() tea.Cmd {
 		parent.UpdateChecking = true
-		return ops.CheckUpdate()
+		return func() tea.Msg { return ops.RequestUpdateMsg{} }
 	})
 
-	p.Form = widget.NewForm(p.Header, p.Current, p.CheckButton)
+	p.ConfirmModal = widget.NewModal(
+		"Evolutionary Ascent",
+		"Confirm migration to the next evolutionary state?",
+		func() tea.Cmd {
+			return func() tea.Msg { return ops.RequestApplyUpdateMsg{} }
+		},
+		nil,
+	)
+
+	p.UpdateButton = widget.NewSubmitButton("Action", "UPDATE", func() tea.Cmd {
+		p.ConfirmModal.Show()
+		return nil
+	})
+	p.UpdateButton.SetColor(theme.Current().Palette.Success)
+
+	p.Form = widget.NewForm(p.Header, p.Current, p.Latest, p.CheckButton)
 	p.Form.Spacing = 0
 	return p
 }
@@ -188,9 +236,57 @@ func NewConfigPageUpdate(parent *Config) *ConfigPageUpdate {
 func (p *ConfigPageUpdate) Init() tea.Cmd { return nil }
 
 func (p *ConfigPageUpdate) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
+	if p.ResultModal != nil && p.ResultModal.IsActive() {
+		newModal, cmd := p.ResultModal.Update(msg)
+		p.ResultModal = newModal
+		return p, cmd
+	}
+
+	if p.ConfirmModal.IsActive() {
+		newModal, cmd := p.ConfirmModal.Update(msg)
+		p.ConfirmModal = newModal
+		return p, cmd
+	}
+
+	switch msg := msg.(type) {
+	case ops.ApplyUpdateMsg:
+		if msg.Err == nil {
+			p.ResultModal = widget.NewAlertModal(
+				"Evolution Complete",
+				"Nido has been successfully upgraded.\nPlease restart the application to apply changes.",
+				nil,
+			)
+			p.ResultModal.BorderColor = theme.Current().Palette.Success
+		} else {
+			p.ResultModal = widget.NewAlertModal(
+				"Evolution Failed",
+				fmt.Sprintf("Failed to upgrade Nido:\n%v", msg.Err),
+				nil,
+			)
+			p.ResultModal.BorderColor = theme.Current().Palette.Error
+		}
+		p.ResultModal.Show()
+		return p, nil
+	}
+
 	// Updates values dynamically
 	if p.Parent.CurrentVersion != "" {
 		p.Current.SetValue(p.Parent.CurrentVersion)
+	}
+	if p.Parent.LatestVersion != "" {
+		p.Latest.SetValue(p.Parent.LatestVersion)
+	} else if p.Parent.UpdateChecking {
+		p.Latest.SetValue("Checking...")
+	} else {
+		p.Latest.SetValue("Unknown (Offline?)")
+	}
+
+	// Dynamic Action Button
+	isNewer := p.Parent.LatestVersion != "" && p.Parent.LatestVersion != p.Parent.CurrentVersion
+	if isNewer {
+		p.Form.Elements[3] = p.UpdateButton
+	} else {
+		p.Form.Elements[3] = p.CheckButton
 	}
 
 	if !p.Focused() {
@@ -202,6 +298,9 @@ func (p *ConfigPageUpdate) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 }
 
 func (p *ConfigPageUpdate) View() string {
+	if p.IsModalActive() {
+		return "" // Parent handles rendering
+	}
 	w := p.Width()
 	safeWidth := w - 4
 	if safeWidth > 60 {
@@ -210,9 +309,43 @@ func (p *ConfigPageUpdate) View() string {
 	p.Form.Width = safeWidth
 	return p.Form.View(safeWidth)
 }
+func (p *ConfigPageUpdate) IsModalActive() bool {
+	return (p.ConfirmModal != nil && p.ConfirmModal.IsActive()) || (p.ResultModal != nil && p.ResultModal.IsActive())
+}
+func (p *ConfigPageUpdate) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, tea.Cmd, bool) {
+	if p.ResultModal != nil && p.ResultModal.IsActive() {
+		cmd, handled := p.ResultModal.HandleMouse(x, y, msg)
+		return p, cmd, handled
+	}
+	if p.ConfirmModal != nil && p.ConfirmModal.IsActive() {
+		cmd, handled := p.ConfirmModal.HandleMouse(x, y, msg)
+		return p, cmd, handled
+	}
+	return p, nil, false
+}
 
 func (p *ConfigPageUpdate) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
 func (p *ConfigPageUpdate) Blur()          { p.BaseViewlet.Blur(); p.Form.Blur() }
+func (p *ConfigPageUpdate) HasActiveTextInput() bool {
+	return p.Form != nil && p.Form.HasActiveTextInput()
+}
+
+func (p *ConfigPageUpdate) HasActiveFocus() bool {
+	return p.Form != nil && p.Form.HasActiveFocus()
+}
+
+func (p *ConfigPageUpdate) Shortcuts() []fv.Shortcut {
+	if p.IsModalActive() {
+		return []fv.Shortcut{
+			{Key: "enter", Label: "engage"},
+			{Key: "esc", Label: "back"},
+		}
+	}
+	return []fv.Shortcut{
+		{Key: "enter", Label: "engage"},
+		{Key: "esc", Label: "back"},
+	}
+}
 
 // --- Cache Page (Maintenance) ---
 
@@ -245,7 +378,11 @@ func (p *ConfigPageCache) Init() tea.Cmd { return nil }
 
 func (p *ConfigPageCache) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 	// Sync Stats
-	stats := fmt.Sprintf("%d images • %s", p.Parent.CacheStats.TotalImages, p.Parent.CacheStats.TotalSize)
+	stats := "Loading..."
+	// We use p.Parent.CacheStats.TotalSize != "" as a signal that data has arrived at least once
+	if p.Parent.CacheStats.TotalSize != "" {
+		stats = fmt.Sprintf("%d images • %s", p.Parent.CacheStats.TotalImages, p.Parent.CacheStats.TotalSize)
+	}
 	p.Stats.SetValue(stats)
 
 	if !p.Focused() {
@@ -267,6 +404,20 @@ func (p *ConfigPageCache) View() string {
 }
 func (p *ConfigPageCache) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
 func (p *ConfigPageCache) Blur()          { p.BaseViewlet.Blur(); p.Form.Blur() }
+func (p *ConfigPageCache) HasActiveTextInput() bool {
+	return p.Form != nil && p.Form.HasActiveTextInput()
+}
+
+func (p *ConfigPageCache) HasActiveFocus() bool {
+	return p.Form != nil && p.Form.HasActiveFocus()
+}
+
+func (p *ConfigPageCache) Shortcuts() []fv.Shortcut {
+	return []fv.Shortcut{
+		{Key: "enter", Label: "purge"},
+		{Key: "esc", Label: "back"},
+	}
+}
 
 // --- Doctor Page ---
 
@@ -275,28 +426,79 @@ type ConfigPageDoctor struct {
 	Parent *Config
 
 	Form      *widget.Form
-	Header    *widget.Card
 	RunButton *widget.Button
-	Output    string // Simple text output for now, maybe scrollable later
+	Reports   []ops.DoctorReport
+	Err       error
+	Modal     *widget.Modal
 }
 
 func NewConfigPageDoctor(parent *Config) *ConfigPageDoctor {
 	p := &ConfigPageDoctor{Parent: parent}
-	p.Header = widget.NewCard(theme.IconDoctor, "Health", "Run system health check")
 
-	p.RunButton = widget.NewSubmitButton("Diagnostic", "RUN", func() tea.Cmd {
+	p.RunButton = widget.NewSubmitButton("", "RUN DIAGNOSTICS", func() tea.Cmd {
 		return ops.RunDoctor()
 	})
 
-	p.Form = widget.NewForm(p.Header, p.RunButton)
+	p.Form = widget.NewForm(p.RunButton)
 	return p
 }
 
 func (p *ConfigPageDoctor) Init() tea.Cmd { return nil }
 func (p *ConfigPageDoctor) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
+	if p.Modal != nil && p.Modal.IsActive() {
+		newModal, cmd := p.Modal.Update(msg)
+		p.Modal = newModal
+		return p, cmd
+	}
+
 	if !p.Focused() {
 		return p, nil
 	}
+
+	switch msg := msg.(type) {
+	case ops.DoctorResultMsg:
+		p.Reports = msg.Reports
+		p.Err = msg.Err
+
+		if p.Err == nil && len(p.Reports) > 0 {
+			// Create Result Modal
+			t := theme.Current()
+			passed := 0
+			for _, r := range p.Reports {
+				if r.Passed {
+					passed++
+				}
+			}
+			total := len(p.Reports)
+			integrity := (float64(passed) / float64(total)) * 100
+
+			var reportLines []string
+			for _, r := range p.Reports {
+				icon := theme.IconCheck
+				if !r.Passed {
+					icon = theme.IconError
+				}
+				line := fmt.Sprintf("%-2s %-12s %s", icon, r.Label, r.Details)
+				reportLines = append(reportLines, line)
+			}
+
+			summary := fmt.Sprintf("NEST INTEGRITY: %.0f%%\n\n%s", integrity, strings.Join(reportLines, "\n"))
+			p.Modal = widget.NewAlertModal("System Health Report", summary, func() tea.Cmd {
+				return func() tea.Msg { return FocusSidebarMsg{} }
+			})
+			p.Modal.BorderColor = t.Palette.Success
+			if integrity < 100 {
+				p.Modal.BorderColor = t.Palette.Error
+			}
+			p.Modal.MessageAlign = lipgloss.Left
+			p.Modal.Show()
+			return p, nil
+		}
+
+		// After results are in (if no modal), return focus to sidebar
+		return p, func() tea.Msg { return FocusSidebarMsg{} }
+	}
+
 	newForm, cmd := p.Form.Update(msg)
 	p.Form = newForm
 	return p, cmd
@@ -311,16 +513,45 @@ func (p *ConfigPageDoctor) View() string {
 
 	base := p.Form.View(safeWidth)
 
-	// Append output if present
-	if p.Output != "" {
-		t := theme.Current()
-		outStyle := t.Styles.TextDim.Copy().Width(safeWidth).PaddingTop(1)
-		base = layout.VStack(0, base, outStyle.Render("Creating diagnostic report...\n"+p.Output))
+	if p.Err != nil {
+		errStyle := lipgloss.NewStyle().Foreground(theme.Current().Palette.Error).Padding(1, 2)
+		base = layout.VStack(0, base, errStyle.Render("Critical failure: "+p.Err.Error()))
 	}
+
 	return base
 }
 func (p *ConfigPageDoctor) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
 func (p *ConfigPageDoctor) Blur()          { p.BaseViewlet.Blur(); p.Form.Blur() }
+func (p *ConfigPageDoctor) HasActiveTextInput() bool {
+	return p.Form != nil && p.Form.HasActiveTextInput()
+}
+
+func (p *ConfigPageDoctor) HasActiveFocus() bool {
+	return p.Form != nil && p.Form.HasActiveFocus()
+}
+
+func (p *ConfigPageDoctor) Shortcuts() []fv.Shortcut {
+	if p.IsModalActive() {
+		return []fv.Shortcut{
+			{Key: "enter", Label: "engage"},
+			{Key: "esc", Label: "back"},
+		}
+	}
+	return []fv.Shortcut{
+		{Key: "enter", Label: "scan"},
+		{Key: "esc", Label: "back"},
+	}
+}
+func (p *ConfigPageDoctor) IsModalActive() bool {
+	return p.Modal != nil && p.Modal.IsActive()
+}
+func (p *ConfigPageDoctor) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, tea.Cmd, bool) {
+	if p.Modal != nil && p.Modal.IsActive() {
+		cmd, handled := p.Modal.HandleMouse(x, y, msg)
+		return p, cmd, handled
+	}
+	return p, nil, false
+}
 
 // --- Appearance Page ---
 
@@ -462,6 +693,24 @@ func (p *ConfigPageAppearance) IsModalActive() bool {
 	return p.Modal != nil && p.Modal.IsActive()
 }
 
-func (p *ConfigPageAppearance) HasActiveInput() bool {
-	return p.Form != nil && p.Form.HasActiveInput()
+func (p *ConfigPageAppearance) HasActiveTextInput() bool {
+	return p.Form != nil && p.Form.HasActiveTextInput()
+}
+
+func (p *ConfigPageAppearance) HasActiveFocus() bool {
+	return p.Form != nil && p.Form.HasActiveFocus()
+}
+
+func (p *ConfigPageAppearance) Shortcuts() []fv.Shortcut {
+	if p.IsModalActive() {
+		return []view.Shortcut{
+			{Key: "enter", Label: "engage"},
+			{Key: "esc", Label: "back"},
+		}
+	}
+	return []fv.Shortcut{
+		{Key: "tab", Label: "glide"},
+		{Key: "enter", Label: "engage"},
+		{Key: "esc", Label: "back"},
+	}
 }

@@ -79,6 +79,10 @@ func NewIncubator(parent *Hatchery) *Incubator {
 		}
 		return nil
 	})
+	// Real-time filtering for valid VM name characters
+	inc.input.Filter = func(r rune) bool {
+		return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.'
+	}
 
 	// 3. Toggle
 	inc.toggle = widget.NewToggle("GUI Mode", true)
@@ -209,8 +213,8 @@ func (i *Incubator) SetSource(item *SourceItem) {
 
 func (i *Incubator) Shortcuts() []fv.Shortcut {
 	return []fv.Shortcut{
-		{Key: "tabs", Label: "next field"},
-		{Key: "enter", Label: "action"},
+		{Key: "tab", Label: "glide"},
+		{Key: "enter", Label: "spawn"},
 	}
 }
 
@@ -218,8 +222,12 @@ func (i *Incubator) IsModalActive() bool {
 	return false
 }
 
-func (i *Incubator) HasActiveInput() bool {
-	return i.Form != nil && i.Form.HasActiveInput()
+func (i *Incubator) HasActiveTextInput() bool {
+	return i.Form != nil && i.Form.HasActiveTextInput()
+}
+
+func (i *Incubator) HasActiveFocus() bool {
+	return i.Form != nil && i.Form.HasActiveFocus()
 }
 
 // --- Main Container ---
@@ -235,7 +243,8 @@ type Hatchery struct {
 	Pages         *widget.PageManager
 	ConfirmDelete *widget.Modal
 
-	prov provider.VMProvider
+	prov               provider.VMProvider
+	pendingDeleteForce bool
 }
 
 // NewHatchery returns a new Hatchery viewlet.
@@ -286,7 +295,8 @@ func NewHatchery(prov provider.VMProvider) *Hatchery {
 			if item := h.Sidebar.SelectedItem(); item != nil {
 				if srcItem, ok := item.(SourceItem); ok && srcItem.Type == "TEMPLATE" {
 					return func() tea.Msg {
-						return ops.RequestDeleteTemplateMsg{Name: srcItem.Label}
+						// Pass the force flag determined by the check
+						return ops.RequestDeleteTemplateMsg{Name: srcItem.Label, Force: h.pendingDeleteForce}
 					}
 				}
 			}
@@ -320,6 +330,30 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case ops.TemplateUsageMsg:
+		if msg.Err != nil {
+			// If check failed, assume not used but show error? Or just proceed with standard modal?
+			// Let's safe-fail to standard modal but warn in logs if we had them.
+			h.pendingDeleteForce = false
+			h.ConfirmDelete.Message = fmt.Sprintf("Delete template '%s'?\n(Usage check failed: %v)", msg.Name, msg.Err)
+			h.ConfirmDelete.Show()
+			return h, nil
+		}
+
+		if msg.InUse {
+			h.pendingDeleteForce = true
+			h.ConfirmDelete.Title = "CRITICAL WARNING"
+			h.ConfirmDelete.Message = fmt.Sprintf("Template '%s' is IN USE by %d VM(s)!\n\nDeleting it will BREAK those VMs.\nAre you absolutely sure?", msg.Name, len(msg.UsedBy))
+			// Ideally we'd color this red or something, but the widget.Modal is simple.
+			// The content is enough.
+		} else {
+			h.pendingDeleteForce = false
+			h.ConfirmDelete.Title = "Delete Template"
+			h.ConfirmDelete.Message = fmt.Sprintf("Delete template '%s'?\nThis cannot be undone.", msg.Name)
+		}
+		h.ConfirmDelete.Show()
+		return h, nil
+
 	// 1. Data Loaded
 	case ops.SourcesLoadedMsg:
 		if msg.Err != nil {
@@ -390,15 +424,14 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 			cmds = append(cmds, h.MasterDetail.SetFocus(widget.FocusDetail))
 		}
 
-		// Delete Template Action - NOW MODAL TRIGGERED
+		// Delete Template Action - NOW CHECKS USAGE FIRST
 		if h.Sidebar.Focused() && (msg.String() == "delete" || msg.String() == "backspace") {
 			if item := h.Sidebar.SelectedItem(); item != nil {
 				// Only delete templates
 				srcItem, ok := item.(SourceItem)
 				if ok && srcItem.Type == "TEMPLATE" {
-					h.ConfirmDelete.Message = fmt.Sprintf("Delete template '%s'?\nThis cannot be undone.", srcItem.Label)
-					h.ConfirmDelete.Show()
-					return h, nil
+					// Async check
+					return h, ops.CheckTemplateUsage(h.prov, srcItem.Label)
 				}
 			}
 		}
@@ -439,20 +472,29 @@ func (h *Hatchery) Focus() tea.Cmd {
 func (h *Hatchery) Shortcuts() []fv.Shortcut {
 	if h.ConfirmDelete.IsActive() {
 		return []fv.Shortcut{
-			{Key: "enter", Label: "confirm"},
-			{Key: "esc", Label: "cancel"},
+			{Key: "enter", Label: "engage"},
+			{Key: "esc", Label: "back"},
 		}
 	}
 
 	shortcuts := []fv.Shortcut{
-		{Key: "↑/↓", Label: "move"},
+		{Key: "↑/↓", Label: "glide"},
 	}
-	shortcuts = append(shortcuts, h.MasterDetail.Shortcuts()...)
+
+	// Delegate to MasterDetail for local pane shortcuts
+	// But Hatchery.Shortcuts overrides it, so we manually merge or pick.
+	// We want to combine Sidebar glide with Incubator actions if possible.
+	if h.MasterDetail.ActiveFocus == widget.FocusDetail {
+		shortcuts = append(shortcuts, h.Incubator.Shortcuts()...)
+		shortcuts = append(shortcuts, fv.Shortcut{Key: "esc", Label: "back"})
+	} else {
+		shortcuts = append(shortcuts, fv.Shortcut{Key: "enter", Label: "engage"})
+	}
 
 	// Contextual Actions
 	if item := h.Sidebar.SelectedItem(); item != nil {
 		if srcItem, ok := item.(SourceItem); ok && srcItem.Type == "TEMPLATE" {
-			shortcuts = append(shortcuts, fv.Shortcut{Key: "delete", Label: "delete"})
+			shortcuts = append(shortcuts, fv.Shortcut{Key: "delete", Label: "cull"})
 		}
 	}
 
@@ -463,9 +505,16 @@ func (h *Hatchery) IsModalActive() bool {
 	return h.ConfirmDelete != nil && h.ConfirmDelete.IsActive()
 }
 
-func (h *Hatchery) HasActiveInput() bool {
+func (h *Hatchery) HasActiveTextInput() bool {
 	if h.Incubator != nil {
-		return h.Incubator.HasActiveInput()
+		return h.Incubator.HasActiveTextInput()
+	}
+	return false
+}
+
+func (h *Hatchery) HasActiveFocus() bool {
+	if h.Incubator != nil {
+		return h.Incubator.HasActiveFocus()
 	}
 	return false
 }

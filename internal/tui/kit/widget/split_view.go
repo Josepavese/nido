@@ -83,7 +83,7 @@ func (s *SplitView) Resize(r layout.Rect) {
 
 	sw := s.SidebarWidth
 	if sw <= 0 {
-		dim := layout.Calculate(r.Width, r.Height, 25, theme.Width.Sidebar, theme.Width.SidebarWide)
+		dim := layout.Calculate(r.Width, r.Height, 30, theme.Width.Sidebar, theme.Width.SidebarWide)
 		sw = dim.SidebarWidth
 	}
 
@@ -151,11 +151,21 @@ func (s *SplitView) IsModalActive() bool {
 	return false
 }
 
-func (s *SplitView) HasActiveInput() bool {
-	if s.Sidebar != nil && s.Sidebar.HasActiveInput() {
+func (s *SplitView) HasActiveTextInput() bool {
+	if s.Sidebar != nil && s.Sidebar.HasActiveTextInput() {
 		return true
 	}
-	if s.Main != nil && s.Main.HasActiveInput() {
+	if s.Main != nil && s.Main.HasActiveTextInput() {
+		return true
+	}
+	return false
+}
+
+func (s *SplitView) HasActiveFocus() bool {
+	if s.Sidebar != nil && s.Sidebar.HasActiveFocus() {
+		return true
+	}
+	if s.Main != nil && s.Main.HasActiveFocus() {
 		return true
 	}
 	return false

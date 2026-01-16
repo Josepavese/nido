@@ -1,6 +1,8 @@
 package widget
 
 import (
+	"strings"
+
 	"github.com/Josepavese/nido/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/internal/tui/kit/theme"
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,20 +20,29 @@ type Modal struct {
 	active        bool
 	selectedIsYes bool // true = Yes/Confirm, false = No/Cancel
 
+	// Layout state for hit detection
+	lastW, lastH    int
+	yesX, noX, btnY int
+	okX, okY        int
+
 	// Configuration
 	SingleButton bool // If true, shows only one button (OK/Close)
 	width        int
 	height       int
+
+	BorderColor  lipgloss.TerminalColor
+	MessageAlign lipgloss.Position
 }
 
 func NewModal(title, message string, onConfirm, onCancel func() tea.Cmd) *Modal {
 	return &Modal{
-		Title:     title,
-		Message:   message,
-		OnConfirm: onConfirm,
-		OnCancel:  onCancel,
-		width:     50,
-		height:    10,
+		Title:        title,
+		Message:      message,
+		OnConfirm:    onConfirm,
+		OnCancel:     onCancel,
+		width:        50,
+		height:       10,
+		MessageAlign: lipgloss.Center,
 	}
 }
 
@@ -43,6 +54,7 @@ func NewAlertModal(title, message string, onDismiss func() tea.Cmd) *Modal {
 		SingleButton: true,
 		width:        60, // Slightly wider for error messages
 		height:       10,
+		MessageAlign: lipgloss.Center,
 	}
 }
 
@@ -116,9 +128,12 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 	t := theme.Current()
 
 	// 1. Content Styling
-	borderColor := t.Palette.Accent
-	if m.SingleButton {
-		borderColor = t.Palette.Error // Alerts usually imply errors/warnings
+	borderColor := m.BorderColor
+	if borderColor == nil {
+		borderColor = t.Palette.Accent
+		if m.SingleButton {
+			borderColor = t.Palette.Error // Alerts usually imply errors/warnings
+		}
 	}
 
 	horizontalPadding := 4 // 2 left + 2 right
@@ -142,7 +157,7 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 	dialogStyle := t.Styles.Border.Copy().
 		BorderForeground(borderColor).
 		Padding(1, 2).
-		Width(contentWidth).
+		Width(effectiveWidth - horizontalBorder).
 		Align(lipgloss.Center)
 
 	// 2. Buttons
@@ -150,6 +165,8 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 	if m.SingleButton {
 		okStyle := lipgloss.NewStyle().Foreground(t.Palette.Background).Background(t.Palette.Error).Bold(true).Padding(0, 2)
 		buttons = okStyle.Render("Close")
+		m.btnY = 2 + (strings.Count(m.Message, "\n") + 1) + 1
+		m.okX = (effectiveWidth - lipgloss.Width(buttons)) / 2
 	} else {
 		yesStyle := lipgloss.NewStyle().Foreground(t.Palette.TextDim)
 		noStyle := lipgloss.NewStyle().Foreground(t.Palette.TextDim)
@@ -162,11 +179,23 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 			noStyle = activeStyle
 		}
 
+		yesLabel := "Yes"
+		noLabel := "No"
+		yesWidth := lipgloss.Width(yesStyle.Render(yesLabel))
+		noWidth := lipgloss.Width(noStyle.Render(noLabel))
+		spacing := 3
+
 		buttons = lipgloss.JoinHorizontal(lipgloss.Center,
-			yesStyle.Render("Yes"),
-			"   ",
-			noStyle.Render("No"),
+			yesStyle.Render(yesLabel),
+			strings.Repeat(" ", spacing),
+			noStyle.Render(noLabel),
 		)
+
+		// Record relative positions for mouse
+		totalBtnsWidth := yesWidth + spacing + noWidth
+		m.yesX = (effectiveWidth - totalBtnsWidth) / 2
+		m.noX = m.yesX + yesWidth + spacing
+		m.btnY = 2 + (strings.Count(m.Message, "\n") + 1) + 1
 	}
 
 	// 3. Layout
@@ -178,17 +207,65 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 	content := lipgloss.JoinVertical(lipgloss.Center,
 		titleStyle.Render(m.Title),
 		"",
-		t.Styles.Text.Render(m.Message),
+		lipgloss.PlaceHorizontal(contentWidth, m.MessageAlign, t.Styles.Text.Render(m.Message)),
 		"",
 		buttons,
 	)
 
 	dialog := dialogStyle.Render(content)
 
-	// 4. Overlay Center
-	if parentWidth == 0 || parentHeight == 0 {
-		return dialog
-	}
+	m.lastW = parentWidth
+	m.lastH = parentHeight
 
 	return layout.PlaceOverlay(parentWidth, parentHeight, dialog)
+}
+
+func (m *Modal) HandleMouse(x, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
+	if !m.active || msg.Type != tea.MouseLeft {
+		return nil, false
+	}
+
+	effectiveWidth := m.width
+	if m.lastW > 0 && effectiveWidth > m.lastW-2 {
+		effectiveWidth = m.lastW - 2
+	}
+
+	dialogX := (m.lastW - effectiveWidth) / 2
+	dialogY := (m.lastH - m.height) / 2
+
+	lx := x - dialogX
+	ly := y - dialogY
+
+	if lx < 0 || ly < 0 || lx >= effectiveWidth || ly >= m.height {
+		return nil, false
+	}
+
+	if ly >= m.btnY-1 && ly <= m.btnY+1 {
+		if m.SingleButton {
+			m.Hide()
+			if m.OnConfirm != nil {
+				return m.OnConfirm(), true
+			}
+			return nil, true
+		} else {
+			if lx >= m.yesX-1 && lx <= m.yesX+4 {
+				m.selectedIsYes = true
+				m.Hide()
+				if m.OnConfirm != nil {
+					return m.OnConfirm(), true
+				}
+				return nil, true
+			}
+			if lx >= m.noX-1 && lx <= m.noX+4 {
+				m.selectedIsYes = false
+				m.Hide()
+				if m.OnCancel != nil {
+					return m.OnCancel(), true
+				}
+				return nil, true
+			}
+		}
+	}
+
+	return nil, true
 }

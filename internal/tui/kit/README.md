@@ -24,6 +24,7 @@ The `widget.Form` allows you to build complex forms declaratively using a list o
 * **Disabled State**: Elements can be marked `Disabled: true` to become read-only and skipped during focus cycling.
 * **Compact Mode**: Elements can be marked `Compact: true` for single-line rendering without borders (opt-in).
 * **Smart Submit**: Buttons created with `NewSubmitButton` are automatically skipped (unfocusable) if the form contains validation errors.
+* **Real-time Filtering**: Inputs support a `Filter func(rune) bool` to block invalid characters before they are even entered.
 * **Adaptive Rendering**: Inputs automatically adapt to tight spaces (shorter labels, content truncation with "...").
 
 **Elements:**
@@ -38,7 +39,7 @@ The `widget.Form` allows you to build complex forms declaratively using a list o
 
     ```go
     widget.NewInput("Label", "Placeholder", validatorFunc)
-    // Supports i.Disabled = true, i.Compact = true
+    // Supports i.Disabled = true, i.Compact = true, i.Filter = filterFunc
     ```
 
 * **`Toggle`**: A binary on/off switch.

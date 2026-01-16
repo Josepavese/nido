@@ -103,7 +103,8 @@ type VMProvider interface {
 	GetUsedBackingFiles() ([]string, error)
 
 	// DeleteTemplate removes a template from cold storage.
-	DeleteTemplate(name string) error
+	// If force is false, it should check if the template is in use.
+	DeleteTemplate(name string, force bool) error
 
 	// Prune removes all stopped VMs from the system.
 	// Returns the count of VMs deleted.

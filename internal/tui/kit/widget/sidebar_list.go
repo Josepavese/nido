@@ -173,7 +173,7 @@ func (s *SidebarList) SetItems(items []SidebarItem) {
 // Shortcuts returns standard navigation shortcuts
 func (s *SidebarList) Shortcuts() []viewlet.Shortcut {
 	return []viewlet.Shortcut{
-		{Key: "↑/↓", Label: "navigate"},
+		{Key: "↑/↓", Label: "glide"},
 	}
 }
 
@@ -268,12 +268,13 @@ func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, 
 }
 
 // Dummy methods to satisfy Viewlet interface if needed
-func (s *SidebarList) Resize(r layout.Rect) { s.Model.SetSize(r.Width, r.Height) }
-func (s *SidebarList) Focus() tea.Cmd       { s.focused = true; return nil }
-func (s *SidebarList) Blur()                { s.focused = false }
-func (s *SidebarList) Focused() bool        { return s.focused }
-func (s *SidebarList) View() string         { return s.Model.View() }
-func (s *SidebarList) Init() tea.Cmd        { return nil }
-func (s *SidebarList) IsModalActive() bool  { return false }
-func (s *SidebarList) HasActiveInput() bool { return false }
-func (s *SidebarList) Focusable() bool      { return true }
+func (s *SidebarList) Resize(r layout.Rect)     { s.Model.SetSize(r.Width, r.Height) }
+func (s *SidebarList) Focus() tea.Cmd           { s.focused = true; return nil }
+func (s *SidebarList) Blur()                    { s.focused = false }
+func (s *SidebarList) Focused() bool            { return s.focused }
+func (s *SidebarList) View() string             { return s.Model.View() }
+func (s *SidebarList) Init() tea.Cmd            { return nil }
+func (s *SidebarList) IsModalActive() bool      { return false }
+func (s *SidebarList) HasActiveTextInput() bool { return false }
+func (s *SidebarList) HasActiveFocus() bool     { return s.focused }
+func (s *SidebarList) Focusable() bool          { return true }

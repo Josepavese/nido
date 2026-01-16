@@ -30,9 +30,10 @@ func (m *mockViewlet) Focused() bool                 { return false }
 func (m *mockViewlet) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, tea.Cmd, bool) {
 	return m, nil, false
 }
-func (m *mockViewlet) IsModalActive() bool  { return false }
-func (m *mockViewlet) HasActiveInput() bool { return false }
-func (m *mockViewlet) Focusable() bool      { return true }
+func (m *mockViewlet) IsModalActive() bool      { return false }
+func (m *mockViewlet) HasActiveTextInput() bool { return false }
+func (m *mockViewlet) HasActiveFocus() bool     { return false }
+func (m *mockViewlet) Focusable() bool          { return true }
 
 func TestSplitView_Resize(t *testing.T) {
 	sidebar := &mockViewlet{}
@@ -74,12 +75,12 @@ func TestSplitView_Resize_Narrow(t *testing.T) {
 	rect := layout.NewRect(0, 0, 80, 24)
 	sv.Resize(rect)
 
-	if sidebar.width != 25 {
-		t.Errorf("expected narrow sidebar width 25, got %d", sidebar.width)
+	if sidebar.width != 30 {
+		t.Errorf("expected narrow sidebar width 30, got %d", sidebar.width)
 	}
-	// 80 - 25 = 55 (border is 0 for NewStyle)
-	if main.width != 55 {
-		t.Errorf("expected main width 55, got %d", main.width)
+	// 80 - 30 = 50 (border is 0 for NewStyle)
+	if main.width != 50 {
+		t.Errorf("expected main width 50, got %d", main.width)
 	}
 }
 

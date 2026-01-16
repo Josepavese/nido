@@ -50,8 +50,11 @@ type Viewlet interface {
 	// IsModalActive returns whether a modal dialog is currently blocking interaction.
 	IsModalActive() bool
 
-	// HasActiveInput returns whether the viewlet currently has an active text input focused.
-	HasActiveInput() bool
+	// HasActiveTextInput returns whether the viewlet currently has an active text input focused (blocks 'q').
+	HasActiveTextInput() bool
+
+	// HasActiveFocus returns whether any interactive element (button, toggle, input) is focused (blocks 'esc' quit).
+	HasActiveFocus() bool
 
 	// Focusable returns whether the viewlet can accept keyboard focus.
 	Focusable() bool
@@ -112,8 +115,13 @@ func (b *BaseViewlet) IsModalActive() bool {
 	return false
 }
 
-// HasActiveInput provides a default implementation.
-func (b *BaseViewlet) HasActiveInput() bool {
+// HasActiveTextInput provides a default implementation.
+func (b *BaseViewlet) HasActiveTextInput() bool {
+	return false
+}
+
+// HasActiveFocus provides a default implementation.
+func (b *BaseViewlet) HasActiveFocus() bool {
 	return false
 }
 
@@ -124,10 +132,7 @@ func (b *BaseViewlet) Focusable() bool {
 
 // DefaultShortcuts returns common shortcuts shared across viewlets.
 func DefaultShortcuts() []Shortcut {
-	return []Shortcut{
-		{Key: "q", Label: "quit"},
-		{Key: "←/→", Label: "tabs"},
-	}
+	return nil
 }
 
 // SelectionMsg is emitted by components (like SidebarList) when their selection changes.

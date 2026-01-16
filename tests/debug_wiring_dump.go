@@ -51,7 +51,8 @@ func (d *DummyViewlet) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, te
 }
 func (d *DummyViewlet) Shortcuts() []view.Shortcut { return nil }
 func (d *DummyViewlet) IsModalActive() bool        { return false }
-func (d *DummyViewlet) HasActiveInput() bool       { return false }
+func (d *DummyViewlet) HasActiveTextInput() bool   { return false }
+func (d *DummyViewlet) HasActiveFocus() bool       { return false }
 func (d *DummyViewlet) Blur()                      {}
 func (d *DummyViewlet) Focus() tea.Cmd             { return nil }
 func (d *DummyViewlet) Focused() bool              { return false }

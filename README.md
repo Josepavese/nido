@@ -239,7 +239,7 @@ echo "autoload -Uz compinit && compinit" >> ~/.zshrc
 | `image pull <image>` | Download image | `nido image pull ubuntu:24.04` |
 | `template list` | List templates | `nido template list` |
 | `template create <vm> <tpl>` | Archive VM | `nido template create my-vm golden` |
-| `template delete <name>` | Delete template | `nido template delete golden` |
+| `template delete <name> [--force]` | Delete template | `nido template delete golden --force` |
 | `doctor` | System diagnostics | `nido doctor` |
 | `config` | View configuration | `nido config` |
 | `register` | MCP setup helper | `nido register` |

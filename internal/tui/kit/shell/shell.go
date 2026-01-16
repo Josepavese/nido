@@ -433,11 +433,7 @@ func (s *Shell) renderFooter() string {
 	var sbItems []widget.StatusBarItem
 	sbItems = append(sbItems, widget.StatusBarItem{
 		Key:   "←/→",
-		Label: "menu",
-	})
-	sbItems = append(sbItems, widget.StatusBarItem{
-		Key:   "q",
-		Label: "quit",
+		Label: "flow",
 	})
 
 	// 2. Viewlet Shortcuts
@@ -449,6 +445,13 @@ func (s *Shell) renderFooter() string {
 			})
 		}
 	}
+
+	// 3. System Exit (Always last)
+	sbItems = append(sbItems, widget.StatusBarItem{
+		Key:   "⎋/q",
+		Label: "exhale",
+	})
+
 	sb.SetItems(sbItems)
 
 	return sb.View()
@@ -462,20 +465,22 @@ func prettifyKey(k string) string {
 		return "⭾"
 	case "shift+tab":
 		return "⇧⭾"
-	case "up", "arrow up":
-		return "↑"
-	case "down", "arrow down":
-		return "↓"
-	case "left", "arrow left":
-		return "←"
+	case "up", "arrow up", "↑/↓":
+		return "↑/↓" // Already pretty if passed in this way, but just in case
+	case "left", "arrow left", "←/→":
+		return "←/→"
 	case "right", "arrow right":
 		return "→"
 	case "delete", "backspace":
 		return "⌫"
 	case "esc":
 		return "⎋"
-	case "ctrl+c":
+	case "ctrl+c", "ctrl+q":
 		return "^C"
+	case "enter/space":
+		return "↵/␣"
+	case "space":
+		return "␣"
 	default:
 		return k
 	}

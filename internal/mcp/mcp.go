@@ -479,7 +479,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			Name string `json:"name"`
 		}
 		json.Unmarshal(params.Arguments, &args)
-		if e := s.Provider.DeleteTemplate(args.Name); e != nil {
+		if e := s.Provider.DeleteTemplate(args.Name, false); e != nil {
 			err = e
 		} else {
 			result = fmt.Sprintf("Template '%s' deleted.", args.Name)

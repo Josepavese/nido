@@ -21,11 +21,7 @@ type RegistryItem struct {
 }
 
 func (i RegistryItem) Title() string {
-	if i.IsLocal {
-		return i.Name
-	}
-	// For remote, maybe show full name?
-	return i.Name
+	return fmt.Sprintf("%s:%s", i.Name, i.Version)
 }
 
 func (i RegistryItem) Description() string {
@@ -289,21 +285,31 @@ func (r *Registry) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, tea.Cm
 func (r *Registry) Shortcuts() []view.Shortcut {
 	if r.ConfirmDelete.IsActive() {
 		return []view.Shortcut{
-			{Key: "enter", Label: "confirm"},
-			{Key: "esc", Label: "cancel"},
+			{Key: "enter", Label: "engage"},
+			{Key: "esc", Label: "back"},
 		}
 	}
-	s := r.MasterDetail.Shortcuts()
+
+	s := []view.Shortcut{
+		{Key: "↑/↓", Label: "glide"},
+	}
 
 	// Contextual Shortcuts
-	if r.DetailView.Item.Name != "" {
-		if r.DetailView.Item.IsLocal {
-			s = append(s, view.Shortcut{Key: "p", Label: "prune"})
-			s = append(s, view.Shortcut{Key: "backspace", Label: "delete"})
-		} else {
-			s = append(s, view.Shortcut{Key: "enter", Label: "pull"})
+	if item := r.Sidebar.SelectedItem(); item != nil {
+		if regItem, ok := item.(RegistryItem); ok && regItem.Name != "" {
+			if regItem.IsLocal {
+				s = append(s, view.Shortcut{Key: "p", Label: "purge"})
+				s = append(s, view.Shortcut{Key: "delete", Label: "cull"})
+			} else {
+				s = append(s, view.Shortcut{Key: "enter", Label: "pull"})
+			}
 		}
 	}
+
+	if r.MasterDetail.ActiveFocus == widget.FocusDetail {
+		s = append(s, view.Shortcut{Key: "esc", Label: "back"})
+	}
+
 	return s
 }
 
@@ -311,9 +317,16 @@ func (r *Registry) IsModalActive() bool {
 	return r.ConfirmDelete != nil && r.ConfirmDelete.IsActive()
 }
 
-func (r *Registry) HasActiveInput() bool {
+func (r *Registry) HasActiveTextInput() bool {
 	if r.DetailView != nil {
-		return r.DetailView.HasActiveInput()
+		return r.DetailView.HasActiveTextInput()
+	}
+	return false
+}
+
+func (r *Registry) HasActiveFocus() bool {
+	if r.DetailView != nil {
+		return r.DetailView.HasActiveFocus()
 	}
 	return false
 }
@@ -430,6 +443,10 @@ func (d *RegistryDetail) IsModalActive() bool {
 	return false
 }
 
-func (d *RegistryDetail) HasActiveInput() bool {
-	return d.Form != nil && d.Form.HasActiveInput()
+func (d *RegistryDetail) HasActiveTextInput() bool {
+	return d.Form != nil && d.Form.HasActiveTextInput()
+}
+
+func (d *RegistryDetail) HasActiveFocus() bool {
+	return d.Form != nil && d.Form.HasActiveFocus()
 }

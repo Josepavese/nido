@@ -29,6 +29,7 @@ type Input struct {
 	Error      string
 	Disabled   bool // New: Read-only mode
 	Compact    bool // New: Render without borders (single line)
+	Filter     func(rune) bool
 	focused    bool
 	width      int
 }
@@ -77,6 +78,35 @@ func (i *Input) Update(msg tea.Msg) (Element, tea.Cmd) {
 	if i.Disabled {
 		return i, nil
 	}
+
+	// 1. Intercept Key Events for Filtering
+	if kmsg, ok := msg.(tea.KeyMsg); ok && i.Filter != nil {
+		// Handle regular runes
+		if kmsg.Type == tea.KeyRunes {
+			var filteredRunes []rune
+			changed := false
+			for _, r := range kmsg.Runes {
+				if i.Filter(r) {
+					filteredRunes = append(filteredRunes, r)
+				} else {
+					changed = true
+				}
+			}
+			if changed {
+				if len(filteredRunes) == 0 {
+					return i, nil // Block entire event
+				}
+				kmsg.Runes = filteredRunes // Override with filtered runes
+				msg = kmsg
+			}
+		} else if kmsg.Type == tea.KeySpace {
+			// Explicitly handle space key
+			if !i.Filter(' ') {
+				return i, nil // Block space
+			}
+		}
+	}
+
 	var cmd tea.Cmd
 	i.InputModel, cmd = i.InputModel.Update(msg)
 
@@ -199,6 +229,7 @@ type Button struct {
 	Disabled bool
 	focused  bool
 	width    int
+	Color    lipgloss.TerminalColor
 }
 
 func NewButton(label, text string, action func() tea.Cmd) *Button {
@@ -217,8 +248,9 @@ func (b *Button) Focus() tea.Cmd {
 	b.focused = true
 	return nil
 }
-func (b *Button) Blur()          { b.focused = false }
-func (b *Button) SetWidth(w int) { b.width = w }
+func (b *Button) Blur()                             { b.focused = false }
+func (b *Button) SetWidth(w int)                    { b.width = w }
+func (b *Button) SetColor(c lipgloss.TerminalColor) { b.Color = c }
 func (b *Button) Update(msg tea.Msg) (Element, tea.Cmd) {
 	if b.Disabled {
 		return b, nil
@@ -239,7 +271,11 @@ func (b *Button) View(width int) string {
 	t := theme.Current()
 	contStyle := lipgloss.NewStyle().Foreground(t.Palette.TextDim)
 	if b.focused {
-		contStyle = lipgloss.NewStyle().Foreground(t.Palette.Accent).Bold(true)
+		var accent lipgloss.TerminalColor = t.Palette.Accent
+		if b.Color != nil {
+			accent = b.Color
+		}
+		contStyle = lipgloss.NewStyle().Foreground(accent).Bold(true)
 	}
 	// Pass center alignment for buttons and empty label if label is "SAVE" or specifically requested
 	displayLabel := b.Label
@@ -259,7 +295,7 @@ type Form struct {
 	Width      int
 }
 
-func (f *Form) HasActiveInput() bool {
+func (f *Form) HasActiveTextInput() bool {
 	res := false
 	for _, el := range f.Elements {
 		if input, ok := el.(*Input); ok {
@@ -270,6 +306,15 @@ func (f *Form) HasActiveInput() bool {
 		}
 	}
 	return res
+}
+
+func (f *Form) HasActiveFocus() bool {
+	for _, el := range f.Elements {
+		if el.Focused() {
+			return true
+		}
+	}
+	return false
 }
 
 func (f *Form) Validate() bool {

@@ -17,11 +17,20 @@ type RequestCreateTemplateMsg struct {
 
 // RequestDeleteTemplateMsg requests a template deletion.
 type RequestDeleteTemplateMsg struct {
-	Name string
+	Name  string
+	Force bool
 }
 
 // RequestTemplateListMsg requests the list of templates.
 type RequestTemplateListMsg struct{}
+
+// TemplateUsageMsg contains the result of a dependency check.
+type TemplateUsageMsg struct {
+	Name   string
+	InUse  bool
+	UsedBy []string
+	Err    error
+}
 
 // --- Registry Messages ---
 
@@ -55,3 +64,12 @@ type RequestDeleteImageMsg struct {
 type RequestPruneMsg struct {
 	UnusedOnly bool
 }
+
+// RequestUpdateMsg requests a version check.
+type RequestUpdateMsg struct{}
+
+// RequestCacheMsg requests cache statistics.
+type RequestCacheMsg struct{}
+
+// RequestApplyUpdateMsg requests an actual binary update.
+type RequestApplyUpdateMsg struct{}

@@ -59,15 +59,19 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "q":
 			active := a.Shell.ActiveViewlet()
-			hasInput := false
-			if active != nil {
-				hasInput = active.HasActiveInput()
-			}
-
-			if active != nil && hasInput {
+			if active != nil && (active.IsModalActive() || active.HasActiveTextInput()) {
 				break // Propagate 'q' to active viewlet
 			}
+			if a.OnQuit != nil {
+				a.OnQuit()
+			}
+			return a, tea.Quit
 
+		case "esc":
+			active := a.Shell.ActiveViewlet()
+			if active != nil && (active.IsModalActive() || active.HasActiveFocus()) {
+				break // Propagate 'esc' to active viewlet
+			}
 			if a.OnQuit != nil {
 				a.OnQuit()
 			}

@@ -36,14 +36,55 @@ func NewQemuProvider(rootDir string, cfg *config.Config) *QemuProvider {
 // Spawn brings a new VM to life. It handles template resolution, disk creation,
 // and saves the initial state before handing over to Start.
 func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
-	// 1. Template Resolution
+	// 0. Name Validation
+	// Only allow alphanumeric, hyphens, underscores, and dots. Rejects spaces.
+	if name == "" {
+		return fmt.Errorf("name cannot be empty")
+	}
+	for _, r := range name {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.') {
+			return fmt.Errorf("invalid name: only alphanumeric, hyphens, underscores, and dots allowed (no spaces)")
+		}
+	}
+
+	// 1. Template/Image Resolution
 	tpl := opts.DiskPath
 	if tpl == "" {
 		tpl = p.Config.TemplateDefault
 	}
 
+	// If it's not an absolute path and doesn't contain a slash, it's either a Template or an Image Tag
 	if !filepath.IsAbs(tpl) && !strings.Contains(tpl, "/") {
-		tpl = filepath.Join(p.Config.BackupDir, tpl+".compact.qcow2")
+		// Try Template first
+		templatePath := filepath.Join(p.Config.BackupDir, tpl+".compact.qcow2")
+		if _, err := os.Stat(templatePath); err == nil {
+			tpl = templatePath
+		} else {
+			// Try resolving as Image Tag (e.g., "ubuntu:24.04") or Flavour
+			imgDir := p.Config.ImageDir
+			if imgDir == "" {
+				imgDir = filepath.Join(p.RootDir, "images")
+			}
+
+			// Load catalog to find the image
+			catalog, err := image.LoadCatalogFromFile(filepath.Join(imgDir, image.CatalogCacheFile))
+			if err == nil {
+				pName, pVer := tpl, ""
+				if strings.Contains(tpl, ":") {
+					parts := strings.Split(tpl, ":")
+					pName, pVer = parts[0], parts[1]
+				}
+				img, ver, err := catalog.FindImage(pName, pVer)
+				if err == nil {
+					// Found! Update tpl to the cached image path
+					tpl = filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
+					// Also update SSH user if not explicitly provided
+					if opts.SSHUser == "" && img.SSHUser != "" {
+						opts.SSHUser = img.SSHUser
+					}
+				}
+			}
+		}
 	}
 
 	// 2. Create Disk
@@ -468,11 +509,32 @@ func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (strin
 	return targetTemplate, nil
 }
 
-func (p *QemuProvider) DeleteTemplate(name string) error {
+func (p *QemuProvider) DeleteTemplate(name string, force bool) error {
 	templatePath := filepath.Join(p.Config.BackupDir, name+".compact.qcow2")
 	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
 		return fmt.Errorf("template not found: %s", name)
 	}
+
+	// Safety Check: Is it in use?
+	if !force {
+		used, err := p.GetUsedBackingFiles()
+		if err != nil {
+			return fmt.Errorf("failed to check template usage: %v", err)
+		}
+		// used contains absolute paths. We need to check if our template path is in there.
+		// There's a slight risk of path mismatch (abs vs relative), so we resolve both.
+		absTemplate, err := filepath.Abs(templatePath)
+		if err != nil {
+			absTemplate = templatePath
+		}
+
+		for _, u := range used {
+			if u == absTemplate || u == templatePath {
+				return fmt.Errorf("template '%s' is in use by one or more VMs (use --force to override)", name)
+			}
+		}
+	}
+
 	return os.Remove(templatePath)
 }
 
@@ -598,6 +660,9 @@ func (p *QemuProvider) SSHCommand(name string) (string, error) {
 	info, err := p.Info(name)
 	if err != nil {
 		return "", err
+	}
+	if info.SSHPort == 0 || info.State != "running" {
+		return "", fmt.Errorf("VM '%s' is not running or has no network access", name)
 	}
 	return fmt.Sprintf("ssh -p %d %s@%s", info.SSHPort, info.SSHUser, info.IP), nil
 }

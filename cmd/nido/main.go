@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Josepavese/nido/internal/build"
 	clijson "github.com/Josepavese/nido/internal/cli"
 	"github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/image"
@@ -20,8 +21,7 @@ import (
 	"github.com/Josepavese/nido/internal/ui"
 )
 
-// Version is injected at build time
-var Version = "v4.3.6"
+// Version is handled by the build package
 
 // main is the brain of the Nido CLI. It handles command line parsing,
 // configuration loading, and dispatches requests to the appropriate handlers.
@@ -176,7 +176,7 @@ func main() {
 			os.Exit(1)
 		}
 		name := rest[0]
-		if strings.HasPrefix(name, "--") {
+		if strings.HasPrefix(name, "-") {
 			if jsonOut {
 				resp := clijson.NewResponseError("spawn", "ERR_INVALID_ARGS", "Missing VM name", "First argument must be a VM name, not a flag.", "Usage: nido spawn <name> ...", nil)
 				_ = clijson.PrintJSON(resp)
@@ -185,6 +185,18 @@ func main() {
 			ui.Error("Invalid VM name '%s'. It looks like a flag.", name)
 			fmt.Println("Usage: nido spawn <name> [--image <name:tag> | <template>]")
 			os.Exit(1)
+		}
+		// Strict Name Validation: no spaces, only alphanumeric, hyphen, underscore, dot.
+		for _, r := range name {
+			if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.') {
+				if jsonOut {
+					resp := clijson.NewResponseError("spawn", "ERR_INVALID_ARGS", "Invalid VM name", "Only alphanumeric, hyphens, underscores, and dots allowed.", "Usage: nido spawn <name> ...", nil)
+					_ = clijson.PrintJSON(resp)
+					os.Exit(1)
+				}
+				ui.Error("Invalid VM name '%s'. (No spaces allowed, only alphanumeric, -, _, .)", name)
+				os.Exit(1)
+			}
 		}
 		tpl := ""
 		imageTag := ""
@@ -566,14 +578,23 @@ func main() {
 			ui.Success("New species '"+tplName+"' archived at: %s", path)
 		} else if subCmd == "delete" {
 			if len(rest) < 2 {
-				ui.Error("Missing parameters. Usage: nido template delete <template-name>")
+				ui.Error("Missing parameters. Usage: nido template delete <template-name> [--force]")
 				os.Exit(1)
 			}
 			tplName := rest[1]
-			if !jsonOut {
-				ui.Ironic("Vaporizing genetic archive...")
+			force := false
+			if len(rest) > 2 && rest[2] == "--force" {
+				force = true
 			}
-			if err := prov.DeleteTemplate(tplName); err != nil {
+
+			if !jsonOut {
+				if force {
+					ui.Ironic("Vaporizing genetic archive (forced)...")
+				} else {
+					ui.Ironic("Vaporizing genetic archive...")
+				}
+			}
+			if err := prov.DeleteTemplate(tplName, force); err != nil {
 				if isNotFoundErr(err) {
 					if jsonOut {
 						resp := clijson.NewResponseOK("template delete", map[string]interface{}{
@@ -775,8 +796,13 @@ func getBashCompletion() string {
             return 0
             ;;
         info|stop|delete)
-            COMPREPLY=( $(compgen -W "$(nido completion list-vms) --json" -- ${cur}) )
-            return 0
+            if [[ ${COMP_CWORD} -eq 2 ]]; then
+                COMPREPLY=( $(compgen -W "$(nido completion list-vms) --json" -- ${cur}) )
+                return 0
+            elif [[ ${COMP_WORDS[COMP_CWORD-2]} == "template" ]]; then
+                COMPREPLY=( $(compgen -W "$(nido completion list-templates) --force" -- ${cur}) )
+                return 0
+            fi
             ;;
         ls|list|version|prune|doctor|register)
             COMPREPLY=( $(compgen -W "--json" -- ${cur}) )
@@ -829,9 +855,10 @@ func getBashCompletion() string {
                 return 0
             fi
             ;;
-        delete)
-             if [[ ${COMP_WORDS[COMP_CWORD-2]} == "template" ]]; then
-                COMPREPLY=( $(compgen -W "$(nido completion list-templates)" -- ${cur}) )
+        *)
+            # Fallback for flags and deeper levels
+            if [[ ${COMP_WORDS[COMP_CWORD-2]} == "delete" ]] && [[ ${COMP_WORDS[COMP_CWORD-3]} == "template" ]]; then
+                COMPREPLY=( $(compgen -W "--force" -- ${cur}) )
                 return 0
             fi
             ;;
@@ -921,6 +948,8 @@ func getZshCompletion() string {
             _values 'vms' $(nido completion list-vms)
           elif (( CURRENT == 3 )) && [[ $words[2] == "delete" ]]; then
             _values 'templates' $(nido completion list-templates)
+          elif (( CURRENT == 4 )) && [[ $words[2] == "delete" ]]; then
+            _values 'options' '--force'
           fi
           ;;
         images)
@@ -1158,7 +1187,7 @@ func cmdMcpJsonList(prov provider.VMProvider) {
 func cmdVersion(jsonOut bool) {
 	if jsonOut {
 		resp := clijson.NewResponseOK("version", map[string]interface{}{
-			"version":  Version,
+			"version":  build.Version,
 			"state":    "Evolved",
 			"protocol": "v3.0",
 		})
@@ -1166,14 +1195,13 @@ func cmdVersion(jsonOut bool) {
 		return
 	}
 
-	fmt.Printf("%sNido %s%s%s (State: Evolved)\n", ui.Dim, ui.Reset, ui.Bold, Version)
+	fmt.Printf("%sNido %s%s%s (State: Evolved)\n", ui.Dim, ui.Reset, ui.Bold, build.Version)
 	ui.Ironic("Hypervisor handshake protocol v3.0 stable.")
 
-	// Check for updates asynchronously (fast)
 	go func() {
-		latest, err := getLatestVersion()
-		if err == nil && latest != "" && latest != Version {
-			fmt.Printf("\n%s✨ A new evolutionary state is available: %s%s (current: %s)\n", ui.Yellow, ui.Bold, latest, Version)
+		latest, err := build.GetLatestVersion()
+		if err == nil && latest != "" && latest != build.Version {
+			fmt.Printf("\n%s✨ A new evolutionary state is available: %s%s (current: %s)\n", ui.Yellow, ui.Bold, latest, build.Version)
 			ui.Info("Run 'nido update' to ascend to the next level.")
 		}
 	}()
@@ -1215,39 +1243,24 @@ func isAlreadyExistsErr(err error) bool {
 	return strings.Contains(lower, "already exists") || strings.Contains(lower, "file exists")
 }
 
-func getLatestVersion() (string, error) {
-	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get("https://api.github.com/repos/Josepavese/nido/releases/latest")
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	var release struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return "", err
-	}
-	return release.TagName, nil
-}
+// getLatestVersion removed, moved to build package
 
 func cmdUpdate(nidoDir string) {
 	ui.Header("Nido Evolutionary Ascent")
 	ui.Ironic("Scanning the horizon for newer genetic sequences...")
 
-	latest, err := getLatestVersion()
+	latest, err := build.GetLatestVersion()
 	if err != nil {
 		ui.Error("Failed to reach the mother nest: %v", err)
 		os.Exit(1)
 	}
 
-	if latest == Version {
-		ui.Success("You are already at the peak of evolution (%s).", Version)
+	if latest == build.Version {
+		ui.Success("You are already at the peak of evolution (%s).", build.Version)
 		return
 	}
 
-	ui.Info("Found new version: %s (current: %s)", latest, Version)
+	ui.Info("Found new version: %s (current: %s)", latest, build.Version)
 	ui.Ironic("Downloading new binary from the cloud...")
 
 	// Determine binary name based on platform

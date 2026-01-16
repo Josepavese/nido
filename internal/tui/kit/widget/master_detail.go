@@ -166,7 +166,12 @@ func (m *MasterDetail) IsModalActive() bool {
 	return (m.Sidebar != nil && m.Sidebar.IsModalActive()) || (m.Pages != nil && m.Pages.IsModalActive())
 }
 
-func (m *MasterDetail) HasActiveInput() bool {
-	res := (m.Sidebar != nil && m.Sidebar.HasActiveInput()) || (m.Pages != nil && m.Pages.HasActiveInput())
+func (m *MasterDetail) HasActiveTextInput() bool {
+	res := (m.Sidebar != nil && m.Sidebar.HasActiveTextInput()) || (m.Pages != nil && m.Pages.HasActiveTextInput())
+	return res
+}
+
+func (m *MasterDetail) HasActiveFocus() bool {
+	res := (m.Sidebar != nil && m.Sidebar.HasActiveFocus()) || (m.Pages != nil && m.Pages.HasActiveFocus())
 	return res
 }

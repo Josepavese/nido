@@ -428,48 +428,42 @@ func (f *Fleet) Focus() tea.Cmd {
 }
 
 func (f *Fleet) Shortcuts() []view.Shortcut {
-	if f.ConfirmDelete.IsActive() {
+	if f.IsModalActive() {
 		return []view.Shortcut{
-			{Key: "enter", Label: "confirm"},
-			{Key: "esc", Label: "cancel"},
-		}
-	}
-	if f.ErrorModal.IsActive() {
-		return []view.Shortcut{
-			{Key: "enter", Label: "close"},
-			{Key: "esc", Label: "close"},
-		}
-	}
-	if f.TemplateModal.IsActive() {
-		return []view.Shortcut{
-			{Key: "enter", Label: "confirm"},
-			{Key: "esc", Label: "cancel"},
+			{Key: "enter", Label: "engage"},
+			{Key: "esc", Label: "back"},
 		}
 	}
 
 	shortcuts := []view.Shortcut{
-		{Key: "↑/↓", Label: "navigate"},
+		{Key: "↑/↓", Label: "glide"},
 	}
 
 	if selectedItem := f.Sidebar.SelectedItem(); selectedItem != nil {
 		if item, ok := selectedItem.(FleetItem); ok {
-			// Power Hint
+			// Engage Hint (Toggle)
+			toggleLabel := "engage"
 			if item.State == "running" {
-				shortcuts = append(shortcuts, view.Shortcut{Key: "space", Label: "stop"})
-				// Actions only available when running
+				toggleLabel = "exhale" // stop
+			}
+			shortcuts = append(shortcuts, view.Shortcut{Key: "enter/space", Label: toggleLabel})
+
+			// Running specific
+			if item.State == "running" {
 				shortcuts = append(shortcuts, view.Shortcut{Key: "s", Label: "ssh"})
 				shortcuts = append(shortcuts, view.Shortcut{Key: "v", Label: "vnc"})
 			} else {
-				shortcuts = append(shortcuts, view.Shortcut{Key: "space", Label: "start"})
-			}
-			// Delete Hint (always available)
-			shortcuts = append(shortcuts, view.Shortcut{Key: "canc", Label: "delete"})
-
-			// Template Hint (Only if stopped)
-			if item.State != "running" {
+				// Stopped specific
 				shortcuts = append(shortcuts, view.Shortcut{Key: "t", Label: "template"})
 			}
+
+			// Delete Hint (always available)
+			shortcuts = append(shortcuts, view.Shortcut{Key: "delete", Label: "evict"})
 		}
+	}
+
+	if f.MasterDetail.ActiveFocus == widget.FocusDetail {
+		shortcuts = append(shortcuts, view.Shortcut{Key: "esc", Label: "back"})
 	}
 
 	return shortcuts

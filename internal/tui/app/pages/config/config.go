@@ -1,8 +1,6 @@
 package config
 
 import (
-	"fmt"
-
 	appconfig "github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/tui/app/ops"
 	"github.com/Josepavese/nido/internal/tui/kit/layout"
@@ -72,13 +70,14 @@ type Config struct {
 	Pages        *widget.PageManager
 
 	// Data
-	items          []ConfigItem
+	items []ConfigItem
+
+	// State
 	CurrentVersion string
+	LatestVersion  string
 	UpdateChecking bool
 	CacheStats     CacheStats
-	DoctorOutput   string // Store last doctor output
 
-	// Detail Pages
 	// Detail Pages
 	PageGlobal     *ConfigPageGlobalForm
 	PageAppearance *ConfigPageAppearance
@@ -133,6 +132,8 @@ func (c *Config) Init() tea.Cmd {
 	return tea.Batch(
 		c.MasterDetail.Init(),
 		c.Spinner.Tick,
+		func() tea.Msg { return ops.RequestUpdateMsg{} },
+		func() tea.Msg { return ops.RequestCacheMsg{} },
 	)
 }
 
@@ -266,32 +267,24 @@ func (c *Config) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 		// (Optional, user didn't ask, sticking to strict Esc request)
 
 	case ops.DoctorResultMsg:
-		c.DoctorOutput = msg.Output
-		if msg.Err != nil {
-			c.DoctorOutput += fmt.Sprintf("\nError: %v", msg.Err)
-		}
 		if c.PageDoctor != nil {
-			c.PageDoctor.Output = c.DoctorOutput
+			c.PageDoctor.Reports = msg.Reports
+			c.PageDoctor.Err = msg.Err
 		}
-
-	case ops.RequestUpdateMsg: // Loopback from internal page
-		c.UpdateChecking = true
-		cmds = append(cmds, ops.CheckUpdate())
-
-	case ops.UpdateCheckMsg:
-		c.UpdateChecking = false
-		c.CurrentVersion = msg.Current
 
 	case FocusSidebarMsg:
 		cmds = append(cmds, c.MasterDetail.SetFocus(widget.FocusSidebar))
 
-	case ops.CacheListMsg:
-		// We use this to compute stats
-		count := len(msg.Items)
-		// Size not summed in msg? msg.Items has Size string.
-		// Simulating stat update:
-		c.CacheStats = CacheStats{TotalImages: count, TotalSize: "Calculated"}
-		// (Real size sum needs parsing)
+	case ops.UpdateCheckMsg:
+		c.CurrentVersion = msg.Current
+		c.LatestVersion = msg.Latest
+		c.UpdateChecking = false
+
+	case ops.CacheStatsMsg:
+		c.CacheStats = CacheStats{
+			TotalImages: msg.Stats.TotalImages,
+			TotalSize:   msg.Stats.TotalSize,
+		}
 	}
 
 	newMD, mdCmd := c.MasterDetail.Update(msg)
@@ -314,6 +307,14 @@ func (c *Config) View() string {
 				modal = pf.Modal
 			} else if pa, ok := p.(*ConfigPageAppearance); ok {
 				modal = pa.Modal
+			} else if pd, ok := p.(*ConfigPageDoctor); ok {
+				modal = pd.Modal
+			} else if pu, ok := p.(*ConfigPageUpdate); ok {
+				if pu.ResultModal != nil && pu.ResultModal.IsActive() {
+					modal = pu.ResultModal
+				} else {
+					modal = pu.ConfirmModal
+				}
 			}
 
 			if modal != nil {
@@ -335,7 +336,11 @@ func (c *Config) Focus() tea.Cmd {
 }
 
 func (c *Config) Shortcuts() []fv.Shortcut {
-	return c.MasterDetail.Shortcuts()
+	s := c.MasterDetail.Shortcuts()
+	if c.MasterDetail.ActiveFocus == widget.FocusSidebar {
+		s = append(s, fv.Shortcut{Key: "enter", Label: "engage"})
+	}
+	return s
 }
 
 func (c *Config) IsModalActive() bool {
@@ -345,12 +350,18 @@ func (c *Config) IsModalActive() bool {
 	return c.MasterDetail.IsModalActive()
 }
 
-func (c *Config) HasActiveInput() bool {
-	res := false
+func (c *Config) HasActiveTextInput() bool {
 	if c.MasterDetail != nil {
-		res = c.MasterDetail.HasActiveInput()
+		return c.MasterDetail.HasActiveTextInput()
 	}
-	return res
+	return false
+}
+
+func (c *Config) HasActiveFocus() bool {
+	if c.MasterDetail != nil {
+		return c.MasterDetail.HasActiveFocus()
+	}
+	return false
 }
 
 // Internal Messages (kept for compatibility)

@@ -139,12 +139,18 @@ func (pm *PageManager) IsModalActive() bool {
 	return false
 }
 
-func (pm *PageManager) HasActiveInput() bool {
-	res := false
+func (pm *PageManager) HasActiveTextInput() bool {
 	if p, ok := pm.Pages[pm.Active]; ok {
-		res = p.HasActiveInput()
+		return p.HasActiveTextInput()
 	}
-	return res
+	return false
+}
+
+func (pm *PageManager) HasActiveFocus() bool {
+	if p, ok := pm.Pages[pm.Active]; ok {
+		return p.HasActiveFocus()
+	}
+	return false
 }
 
 func (pm *PageManager) Focusable() bool {

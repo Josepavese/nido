@@ -4,6 +4,7 @@
 package ops
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,8 +12,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Josepavese/nido/internal/build"
 	"github.com/Josepavese/nido/internal/config"
+	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/provider"
+	view "github.com/Josepavese/nido/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -123,17 +127,197 @@ func FetchVMInfo(prov provider.VMProvider, name string) tea.Cmd {
 	}
 }
 
-// SpawnVM creates a new VM from a template.
-func SpawnVM(prov provider.VMProvider, name, template, userData string, gui bool) tea.Cmd {
+// SpawnVM creates a new VM options. It automatically pulls the image if missing.
+func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool) tea.Cmd {
+	opName := "spawn"
+
 	return func() tea.Msg {
-		opts := provider.VMOptions{
-			DiskPath:     template,
-			UserDataPath: userData,
-			Gui:          gui,
-			SSHUser:      "",
+		// 1. Check if source is a local template (file or name)
+		// Logic similar to QemuProvider.Spawn but used here to decide whether to pull.
+
+		// If it's absolute path, assume it exists or let provider fail
+		if filepath.IsAbs(source) || strings.Contains(source, "/") {
+			// Just spawn, provider handles file not found or uses it
+			opts := provider.VMOptions{
+				DiskPath:     source,
+				UserDataPath: userData,
+				Gui:          gui,
+			}
+			err := prov.Spawn(name, opts)
+			return OpResultMsg{Op: opName, Err: err}
 		}
-		err := prov.Spawn(name, opts)
-		return OpResultMsg{Op: "spawn", Err: err}
+
+		// Check if it's a known template
+		// Accessing provider internal config is hard here without import cycle or breaking abstraction?
+		// We can list templates.
+		templates, _ := prov.ListTemplates() // Ignore error for now, treat as empty
+		isTemplate := false
+		for _, t := range templates {
+			if t == source {
+				isTemplate = true
+				break
+			}
+		}
+
+		if isTemplate {
+			opts := provider.VMOptions{
+				DiskPath:     source,
+				UserDataPath: userData,
+				Gui:          gui,
+			}
+			err := prov.Spawn(name, opts)
+			return OpResultMsg{Op: opName, Err: err}
+		}
+
+		// 2. Not a template? Check Catalog and Pull if needed
+		// This uses the channel-based progress logic
+		ch := make(chan ProgressMsg, 10)
+
+		go func() {
+			defer close(ch)
+
+			// Resolve Image from Catalog
+			cfg := prov.GetConfig()
+			imgDir := cfg.ImageDir
+			if imgDir == "" {
+				home, _ := os.UserHomeDir()
+				imgDir = filepath.Join(home, ".nido", "images")
+			}
+
+			catalog, err := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
+			if err != nil {
+				// Fallback to spawn if catalog fails, maybe it's a special template not listed?
+				// Or return error. Safe to return error.
+				ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("catalog load failed: %w", err)}}
+				return
+			}
+
+			pName, pVer := source, ""
+			if strings.Contains(source, ":") {
+				parts := strings.Split(source, ":")
+				pName, pVer = parts[0], parts[1]
+			}
+
+			img, ver, err := catalog.FindImage(pName, pVer)
+			if err != nil {
+				// Not found in catalog? Maybe the provider can handle it (e.g. unknown magic).
+				// Try direct spawn.
+				opts := provider.VMOptions{
+					DiskPath:     source,
+					UserDataPath: userData,
+					Gui:          gui,
+				}
+				err := prov.Spawn(name, opts)
+				ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: err}}
+				return
+			}
+
+			// Image found! Check if we have it.
+			destPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
+			if _, err := os.Stat(destPath); os.IsNotExist(err) {
+				// NEED TO PULL
+				ch <- ProgressMsg{
+					OpName: opName,
+					Status: view.StatusMsg{
+						Loading:   true,
+						Operation: fmt.Sprintf("Pulling %s", source),
+						Progress:  0.0,
+					},
+				}
+
+				downloader := image.Downloader{
+					Quiet: true,
+					OnProgress: func(current, total int64) {
+						ratio := 0.0
+						if total > 0 {
+							ratio = float64(current) / float64(total)
+						}
+						// Limit updates?
+						ch <- ProgressMsg{
+							OpName: opName,
+							Status: view.StatusMsg{
+								Loading:   true,
+								Operation: fmt.Sprintf("Pulling %s", source),
+								Progress:  ratio,
+							},
+						}
+					},
+				}
+
+				downloadPath := destPath
+				isCompressed := strings.HasSuffix(ver.URL, ".tar.xz")
+				if isCompressed {
+					downloadPath = destPath + ".tar.xz"
+				}
+
+				if len(ver.PartURLs) > 0 {
+					err = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
+				} else {
+					err = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
+				}
+
+				if err != nil {
+					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("download failed: %w", err)}}
+					return
+				}
+
+				// Verify & Decompress
+				ch <- ProgressMsg{
+					OpName: opName,
+					Status: view.StatusMsg{
+						Loading:   true,
+						Operation: fmt.Sprintf("Verifying %s", pName),
+						Progress:  1.0,
+					},
+				}
+
+				if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+					os.Remove(downloadPath)
+					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("verification failed: %w", err)}}
+					return
+				}
+
+				if isCompressed {
+					ch <- ProgressMsg{
+						OpName: opName,
+						Status: view.StatusMsg{
+							Loading:   true,
+							Operation: fmt.Sprintf("Decompressing %s", pName),
+							Progress:  1.0,
+						},
+					}
+					if err := downloader.Decompress(downloadPath, destPath); err != nil {
+						os.Remove(downloadPath)
+						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("decompression failed: %w", err)}}
+						return
+					}
+					os.Remove(downloadPath)
+				}
+			}
+
+			// 3. Spawning
+			ch <- ProgressMsg{
+				OpName: opName,
+				Status: view.StatusMsg{
+					Loading:   true,
+					Operation: fmt.Sprintf("Hatching %s", name),
+					Progress:  1.0,
+				},
+			}
+
+			// We pass the RAW source string, trusting that QemuProvider (which we updated)
+			// will resolve it to the now-existing file.
+			opts := provider.VMOptions{
+				DiskPath:     source,
+				UserDataPath: userData,
+				Gui:          gui,
+				SSHUser:      img.SSHUser, // Use user from catalog if available
+			}
+			err = prov.Spawn(name, opts)
+			ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: err}}
+		}()
+
+		return waitForProgress(ch)()
 	}
 }
 
@@ -170,10 +354,50 @@ func CreateTemplate(prov provider.VMProvider, vmName, templateName string) tea.C
 }
 
 // DeleteTemplate removes a template.
-func DeleteTemplate(prov provider.VMProvider, name string) tea.Cmd {
+func DeleteTemplate(prov provider.VMProvider, name string, force bool) tea.Cmd {
 	return func() tea.Msg {
-		err := prov.DeleteTemplate(name)
+		err := prov.DeleteTemplate(name, force)
 		return OpResultMsg{Op: "delete-template", Err: err}
+	}
+}
+
+// CheckTemplateUsage checks if a template is used by any VMs.
+func CheckTemplateUsage(prov provider.VMProvider, name string) tea.Cmd {
+	return func() tea.Msg {
+		if prov == nil {
+			return TemplateUsageMsg{Err: fmt.Errorf("provider is nil")}
+		}
+		used, err := prov.GetUsedBackingFiles()
+		if err != nil {
+			return TemplateUsageMsg{Name: name, Err: err}
+		}
+
+		// Check if our template is in the used list.
+		// We need to resolve paths similar to QemuProvider implementation
+		// But since we can't easily resolve the template path here without config,
+		// we might rely on simple string matching if possible, or we need to access config.
+		// BETTER: The Provider should expose `IsTemplateInUse(name)`.
+		// BUT: provider method `GetUsedBackingFiles` returns paths.
+		// Let's iterate and check for suffix for now, as a heuristic.
+		// The template file is usually `name + ".compact.qcow2"`.
+
+		// Actually, QemuProvider logic was:
+		// templatePath := filepath.Join(p.Config.BackupDir, name+".compact.qcow2")
+
+		// Replicating that logic here is brittle.
+		// Ideally `prov.InfoTemplate(name)` or similar would return status.
+		// OR we trust the simple check: does any backing file end with `name + ".compact.qcow2"`?
+		suffix := fmt.Sprintf("/%s.compact.qcow2", name)
+
+		var usedBy []string
+		for _, u := range used {
+			if strings.HasSuffix(u, suffix) {
+				usedBy = append(usedBy, "unknown-vm") // We don't know WHICH VM uses it from this list yet, only that it is used.
+				// Unless GetUsedBackingFiles returns map? It returns slice of strings.
+			}
+		}
+
+		return TemplateUsageMsg{Name: name, InUse: len(usedBy) > 0, UsedBy: usedBy}
 	}
 }
 
@@ -194,44 +418,99 @@ func FetchTemplatesList(prov provider.VMProvider) tea.Cmd {
 
 // --- Config Commands ---
 
-// CheckUpdate checks for available updates.
+// CheckUpdate checks for available updates via GitHub.
 func CheckUpdate() tea.Cmd {
 	return func() tea.Msg {
-		out, err := exec.Command("nido", "version").Output()
-		if err != nil {
-			return UpdateCheckMsg{Err: err}
+		latest, err := build.GetLatestVersion()
+		return UpdateCheckMsg{
+			Current: build.Version,
+			Latest:  latest,
+			Err:     err,
 		}
-		current := strings.TrimSpace(string(out))
-		// Extract version number (e.g., "Nido v4.3.6 (State: Evolved)" -> "v4.3.6")
-		parts := strings.Fields(current)
-		if len(parts) >= 2 {
-			current = parts[1]
-		}
-		return UpdateCheckMsg{Current: current, Latest: current} // TODO: Check GitHub for latest
 	}
 }
 
-// DoctorResultMsg contains the output of the doctor check.
+// ApplyUpdateMsg is sent when an update operation completes.
+type ApplyUpdateMsg struct {
+	Err error
+}
+
+// ApplyUpdate performs the evolutionary ascent by calling the CLI update.
+func ApplyUpdate() tea.Cmd {
+	return func() tea.Msg {
+		// We execute 'nido update' and wait for it to finish.
+		// We try to find the current executable to call it explicitly.
+		exe, err := os.Executable()
+		if err != nil {
+			exe = "nido" // Fallback
+		}
+		cmd := exec.Command(exe, "update")
+		err = cmd.Run()
+		return ApplyUpdateMsg{Err: err}
+	}
+}
+
+// DoctorReport represents a single diagnostic check result.
+type DoctorReport struct {
+	Label   string `json:"label"`
+	Passed  bool   `json:"passed"`
+	Details string `json:"details"`
+}
+
+// DoctorResultMsg contains the parsed output of the doctor check.
 type DoctorResultMsg struct {
-	Output string
-	Err    error
+	Reports []DoctorReport
+	Err     error
 }
 
 // RunDoctor executes the system diagnostic tool.
 func RunDoctor() tea.Cmd {
 	return func() tea.Msg {
-		out, err := exec.Command("nido", "doctor").CombinedOutput()
+		out, err := exec.Command("nido", "doctor", "--json").CombinedOutput()
 		if err != nil {
-			return DoctorResultMsg{Output: string(out), Err: err}
+			return DoctorResultMsg{Err: err}
 		}
-		return DoctorResultMsg{Output: string(out)}
+
+		var resp struct {
+			Data struct {
+				Reports []string `json:"reports"`
+			} `json:"data"`
+		}
+
+		if err := json.Unmarshal(out, &resp); err != nil {
+			return DoctorResultMsg{Err: err}
+		}
+
+		reports := make([]DoctorReport, 0, len(resp.Data.Reports))
+		for _, r := range resp.Data.Reports {
+			var status string
+			var statusIdx int
+			if idx := strings.Index(r, "[PASS]"); idx != -1 {
+				status = "[PASS]"
+				statusIdx = idx
+			} else if idx := strings.Index(r, "[FAIL]"); idx != -1 {
+				status = "[FAIL]"
+				statusIdx = idx
+			} else {
+				continue
+			}
+
+			label := strings.TrimSpace(r[:statusIdx])
+			details := strings.TrimSpace(r[statusIdx+len(status):])
+
+			reports = append(reports, DoctorReport{
+				Label:   label,
+				Passed:  status == "[PASS]",
+				Details: details,
+			})
+		}
+
+		return DoctorResultMsg{Reports: reports}
 	}
 }
 
 // Config Request Messages
 type SaveConfigMsg struct{ Key, Value string }
-type RequestUpdateMsg struct{}
-type RequestCacheMsg struct{}
 
 // REMOVED DUPLICATE ConfigSavedMsg HERE
 
