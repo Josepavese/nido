@@ -5,6 +5,20 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0] - 2026-01-16 "The Arcade Nest" 🕹️🐦
+
+### 🎉 Major Features
+
+- **80s Arcade TUI:** The "About" page has been completely reimagined as a retro arcade cabinet. Validated with empirical pixel-perfect rendering. Includes a high-score table ("HALL OF FLOCK") and blinking "INSERT COIN" text. Pure nostalgia. 👾
+- **Idempotent Navigation:** Fixed a critical issue where the TUI shell could spawn duplicate navigation tabs ("piolotto spam"). The wiring is now rock-solid.
+- **TUI Focus Logic:** Global improvements to focus handling, ensuring `Esc` and `q` behave predictably across all modals and views.
+
+### 🔧 Quality of Life
+
+- **ASCII Art Stability:** The Nido logo in the TUI is now geometrically stabilized (25x4 chars) to prevent visual drift on resize.
+- **Sidebar Restoration:** Fixed truncation issues in the sidebar to ensure all VM details are visible.
+- **Real-time Input Filtering:** Inputs in the TUI now strictly filter invalid characters (like spaces in VM names) in real-time.
+
 ## [4.3.4] - 2026-01-08
 
 ### ✨ UI & DX Refinements

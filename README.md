@@ -274,6 +274,9 @@ Nido can expose a graphical interface for VMs:
 - Keyboard: `r` refresh · `n` spawn modal · `↵` start/stop · `del` delete · `i` refresh info · `q` quit.
 - Includes progress/loader rail, VM list + detail pane, and spawn form (name, template, user-data, GUI toggle).
 
+![Nido TUI Arcade Mode](https://placehold.co/800x400?text=Arcade+TUI+Screenshot+Coming+Soon)
+*The new Arcade Mode About Page - Pure 80s Nostalgia*
+
 ### Automation
 
 To add a new image source, submit a PR to `registry/sources.yaml`. The `registry-builder` tool will automatically fetch the latest versions and checksums.
