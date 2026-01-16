@@ -20,6 +20,9 @@ type RequestDeleteTemplateMsg struct {
 	Name string
 }
 
+// RequestTemplateListMsg requests the list of templates.
+type RequestTemplateListMsg struct{}
+
 // --- Registry Messages ---
 
 // RegistryImage represents a remote image available for download.

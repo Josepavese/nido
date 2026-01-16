@@ -62,11 +62,10 @@ type Shell struct {
 	grid        layout.Grid
 	ActionStack *widget.ActionStack // New Widget
 
-	// Status & Logging
+	// Status
 	Loading   bool
 	Operation string
 	Progress  float64
-	Logs      []string
 
 	// Styles
 	Styles ShellStyles
@@ -211,8 +210,6 @@ func (s *Shell) Update(msg tea.Msg) tea.Cmd {
 			s.RecalculateLayout()
 		}
 
-	case viewlet.LogMsg:
-		s.Logs = append(s.Logs, msg.Text)
 	case viewlet.SwitchTabMsg:
 		// Support programmatic switching (e.g., from a hotkey inside a viewlet)
 		// For now, we assume the Msg contains the target Key or Index.

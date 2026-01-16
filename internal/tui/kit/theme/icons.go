@@ -9,11 +9,10 @@ import (
 // Application Icons (Single Source of Truth)
 const (
 	// Tab/Page Icons
-	IconRegistry = "🛸"  // Registry Page (Mothership)
-	IconHatchery = "🥐"  // Hatchery / Sources (Breadcrumbs / Pica-pane)
-	IconFleet    = "🦅"  // Fleet Page (Birds in Flight)
-	IconConfig   = "⚙️" // Config Page
-	IconLogs     = "📋"  // Logs Page
+	IconRegistry = "🛸" // Registry Page (Mothership)
+	IconHatchery = "🥐" // Hatchery / Sources (Breadcrumbs / Pica-pane)
+	IconFleet    = "🦅" // Fleet Page (Birds in Flight)
+	IconSystem   = "💾" // System Page (Floppy Disk / Nerdy)
 
 	// Asset Types
 	IconTemplate = "🧬" // VM Template
@@ -27,10 +26,14 @@ const (
 	// Actions & States
 	IconUnknown = "❓"
 	IconError   = "❌"
+	IconCheck   = "✅" // Success / Update
+	IconDoctor  = "🩺" // Doctor
 
 	// Fleet States
-	IconBird  = "🐦" // Running
-	IconSleep = "💤" // Stopped
+	IconBird   = "🐦" // Running
+	IconSleep  = "💤" // Stopped
+	IconLayout = "🎨" // Appearance / Rice
+
 )
 
 // IconForType maps a string type (e.g., from API or config) to an icon.

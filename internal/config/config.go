@@ -61,7 +61,7 @@ func LoadConfig(path string) (*Config, error) {
 			TabMinWidth:      6,
 			ExitZoneWidth:    4,
 			FooterLink:       "https://github.com/Josepavese",
-			TabLabels:        []string{"1 FLEET", "2 HATCHERY", "3 LOGS", "4 CONFIG", "5 HELP"},
+			TabLabels:        []string{"1 FLEET", "2 HATCHERY", "3 REGISTRY", "4 CONFIG"},
 			GapScale:         1,
 		},
 	}
@@ -196,6 +196,50 @@ func UpdateConfig(path, key, value string) error {
 	// 3. Write back
 	output := strings.Join(lines, "\n")
 	// Ensure newline at end
+	if !strings.HasSuffix(output, "\n") {
+		output += "\n"
+	}
+
+	return os.WriteFile(path, []byte(output), 0644)
+}
+
+// UpdateConfigMany modifies multiple settings atomically.
+func UpdateConfigMany(path string, updates map[string]string) error {
+	// 1. Read all lines
+	var lines []string
+	if _, err := os.Stat(path); err == nil {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		lines = strings.Split(string(content), "\n")
+	}
+
+	// 2. Update existing keys
+	processedKeys := make(map[string]bool)
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		for key, val := range updates {
+			if strings.HasPrefix(trimmed, key+"=") {
+				lines[i] = key + "=" + val
+				processedKeys[key] = true
+				break
+			}
+		}
+	}
+
+	// 3. Append new keys
+	for key, val := range updates {
+		if !processedKeys[key] {
+			if len(lines) > 0 && lines[len(lines)-1] != "" {
+				lines = append(lines, "")
+			}
+			lines = append(lines, key+"="+val)
+		}
+	}
+
+	// 4. Write back
+	output := strings.Join(lines, "\n")
 	if !strings.HasSuffix(output, "\n") {
 		output += "\n"
 	}

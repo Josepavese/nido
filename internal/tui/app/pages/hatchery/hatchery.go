@@ -218,6 +218,10 @@ func (i *Incubator) IsModalActive() bool {
 	return false
 }
 
+func (i *Incubator) HasActiveInput() bool {
+	return i.Form != nil && i.Form.HasActiveInput()
+}
+
 // --- Main Container ---
 
 // Hatchery implements the Wizard viewlet.
@@ -457,6 +461,13 @@ func (h *Hatchery) Shortcuts() []fv.Shortcut {
 
 func (h *Hatchery) IsModalActive() bool {
 	return h.ConfirmDelete != nil && h.ConfirmDelete.IsActive()
+}
+
+func (h *Hatchery) HasActiveInput() bool {
+	if h.Incubator != nil {
+		return h.Incubator.HasActiveInput()
+	}
+	return false
 }
 
 // --- Wrapper for Sidebar with Header ---

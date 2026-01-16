@@ -57,6 +57,21 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.Shell.PrevTab()
 				return a, nil
 			}
+		case "q":
+			active := a.Shell.ActiveViewlet()
+			hasInput := false
+			if active != nil {
+				hasInput = active.HasActiveInput()
+			}
+
+			if active != nil && hasInput {
+				break // Propagate 'q' to active viewlet
+			}
+
+			if a.OnQuit != nil {
+				a.OnQuit()
+			}
+			return a, tea.Quit
 		}
 	case tea.WindowSizeMsg:
 		a.Shell.Resize(msg.Width, msg.Height)

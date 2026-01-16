@@ -69,6 +69,13 @@ type Fleet struct {
 	detail        FleetDetail
 	transitioning map[string]bool // New: track active fast operations
 	spinner       spinner.Model   // New: local spinner for sidebar
+
+	// Local State
+	existingTemplates []string
+	pendingTemplateVM string
+	TemplateModal     *CreateTemplateModal
+	ConfirmDelete     *widget.Modal
+	ErrorModal        *widget.Modal
 }
 
 // NewFleet creates the viewlet
@@ -84,7 +91,30 @@ func NewFleet(prov provider.VMProvider) *Fleet {
 		detail:        FleetDetail{},
 		transitioning: make(map[string]bool),
 		spinner:       s,
+		TemplateModal: NewCreateTemplateModal(),
 	}
+
+	// Modal for delete confirmation (Full-screen handled by Fleet.View)
+	f.ConfirmDelete = widget.NewModal(
+		"Delete VM",
+		"Are you sure?",
+		func() tea.Cmd {
+			if f.detail.Name != "" {
+				return func() tea.Msg {
+					return ops.RequestOpMsg{Op: ops.OpDelete, Name: f.detail.Name}
+				}
+			}
+			return nil
+		},
+		nil,
+	)
+
+	// Error Modal (Single button)
+	f.ErrorModal = widget.NewAlertModal(
+		"Error",
+		"An unexpected error occurred.",
+		nil, // Dismiss just closes
+	)
 
 	// 1. Sidebar (Empty initially)
 	styles := widget.SidebarStyles{
@@ -127,14 +157,19 @@ func (f *Fleet) Init() tea.Cmd {
 func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	// Modal Interception: If detail has an active modal (Confirm or Error), we must block MasterDetail
-	if f.DetailView.ConfirmDelete.IsActive() {
-		_, cmd := f.DetailView.Update(msg)
+	// Modal Interception: Page-level modals block everything
+	if f.ConfirmDelete.IsActive() {
+		newModal, cmd := f.ConfirmDelete.Update(msg)
+		f.ConfirmDelete = newModal
 		return f, cmd
 	}
-	if f.DetailView.ErrorModal.IsActive() {
-		_, cmd := f.DetailView.Update(msg)
+	if f.ErrorModal.IsActive() {
+		newModal, cmd := f.ErrorModal.Update(msg)
+		f.ErrorModal = newModal
 		return f, cmd
+	}
+	if f.TemplateModal.IsActive() {
+		return f, f.TemplateModal.Update(msg)
 	}
 
 	switch msg := msg.(type) {
@@ -223,6 +258,22 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 			// Let's stick to OpResult for determinism.
 		}
 
+	case ops.TemplateListMsg:
+		if msg.Err == nil {
+			f.existingTemplates = msg.Templates
+			// If we were waiting to open the modal for a VM, do it now
+			if f.pendingTemplateVM != "" {
+				cmds = append(cmds, f.TemplateModal.Show(f.pendingTemplateVM, f.existingTemplates))
+				f.pendingTemplateVM = ""
+			}
+		} else {
+			// Failed to list templates? Show error
+			f.pendingTemplateVM = ""
+			f.ErrorModal.Title = "Error"
+			f.ErrorModal.Message = fmt.Sprintf("Failed to list templates:\n%v", msg.Err)
+			f.ErrorModal.Show()
+		}
+
 	// Forward Actions from Detail View
 	case FleetActionMsg:
 		// Mark as transitioning locally
@@ -266,14 +317,11 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 
 		if msg.Err != nil {
 			title, details := f.mapError(msg.Err)
-			f.DetailView.ErrorModal.Title = title
-			f.DetailView.ErrorModal.Message = details
-			f.DetailView.ErrorModal.Show()
+			f.ErrorModal.Title = title
+			f.ErrorModal.Message = details
+			f.ErrorModal.Show()
 			// Clear all transitioning on error to be safe
 			f.transitioning = make(map[string]bool)
-			// Note: We don't need to trigger RefreshFleet manually here because
-			// wiring.go handles general refreshes. The clearing of map is enough
-			// to stop spinners on next render cycle (triggered by any msg).
 		} else {
 			// Success! wiring.go will trigger RefreshFleet.
 			// We can clear active transitions here IF we knew the name.
@@ -325,9 +373,26 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 		case "v":
 			// VNC Shortcut
 			cmds = append(cmds, f.DetailView.openVNC())
+		case "t":
+			// Template Creation (Context: Selected VM)
+			if selectedItem := f.Sidebar.SelectedItem(); selectedItem != nil {
+				if item, ok := selectedItem.(FleetItem); ok {
+					if item.State != "shutoff" && item.State != "stopped" {
+						f.ErrorModal.Title = "Cannot Create Template"
+						f.ErrorModal.Message = fmt.Sprintf("VM '%s' must be stopped before creating a template.", item.Name)
+						f.ErrorModal.Show()
+					} else {
+						// 1. Set pending
+						f.pendingTemplateVM = item.Name
+						// 2. Fetch templates to validate uniqueness
+						// 2. Fetch templates to validate uniqueness
+						cmds = append(cmds, func() tea.Msg { return ops.RequestTemplateListMsg{} })
+					}
+				}
+			}
 		case "backspace", "delete":
 			// Delete Shortcut - show confirmation modal
-			f.DetailView.ConfirmDelete.Show()
+			f.ConfirmDelete.Show()
 		}
 	}
 
@@ -340,6 +405,16 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 }
 
 func (f *Fleet) View() string {
+	// Overlay Modals (Full-screen)
+	if f.ConfirmDelete.IsActive() {
+		return f.ConfirmDelete.View(f.Width(), f.Height())
+	}
+	if f.ErrorModal.IsActive() {
+		return f.ErrorModal.View(f.Width(), f.Height())
+	}
+	if f.TemplateModal.IsActive() {
+		return f.TemplateModal.View(f.Width(), f.Height())
+	}
 	return f.MasterDetail.View()
 }
 
@@ -353,16 +428,22 @@ func (f *Fleet) Focus() tea.Cmd {
 }
 
 func (f *Fleet) Shortcuts() []view.Shortcut {
-	if f.DetailView.ConfirmDelete.IsActive() {
+	if f.ConfirmDelete.IsActive() {
 		return []view.Shortcut{
 			{Key: "enter", Label: "confirm"},
 			{Key: "esc", Label: "cancel"},
 		}
 	}
-	if f.DetailView.ErrorModal.IsActive() {
+	if f.ErrorModal.IsActive() {
 		return []view.Shortcut{
 			{Key: "enter", Label: "close"},
 			{Key: "esc", Label: "close"},
+		}
+	}
+	if f.TemplateModal.IsActive() {
+		return []view.Shortcut{
+			{Key: "enter", Label: "confirm"},
+			{Key: "esc", Label: "cancel"},
 		}
 	}
 
@@ -383,6 +464,11 @@ func (f *Fleet) Shortcuts() []view.Shortcut {
 			}
 			// Delete Hint (always available)
 			shortcuts = append(shortcuts, view.Shortcut{Key: "canc", Label: "delete"})
+
+			// Template Hint (Only if stopped)
+			if item.State != "running" {
+				shortcuts = append(shortcuts, view.Shortcut{Key: "t", Label: "template"})
+			}
 		}
 	}
 
@@ -395,7 +481,7 @@ func (f *Fleet) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, tea.Cmd, 
 
 // IsModalActive allows the App to block global navigation (tabs) when the modal is open.
 func (f *Fleet) IsModalActive() bool {
-	return f.DetailView.ConfirmDelete.IsActive() || f.DetailView.ErrorModal.IsActive()
+	return f.ConfirmDelete.IsActive() || f.ErrorModal.IsActive() || f.TemplateModal.IsActive()
 }
 
 // --- Detail Component ---
@@ -416,10 +502,6 @@ type ComponentsDetail struct {
 	vncInput *widget.Input
 
 	diskInput *widget.Input
-
-	// Modal
-	ConfirmDelete *widget.Modal
-	ErrorModal    *widget.Modal
 }
 
 func NewComponentsDetail(parent *Fleet) *ComponentsDetail {
@@ -447,28 +529,6 @@ func NewComponentsDetail(parent *Fleet) *ComponentsDetail {
 
 	c.diskInput = widget.NewInput("Disk", "", nil)
 	c.diskInput.Disabled = true
-
-	// Modal for delete confirmation
-	c.ConfirmDelete = widget.NewModal(
-		"Delete VM",
-		"Are you sure?",
-		func() tea.Cmd {
-			if c.Parent.detail.Name != "" {
-				return func() tea.Msg {
-					return ops.RequestOpMsg{Op: ops.OpDelete, Name: c.Parent.detail.Name}
-				}
-			}
-			return nil
-		},
-		nil,
-	)
-
-	// Error Modal (Single button)
-	c.ErrorModal = widget.NewAlertModal(
-		"Error",
-		"An unexpected error occurred.",
-		nil, // Dismiss just closes
-	)
 
 	// Build form with rows
 	c.rebuildForm()
@@ -577,18 +637,6 @@ func (c *ComponentsDetail) togglePower() tea.Cmd {
 func (c *ComponentsDetail) Init() tea.Cmd { return nil }
 
 func (c *ComponentsDetail) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
-	// Modal interception
-	if c.ConfirmDelete.IsActive() {
-		newModal, cmd := c.ConfirmDelete.Update(msg)
-		c.ConfirmDelete = newModal
-		return c, cmd
-	}
-	if c.ErrorModal.IsActive() {
-		newModal, cmd := c.ErrorModal.Update(msg)
-		c.ErrorModal = newModal
-		return c, cmd
-	}
-
 	// Delegate to Form
 	if !c.Focused() {
 		return c, nil
@@ -604,18 +652,6 @@ func (c *ComponentsDetail) Resize(r layout.Rect) {
 }
 
 func (c *ComponentsDetail) Shortcuts() []view.Shortcut {
-	if c.ConfirmDelete.IsActive() {
-		return []view.Shortcut{
-			{Key: "enter", Label: "confirm"},
-			{Key: "esc", Label: "cancel"},
-		}
-	}
-	if c.ErrorModal.IsActive() {
-		return []view.Shortcut{
-			{Key: "enter", Label: "close"},
-		}
-	}
-
 	shortcuts := []view.Shortcut{
 		{Key: "tab", Label: "next"},
 		{Key: "enter", Label: "action"},
@@ -629,21 +665,10 @@ func (c *ComponentsDetail) Shortcuts() []view.Shortcut {
 }
 
 func (c *ComponentsDetail) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, tea.Cmd, bool) {
-	if c.ConfirmDelete.IsActive() || c.ErrorModal.IsActive() {
-		return c, nil, true
-	}
 	return c, nil, false
 }
 
 func (c *ComponentsDetail) View() string {
-	// Modal overlay
-	if c.ConfirmDelete.IsActive() {
-		return c.ConfirmDelete.View(c.Width(), c.Height())
-	}
-	if c.ErrorModal.IsActive() {
-		return c.ErrorModal.View(c.Width(), c.Height())
-	}
-
 	if c.Parent.detail.Name == "" {
 		return layout.Center(c.Width(), "Select a VM from the fleet...")
 	}
@@ -673,6 +698,16 @@ func (c *ComponentsDetail) Focus() tea.Cmd {
 
 func (c *ComponentsDetail) Blur() {
 	c.BaseViewlet.Blur()
+}
+
+func (c *ComponentsDetail) Focusable() bool {
+	// If the form has no active elements, we shouldn't accept focus.
+	// But Form doesn't have a "Focusable()" check for whole form easily accessible?
+	// Currently all inputs are Disabled=true.
+	// Let's iterate inputs or just return false since we know they are disabled.
+	// However, user might want to select text? TUI doesn't support text selection yet.
+	// So for now, return false.
+	return false
 }
 
 // mapError analyzes a raw error and returns a human-friendly title and message.

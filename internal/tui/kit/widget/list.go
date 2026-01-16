@@ -8,6 +8,7 @@ import (
 )
 
 // ListView adapts a bubbletea list.Model to the Viewlet interface.
+// It serves as a generic primitive that can be embedded or used standalone.
 type ListView struct {
 	Model *list.Model
 }
@@ -17,15 +18,15 @@ func NewListView(m *list.Model) *ListView {
 	return &ListView{Model: m}
 }
 
-// Update handles messages. Note: The list update logic is often handled
-// by the parent model in complex apps, but this provides a default pass-through.
+// Update handles messages and delegates to the underlying bubbles model.
 func (l *ListView) Update(msg tea.Msg) (viewlet.Viewlet, tea.Cmd) {
 	var cmd tea.Cmd
-	*l.Model, cmd = l.Model.Update(msg)
+	newModel, cmd := l.Model.Update(msg)
+	*l.Model = newModel
 	return l, cmd
 }
 
-// View returns the list view.
+// View returns the rendered list.
 func (l *ListView) View() string {
 	return l.Model.View()
 }
@@ -41,8 +42,12 @@ func (l *ListView) Blur()                         {}
 func (l *ListView) Focused() bool                 { return false }
 func (l *ListView) Shortcuts() []viewlet.Shortcut { return nil }
 func (l *ListView) IsModalActive() bool           { return false }
+func (l *ListView) HasActiveInput() bool          { return false }
+func (l *ListView) Focusable() bool               { return true }
 
 func (l *ListView) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, tea.Cmd, bool) {
+	// Simple passthrough for generic ListView;
+	// specialized lists (like SidebarList) can override with hit-testing logic.
 	msg.X = x
 	msg.Y = y
 	newV, cmd := l.Update(msg)

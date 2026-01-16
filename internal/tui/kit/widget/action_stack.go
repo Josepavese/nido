@@ -145,31 +145,55 @@ func (s *ActionStack) View(width int) string {
 			val = 0.0
 		}
 
-		// Calculate widths for single-line
-		// [Spinner] MESSAGE ................. [BAR]
+		// Calculate available width
 		availableWidth := width - 6 // Padding (2) + Border (2) + Safe gap (2)
 
-		// Allocate 40% to title, 60% to bar
-		titleWidth := availableWidth * 4 / 10
-		if titleWidth < 20 {
-			titleWidth = 20
-		} // Min width for title
-
-		barWidth := availableWidth - titleWidth - 2 // space
-		if barWidth < 10 {
-			barWidth = 10
-		}
-
-		a.Bar.Width = barWidth
-		progressBar := a.Bar.ViewAs(val)
-
 		// Render on one line
-		titlePart := t.Styles.TextDim.Copy().Width(titleWidth).Render(titleText)
-		content := lipgloss.JoinHorizontal(lipgloss.Center,
-			titlePart,
-			"  ", // Gap
-			progressBar,
-		)
+		var content string
+		if a.Progress < 0 {
+			// Indeterminate mode: Title + Warning aligned right
+			titlePart := t.Styles.TextDim.Copy().Render(titleText)
+
+			// Bird-nerdy warning per tone_of_voice.md
+			warningText := "Steady now... keep the nest open."
+			warningPart := t.Styles.TextMuted.Copy().Italic(true).Render(warningText)
+
+			gapWidth := availableWidth - lipgloss.Width(titlePart) - lipgloss.Width(warningPart)
+			if gapWidth < 1 {
+				gapWidth = 1
+			}
+
+			content = lipgloss.JoinHorizontal(lipgloss.Center,
+				titlePart,
+				strings.Repeat(" ", gapWidth),
+				warningPart,
+			)
+		} else {
+			// Standard mode: Title + Bar
+			// Calculate widths for single-line
+			// [Spinner] MESSAGE ................. [BAR]
+
+			// Allocate 40% to title, 60% to bar
+			titleWidth := availableWidth * 4 / 10
+			if titleWidth < 20 {
+				titleWidth = 20
+			} // Min width for title
+
+			barWidth := availableWidth - titleWidth - 2 // space
+			if barWidth < 10 {
+				barWidth = 10
+			}
+
+			a.Bar.Width = barWidth
+			progressBar := a.Bar.ViewAs(val)
+
+			titlePart := t.Styles.TextDim.Copy().Width(titleWidth).Render(titleText)
+			content = lipgloss.JoinHorizontal(lipgloss.Center,
+				titlePart,
+				"  ", // Gap
+				progressBar,
+			)
+		}
 
 		rows = append(rows, cardStyle.Render(content))
 	}

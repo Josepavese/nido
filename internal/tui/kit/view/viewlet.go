@@ -49,6 +49,12 @@ type Viewlet interface {
 
 	// IsModalActive returns whether a modal dialog is currently blocking interaction.
 	IsModalActive() bool
+
+	// HasActiveInput returns whether the viewlet currently has an active text input focused.
+	HasActiveInput() bool
+
+	// Focusable returns whether the viewlet can accept keyboard focus.
+	Focusable() bool
 }
 
 // BaseViewlet provides common functionality for viewlets.
@@ -106,6 +112,16 @@ func (b *BaseViewlet) IsModalActive() bool {
 	return false
 }
 
+// HasActiveInput provides a default implementation.
+func (b *BaseViewlet) HasActiveInput() bool {
+	return false
+}
+
+// Focusable provides a default implementation (true for most views).
+func (b *BaseViewlet) Focusable() bool {
+	return true
+}
+
 // DefaultShortcuts returns common shortcuts shared across viewlets.
 func DefaultShortcuts() []Shortcut {
 	return []Shortcut{
@@ -130,9 +146,4 @@ type StatusMsg struct {
 	Loading   bool
 	Operation string
 	Progress  float64
-}
-
-// LogMsg is used to append an entry to the global flight logs.
-type LogMsg struct {
-	Text string
 }

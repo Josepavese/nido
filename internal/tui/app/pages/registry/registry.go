@@ -222,7 +222,7 @@ func (r *Registry) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 
 	case ops.RegistryListMsg:
 		if msg.Err != nil {
-			return r, func() tea.Msg { return view.LogMsg{Text: fmt.Sprintf("Registry fetch failed: %v", msg.Err)} }
+			return r, nil
 		}
 		var items []RegistryItem
 		for _, img := range msg.Images {
@@ -237,7 +237,7 @@ func (r *Registry) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 
 	case ops.CacheListMsg:
 		if msg.Err != nil {
-			return r, func() tea.Msg { return view.LogMsg{Text: fmt.Sprintf("Cache list failed: %v", msg.Err)} }
+			return r, nil
 		}
 		var items []RegistryItem
 		for _, img := range msg.Items {
@@ -309,6 +309,13 @@ func (r *Registry) Shortcuts() []view.Shortcut {
 
 func (r *Registry) IsModalActive() bool {
 	return r.ConfirmDelete != nil && r.ConfirmDelete.IsActive()
+}
+
+func (r *Registry) HasActiveInput() bool {
+	if r.DetailView != nil {
+		return r.DetailView.HasActiveInput()
+	}
+	return false
 }
 
 // --- Detail ---
@@ -421,4 +428,8 @@ func (d *RegistryDetail) Resize(r layout.Rect) {
 
 func (d *RegistryDetail) IsModalActive() bool {
 	return false
+}
+
+func (d *RegistryDetail) HasActiveInput() bool {
+	return d.Form != nil && d.Form.HasActiveInput()
 }

@@ -126,7 +126,7 @@ func (i *Input) View(width int) string {
 		)
 	}
 
-	return RenderBoxedField(i.Label, i.InputModel.View(), i.Error, i.focused && !i.Disabled, i.width)
+	return RenderBoxedField(i.Label, i.InputModel.View(), i.Error, i.focused && !i.Disabled, i.width, lipgloss.Left)
 }
 
 // --- 3. Toggle Element ---
@@ -179,7 +179,7 @@ func (t *Toggle) View(width int) string {
 		state = "[ ON ]"
 		st = lipgloss.NewStyle().Foreground(theme.Current().Palette.Success).Bold(true)
 	}
-	return RenderBoxedField(t.Label, st.Render(state), "", t.focused && !t.Disabled, width)
+	return RenderBoxedField(t.Label, st.Render(state), "", t.focused && !t.Disabled, width, lipgloss.Left)
 }
 
 // --- 4. Action Button Element ---
@@ -241,7 +241,14 @@ func (b *Button) View(width int) string {
 	if b.focused {
 		contStyle = lipgloss.NewStyle().Foreground(t.Palette.Accent).Bold(true)
 	}
-	return RenderBoxedField(b.Label, contStyle.Render(b.Text), "", b.focused, width)
+	// Pass center alignment for buttons and empty label if label is "SAVE" or specifically requested
+	displayLabel := b.Label
+	align := lipgloss.Left
+	if b.Role == RoleSubmit {
+		displayLabel = "" // Centered buttons usually don't need a label
+		align = lipgloss.Center
+	}
+	return RenderBoxedField(displayLabel, contStyle.Render(b.Text), "", b.focused, width, align)
 }
 
 // --- Smart Form ---
@@ -250,6 +257,19 @@ type Form struct {
 	FocusIndex int
 	Spacing    int
 	Width      int
+}
+
+func (f *Form) HasActiveInput() bool {
+	res := false
+	for _, el := range f.Elements {
+		if input, ok := el.(*Input); ok {
+			if input.Focused() {
+				res = true
+				break
+			}
+		}
+	}
+	return res
 }
 
 func (f *Form) Validate() bool {
@@ -300,6 +320,11 @@ func (f *Form) nextFocus(dir int) {
 }
 
 func (f *Form) Focus() tea.Cmd {
+	// Auto-select first element if none selected
+	if f.FocusIndex < 0 || f.FocusIndex >= len(f.Elements) {
+		f.nextFocus(1)
+	}
+
 	if f.FocusIndex >= 0 && f.FocusIndex < len(f.Elements) {
 		return f.Elements[f.FocusIndex].Focus()
 	}
@@ -331,6 +356,18 @@ func (f *Form) Blur() {
 
 func (f *Form) Update(msg tea.Msg) (*Form, tea.Cmd) {
 	var cmds []tea.Cmd
+
+	if kmsg, ok := msg.(tea.KeyMsg); ok {
+		switch kmsg.String() {
+		case "up":
+			cmds = append(cmds, f.PrevField())
+			return f, tea.Batch(cmds...)
+		case "down":
+			cmds = append(cmds, f.NextField())
+			return f, tea.Batch(cmds...)
+		}
+	}
+
 	if f.FocusIndex >= 0 && f.FocusIndex < len(f.Elements) {
 		el, cmd := f.Elements[f.FocusIndex].Update(msg)
 		f.Elements[f.FocusIndex] = el
@@ -354,12 +391,14 @@ func (f *Form) View(width int) string {
 }
 
 // Shared Renderer
-func RenderBoxedField(label, content, errorMsg string, focused bool, width int) string {
+func RenderBoxedField(label, content, errorMsg string, focused bool, width int, align lipgloss.Position) string {
 	t := theme.Current()
 
 	// 1. Determine Label Width
 	labelWidth := theme.Width.Label
-	if width > 0 && width < 34 {
+	if label == "" {
+		labelWidth = 0
+	} else if width > 0 && width < 34 {
 		labelWidth = 10 // Compact label for small boxes (enough for "SSH Port")
 	}
 
@@ -389,20 +428,19 @@ func RenderBoxedField(label, content, errorMsg string, focused bool, width int) 
 	}
 
 	// 3. Render and Truncate Label
-	// We must render first to check true width, but simpler to check len/runes for now
-	if lipgloss.Width(label) > labelWidth {
-		if labelWidth > 3 {
-			label = label[:labelWidth-2] + "." // Compact truncation
-		} else {
-			label = label[:labelWidth]
+	renderedLabel := ""
+	if label != "" {
+		if lipgloss.Width(label) > labelWidth {
+			if labelWidth > 3 {
+				label = label[:labelWidth-2] + "." // Compact truncation
+			} else {
+				label = label[:labelWidth]
+			}
 		}
+		renderedLabel = labelStyle.Render(label)
 	}
-	// Force exact width with style
-	renderedLabel := labelStyle.Render(label)
 
 	valWidth := lipgloss.Width(validation)
-	// labelRenderedWidth := lipgloss.Width(renderedLabel) // Should match labelWidth
-	// But let's be safe and use fixed math as requested for robustness
 	contentAvail := innerWidth - labelWidth - valWidth
 	if contentAvail < 0 {
 		contentAvail = 0
@@ -413,22 +451,18 @@ func RenderBoxedField(label, content, errorMsg string, focused bool, width int) 
 	if contentWidth > contentAvail {
 		truncateLen := contentAvail
 		if truncateLen > 3 {
-			// Leave room for "..."
 			content = content[:truncateLen-3] + "..."
+		} else if truncateLen > 0 {
+			content = content[:truncateLen]
 		} else {
-			if truncateLen > 0 {
-				content = content[:truncateLen]
-			} else {
-				content = ""
-			}
+			content = ""
 		}
 	}
 
 	// 5. Compose Inner String (Force precisely innerWidth)
-	// PlaceHorizontal is KEY here to fill exact space
-	middleBlock := lipgloss.PlaceHorizontal(contentAvail, lipgloss.Left, contentStyle.Render(content))
+	middleBlock := lipgloss.PlaceHorizontal(contentAvail, align, contentStyle.Render(content))
 
-	inner := lipgloss.JoinHorizontal(lipgloss.Top, // Top align prevents weird gaps if fonts differ
+	inner := lipgloss.JoinHorizontal(lipgloss.Top,
 		renderedLabel,
 		middleBlock,
 		validation,
@@ -441,10 +475,6 @@ func RenderBoxedField(label, content, errorMsg string, focused bool, width int) 
 		Padding(0, 1)
 
 	if width > 0 {
-		// Sets content area width.
-		// Diagnostic revealed Width includes Padding.
-		// Total = Width(Setting) + Border(2)
-		// We want Total = width. So Width(Setting) = width - 2.
 		boxStyle = boxStyle.Width(width - 2)
 	}
 

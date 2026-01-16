@@ -30,6 +30,9 @@ func (m *mockViewlet) Focused() bool                 { return false }
 func (m *mockViewlet) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, tea.Cmd, bool) {
 	return m, nil, false
 }
+func (m *mockViewlet) IsModalActive() bool  { return false }
+func (m *mockViewlet) HasActiveInput() bool { return false }
+func (m *mockViewlet) Focusable() bool      { return true }
 
 func TestSplitView_Resize(t *testing.T) {
 	sidebar := &mockViewlet{}

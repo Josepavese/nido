@@ -41,17 +41,17 @@ type VMDetailMsg struct {
 	Err    error
 }
 
+// TemplateListMsg contains the list of existing templates.
+type TemplateListMsg struct {
+	Templates []string
+	Err       error
+}
+
 // OpResultMsg is the result of a VM operation.
 type OpResultMsg struct {
 	Op   string
 	Err  error
 	Path string // Optional: for templates
-}
-
-// LogMsg is an internal log message.
-type LogMsg struct {
-	Level string
-	Text  string
 }
 
 // UpdateCheckMsg contains version check results.
@@ -177,6 +177,21 @@ func DeleteTemplate(prov provider.VMProvider, name string) tea.Cmd {
 	}
 }
 
+// FetchTemplatesList retrieves the list of existing templates.
+func FetchTemplatesList(prov provider.VMProvider) tea.Cmd {
+	return func() tea.Msg {
+		if prov == nil {
+			return TemplateListMsg{Err: fmt.Errorf("provider is nil")}
+		}
+		templates, err := prov.ListTemplates()
+		if err != nil {
+			return TemplateListMsg{Err: err}
+		}
+		sort.Strings(templates)
+		return TemplateListMsg{Templates: templates}
+	}
+}
+
 // --- Config Commands ---
 
 // CheckUpdate checks for available updates.
@@ -196,6 +211,34 @@ func CheckUpdate() tea.Cmd {
 	}
 }
 
+// DoctorResultMsg contains the output of the doctor check.
+type DoctorResultMsg struct {
+	Output string
+	Err    error
+}
+
+// RunDoctor executes the system diagnostic tool.
+func RunDoctor() tea.Cmd {
+	return func() tea.Msg {
+		out, err := exec.Command("nido", "doctor").CombinedOutput()
+		if err != nil {
+			return DoctorResultMsg{Output: string(out), Err: err}
+		}
+		return DoctorResultMsg{Output: string(out)}
+	}
+}
+
+// Config Request Messages
+type SaveConfigMsg struct{ Key, Value string }
+type RequestUpdateMsg struct{}
+type RequestCacheMsg struct{}
+
+// REMOVED DUPLICATE ConfigSavedMsg HERE
+
+type ConfigBatchSavedMsg struct {
+	Updates map[string]string
+}
+
 // SaveConfig updates a config value and reloads the config.
 func SaveConfig(cfg *config.Config, key, value string) tea.Cmd {
 	return func() tea.Msg {
@@ -209,7 +252,7 @@ func SaveConfig(cfg *config.Config, key, value string) tea.Cmd {
 
 		err := config.UpdateConfig(path, key, value)
 		if err != nil {
-			return LogMsg{Level: "error", Text: fmt.Sprintf("Save failed: %v", err)}
+			return nil
 		}
 
 		// Reload config into memory
@@ -217,5 +260,29 @@ func SaveConfig(cfg *config.Config, key, value string) tea.Cmd {
 		*cfg = *newCfg
 
 		return ConfigSavedMsg{Key: key, Value: value}
+	}
+}
+
+// SaveConfigMany updates multiple config values and reloads the config.
+func SaveConfigMany(cfg *config.Config, updates map[string]string) tea.Cmd {
+	return func() tea.Msg {
+		// Find config file path
+		home, _ := os.UserHomeDir()
+		path := filepath.Join(home, ".nido", "config.env")
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			cwd, _ := os.Getwd()
+			path = filepath.Join(cwd, "config", "config.env")
+		}
+
+		err := config.UpdateConfigMany(path, updates)
+		if err != nil {
+			return nil
+		}
+
+		// Reload config into memory
+		newCfg, _ := config.LoadConfig(path)
+		*cfg = *newCfg
+
+		return ConfigBatchSavedMsg{Updates: updates}
 	}
 }

@@ -12,15 +12,12 @@ import (
 	"github.com/Josepavese/nido/internal/tui/kit/app"
 	"github.com/Josepavese/nido/internal/tui/kit/shell"
 	"github.com/Josepavese/nido/internal/tui/kit/theme"
-	"github.com/Josepavese/nido/internal/tui/kit/view"
 	"github.com/Josepavese/nido/internal/tui/kit/widget"
 
 	"github.com/Josepavese/nido/internal/tui/app/ops"                     // Was services
 	configpage "github.com/Josepavese/nido/internal/tui/app/pages/config" // Alias
 	"github.com/Josepavese/nido/internal/tui/app/pages/fleet"
 	"github.com/Josepavese/nido/internal/tui/app/pages/hatchery"
-	"github.com/Josepavese/nido/internal/tui/app/pages/help"
-	"github.com/Josepavese/nido/internal/tui/app/pages/logs"
 	"github.com/Josepavese/nido/internal/tui/app/pages/registry"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -71,6 +68,8 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		opName := "create-template"
 		n.Shell.Operation = opName
 		id, cmd := n.Shell.StartAction(fmt.Sprintf("Creating template %s", msg.Name))
+		// Set indeterminate progress (no bar) because qemu-img doesn't report it easily
+		n.Shell.ActionStack.UpdateProgress(id, -1)
 		n.activeActions[opName] = id
 		return n, tea.Batch(cmd, ops.CreateTemplate(n.prov, msg.Name, msg.Source))
 
@@ -127,6 +126,9 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ops.VMDetailRequestMsg:
 		return n, ops.FetchVMInfo(n.prov, msg.Name)
 
+	case ops.RequestTemplateListMsg:
+		return n, ops.FetchTemplatesList(n.prov)
+
 	case ops.RequestOpMsg:
 		n.Shell.Operation = msg.Op
 
@@ -173,33 +175,20 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// But we don't have global loading anymore.
 			// Just log warning if needed, or ignore.
 		}
+		cmds = append(cmds, ops.RefreshFleet(n.prov))
+		// Also refresh sources (e.g. after template delete/create)
+		cmds = append(cmds, ops.FetchSources(n.prov, ops.SourceActionSpawn, false, true))
 
-		if msg.Err != nil {
-			n.Shell.Logs = append(n.Shell.Logs, fmt.Sprintf("Operation %s failed: %v", msg.Op, msg.Err))
-		} else {
-			n.Shell.Logs = append(n.Shell.Logs, fmt.Sprintf("Operation %s complete.", msg.Op))
-			cmds = append(cmds, ops.RefreshFleet(n.prov))
-			// Also refresh sources (e.g. after template delete/create)
-			cmds = append(cmds, ops.FetchSources(n.prov, ops.SourceActionSpawn, false, true))
-
-			// Check if we need to refresh Registry (Prune/Delete/Pull)
-			// Heuristic: if op starts with "pull", "delete", "prune"
-			if msg.Op == "prune" || strings.HasPrefix(msg.Op, "delete ") || strings.HasPrefix(msg.Op, "pull ") {
-				// Forward as CachePruneMsg to trigger Registry refresh
-				if n.Registry != nil {
-					// We misuse CachePruneMsg slightly as a "Something Changed" signal
-					_, cmd := n.Registry.Update(ops.CachePruneMsg{})
-					cmds = append(cmds, cmd)
-				}
+		// Check if we need to refresh Registry (Prune/Delete/Pull)
+		// Heuristic: if op starts with "pull", "delete", "prune"
+		if msg.Op == "prune" || strings.HasPrefix(msg.Op, "delete ") || strings.HasPrefix(msg.Op, "pull ") {
+			// Forward as CachePruneMsg to trigger Registry refresh
+			if n.Registry != nil {
+				// We misuse CachePruneMsg slightly as a "Something Changed" signal
+				_, cmd := n.Registry.Update(ops.CachePruneMsg{})
+				cmds = append(cmds, cmd)
 			}
 		}
-
-	case view.LogMsg:
-		// Also capture generic log messages from viewlets
-		n.Shell.Logs = append(n.Shell.Logs, fmt.Sprintf("[%s] %s", "LOG", msg.Text))
-
-		// Sync Logs Viewlet content (?)
-		// Just an example showing we can intercept.
 	}
 
 	// Delegate to Kit App
@@ -243,17 +232,13 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) erro
 	fView := fleet.NewFleet(prov) // Fleet needs provider
 	hView := hatchery.NewHatchery(prov)
 	cView := configpage.NewConfig(cfg)
-	lView := logs.NewLogs()
 	rView := registry.NewRegistry(prov)
-	helpView := help.NewHelp()
 
 	// 5. Register Routes
-	kitApp.AddRoute("fleet", "FLEET", "Select a bird to inspect. Use ←/→ to navigate tabs.", fView)
-	kitApp.AddRoute("hatchery", "HATCHERY", "Spawn birds. Tab cycles fields. Use ←/→ to navigate tabs.", hView)
-	kitApp.AddRoute("logs", "LOGS", "System activity log. Use ←/→ to navigate tabs.", lView)
-	kitApp.AddRoute("registry", "REGISTRY", "Manage images & templates. Use ←/→ to navigate tabs.", rView)
-	kitApp.AddRoute("config", "CONFIG", "Modify Nido's core DNA. Use ←/→ to navigate tabs.", cView)
-	kitApp.AddRoute("help", "HELP", "Shortcuts & documentation. Use ←/→ to navigate tabs.", helpView)
+	kitApp.AddRoute("fleet", "FLEET", "Select a bird to inspect.", fView)
+	kitApp.AddRoute("hatchery", "HATCHERY", "Spawn birds.", hView)
+	kitApp.AddRoute("registry", "REGISTRY", "Manage images & templates.", rView)
+	kitApp.AddRoute("config", "CONFIG", "Modify Nido's core DNA.", cView)
 
 	kitApp.Shell.SwitchTo("fleet")
 

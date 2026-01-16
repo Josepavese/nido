@@ -127,9 +127,29 @@ func (pm *PageManager) Blur() {
 	}
 }
 
+// ActivePage returns the currently active viewlet.
+func (pm *PageManager) ActivePage() viewlet.Viewlet {
+	return pm.Pages[pm.Active]
+}
+
 func (pm *PageManager) IsModalActive() bool {
 	if p, ok := pm.Pages[pm.Active]; ok {
 		return p.IsModalActive()
+	}
+	return false
+}
+
+func (pm *PageManager) HasActiveInput() bool {
+	res := false
+	if p, ok := pm.Pages[pm.Active]; ok {
+		res = p.HasActiveInput()
+	}
+	return res
+}
+
+func (pm *PageManager) Focusable() bool {
+	if p, ok := pm.Pages[pm.Active]; ok {
+		return p.Focusable()
 	}
 	return false
 }

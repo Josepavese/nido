@@ -75,10 +75,10 @@ func (m *MasterDetail) Update(msg tea.Msg) (viewlet.Viewlet, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	// Focus Management via keyboard
-	if kmsg, ok := msg.(tea.KeyMsg); ok {
+	if kmsg, ok := msg.(tea.KeyMsg); ok && !m.IsModalActive() {
 		switch kmsg.String() {
 		case "tab", "right":
-			if m.ActiveFocus == FocusSidebar {
+			if m.ActiveFocus == FocusSidebar && m.Pages.Focusable() {
 				cmds = append(cmds, m.SetFocus(FocusDetail))
 			}
 		case "shift+tab", "left", "esc":
@@ -163,5 +163,10 @@ func (m *MasterDetail) Focused() bool {
 }
 
 func (m *MasterDetail) IsModalActive() bool {
-	return m.Sidebar.IsModalActive() || m.Pages.IsModalActive()
+	return (m.Sidebar != nil && m.Sidebar.IsModalActive()) || (m.Pages != nil && m.Pages.IsModalActive())
+}
+
+func (m *MasterDetail) HasActiveInput() bool {
+	res := (m.Sidebar != nil && m.Sidebar.HasActiveInput()) || (m.Pages != nil && m.Pages.HasActiveInput())
+	return res
 }

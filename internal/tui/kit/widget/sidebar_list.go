@@ -275,3 +275,5 @@ func (s *SidebarList) Focused() bool        { return s.focused }
 func (s *SidebarList) View() string         { return s.Model.View() }
 func (s *SidebarList) Init() tea.Cmd        { return nil }
 func (s *SidebarList) IsModalActive() bool  { return false }
+func (s *SidebarList) HasActiveInput() bool { return false }
+func (s *SidebarList) Focusable() bool      { return true }

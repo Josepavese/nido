@@ -41,7 +41,7 @@ func main() {
 	}
 
 	for name, content := range scenarios {
-		render := widget.RenderBoxedField(label, content, "", true, width)
+		render := widget.RenderBoxedField(label, content, "", false, width, lipgloss.Center)
 
 		msg := fmt.Sprintf("[%s] TotalWidth: %d", name, lipgloss.Width(render))
 
