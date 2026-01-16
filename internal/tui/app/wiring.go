@@ -14,7 +14,8 @@ import (
 	"github.com/Josepavese/nido/internal/tui/kit/theme"
 	"github.com/Josepavese/nido/internal/tui/kit/widget"
 
-	"github.com/Josepavese/nido/internal/tui/app/ops"                     // Was services
+	"github.com/Josepavese/nido/internal/tui/app/ops" // Was services
+	"github.com/Josepavese/nido/internal/tui/app/pages/about"
 	configpage "github.com/Josepavese/nido/internal/tui/app/pages/config" // Alias
 	"github.com/Josepavese/nido/internal/tui/app/pages/fleet"
 	"github.com/Josepavese/nido/internal/tui/app/pages/hatchery"
@@ -278,6 +279,7 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) erro
 	kitApp.AddRoute("hatchery", "HATCHERY", "Spawn birds.", hView)
 	kitApp.AddRoute("registry", "REGISTRY", "Manage images & templates.", rView)
 	kitApp.AddRoute("config", "SYSTEM", "Modify Nido's core DNA.", cView)
+	kitApp.AddRoute("about", "NIDO", "The Nest.", about.NewAbout())
 
 	kitApp.Shell.SwitchTo("fleet")
 

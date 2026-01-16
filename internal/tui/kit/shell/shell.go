@@ -80,7 +80,17 @@ func NewShell() Shell {
 }
 
 // AddRoute registers a route with the shell.
+// AddRoute registers a route with the shell. If the key already exists, it updates the existing route.
 func (s *Shell) AddRoute(r Route) {
+	// Check if already exists in slice to prevent duplicate tabs
+	for i, existing := range s.routes {
+		if existing.Key == r.Key {
+			s.routes[i] = r
+			s.routesByKey[r.Key] = r.Viewlet
+			return
+		}
+	}
+
 	s.routes = append(s.routes, r)
 	s.routesByKey[r.Key] = r.Viewlet
 	// Auto-select first one if none selected
