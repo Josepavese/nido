@@ -238,7 +238,7 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) erro
 	kitApp.AddRoute("fleet", "FLEET", "Select a bird to inspect.", fView)
 	kitApp.AddRoute("hatchery", "HATCHERY", "Spawn birds.", hView)
 	kitApp.AddRoute("registry", "REGISTRY", "Manage images & templates.", rView)
-	kitApp.AddRoute("config", "CONFIG", "Modify Nido's core DNA.", cView)
+	kitApp.AddRoute("config", "SYSTEM", "Modify Nido's core DNA.", cView)
 
 	kitApp.Shell.SwitchTo("fleet")
 

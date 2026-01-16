@@ -67,7 +67,7 @@ func NewConfigPageGlobalForm(parent *Config) *ConfigPageGlobalForm {
 		nil,
 	)
 
-	p.SubmitButton = widget.NewSubmitButton("SAVE", "APPLY CHANGES", func() tea.Cmd {
+	p.SubmitButton = widget.NewSubmitButton("SAVE", "SAVE", func() tea.Cmd {
 		p.Modal.Show()
 		return nil
 	})
@@ -133,7 +133,7 @@ func (p *ConfigPageGlobalForm) View() string {
 		row,
 		p.InputBackupDir.View(safeWidth),
 		p.InputImageDir.View(safeWidth),
-		layout.VStack(1, "", p.SubmitButton.View(safeWidth)), // Add some spacing before button
+		p.SubmitButton.View(safeWidth),
 	)
 }
 func (p *ConfigPageGlobalForm) Focus() tea.Cmd {
@@ -175,13 +175,13 @@ func NewConfigPageUpdate(parent *Config) *ConfigPageUpdate {
 	p.Current = widget.NewInput("Current Version", "Loading...", nil)
 	p.Current.Disabled = true
 
-	p.CheckButton = widget.NewSubmitButton("Action", "CHECK UPDATE", func() tea.Cmd {
+	p.CheckButton = widget.NewSubmitButton("Action", "CHECK", func() tea.Cmd {
 		parent.UpdateChecking = true
 		return ops.CheckUpdate()
 	})
 
 	p.Form = widget.NewForm(p.Header, p.Current, p.CheckButton)
-	p.Form.Spacing = 1
+	p.Form.Spacing = 0
 	return p
 }
 
@@ -233,7 +233,7 @@ func NewConfigPageCache(parent *Config) *ConfigPageCache {
 	p.Stats = widget.NewInput("Cache Stats", "Loading...", nil)
 	p.Stats.Disabled = true
 
-	p.PruneButton = widget.NewSubmitButton("Action", "PRUNE UNUSED", func() tea.Cmd {
+	p.PruneButton = widget.NewSubmitButton("Action", "PRUNE", func() tea.Cmd {
 		return func() tea.Msg { return ops.RequestPruneMsg{} }
 	})
 
@@ -284,7 +284,7 @@ func NewConfigPageDoctor(parent *Config) *ConfigPageDoctor {
 	p := &ConfigPageDoctor{Parent: parent}
 	p.Header = widget.NewCard(theme.IconDoctor, "Health", "Run system health check")
 
-	p.RunButton = widget.NewSubmitButton("Diagnostic", "RUN CHECKS", func() tea.Cmd {
+	p.RunButton = widget.NewSubmitButton("Diagnostic", "RUN", func() tea.Cmd {
 		return ops.RunDoctor()
 	})
 
@@ -376,7 +376,7 @@ func NewConfigPageAppearance(parent *Config) *ConfigPageAppearance {
 		nil,
 	)
 
-	p.SubmitButton = widget.NewSubmitButton("SAVE", "APPLY THEME", func() tea.Cmd {
+	p.SubmitButton = widget.NewSubmitButton("SAVE", "SAVE", func() tea.Cmd {
 		p.Modal.Show()
 		return nil
 	})
@@ -451,7 +451,7 @@ func (p *ConfigPageAppearance) View() string {
 		p.Header.View(safeWidth),
 		rowSidebar,
 		rowOther,
-		layout.VStack(1, "", p.SubmitButton.View(safeWidth)),
+		p.SubmitButton.View(safeWidth),
 	)
 }
 

@@ -61,7 +61,7 @@ func LoadConfig(path string) (*Config, error) {
 			TabMinWidth:      6,
 			ExitZoneWidth:    4,
 			FooterLink:       "https://github.com/Josepavese",
-			TabLabels:        []string{"1 FLEET", "2 HATCHERY", "3 REGISTRY", "4 CONFIG"},
+			TabLabels:        []string{"1 FLEET", "2 HATCHERY", "3 REGISTRY", "4 SYSTEM"},
 			GapScale:         1,
 		},
 	}
