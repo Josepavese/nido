@@ -141,6 +141,12 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Success
 		return n, tea.Batch(cmds...)
 
+	case ops.RequestUninstallMsg:
+		// We don't really need a long running action tracker because
+		// if it works, we die immediately.
+		n.Shell.Operation = "uninstall"
+		return n, ops.UninstallCmd()
+
 	case ops.ProgressMsg:
 		if msg.Result != nil {
 			// Finished: Handle final result logic
@@ -247,6 +253,9 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // Run starts the Nido TUI.
 func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) error {
 	// 1. Initialize Theme
+	if cfg.Theme != "" {
+		theme.SetTheme(cfg.Theme)
+	}
 	t := theme.Current()
 
 	// 2. Initialize Kit App

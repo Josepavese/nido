@@ -19,7 +19,7 @@ If your AI workflows need a real OS with zero friction, Nido stays out of the wa
 
 ## Use case: hatch, fix, fly away
 
-Say a CI agent needs a clean OS to reproduce a bug, apply a patch, and leave nothing behind.  
+Say a CI agent needs a clean OS to reproduce a bug, apply a patch, and leave nothing behind.
 With Nido, it hatches a VM from an image **even if it isn't local yet**, does the job, and lets it fly away. 🐣🐦
 
 ```bash
@@ -37,37 +37,6 @@ nido delete bugfix-vm
 ```
 
 Bottom line: a real OS as an execution surface for agents, minus the babysitting.
-
-## Philosophy
-
-**Automation first. Agents first. Speed first.**
-
-- ⚡ **Fast by default**  
-  Install fast, spawn fast, clean up fast. Heavy workflows are a bug.
-
-- 🤖 **AI-first, not human-first**  
-  The CLI is friendly, but the real contract is machine-to-machine.
-
-- 🐣 **Ephemeral is the happy path**  
-  VMs hatch, run, and disappear. Cleanup is part of the lifecycle.
-
-- 🪺 **Workflows over infrastructure**  
-  Agent → environment → action → result → cleanup.  
-  The VM is just the execution surface.
-
-- 🧠 **Small and opinionated**  
-  No cloud cosplay. No feature bloat. Strong defaults only.
-
----
-
-## Features
-
-- ⚡ **Fast & lightweight** — install in seconds, no background services  
-- 🐣 **Real VMs on demand** — full OS via QEMU, hardware acceleration when available  
-- 🤖 **Built for AI agents** — clean CLI + native MCP server  
-- 🧺 **Templates** — reproducible environments, no interactive provisioning  
-- 🧹 **Automatic cleanup** — create → run → destroy, crash-safe  
-- 🪶 **Cross-platform & local-first** — Linux, macOS, Windows
 
 ## Quick Start
 
@@ -173,13 +142,13 @@ Instead, it creates a tiny overlay file that only stores the *changes* you make.
 
 ### Space Savings Simulation
 
-| Setup | Traditional VM / Full Copy | Nido Linked Clones |
-| :--- | :--- | :--- |
-| **Base Image** | 2.5 GB | 2.5 GB (Stored once) |
-| **VM 1** | 2.5 GB | **< 1 MB** (Overlay) |
-| **VM 2** | 2.5 GB | **< 1 MB** (Overlay) |
-| **VM 10** | 2.5 GB | **< 1 MB** (Overlay) |
-| **Total for 10 VMs** | **~27.5 GB** 😱 | **~2.6 GB** 🚀 |
+| Setup                      | Traditional VM / Full Copy | Nido Linked Clones         |
+| :------------------------- | :------------------------- | :------------------------- |
+| **Base Image**       | 2.5 GB                     | 2.5 GB (Stored once)       |
+| **VM 1**             | 2.5 GB                     | **< 1 MB** (Overlay) |
+| **VM 2**             | 2.5 GB                     | **< 1 MB** (Overlay) |
+| **VM 10**            | 2.5 GB                     | **< 1 MB** (Overlay) |
+| **Total for 10 VMs** | **~27.5 GB** 😱      | **~2.6 GB** 🚀       |
 
 ### Smart Cache Protection 🛡️
 
@@ -225,28 +194,28 @@ echo "autoload -Uz compinit && compinit" >> ~/.zshrc
 
 ## Commands
 
-| Command | What it does | Example |
-| :--- | :--- | :--- |
+| Command                                | What it does                            | Example                                     |
+| :------------------------------------- | :-------------------------------------- | :------------------------------------------ |
 | `spawn <name> [--image <img> --gui]` | Create and start a VM with optional GUI | `nido spawn vm1 --image xfce:24.04 --gui` |
-| `start <name> [--gui]` | Revive a stopped VM with optional GUI | `nido start test-vm --gui` |
-| `stop <name>` | Put VM into deep sleep | `nido stop test-vm` |
-| `delete <name>` | Evict VM permanently | `nido delete test-vm` |
-| `prune` | Remove all stopped VMs | `nido prune` |
-| `ls` | List all VMs | `nido ls` |
-| `info <name>` | Get VM details | `nido info test-vm` |
-| `ssh <name>` | SSH into VM | `nido ssh test-vm` |
-| `image list` | List cloud images | `nido image list` |
-| `image pull <image>` | Download image | `nido image pull ubuntu:24.04` |
-| `template list` | List templates | `nido template list` |
-| `template create <vm> <tpl>` | Archive VM | `nido template create my-vm golden` |
-| `template delete <name> [--force]` | Delete template | `nido template delete golden --force` |
-| `doctor` | System diagnostics | `nido doctor` |
-| `config` | View configuration | `nido config` |
-| `register` | MCP setup helper | `nido register` |
-| `cache ls` | List cached images | `nido cache ls` |
-| `cache info` | Show cache statistics | `nido cache info` |
-| `cache prune` | Remove all cached images | `nido cache prune` |
-| `help` | Show usage information | `nido help` |
+| `start <name> [--gui]`               | Revive a stopped VM with optional GUI   | `nido start test-vm --gui`                |
+| `stop <name>`                        | Put VM into deep sleep                  | `nido stop test-vm`                       |
+| `delete <name>`                      | Evict VM permanently                    | `nido delete test-vm`                     |
+| `prune`                              | Remove all stopped VMs                  | `nido prune`                              |
+| `ls`                                 | List all VMs                            | `nido ls`                                 |
+| `info <name>`                        | Get VM details                          | `nido info test-vm`                       |
+| `ssh <name>`                         | SSH into VM                             | `nido ssh test-vm`                        |
+| `image list`                         | List cloud images                       | `nido image list`                         |
+| `image pull <image>`                 | Download image                          | `nido image pull ubuntu:24.04`            |
+| `template list`                      | List templates                          | `nido template list`                      |
+| `template create <vm> <tpl>`         | Archive VM                              | `nido template create my-vm golden`       |
+| `template delete <name> [--force]`   | Delete template                         | `nido template delete golden --force`     |
+| `doctor`                             | System diagnostics                      | `nido doctor`                             |
+| `config`                             | View configuration                      | `nido config`                             |
+| `register`                           | MCP setup helper                        | `nido register`                           |
+| `cache ls`                           | List cached images                      | `nido cache ls`                           |
+| `cache info`                         | Show cache statistics                   | `nido cache info`                         |
+| `cache prune`                        | Remove all cached images                | `nido cache prune`                        |
+| `help`                               | Show usage information                  | `nido help`                               |
 
 ### Structured Output (JSON)
 
@@ -271,15 +240,24 @@ Nido can expose a graphical interface for VMs:
 ### Interactive TUI (Bubble Tea)
 
 - Launch: `nido gui`
-- Keyboard: `r` refresh · `n` spawn modal · `↵` start/stop · `del` delete · `i` refresh info · `q` quit.
 - Includes progress/loader rail, VM list + detail pane, and spawn form (name, template, user-data, GUI toggle).
 
-![Nido TUI Arcade Mode](https://placehold.co/800x400?text=Arcade+TUI+Screenshot+Coming+Soon)
-*The new Arcade Mode About Page - Pure 80s Nostalgia*
+![Nido TUI - Registry Mode](assets/img/tui_registry.png)
+*The new Registry Manager — Browse and pull cloud images with ease.*
 
 ### Automation
 
 To add a new image source, submit a PR to `registry/sources.yaml`. The `registry-builder` tool will automatically fetch the latest versions and checksums.
+
+### Themes & Customization 🎨
+
+Make Nido yours. You can now define custom color palettes via a simple JSON configuration.
+
+1. Create `~/.nido/themes.json`.
+2. Define your colors (light/dark supported).
+3. Select your theme in **SYSTEM** > **Rice**.
+
+[👉 Read the Customization Guide](docs/customization.md)
 
 ### Custom Storage
 
@@ -307,14 +285,14 @@ Want to hatch a bird inside a whale? Nido doesn't judge your technical curiositi
 
 ## Why Nido?
 
-| Feature | nido | Vagrant | Multipass | E2B |
-| :--- | :---: | :---: | :---: | :---: |
-| **AI Integration** | ✅ MCP | ❌ | ❌ | ✅ Cloud |
-| **Local-first** | ✅ | ✅ | ✅ | ❌ |
-| **Storage** | Compressed | Full boxes | Full images | Cloud |
-| **Cross-Platform** | ✅ | ✅ | ✅ | ✅ |
-| **Simplicity** | ⭐⭐⭐ | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ |
-| **Humor Level** | 🐣🐣🐣 | 😐 | 😐 | 🤖 |
+| Feature                  |    nido    |  Vagrant  |  Multipass  |   E2B   |
+| :----------------------- | :--------: | :--------: | :---------: | :------: |
+| **AI Integration** |   ✅ MCP   |     ❌     |     ❌     | ✅ Cloud |
+| **Local-first**    |     ✅     |     ✅     |     ✅     |    ❌    |
+| **Storage**        | Compressed | Full boxes | Full images |  Cloud  |
+| **Cross-Platform** |     ✅     |     ✅     |     ✅     |    ✅    |
+| **Simplicity**     |   ⭐⭐⭐   |    ⭐⭐    |   ⭐⭐⭐   |   ⭐⭐   |
+| **Humor Level**    |   🐣🐣🐣   |     😐     |     😐     |    🤖    |
 
 ## Roadmap
 

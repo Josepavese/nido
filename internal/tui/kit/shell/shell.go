@@ -71,6 +71,22 @@ type Shell struct {
 	Styles ShellStyles
 }
 
+// UpdateStyles refreshes the shell's styles from the current theme.
+func (s *Shell) UpdateStyles() {
+	t := theme.Current()
+	s.Styles = ShellStyles{
+		Header:           lipgloss.NewStyle().Background(t.Palette.Surface).Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(t.Palette.SurfaceSubtle),
+		SubHeaderContext: t.Styles.Label.Copy().Bold(true),
+		SubHeaderNav:     t.Styles.Label.Copy(),
+		StatusBar: widget.StatusBarStyles{
+			Key:    t.Styles.Label.Copy().Bold(true),
+			Label:  t.Styles.Label.Copy(),
+			Status: t.Styles.Label.Copy(),
+		},
+		BorderColor: t.Palette.SurfaceHighlight,
+	}
+}
+
 // NewShell creates a new shell.
 func NewShell() Shell {
 	return Shell{
@@ -295,6 +311,8 @@ func (s *Shell) Resize(w, h int) {
 
 // View aligns all content using the Grid Engine.
 func (s *Shell) View() string {
+	s.UpdateStyles()
+
 	if s.Width == 0 || s.Height == 0 {
 		return "Initializing Shell..."
 	}

@@ -304,6 +304,7 @@ func NewHatchery(prov provider.VMProvider) *Hatchery {
 		},
 		nil,
 	)
+	h.ConfirmDelete.SetLevel(widget.ModalLevelDanger)
 
 	return h
 }

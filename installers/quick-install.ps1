@@ -48,6 +48,17 @@ try {
     exit 1
 }
 
+# Download themes
+$themesUrl = "https://raw.githubusercontent.com/Josepavese/nido/main/resources/themes.json"
+$themesPath = "$nidoHome\themes.json"
+Write-Host "🎨 Fetching visual themes..." -ForegroundColor Cyan
+try {
+    Invoke-WebRequest -Uri $themesUrl -OutFile $themesPath
+    Write-Host "✅ Themes installed to $themesPath" -ForegroundColor Green
+} catch {
+    Write-Host "⚠️ Failed to download themes (skipped)" -ForegroundColor Yellow
+}
+
 # Create default config if missing
 $configPath = "$nidoHome\config.env"
 if (-not (Test-Path $configPath)) {

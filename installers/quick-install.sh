@@ -73,6 +73,15 @@ mv "$TMP_FILE" "${NIDO_HOME}/bin/nido"
 
 echo "${GREEN}✅ Binary installed to ${NIDO_HOME}/bin/nido${RESET}"
 
+# Download default themes
+THEMES_URL="https://raw.githubusercontent.com/Josepavese/nido/main/resources/themes.json"
+echo "${CYAN}🎨 Fetching visual themes...${RESET}"
+if curl -fsSL "$THEMES_URL" -o "${NIDO_HOME}/themes.json"; then
+  echo "${GREEN}✅ Themes installed to ${NIDO_HOME}/themes.json${RESET}"
+else
+  echo "${YELLOW}⚠️ Failed to download themes (skipped)${RESET}"
+fi
+
 # Create default config if missing
 if [ ! -f "${NIDO_HOME}/config.env" ]; then
   cat > "${NIDO_HOME}/config.env" << 'EOF'

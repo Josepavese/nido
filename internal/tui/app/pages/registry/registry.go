@@ -128,6 +128,7 @@ func NewRegistry(prov provider.VMProvider) *Registry {
 		},
 		nil,
 	)
+	r.ConfirmDelete.SetLevel(widget.ModalLevelDanger)
 
 	return r
 }

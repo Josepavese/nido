@@ -44,8 +44,9 @@ type SidebarStyles struct {
 // SidebarList is a standardized list component for sidebars.
 // It enforces strict layout but accepts framework-agnostic styling.
 type SidebarList struct {
-	ListView // Embeds adapter logic
-	focused  bool
+	ListView      // Embeds adapter logic
+	focused       bool
+	noIconPadding string
 }
 
 // NewSidebarList creates a new SidebarList with provided configuration.
@@ -73,6 +74,7 @@ func NewSidebarList(items []SidebarItem, width int, styles SidebarStyles, noIcon
 	sl := &SidebarList{}
 	sl.Model = new(list.Model)
 	*sl.Model = l
+	sl.noIconPadding = noIconPadding
 	return sl
 }
 
@@ -136,7 +138,25 @@ func (d SidebarDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 			style := d.Styles.Action.Copy().Width(m.Width())
 			fmt.Fprint(w, style.Render(str))
 		} else {
-			fmt.Fprint(w, d.Styles.Selected.Render(str))
+			// Special handling: formatting title before concatenation avoids
+			// reset codes from colored icons killing the selection style.
+			styledTitle := d.Styles.Selected.Render(item.Title())
+			// Truncate styled title if needed (lipgloss handles ANSI width)
+			if maxW > 0 && lipgloss.Width(styledTitle) > maxW {
+				styledTitle = lipgloss.NewStyle().MaxWidth(maxW).Render(styledTitle)
+			}
+
+			// Reconstruct string with styled components
+			finalStr := styledTitle
+			if item.Icon() != "" {
+				finalStr = fmt.Sprintf("%s%s", theme.RenderIcon(item.Icon()), styledTitle)
+			} else if d.NoIconPadding != "" {
+				finalStr = d.NoIconPadding + styledTitle
+			}
+
+			// We still wrap in Selected to catch any edge cases or padding
+			// but since foreground is already applied to title, it should persist.
+			fmt.Fprint(w, d.Styles.Selected.Render(finalStr))
 		}
 	} else {
 		// Unselected State
@@ -149,7 +169,21 @@ func (d SidebarDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 				Foreground(d.Styles.Action.GetBackground()) // Contrast text (Background color of selected action)
 			fmt.Fprint(w, style.Render(str))
 		} else {
-			fmt.Fprint(w, d.Styles.Normal.Render(str))
+			// Apply style specifically to Title to avoid Icon reset codes clearing it
+			styledTitle := d.Styles.Normal.Render(item.Title())
+			// Use same max width logic as Selected state
+			maxW := m.Width() - 3
+			if maxW > 0 && lipgloss.Width(styledTitle) > maxW {
+				styledTitle = lipgloss.NewStyle().MaxWidth(maxW).Render(styledTitle)
+			}
+
+			finalStr := styledTitle
+			if item.Icon() != "" {
+				finalStr = fmt.Sprintf("%s%s", theme.RenderIcon(item.Icon()), styledTitle)
+			} else if d.NoIconPadding != "" {
+				finalStr = d.NoIconPadding + styledTitle
+			}
+			fmt.Fprint(w, finalStr)
 		}
 	}
 }
@@ -268,11 +302,28 @@ func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, 
 }
 
 // Dummy methods to satisfy Viewlet interface if needed
-func (s *SidebarList) Resize(r layout.Rect)     { s.Model.SetSize(r.Width, r.Height) }
-func (s *SidebarList) Focus() tea.Cmd           { s.focused = true; return nil }
-func (s *SidebarList) Blur()                    { s.focused = false }
-func (s *SidebarList) Focused() bool            { return s.focused }
-func (s *SidebarList) View() string             { return s.Model.View() }
+func (s *SidebarList) Resize(r layout.Rect) { s.Model.SetSize(r.Width, r.Height) }
+func (s *SidebarList) Focus() tea.Cmd       { s.focused = true; return nil }
+func (s *SidebarList) Blur()                { s.focused = false }
+func (s *SidebarList) Focused() bool        { return s.focused }
+func (s *SidebarList) View() string {
+	s.UpdateStyles()
+	return s.Model.View()
+}
+
+func (s *SidebarList) UpdateStyles() {
+	t := theme.Current()
+	newStyles := SidebarStyles{
+		Normal:   t.Styles.SidebarItem,
+		Selected: t.Styles.SidebarItemSelected,
+		Dim:      lipgloss.NewStyle().Foreground(t.Palette.TextDim),
+		Action:   t.Styles.SidebarItemSelected.Copy(),
+	}
+	d := NewSidebarDelegate(newStyles, s.noIconPadding)
+	s.Model.SetDelegate(d)
+	s.Model.Styles.NoItems = t.Styles.SidebarItem.Copy().Padding(1, 2) // Maintain padding but use theme color
+}
+
 func (s *SidebarList) Init() tea.Cmd            { return nil }
 func (s *SidebarList) IsModalActive() bool      { return false }
 func (s *SidebarList) HasActiveTextInput() bool { return false }

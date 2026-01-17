@@ -24,10 +24,12 @@ const (
 	IconCloud = "☁️" // Remote Registry
 
 	// Actions & States
-	IconUnknown = "❓"
-	IconError   = "❌"
-	IconCheck   = "✅" // Success / Update
-	IconDoctor  = "🩺" // Doctor
+	IconUnknown      = "❓"
+	IconError        = "❌"
+	IconCheck        = "✅"  // Success / Update
+	IconDoctor       = "🩺"  // Doctor
+	IconWarning      = "⚠️" // Warning
+	IconSelfDestruct = "🍳"  // The Nest is Cooked
 
 	// Fleet States
 	IconBird   = "🐦" // Running

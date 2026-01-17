@@ -15,6 +15,7 @@ type Config struct {
 	SSHUser         string
 	ImageDir        string // Directory for downloaded images (default: ~/.nido/images)
 	LinkedClones    bool   // Whether to use Copy-on-Write linked clones (default: true)
+	Theme           string // Active UI theme name (default: auto)
 	TUI             TUIConfig
 }
 
@@ -80,6 +81,9 @@ func LoadConfig(path string) (*Config, error) {
 		val := parts[1]
 
 		switch key {
+		// Update LoadConfig loop
+		case "THEME":
+			cfg.Theme = val
 		case "BACKUP_DIR":
 			cfg.BackupDir = val
 		case "TEMPLATE_DEFAULT":

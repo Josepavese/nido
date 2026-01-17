@@ -1,0 +1,50 @@
+[
+    {
+        "name": "Dracula",
+        "palette": {
+            "base": "#282a36",
+            "surface": "#44475a",
+            "surface_highlight": "#6272a4",
+            "text": "#f8f8f2",
+            "text_dim": "#6272a4",
+            "accent": "#bd93f9",
+            "success": "#50fa7b",
+            "warning": "#ffb86c",
+            "error": "#ff5555",
+            "highlight": "#f1fa8c",
+            "border": "#6272a4"
+        }
+    },
+    {
+        "name": "Nord",
+        "palette": {
+            "base": "#2e3440",
+            "surface": "#3b4252",
+            "surface_highlight": "#434c5e",
+            "text": "#d8dee9",
+            "text_dim": "#4c566a",
+            "accent": "#88c0d0",
+            "success": "#a3be8c",
+            "warning": "#ebcb8b",
+            "error": "#bf616a",
+            "highlight": "#d8dee9",
+            "border": "#4c566a"
+        }
+    },
+    {
+        "name": "Gruvbox",
+        "palette": {
+            "base": "#282828",
+            "surface": "#3c3836",
+            "surface_highlight": "#504945",
+            "text": "#ebdbb2",
+            "text_dim": "#928374",
+            "accent": "#d79921",
+            "success": "#98971a",
+            "warning": "#d65d0e",
+            "error": "#cc241d",
+            "highlight": "#bd93f9",
+            "border": "#fabd2f"
+        }
+    }
+]

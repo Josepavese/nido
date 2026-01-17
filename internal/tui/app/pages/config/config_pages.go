@@ -8,9 +8,9 @@ import (
 	"github.com/Josepavese/nido/internal/tui/app/ops"
 	"github.com/Josepavese/nido/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/internal/tui/kit/theme"
-	"github.com/Josepavese/nido/internal/tui/kit/view"
 	fv "github.com/Josepavese/nido/internal/tui/kit/view"
 	"github.com/Josepavese/nido/internal/tui/kit/widget"
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -562,6 +562,10 @@ type ConfigPageAppearance struct {
 	Header *widget.Card
 	Modal  *widget.Modal
 
+	// Theme Selection
+	SelectTheme *widget.Select
+	ThemeModal  *widget.ListModal
+
 	// Inputs
 	InputSidebarWidth     *widget.Input
 	InputSidebarWideWidth *widget.Input
@@ -572,10 +576,84 @@ type ConfigPageAppearance struct {
 }
 
 func NewConfigPageAppearance(parent *Config) *ConfigPageAppearance {
+	// Ensure user themes are loaded
+	_ = theme.LoadUserThemes()
+
 	p := &ConfigPageAppearance{Parent: parent}
 	p.Header = widget.NewCard(theme.IconLayout, "Rice", "UI and aesthetic tweaks.")
 
 	tui := parent.cfg.TUI
+
+	// Theme Select
+	currentThemeName := parent.cfg.Theme
+	if currentThemeName == "" {
+		currentThemeName = "Auto"
+	}
+
+	// Prepare items for modal
+	avail := theme.AvailableThemes()
+	var items []list.Item
+	for _, n := range avail {
+		p := theme.GetPalette(n)
+		items = append(items, widget.ThemeItem{
+			Name:         n,
+			PrimaryColor: p.Accent, // Use Accent as the primary identifying color
+		})
+	}
+
+	p.ThemeModal = widget.NewListModal(
+		"Select Theme",
+		items,
+		44, 12, // User Requested: "More compact width"
+		func(selected list.Item) tea.Cmd {
+			// On Select
+			// We now cast to ThemeItem
+			ti, ok := selected.(widget.ThemeItem)
+			if !ok {
+				return nil
+			}
+			name := ti.Name
+			p.SelectTheme.SetValue(name)
+
+			// Update Config & Apply
+			// We update config in memory, but maybe we should save immediately?
+			// The original "SAVE" button saves everything.
+			// Ideally live preview would be nice, but per plan, we just set the field value.
+			// However, to see it, we might want to apply it.
+			theme.SetTheme(name)
+
+			// Also update the parent config field so it gets saved on "SAVE"
+			parent.cfg.Theme = name
+
+			return func() tea.Msg { return FocusSidebarMsg{} } // Return valid command or msg
+		},
+		func() tea.Cmd {
+			return nil
+		},
+	)
+
+	// Live Preview
+	p.ThemeModal.OnHighlight = func(item list.Item) {
+		if ti, ok := item.(widget.ThemeItem); ok {
+			theme.SetTheme(ti.Name)
+		}
+	}
+
+	p.SelectTheme = widget.NewSelect("Theme", currentThemeName, func() tea.Cmd {
+		// Pre-select the current theme
+		target := strings.ToLower(p.SelectTheme.Value)
+		items := p.ThemeModal.List.Items()
+		for i, item := range items {
+			if ti, ok := item.(widget.ThemeItem); ok {
+				if strings.ToLower(ti.Name) == target {
+					p.ThemeModal.List.Select(i)
+					break
+				}
+			}
+		}
+		p.ThemeModal.Show()
+		return nil
+	})
 
 	p.InputSidebarWidth = widget.NewInput("Sidebar W", "30", nil)
 	p.InputSidebarWidth.SetValue(fmt.Sprint(tui.SidebarWidth))
@@ -594,6 +672,7 @@ func NewConfigPageAppearance(parent *Config) *ConfigPageAppearance {
 		"Apply these visual changes?",
 		func() tea.Cmd {
 			updates := map[string]string{
+				"THEME":                  p.SelectTheme.Value,
 				"TUI_SIDEBAR_WIDTH":      p.InputSidebarWidth.Value(),
 				"TUI_SIDEBAR_WIDE_WIDTH": p.InputSidebarWideWidth.Value(),
 				"TUI_TAB_MIN_WIDTH":      p.InputTabMinWidth.Value(),
@@ -614,6 +693,7 @@ func NewConfigPageAppearance(parent *Config) *ConfigPageAppearance {
 
 	p.Form = widget.NewForm(
 		p.Header,
+		p.SelectTheme, // Added first
 		p.InputSidebarWidth,
 		p.InputSidebarWideWidth,
 		p.InputTabMinWidth,
@@ -632,13 +712,18 @@ func (p *ConfigPageAppearance) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 		return p, nil
 	}
 
-	if msg, ok := msg.(tea.KeyMsg); ok && !p.Modal.IsActive() {
+	if msg, ok := msg.(tea.KeyMsg); ok && !p.IsModalActive() {
 		switch msg.String() {
 		case "tab":
 			return p, p.Form.NextField()
 		case "shift+tab":
 			return p, p.Form.PrevField()
 		}
+	}
+
+	if p.ThemeModal.IsActive() {
+		_, cmd := p.ThemeModal.Update(msg)
+		return p, cmd
 	}
 
 	if p.Modal.IsActive() {
@@ -659,7 +744,22 @@ func (p *ConfigPageAppearance) View() string {
 		safeWidth = 60
 	}
 
-	// Parent handles modal rendering globally
+	// Render Modals on top
+	if p.ThemeModal.IsActive() {
+		// Overlay logic: render the modal centered
+		// Since View() returns string, proper overlay relies on the parent Shell
+		// or we return just the modal if it consumes full screen.
+		// ListModal returns a styled box.
+		// We'll trust standard bubbletea render loop or parent overlay logic.
+		// If Parent Config handles Modal overlays via IsModalActive check returning "",
+		// then we should do the same here if the parent draws it?
+		// No, ConfigPageAppearance.View IS the content.
+		// If we return the modal string, it replaces the content.
+		// To do proper overlay (transparent background), we need complex composites.
+		// For now, replacing the view is acceptable for this TUI style (modal focus).
+		return lipgloss.Place(w, p.Height(), lipgloss.Center, lipgloss.Center, p.ThemeModal.View())
+	}
+
 	if p.Modal.IsActive() {
 		return ""
 	}
@@ -668,18 +768,19 @@ func (p *ConfigPageAppearance) View() string {
 
 	// Custom Layout for Appearance
 	// Row 1: Sidebar W | Wide W
-	rowSidebar := layout.HStack(1,
+	rowSidebar := layout.HStack(2,
 		p.InputSidebarWidth.View((safeWidth/2)-1),
 		p.InputSidebarWideWidth.View((safeWidth/2)-1),
 	)
 	// Row 2: Tab Min W | Gap Scale
-	rowOther := layout.HStack(1,
+	rowOther := layout.HStack(2,
 		p.InputTabMinWidth.View((safeWidth/2)-1),
 		p.InputGapScale.View((safeWidth/2)-1),
 	)
 
 	return layout.VStack(0,
 		p.Header.View(safeWidth),
+		p.SelectTheme.View(safeWidth), // Theme Select full width
 		rowSidebar,
 		rowOther,
 		p.SubmitButton.View(safeWidth),
@@ -690,7 +791,7 @@ func (p *ConfigPageAppearance) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p
 func (p *ConfigPageAppearance) Blur()          { p.BaseViewlet.Blur(); p.Form.Blur() }
 
 func (p *ConfigPageAppearance) IsModalActive() bool {
-	return p.Modal != nil && p.Modal.IsActive()
+	return (p.Modal != nil && p.Modal.IsActive()) || (p.ThemeModal != nil && p.ThemeModal.IsActive())
 }
 
 func (p *ConfigPageAppearance) HasActiveTextInput() bool {
@@ -703,7 +804,15 @@ func (p *ConfigPageAppearance) HasActiveFocus() bool {
 
 func (p *ConfigPageAppearance) Shortcuts() []fv.Shortcut {
 	if p.IsModalActive() {
-		return []view.Shortcut{
+		// If list modal is active, arrow keys are relevant
+		if p.ThemeModal != nil && p.ThemeModal.IsActive() {
+			return []fv.Shortcut{
+				{Key: "↑/↓", Label: "nav"},
+				{Key: "enter", Label: "select"},
+				{Key: "esc", Label: "cancel"},
+			}
+		}
+		return []fv.Shortcut{
 			{Key: "enter", Label: "engage"},
 			{Key: "esc", Label: "back"},
 		}
@@ -711,6 +820,132 @@ func (p *ConfigPageAppearance) Shortcuts() []fv.Shortcut {
 	return []fv.Shortcut{
 		{Key: "tab", Label: "glide"},
 		{Key: "enter", Label: "engage"},
+		{Key: "esc", Label: "back"},
+	}
+}
+
+func (p *ConfigPageAppearance) HandleMouse(x int, y int, msg tea.MouseMsg) (fv.Viewlet, tea.Cmd, bool) {
+	if p.IsModalActive() {
+		return p, nil, true
+	}
+
+	headerContent := p.Header.View(p.Width() - 4)
+	headerHeight := lipgloss.Height(headerContent)
+
+	if y >= headerHeight {
+		formY := y - headerHeight
+		cmd, handled := p.Form.HandleMouse(x, formY, msg)
+		return p, cmd, handled
+	}
+
+	return p, nil, false
+}
+
+// --- Uninstall Page (Danger Zone) ---
+
+type ConfigPageUninstall struct {
+	fv.BaseViewlet
+	Parent *Config
+
+	Form            *widget.Form
+	Header          *widget.Card
+	WarningText     *widget.Card
+	UninstallButton *widget.Button
+	Modal           *widget.Modal
+}
+
+func NewConfigPageUninstall(parent *Config) *ConfigPageUninstall {
+	p := &ConfigPageUninstall{Parent: parent}
+	p.Header = widget.NewCard(theme.IconSelfDestruct, "Self Destruct", "Uninstall Nido and delete all templates.")
+
+	p.Modal = widget.NewModal(
+		"SELF DESTRUCT",
+		"Are you absolutely sure?\nThis will permanently delete all data, templates, images, and the application itself.",
+		func() tea.Cmd {
+			return func() tea.Msg { return ops.RequestUninstallMsg{} }
+		},
+		nil,
+	)
+	p.Modal.SetWidth(60)
+	// Make the modal scary
+	p.Modal.BorderColor = theme.Current().Palette.Error
+
+	p.UninstallButton = widget.NewSubmitButton("", "UNINSTALL NIDO", func() tea.Cmd {
+		p.Modal.Show()
+		return nil
+	})
+	p.UninstallButton.SetColor(theme.Current().Palette.Error)
+	p.UninstallButton.BorderColor = theme.Current().Palette.Error
+
+	p.Form = widget.NewForm(p.Header, p.UninstallButton)
+	p.Form.Spacing = 0
+	return p
+}
+
+func (p *ConfigPageUninstall) Init() tea.Cmd { return nil }
+
+func (p *ConfigPageUninstall) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
+	if p.Modal != nil && p.Modal.IsActive() {
+		newModal, cmd := p.Modal.Update(msg)
+		p.Modal = newModal
+		return p, cmd
+	}
+
+	if !p.Focused() {
+		return p, nil
+	}
+
+	newForm, cmd := p.Form.Update(msg)
+	p.Form = newForm
+	return p, cmd
+}
+
+func (p *ConfigPageUninstall) View() string {
+	w := p.Width()
+	safeWidth := w - 4
+	if safeWidth > 60 {
+		safeWidth = 60
+	}
+	p.Form.Width = safeWidth
+
+	if p.Modal.IsActive() {
+		return ""
+	}
+
+	return p.Form.View(safeWidth)
+}
+
+func (p *ConfigPageUninstall) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
+func (p *ConfigPageUninstall) Blur()          { p.BaseViewlet.Blur(); p.Form.Blur() }
+func (p *ConfigPageUninstall) HasActiveTextInput() bool {
+	return p.Form != nil && p.Form.HasActiveTextInput()
+}
+
+func (p *ConfigPageUninstall) HasActiveFocus() bool {
+	return p.Form != nil && p.Form.HasActiveFocus()
+}
+
+func (p *ConfigPageUninstall) IsModalActive() bool {
+	return p.Modal != nil && p.Modal.IsActive()
+}
+
+func (p *ConfigPageUninstall) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, tea.Cmd, bool) {
+	if p.Modal != nil && p.Modal.IsActive() {
+		cmd, handled := p.Modal.HandleMouse(x, y, msg)
+		return p, cmd, handled
+	}
+	return p, nil, false
+}
+
+func (p *ConfigPageUninstall) Shortcuts() []fv.Shortcut {
+	if p.IsModalActive() {
+		return []fv.Shortcut{
+			{Key: "enter", Label: "confirm destruction"},
+			{Key: "esc", Label: "abort"},
+		}
+	}
+	return []fv.Shortcut{
+		{Key: "enter", Label: "initiate"},
 		{Key: "esc", Label: "back"},
 	}
 }

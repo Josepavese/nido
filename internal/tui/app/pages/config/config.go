@@ -49,6 +49,8 @@ func (i ConfigItem) Icon() string {
 		return theme.IconCache // Artifacts
 	case "DOCTOR":
 		return theme.IconDoctor // Health
+	case "UNINSTALL":
+		return theme.IconSelfDestruct // Danger
 	}
 	return theme.IconSystem
 }
@@ -84,6 +86,7 @@ type Config struct {
 	PageUpdate     *ConfigPageUpdate
 	PageCache      *ConfigPageCache
 	PageDoctor     *ConfigPageDoctor
+	PageUninstall  *ConfigPageUninstall
 }
 
 type CacheStats struct {
@@ -150,6 +153,7 @@ func (c *Config) RefreshItems() {
 		{Key: "UPDATE", Label: "Evolution", Desc: "Update Nido versions", Type: "page"},
 		{Key: "DOCTOR", Label: "Health", Desc: "System health check", Type: "page"},
 		{Key: "CACHE", Label: "Artifacts", Desc: "Manage image storage", Type: "page"},
+		{Key: "UNINSTALL", Label: "Self Destruct", Desc: "Uninstall Nido", Type: "page"},
 	}
 
 	// Update Sidebar
@@ -195,6 +199,10 @@ func (c *Config) RefreshItems() {
 	if c.PageCache == nil {
 		c.PageCache = NewConfigPageCache(c)
 		c.Pages.AddPage("CACHE", c.PageCache)
+	}
+	if c.PageUninstall == nil {
+		c.PageUninstall = NewConfigPageUninstall(c)
+		c.Pages.AddPage("UNINSTALL", c.PageUninstall)
 	}
 
 	// Restore selection logic?
@@ -256,7 +264,7 @@ func (c *Config) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 		// 2. Detail to Sidebar (Esc)
 		// This captures Esc from ANY detail page (Global, Appearance, etc.)
-		if !c.Sidebar.Focused() {
+		if !c.Sidebar.Focused() && !c.IsModalActive() {
 			if msg.String() == "esc" {
 				cmds = append(cmds, c.MasterDetail.SetFocus(widget.FocusSidebar))
 				return c, tea.Batch(cmds...)
@@ -306,7 +314,9 @@ func (c *Config) View() string {
 			if pf, ok := p.(*ConfigPageGlobalForm); ok {
 				modal = pf.Modal
 			} else if pa, ok := p.(*ConfigPageAppearance); ok {
-				modal = pa.Modal
+				if pa.Modal != nil && pa.Modal.IsActive() {
+					modal = pa.Modal
+				}
 			} else if pd, ok := p.(*ConfigPageDoctor); ok {
 				modal = pd.Modal
 			} else if pu, ok := p.(*ConfigPageUpdate); ok {
@@ -315,10 +325,45 @@ func (c *Config) View() string {
 				} else {
 					modal = pu.ConfirmModal
 				}
+			} else if pun, ok := p.(*ConfigPageUninstall); ok {
+				modal = pun.Modal
 			}
 
 			if modal != nil {
 				return modal.View(c.Width(), c.Height())
+			}
+
+			// Special Case: ListModal (ThemeModal)
+			if pa, ok := p.(*ConfigPageAppearance); ok {
+				if pa.ThemeModal != nil && pa.ThemeModal.IsActive() {
+					// We need to render ListModal manually here because it doesn't match widget.Modal interface?
+					// Or we just return what the Page returned?
+					// Wait, Config.View logic is: "If modal active, return modal view INSTEAD of page view".
+					// The Page.View() ALREADY returns the modal if active (lines 721-734 in config_pages.go).
+					// BUT Config.View (lines 305-337) overrides this!
+					// It says: if c.IsModalActive(), find the modal, render IT.
+					// If it fails to find the modal (which it did for ThemeModal), does it return base?
+					// No, IsModalActive() checks MasterDetail.IsModalActive().
+					// MasterDetail checks ActivePage.IsModalActive().
+					// Appearance.IsModalActive() returns true.
+					// So Config.View enters the if block (309).
+					// Then it tries to find `modal`.
+					// If it finds NIL (current state for ThemeModal), it falls through and returns `base`?
+					// No, existing code falls through to `return base` if `modal == nil`.
+					// So it renders the MasterDetail view (sidebar + page).
+					// BUT ConfigPageAppearance.View returns ONLY the modal when active.
+					// So it should work?
+					// Unless MasterDetail rendering messes it up.
+					// Wait, if Config.View() returns `base`, it returns MasterDetail.View().
+					// MasterDetail.View() calls ActivePage.View().
+					// Appearance.View() returns `lipgloss.Place(...)`.
+					// So "Black Screen" means `lipgloss.Place` is empty or messed up.
+					// OR, the `modal` variable extraction in `Config.View` is flawed but harmless if it returns nil.
+					//
+					// Let's force `Config.View` to return the `ThemeModal` view directly if detected, using `lipgloss.Place`.
+
+					return lipgloss.Place(c.Width(), c.Height(), lipgloss.Center, lipgloss.Center, pa.ThemeModal.View())
+				}
 			}
 		}
 	}

@@ -32,7 +32,18 @@ type Modal struct {
 
 	BorderColor  lipgloss.TerminalColor
 	MessageAlign lipgloss.Position
+
+	Level ModalLevel
 }
+
+// ModalLevel defines the semantic severity of the modal
+type ModalLevel int
+
+const (
+	ModalLevelNormal  ModalLevel = iota // Default: Uses Accent color
+	ModalLevelDanger                    // Destructive: Uses Error color
+	ModalLevelSuccess                   // Positive: Uses Success color
+)
 
 func NewModal(title, message string, onConfirm, onCancel func() tea.Cmd) *Modal {
 	return &Modal{
@@ -43,6 +54,7 @@ func NewModal(title, message string, onConfirm, onCancel func() tea.Cmd) *Modal 
 		width:        50,
 		height:       10,
 		MessageAlign: lipgloss.Center,
+		Level:        ModalLevelNormal,
 	}
 }
 
@@ -57,6 +69,10 @@ func NewAlertModal(title, message string, onDismiss func() tea.Cmd) *Modal {
 		MessageAlign: lipgloss.Center,
 	}
 }
+
+func (m *Modal) SetWidth(w int)        { m.width = w }
+func (m *Modal) SetHeight(h int)       { m.height = h }
+func (m *Modal) SetLevel(l ModalLevel) { m.Level = l }
 
 func (m *Modal) Show() {
 	m.active = true
@@ -130,9 +146,17 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 	// 1. Content Styling
 	borderColor := m.BorderColor
 	if borderColor == nil {
-		borderColor = t.Palette.Accent
-		if m.SingleButton {
-			borderColor = t.Palette.Error // Alerts usually imply errors/warnings
+		switch m.Level {
+		case ModalLevelDanger:
+			borderColor = t.Palette.Error
+		case ModalLevelSuccess:
+			borderColor = t.Palette.Success
+		default:
+			borderColor = t.Palette.Accent
+		}
+
+		if m.SingleButton && m.Level == ModalLevelNormal {
+			borderColor = t.Palette.Error // Alerts default to error-ish if not specified, legacy compat
 		}
 	}
 
@@ -171,7 +195,14 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 		yesStyle := lipgloss.NewStyle().Foreground(t.Palette.TextDim)
 		noStyle := lipgloss.NewStyle().Foreground(t.Palette.TextDim)
 
-		activeStyle := lipgloss.NewStyle().Foreground(t.Palette.Background).Background(t.Palette.Accent).Bold(true).Padding(0, 1)
+		activeColor := t.Palette.Accent
+		if m.Level == ModalLevelDanger {
+			activeColor = t.Palette.Error
+		} else if m.Level == ModalLevelSuccess {
+			activeColor = t.Palette.Success
+		}
+
+		activeStyle := lipgloss.NewStyle().Foreground(t.Palette.Background).Background(activeColor).Bold(true).Padding(0, 1)
 
 		if m.selectedIsYes {
 			yesStyle = activeStyle
@@ -200,14 +231,16 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 
 	// 3. Layout
 	titleStyle := t.Styles.Title.Copy()
-	if m.SingleButton {
+	if m.Level == ModalLevelDanger || (m.SingleButton && m.Level == ModalLevelNormal) {
 		titleStyle = titleStyle.Foreground(t.Palette.Error)
+	} else if m.Level == ModalLevelSuccess {
+		titleStyle = titleStyle.Foreground(t.Palette.Success)
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Center,
 		titleStyle.Render(m.Title),
 		"",
-		lipgloss.PlaceHorizontal(contentWidth, m.MessageAlign, t.Styles.Text.Render(m.Message)),
+		lipgloss.PlaceHorizontal(contentWidth, m.MessageAlign, t.Styles.TextDim.Render(m.Message)),
 		"",
 		buttons,
 	)

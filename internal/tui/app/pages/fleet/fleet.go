@@ -108,6 +108,7 @@ func NewFleet(prov provider.VMProvider) *Fleet {
 		},
 		nil,
 	)
+	f.ConfirmDelete.SetLevel(widget.ModalLevelDanger)
 
 	// Error Modal (Single button)
 	f.ErrorModal = widget.NewAlertModal(
@@ -458,7 +459,7 @@ func (f *Fleet) Shortcuts() []view.Shortcut {
 			}
 
 			// Delete Hint (always available)
-			shortcuts = append(shortcuts, view.Shortcut{Key: "delete", Label: "evict"})
+			shortcuts = append(shortcuts, view.Shortcut{Key: "backspace", Label: "evict"})
 		}
 	}
 
@@ -551,7 +552,7 @@ func (c *ComponentsDetail) UpdateDetail(d FleetDetail) {
 		// No VM selected
 		c.header.Icon = "🦅"
 		c.header.Title = "Select VM"
-		c.header.Subtitle = ""
+		c.header.Subtitle = "Choose a pilot from the fleet roster..."
 
 		c.pidInput.SetValue("")
 		c.ipInput.SetValue("")
@@ -663,10 +664,6 @@ func (c *ComponentsDetail) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet
 }
 
 func (c *ComponentsDetail) View() string {
-	if c.Parent.detail.Name == "" {
-		return layout.Center(c.Width(), "Select a VM from the fleet...")
-	}
-
 	w := c.Width()
 	padding := theme.Current().Layout.ContainerPadding
 	safeWidth := w - (2 * padding)
@@ -682,6 +679,7 @@ func (c *ComponentsDetail) View() string {
 	c.Form.Width = safeWidth
 
 	// Standardized Left Alignment (matches Registry/Hatchery)
+	// We always render the form, even if empty, to maintain alignment.
 	return c.Form.View(safeWidth)
 }
 

@@ -68,7 +68,13 @@ info "Replacing binary..."
 mv "${REPO_ROOT}/nido" "$TARGET"
 success "Binary replaced."
 
-# 4. Verify
+# 4. Sync Resources
+info "Syncing themes..."
+mkdir -p ~/.nido
+cp "${REPO_ROOT}/resources/themes.json" ~/.nido/themes.json
+success "Themes synchronized."
+
+# 5. Verify
 printf "\n"
 nido version
 printf "\n${GREEN}⚡ Ready to fly.${RESET}\n"

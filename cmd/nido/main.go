@@ -16,6 +16,7 @@ import (
 	clijson "github.com/Josepavese/nido/internal/cli"
 	"github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/image"
+	"github.com/Josepavese/nido/internal/lifecycle"
 	"github.com/Josepavese/nido/internal/mcp"
 	"github.com/Josepavese/nido/internal/provider"
 	"github.com/Josepavese/nido/internal/ui"
@@ -713,6 +714,67 @@ func main() {
 			return
 		}
 		ui.Success("Vaporized %d stopped life forms.", count)
+	case "uninstall":
+		// Nuclear option: Remove everything.
+		jsonOut, rest := consumeJSONFlag(args)
+		force := false
+		for _, arg := range rest {
+			if arg == "--force" {
+				force = true
+			}
+		}
+
+		if !force {
+			if jsonOut {
+				resp := clijson.NewResponseError("uninstall", "ERR_CONFIRMATION_REQUIRED", "Confirmation required", "Use --force to skip prompt.", "Usage: nido uninstall --force", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
+			ui.Warn("⚠️  DANGER ZONE ⚠️")
+			ui.Warn("This will PERMANENTLY DELETE:")
+			fmt.Printf("  - Configuration & Data: %s\n", nidoDir)
+			fmt.Printf("  - Local Templates:      %s\n", filepath.Join(nidoDir, "templates"))
+			exe, _ := os.Executable()
+			fmt.Printf("  - Nido Binary:          %s\n", exe)
+			fmt.Println("")
+			fmt.Print("Are you sure you want to proceed? [y/N]: ")
+			var response string
+			fmt.Scanln(&response)
+			if strings.ToLower(response) != "y" {
+				ui.Info("Aborted. The nest remains safe.")
+				os.Exit(0)
+			}
+		}
+
+		exe, err := os.Executable()
+		if err != nil {
+			ui.Error("Failed to locate self: %v", err)
+			os.Exit(1)
+		}
+		// In dev/go run, executable might be in tmp, which is fine to delete or ignore.
+
+		if !jsonOut {
+			ui.Ironic("Initiating self-destruct sequence...")
+		}
+
+		if err := lifecycle.Uninstall(nidoDir, exe); err != nil {
+			if jsonOut {
+				resp := clijson.NewResponseError("uninstall", "ERR_INTERNAL", "Uninstall failed", err.Error(), "Check permissions and try again.", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
+			}
+			ui.Error("Self-destruct failed: %v", err)
+			os.Exit(1)
+		}
+
+		if jsonOut {
+			resp := clijson.NewResponseOK("uninstall", map[string]interface{}{
+				"result": "uninstalled",
+			})
+			_ = clijson.PrintJSON(resp)
+			return
+		}
+		ui.Success("Nido has been uninstalled. Farewell, Pilot.")
 	case "mcp":
 		// Enter MCP mode: speak directly to AI agents via machine language.
 		server := mcp.NewServer(prov)

@@ -26,3 +26,6 @@ nohup.out
 
 # logs
 /logs
+
+# vscode
+.vscode

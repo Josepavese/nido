@@ -67,77 +67,144 @@ const (
 // Light or Dark values based on lipgloss.HasDarkBackground().
 // The IsDark flag is for reference only; the actual color selection
 // happens in lipgloss when rendering.
-func Current() Theme {
-	mode := parseThemeMode(os.Getenv("NIDO_THEME"))
-	is256 := shouldUse256Colors()
+// Registry of available themes
+var (
+	registry        = make(map[string]Palette)
+	activeThemeName = "auto"
 
-	// Determine if terminal has dark background
-	isDark := true // default to dark
-	if mode == themeModeLight {
-		isDark = false
-	} else if mode == themeModeAuto {
-		isDark = lipgloss.HasDarkBackground()
+	// Built-in themes (registered in init)
+	BuiltinThemes = []string{"Dark", "Light", "Pink", "High Contrast", "Matrix"}
+)
+
+func init() {
+	Register("Dark", Dark)
+	Register("Light", Light)
+	Register("Pink", Pink)
+	Register("High Contrast", HighContrast)
+	Register("Matrix", Matrix)
+}
+
+// Register adds a new theme to the registry.
+func Register(name string, p Palette) {
+	registry[strings.ToLower(name)] = p
+}
+
+// SetTheme activates a specific theme by name.
+func SetTheme(name string) {
+	if name == "" {
+		return
+	}
+	activeThemeName = strings.ToLower(name)
+}
+
+// AvailableThemes returns a list of all registered theme names.
+func AvailableThemes() []string {
+	var names []string
+	for k := range registry {
+		// capitalize for display?
+		names = append(names, k) // we store lower, maybe return original case if we stored it?
+	}
+	return names // simple for now
+}
+
+// GetPalette returns the palette for a registered theme.
+// Returns default Dark palette if name not found.
+func GetPalette(name string) Palette {
+	if p, ok := registry[strings.ToLower(name)]; ok {
+		return p
+	}
+	return Dark
+}
+
+// Current returns the active theme.
+func Current() Theme {
+	// 1. Resolve Mode/Name
+	mode := activeThemeName
+	env := os.Getenv("NIDO_THEME")
+	if env != "" {
+		mode = strings.ToLower(env)
 	}
 
-	// Select appropriate palette
-	// Note: AdaptiveColor automatically handles light/dark rendering
-	// The palette contains both Light and Dark values; lipgloss picks the right one
-	var palette Palette
-	switch mode {
-	case themeModePink:
-		palette = Pink
-	case themeModeHighContrast:
-		palette = HighContrast
-	case themeModeMatrix:
-		palette = Matrix
-	case themeModeDark:
-		palette = Dark
-	case themeModeLight:
-		palette = Light
-	default:
-		// themeModeAuto or fallback
-		if is256 {
-			palette = Palette256
-		} else if isDark {
-			palette = Dark
-		} else {
-			palette = Light
+	// 2. Check Registry
+	if p, ok := registry[mode]; ok {
+		return buildTheme(p, false)
+	}
+
+	// 3. Fallback / Auto Logic
+	if mode == "auto" || mode == "" {
+		if lipgloss.HasDarkBackground() {
+			return buildTheme(Dark, true)
 		}
+		return buildTheme(Light, false)
+	}
+
+	// 4. Unknown theme -> Fallback to Dark
+	return buildTheme(Dark, true)
+}
+
+func buildTheme(p Palette, isDark bool) Theme {
+	is256 := shouldUse256Colors()
+	if is256 {
+		p = Palette256
 	}
 
 	styles := Styles{
-		SidebarItem:         lipgloss.NewStyle().Foreground(palette.TextDim),
-		SidebarItemSelected: lipgloss.NewStyle().Foreground(palette.Accent).Bold(true),
-		Text:                lipgloss.NewStyle().Foreground(palette.Text),
-		TextDim:             lipgloss.NewStyle().Foreground(palette.TextDim),
-		TextMuted:           lipgloss.NewStyle().Foreground(palette.TextMuted),
-		Accent:              lipgloss.NewStyle().Foreground(palette.Accent),
-		AccentStrong:        lipgloss.NewStyle().Foreground(palette.AccentStrong).Bold(true),
-		Success:             lipgloss.NewStyle().Foreground(palette.Success),
-		Error:               lipgloss.NewStyle().Foreground(palette.Error),
-		Warning:             lipgloss.NewStyle().Foreground(palette.Warning),
-		ButtonActive:        lipgloss.NewStyle().Foreground(palette.Background).Background(palette.Accent).Bold(true).Padding(0, 2),
+		SidebarItem:         lipgloss.NewStyle().Foreground(p.TextDim),
+		SidebarItemSelected: lipgloss.NewStyle().Foreground(p.Accent).Bold(true),
+		Text:                lipgloss.NewStyle().Foreground(p.Text),
+		TextDim:             lipgloss.NewStyle().Foreground(p.TextDim),
+		TextMuted:           lipgloss.NewStyle().Foreground(p.TextMuted),
+		Accent:              lipgloss.NewStyle().Foreground(p.Accent),
+		AccentStrong:        lipgloss.NewStyle().Foreground(p.AccentStrong).Bold(true),
+		Success:             lipgloss.NewStyle().Foreground(p.Success),
+		Error:               lipgloss.NewStyle().Foreground(p.Error),
+		Warning:             lipgloss.NewStyle().Foreground(p.Warning),
+		ButtonActive:        lipgloss.NewStyle().Foreground(p.Background).Background(p.Accent).Bold(true).Padding(0, 2),
 
-		// Standardized Component Styles
-		Label: lipgloss.NewStyle().Foreground(palette.TextDim),
-		Value: lipgloss.NewStyle().Foreground(palette.Text),
-		Title: lipgloss.NewStyle().Foreground(palette.Accent).Bold(true),
+		Label: lipgloss.NewStyle().Foreground(p.TextDim),
+		Value: lipgloss.NewStyle().Foreground(p.TextDim),
+		Title: lipgloss.NewStyle().Foreground(p.Accent).Bold(true),
 		Border: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(palette.SurfaceHighlight),
+			BorderForeground(p.SurfaceHighlight),
 	}
 
-	layout := Layout{
-		ContainerPadding: 2, // Standard symmetry (was 2 implied)
-	}
+	layout := Layout{ContainerPadding: 2}
 
 	return Theme{
-		Palette: palette,
+		Palette: p,
 		Is256:   is256,
-		IsDark:  isDark,
+		IsDark:  isDark, // Approximation, accurate only if using standard adaptive colors
 		Styles:  styles,
 		Layout:  layout,
 	}
+}
+
+// LoadUserThemes attempts to load themes.json from ~/.nido
+func LoadUserThemes() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	// Check standard path
+	path := home + "/.nido/themes.json"
+
+	// Check if install dir has one? (Skipped for now per verification report risk)
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil // No user themes, no error
+	}
+
+	themes, err := LoadThemes(path)
+	if err != nil {
+		return err // Malformed file is an error worth reporting
+	}
+
+	for _, t := range themes {
+		Register(t.Name, t.ToPalette())
+	}
+	return nil
 }
 
 // Layout holds metrics for UI spacing and sizing.

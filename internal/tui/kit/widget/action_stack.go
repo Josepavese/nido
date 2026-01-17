@@ -63,6 +63,7 @@ func (s *ActionStack) Add(id, message string) tea.Cmd {
 		t.Palette.Success.Dark,
 	))
 	pg.ShowPercentage = true
+	pg.PercentageStyle = t.Styles.Accent.Copy() // Use Accent color for percentage to match theme
 
 	s.Items = append(s.Items, Action{
 		ID:        id,
@@ -133,8 +134,11 @@ func (s *ActionStack) View(width int) string {
 		Padding(0, 1)
 
 	for _, a := range s.Items {
-		// 1. Title/Spinner
-		titleText := fmt.Sprintf("%s %s", a.Spinner.View(), strings.ToUpper(a.Message))
+		// Prepare Title components
+		// IMPORTANT: Style the message SEPARATELY from the spinner.
+		// Spinner.View() contains ANSI reset codes that kill any wrapper style.
+		spinnerView := a.Spinner.View()
+		messageView := t.Styles.AccentStrong.Render(strings.ToUpper(a.Message))
 
 		// 2. Progress Bar
 		val := a.Progress
@@ -152,19 +156,25 @@ func (s *ActionStack) View(width int) string {
 		var content string
 		if a.Progress < 0 {
 			// Indeterminate mode: Title + Warning aligned right
-			titlePart := t.Styles.TextDim.Copy().Render(titleText)
 
 			// Bird-nerdy warning per tone_of_voice.md
 			warningText := "Steady now... keep the nest open."
 			warningPart := t.Styles.TextMuted.Copy().Italic(true).Render(warningText)
 
-			gapWidth := availableWidth - lipgloss.Width(titlePart) - lipgloss.Width(warningPart)
+			// We need to calculate how much space the title CAN take vs how much generic gap we have.
+			// Ideally we just flex space between them.
+
+			// Combine spinner + msg for width check
+			// We use a layout style just for width, no color (so internal colors persist)
+			titleText := fmt.Sprintf("%s %s", spinnerView, messageView)
+
+			gapWidth := availableWidth - lipgloss.Width(titleText) - lipgloss.Width(warningPart)
 			if gapWidth < 1 {
 				gapWidth = 1
 			}
 
 			content = lipgloss.JoinHorizontal(lipgloss.Center,
-				titlePart,
+				titleText,
 				strings.Repeat(" ", gapWidth),
 				warningPart,
 			)
@@ -173,7 +183,7 @@ func (s *ActionStack) View(width int) string {
 			// Calculate widths for single-line
 			// [Spinner] MESSAGE ................. [BAR]
 
-			// Allocate 40% to title, 60% to bar
+			// Allocate 40% to title block, 60% to bar
 			titleWidth := availableWidth * 4 / 10
 			if titleWidth < 20 {
 				titleWidth = 20
@@ -187,7 +197,11 @@ func (s *ActionStack) View(width int) string {
 			a.Bar.Width = barWidth
 			progressBar := a.Bar.ViewAs(val)
 
-			titlePart := t.Styles.TextDim.Copy().Width(titleWidth).Render(titleText)
+			// We wrap the Title Text in a container just to enforce Width.
+			// We do NOT apply foreground color here, to respect the internal styles.
+			titleText := fmt.Sprintf("%s %s", spinnerView, messageView)
+			titlePart := lipgloss.NewStyle().Width(titleWidth).Render(titleText)
+
 			content = lipgloss.JoinHorizontal(lipgloss.Center,
 				titlePart,
 				"  ", // Gap

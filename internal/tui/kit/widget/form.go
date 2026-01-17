@@ -134,8 +134,15 @@ func (i *Input) View(width int) string {
 	// Always enforce width constraints before rendering View
 	i.updateInputWidth()
 
+	t := theme.Current()
+
+	// Apply Theme Styles to internal model
+	i.InputModel.PlaceholderStyle = t.Styles.TextMuted
+	i.InputModel.TextStyle = t.Styles.Value.Copy() // Value defaults to TextDim, good
+	i.InputModel.Cursor.Style = t.Styles.Accent
+	i.InputModel.Cursor.TextStyle = t.Styles.Accent // Character under block cursor
+
 	if i.Compact {
-		t := theme.Current()
 		labelWidth := theme.Width.Label
 		if width > 0 && width < 30 {
 			labelWidth = 8
@@ -156,7 +163,7 @@ func (i *Input) View(width int) string {
 		)
 	}
 
-	return RenderBoxedField(i.Label, i.InputModel.View(), i.Error, i.focused && !i.Disabled, i.width, lipgloss.Left)
+	return RenderBoxedField(i.Label, i.InputModel.View(), i.Error, i.focused && !i.Disabled, i.width, lipgloss.Left, nil)
 }
 
 // --- 3. Toggle Element ---
@@ -209,7 +216,7 @@ func (t *Toggle) View(width int) string {
 		state = "[ ON ]"
 		st = lipgloss.NewStyle().Foreground(theme.Current().Palette.Success).Bold(true)
 	}
-	return RenderBoxedField(t.Label, st.Render(state), "", t.focused && !t.Disabled, width, lipgloss.Left)
+	return RenderBoxedField(t.Label, st.Render(state), "", t.focused && !t.Disabled, width, lipgloss.Left, nil)
 }
 
 // --- 4. Action Button Element ---
@@ -222,14 +229,15 @@ const (
 )
 
 type Button struct {
-	Label    string
-	Text     string
-	Action   func() tea.Cmd
-	Role     ButtonRole
-	Disabled bool
-	focused  bool
-	width    int
-	Color    lipgloss.TerminalColor
+	Label       string
+	Text        string
+	Action      func() tea.Cmd
+	Role        ButtonRole
+	Disabled    bool
+	focused     bool
+	width       int
+	Color       lipgloss.TerminalColor
+	BorderColor lipgloss.TerminalColor
 }
 
 func NewButton(label, text string, action func() tea.Cmd) *Button {
@@ -284,7 +292,15 @@ func (b *Button) View(width int) string {
 		displayLabel = "" // Centered buttons usually don't need a label
 		align = lipgloss.Center
 	}
-	return RenderBoxedField(displayLabel, contStyle.Render(b.Text), "", b.focused, width, align)
+
+	bc := b.BorderColor
+	if bc == nil && b.focused {
+		if b.Color != nil {
+			bc = b.Color
+		}
+	}
+
+	return RenderBoxedField(displayLabel, contStyle.Render(b.Text), "", b.focused, width, align, bc)
 }
 
 // --- Smart Form ---
@@ -438,8 +454,55 @@ func (f *Form) View(width int) string {
 	return layout.VStack(f.Spacing, views...)
 }
 
+// HandleMouse delegates mouse events to the specific element at the coordinates.
+func (f *Form) HandleMouse(x int, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
+	currentY := 0
+	width := f.Width
+	if width == 0 {
+		width = 80 // Fallback
+	}
+
+	for i, el := range f.Elements {
+		// Calculate height of this element
+		content := el.View(width)
+		height := lipgloss.Height(content)
+
+		// Check if click is within this element's vertical band
+		if y >= currentY && y < currentY+height {
+			// Hit!
+			// 1. Focus this element
+			if el.Focusable() {
+				if f.FocusIndex != -1 && f.FocusIndex != i {
+					f.Elements[f.FocusIndex].Blur()
+				}
+				f.FocusIndex = i
+				cmd1 := el.Focus()
+
+				// 2. Pass event to element if it supports HandleMouse
+				var cmd2 tea.Cmd
+				handled := false
+				if clickable, ok := el.(interface {
+					HandleMouse(int, int, tea.MouseMsg) (tea.Cmd, bool)
+				}); ok {
+					// Pass relative Y
+					relY := y - currentY
+					cmd2, handled = clickable.HandleMouse(x, relY, msg)
+				} else {
+					// Default "click to to focus" handled above
+					handled = true
+				}
+
+				return tea.Batch(cmd1, cmd2), handled
+			}
+		}
+
+		currentY += height + f.Spacing
+	}
+	return nil, false
+}
+
 // Shared Renderer
-func RenderBoxedField(label, content, errorMsg string, focused bool, width int, align lipgloss.Position) string {
+func RenderBoxedField(label, content, errorMsg string, focused bool, width int, align lipgloss.Position, forcedBorderColor lipgloss.TerminalColor) string {
 	t := theme.Current()
 
 	// 1. Determine Label Width
@@ -457,8 +520,7 @@ func RenderBoxedField(label, content, errorMsg string, focused bool, width int, 
 		Align(lipgloss.Left)
 
 	contentStyle := t.Styles.Value.Copy()
-
-	borderColor := t.Palette.SurfaceHighlight
+	var borderColor lipgloss.TerminalColor = t.Palette.SurfaceHighlight
 	validation := ""
 	if errorMsg != "" {
 		borderColor = t.Palette.Error
@@ -466,6 +528,11 @@ func RenderBoxedField(label, content, errorMsg string, focused bool, width int, 
 	} else if focused {
 		borderColor = t.Palette.Accent
 		labelStyle = labelStyle.Foreground(t.Palette.Accent).Bold(true)
+		contentStyle = contentStyle.Foreground(t.Palette.Accent).Bold(true)
+	}
+
+	if forcedBorderColor != nil {
+		borderColor = forcedBorderColor
 	}
 
 	// 3. Calculate Available Space for Content

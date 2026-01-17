@@ -103,7 +103,7 @@ func (m *PromptModal) View(parentWidth, parentHeight int) string {
 
 	// 2. Content
 	titleView := t.Styles.Title.Render(strings.ToUpper(m.Title))
-	messageView := t.Styles.Text.Render(m.Message)
+	messageView := t.Styles.TextDim.Render(m.Message)
 
 	// Input (Width - Padding(4) - Border(2))
 	inputView := m.Input.View(m.width - 6)
