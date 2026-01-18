@@ -11,6 +11,7 @@ This server exposes a rich set of tools to:
 - **Templates**: Create and manage cold storage templates of your VMs.
 - **Images**: Search, pull, and manage the local cache of cloud images (e.g., Ubuntu, Debian).
 - **Maintenance**: Prune stopped VMs, check system health (`doctor`), and clean up caches.
+ - **Help**: `mcp-help` emits the full MCP tools catalog (names, descriptions, schemas).
 
 ## Installation & Configuration
 
@@ -127,6 +128,14 @@ Download an image into the local cache.
 
 Force refresh the upstream image catalog.
 
+#### `vm_images_info`
+
+Inspect catalog metadata for a specific image tag (name:version or alias).
+
+#### `vm_images_remove`
+
+Remove a cached image by `name:version`.
+
 #### `vm_cache_list` / `vm_cache_info`
 
 Inspect the local image cache usage.
@@ -135,7 +144,7 @@ Inspect the local image cache usage.
 
 Delete a specific image from cache.
 
-- **Args**: `name`, `version`
+- **Args**: `image` (name:version)
 
 #### `vm_cache_prune`
 

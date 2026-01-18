@@ -52,6 +52,35 @@ func NewServer(p provider.VMProvider) *Server {
 	return &Server{Provider: p}
 }
 
+// ToolsCatalog returns all MCP tools with descriptions and schemas.
+func ToolsCatalog() []map[string]interface{} {
+	return []map[string]interface{}{
+		{"name": "vm_list", "description": "List all virtual machines", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+		{"name": "vm_create", "description": "Create a VM from image or template", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "template": map[string]interface{}{"type": "string"}, "image": map[string]interface{}{"type": "string"}, "user_data": map[string]interface{}{"type": "string"}, "gui": map[string]interface{}{"type": "boolean"}, "ports": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}}}, "required": []string{"name"}}},
+		{"name": "vm_start", "description": "Start a VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "gui": map[string]interface{}{"type": "boolean"}}, "required": []string{"name"}}},
+		{"name": "vm_stop", "description": "Stop a VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
+		{"name": "vm_delete", "description": "Delete a VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
+		{"name": "vm_info", "description": "Get VM info", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
+		{"name": "vm_ssh", "description": "Get SSH command for VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
+		{"name": "vm_prune", "description": "Prune stopped VMs", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+		{"name": "vm_template_list", "description": "List templates", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+		{"name": "vm_template_create", "description": "Create template from VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"vm_name": map[string]interface{}{"type": "string"}, "template_name": map[string]interface{}{"type": "string"}}, "required": []string{"vm_name", "template_name"}}},
+		{"name": "vm_template_delete", "description": "Delete template", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
+		{"name": "vm_images_list", "description": "List catalog images", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+		{"name": "vm_images_info", "description": "Get catalog info for image", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"image": map[string]interface{}{"type": "string"}}, "required": []string{"image"}}},
+		{"name": "vm_images_pull", "description": "Pull image into cache", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"image": map[string]interface{}{"type": "string"}}, "required": []string{"image"}}},
+		{"name": "vm_images_remove", "description": "Remove cached image", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"image": map[string]interface{}{"type": "string"}}, "required": []string{"image"}}},
+		{"name": "vm_images_update", "description": "Refresh image catalog", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+		{"name": "vm_cache_list", "description": "List cached images", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+		{"name": "vm_cache_info", "description": "Cache stats", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+		{"name": "vm_cache_remove", "description": "Remove cached image", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"image": map[string]interface{}{"type": "string"}}, "required": []string{"image"}}},
+		{"name": "vm_cache_prune", "description": "Prune cached images", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+		{"name": "vm_port_forward", "description": "Add port forward", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "mapping": map[string]interface{}{"type": "string"}}, "required": []string{"name", "mapping"}}},
+		{"name": "vm_port_unforward", "description": "Remove port forward", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "guest_port": map[string]interface{}{"type": "number"}, "protocol": map[string]interface{}{"type": "string"}}, "required": []string{"name", "guest_port", "protocol"}}},
+		{"name": "vm_port_list", "description": "List port forwards", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
+	}
+}
+
 // Serve starts the MCP server loop, reading JSON-RPC requests from stdin
 // and writing responses to stdout. Runs until EOF or a fatal error.
 func (s *Server) Serve() {
@@ -95,245 +124,9 @@ func (s *Server) handleRequest(req JSONRPCRequest) {
 }
 
 func (s *Server) handleToolsList(req JSONRPCRequest) {
-	tools := []map[string]interface{}{
-		{
-			"name":        "vm_list",
-			"description": "List all virtual machines in the nest",
-			"inputSchema": map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-		},
-		{
-			"name":        "vm_create",
-			"description": "Create a new VM from a template or cloud image",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"name":      map[string]interface{}{"type": "string", "description": "Name of the new VM"},
-					"template":  map[string]interface{}{"type": "string", "description": "Template to use (e.g. template-headless)"},
-					"image":     map[string]interface{}{"type": "string", "description": "Cloud image to pull and use (e.g. ubuntu:24.04)"},
-					"user_data": map[string]interface{}{"type": "string", "description": "Optional cloud-init user-data content"},
-					"gui":       map[string]interface{}{"type": "boolean", "description": "Enable GUI (VNC) for graphical desktop environments"},
-					"ports":     map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Port mappings in format [LABEL:]GUEST[:HOST][/PROTO], e.g. web:80:32080"},
-				},
-				"required": []string{"name"},
-			},
-		},
-		{
-			"name":        "vm_start",
-			"description": "Start a virtual machine",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"name": map[string]interface{}{"type": "string", "description": "Name of the VM to start"},
-					"gui":  map[string]interface{}{"type": "boolean", "description": "Enable GUI (VNC) for graphical desktop environments"},
-				},
-				"required": []string{"name"},
-			},
-		},
-		{
-			"name":        "vm_stop",
-			"description": "Stop a virtual machine elegantly",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"name": map[string]interface{}{"type": "string", "description": "Name of the VM to stop"},
-				},
-				"required": []string{"name"},
-			},
-		},
-		{
-			"name":        "vm_delete",
-			"description": "Evict a VM from the nest permanently",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"name": map[string]interface{}{"type": "string", "description": "Name of the VM to delete"},
-				},
-				"required": []string{"name"},
-			},
-		},
-		{
-			"name":        "vm_info",
-			"description": "Inspect a specific VM's neural links and status",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"name": map[string]interface{}{"type": "string", "description": "Name of the VM to inspect"},
-				},
-				"required": []string{"name"},
-			},
-		},
-		{
-			"name":        "vm_ssh",
-			"description": "Get the SSH connection string for a VM",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"name": map[string]interface{}{"type": "string", "description": "Name of the VM"},
-				},
-				"required": []string{"name"},
-			},
-		},
-		{
-			"name":        "vm_template_list",
-			"description": "List all available VM templates in cold storage",
-			"inputSchema": map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-		},
-		{
-			"name":        "vm_template_create",
-			"description": "Archive an existing VM into a cold template",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"vm_name":       map[string]interface{}{"type": "string", "description": "Name of the source VM"},
-					"template_name": map[string]interface{}{"type": "string", "description": "Name for the new template"},
-				},
-				"required": []string{"vm_name", "template_name"},
-			},
-		},
-		{
-			"name":        "vm_template_delete",
-			"description": "Delete a template from cold storage",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"name": map[string]interface{}{"type": "string", "description": "Name of the template to delete"},
-				},
-				"required": []string{"name"},
-			},
-		},
-		{
-			"name":        "vm_port_forward",
-			"description": "Add or update a port forwarding rule for a VM",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"name":    map[string]interface{}{"type": "string", "description": "Name of the VM"},
-					"mapping": map[string]interface{}{"type": "string", "description": "Mapping in format [LABEL:]GUEST[:HOST][/PROTO]"},
-				},
-				"required": []string{"name", "mapping"},
-			},
-		},
-		{
-			"name":        "vm_port_unforward",
-			"description": "Remove a port forwarding rule from a VM",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"name":       map[string]interface{}{"type": "string", "description": "Name of the VM"},
-					"guest_port": map[string]interface{}{"type": "integer", "description": "The guest port to stop forwarding"},
-					"protocol":   map[string]interface{}{"type": "string", "description": "Protocol (tcp or udp), defaults to tcp"},
-				},
-				"required": []string{"name", "guest_port"},
-			},
-		},
-		{
-			"name":        "vm_port_list",
-			"description": "List all active port forwarding rules for a VM",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"name": map[string]interface{}{"type": "string", "description": "Name of the VM"},
-				},
-				"required": []string{"name"},
-			},
-		},
-		{
-			"name":        "vm_doctor",
-			"description": "Run system diagnostics to check nest health",
-			"inputSchema": map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-		},
-		{
-			"name":        "vm_config_get",
-			"description": "Get current Nido configuration",
-			"inputSchema": map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-		},
-		{
-			"name":        "vm_prune",
-			"description": "Remove all stopped virtual machines",
-			"inputSchema": map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-		},
-		{
-			"name":        "vm_images_list",
-			"description": "List all available VM images, distinguishing between OFFICIAL (upstream proxies) and NIDO FLAVOURS (pre-configured environments).",
-			"inputSchema": map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-		},
-		{
-			"name":        "vm_images_pull",
-			"description": "Download a cloud image from the catalog",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"image": map[string]interface{}{"type": "string", "description": "Image name and tag (e.g. ubuntu:24.04)"},
-				},
-				"required": []string{"image"},
-			},
-		},
-		{
-			"name":        "vm_images_update",
-			"description": "Force refresh the cloud image catalog",
-			"inputSchema": map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-		},
-		{
-			"name":        "vm_cache_list",
-			"description": "List all cached cloud images with sizes and metadata",
-			"inputSchema": map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-		},
-		{
-			"name":        "vm_cache_info",
-			"description": "Get cache statistics (total size, count, age)",
-			"inputSchema": map[string]interface{}{
-				"type":       "object",
-				"properties": map[string]interface{}{},
-			},
-		},
-		{
-			"name":        "vm_cache_remove",
-			"description": "Remove a specific cached image",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"name":    map[string]interface{}{"type": "string", "description": "Image name (e.g. ubuntu)"},
-					"version": map[string]interface{}{"type": "string", "description": "Image version (e.g. 24.04)"},
-				},
-				"required": []string{"name", "version"},
-			},
-		},
-		{
-			"name":        "vm_cache_prune",
-			"description": "Remove all or unused cached images",
-			"inputSchema": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"unused_only": map[string]interface{}{"type": "boolean", "description": "Only remove images not used by any VM"},
-				},
-			},
-		},
-	}
-	s.sendResponse(req.ID, map[string]interface{}{"tools": tools})
+	s.sendResponse(req.ID, map[string]interface{}{
+		"tools": ToolsCatalog(),
+	})
 }
 
 func (s *Server) handleToolsCall(req JSONRPCRequest) {
@@ -415,7 +208,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 
 			imgPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
 			if _, e := os.Stat(imgPath); os.IsNotExist(e) {
-				downloader := image.Downloader{}
+				downloader := image.Downloader{Quiet: true}
 				downloadPath := imgPath
 				isCompressed := strings.HasSuffix(ver.URL, ".tar.xz")
 				if isCompressed {
@@ -588,7 +381,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		}
 
 		imgPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
-		downloader := image.Downloader{}
+		downloader := image.Downloader{Quiet: true}
 		downloadPath := imgPath
 		isCompressed := strings.HasSuffix(ver.URL, ".tar.xz")
 		if isCompressed {
@@ -636,6 +429,55 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		} else {
 			result = fmt.Sprintf("Catalog updated. %d images available.", len(catalog.Images))
 		}
+	case "vm_images_info":
+		var args struct {
+			Image string `json:"image"`
+		}
+		json.Unmarshal(params.Arguments, &args)
+		home, _ := os.UserHomeDir()
+		imgDir := filepath.Join(home, ".nido", "images")
+		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
+		if e != nil {
+			err = e
+			break
+		}
+		pName, pVer := args.Image, ""
+		if strings.Contains(args.Image, ":") {
+			parts := strings.Split(args.Image, ":")
+			pName, pVer = parts[0], parts[1]
+		}
+		_, ver, e := catalog.FindImage(pName, pVer)
+		if e != nil {
+			err = e
+			break
+		}
+		data, _ := json.Marshal(ver)
+		result = string(data)
+	case "vm_images_remove":
+		var args struct {
+			Image string `json:"image"`
+		}
+		json.Unmarshal(params.Arguments, &args)
+		name, ver := args.Image, ""
+		if strings.Contains(args.Image, ":") {
+			parts := strings.Split(args.Image, ":")
+			name, ver = parts[0], parts[1]
+		}
+		home, _ := os.UserHomeDir()
+		imgDir := filepath.Join(home, ".nido", "images")
+		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
+		if e != nil {
+			err = e
+			break
+		}
+		if ver == "" {
+			ver = "latest"
+		}
+		if e := catalog.RemoveCachedImage(imgDir, name, ver); e != nil {
+			err = e
+		} else {
+			result = fmt.Sprintf("Removed %s:%s from cache", name, ver)
+		}
 
 	// Cache management tools
 	case "vm_cache_list":
@@ -670,8 +512,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		}
 	case "vm_cache_remove":
 		var args struct {
-			Name    string `json:"name"`
-			Version string `json:"version"`
+			Image string `json:"image"`
 		}
 		json.Unmarshal(params.Arguments, &args)
 		home, _ := os.UserHomeDir()
@@ -681,10 +522,18 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			err = e
 			break
 		}
-		if e := catalog.RemoveCachedImage(imgDir, args.Name, args.Version); e != nil {
+		name, ver := args.Image, ""
+		if strings.Contains(args.Image, ":") {
+			parts := strings.Split(args.Image, ":")
+			name, ver = parts[0], parts[1]
+		}
+		if ver == "" {
+			ver = "latest"
+		}
+		if e := catalog.RemoveCachedImage(imgDir, name, ver); e != nil {
 			err = e
 		} else {
-			result = fmt.Sprintf("Removed %s:%s from cache", args.Name, args.Version)
+			result = fmt.Sprintf("Removed %s:%s from cache", name, ver)
 		}
 	case "vm_cache_prune":
 		var args struct {
