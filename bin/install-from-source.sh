@@ -113,6 +113,58 @@ if [[ -n "$SHELL_RC" ]] && [[ -f "$SHELL_RC" ]]; then
     fi
 fi
 
+# 5. Desktop Integration
+echo ""
+echo "${STEP} Finalizing Nesting (Desktop Integration)..."
+cp "./resources/nido.png" "${NIDO_HOME}/nido.png"
+
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+if [[ "$OS" == "linux" ]]; then
+    DESKTOP_DIR="${HOME}/.local/share/applications"
+    mkdir -p "$DESKTOP_DIR"
+    # Create a small launcher script to handle dimensions
+    cat > "${NIDO_HOME}/bin/nido-launcher" <<EOF
+#!/bin/bash
+# 🐣 Nido Linux Launcher with Optimal Dimensions
+if command -v gnome-terminal >/dev/null 2>&1; then
+    gnome-terminal --geometry=80x24 -- "${NIDO_HOME}/bin/nido" gui
+elif command -v x-terminal-emulator >/dev/null 2>&1; then
+    x-terminal-emulator -e "${NIDO_HOME}/bin/nido" gui
+else
+    "${NIDO_HOME}/bin/nido" gui
+fi
+EOF
+    chmod +x "${NIDO_HOME}/bin/nido-launcher"
+
+    cat > "${DESKTOP_DIR}/nido.desktop" <<EOF
+[Desktop Entry]
+Name=Nido
+Comment=The Universal VM Nest
+Exec=${NIDO_HOME}/bin/nido-launcher
+Icon=${NIDO_HOME}/nido.png
+Terminal=false
+Type=Application
+Categories=System;Utility;
+Keywords=vm;qemu;virtual;nest;
+EOF
+    chmod +x "${DESKTOP_DIR}/nido.desktop"
+    echo "  ${OK} Launcher entry created in ${DESKTOP_DIR}/nido.desktop"
+elif [[ "$OS" == "darwin" ]]; then
+    APP_DIR="${HOME}/Applications/Nido.app"
+    mkdir -p "${APP_DIR}/Contents/MacOS"
+    cat > "${APP_DIR}/Contents/MacOS/Nido" <<EOF
+#!/bin/bash
+# 🐣 Nido macOS Launcher
+osascript -e 'tell application "Terminal"
+    activate
+    set newWin to (do script "${NIDO_HOME}/bin/nido gui")
+    set bounds of window 1 of (application "Terminal") to {100, 100, 750, 550}
+end tell'
+EOF
+    chmod +x "${APP_DIR}/Contents/MacOS/Nido"
+    echo "  ${OK} Application bundle created in ${APP_DIR}"
+fi
+
 echo ""
 echo "${BOLD}${GREEN}  CONGRATULATIONS! ${BIRD}${RESET}"
 echo "  Nido v3 is now installed and ready to fly."

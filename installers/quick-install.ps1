@@ -67,6 +67,30 @@ if ($currentPath -notlike "*$binDir*") {
     Write-Host "✅ Added to PATH (restart terminal to apply)" -ForegroundColor Green
 }
 
+# Desktop Integration
+Write-Host "🎨 Setting up Desktop Integration..." -ForegroundColor Cyan
+$iconUrl = "https://raw.githubusercontent.com/Josepavese/nido/main/resources/nido.png"
+$iconPath = "$nidoHome\nido.png"
+try {
+    Invoke-WebRequest -Uri $iconUrl -OutFile $iconPath
+} catch {
+    Write-Host "⚠️ Generic icon will be used (download failed)" -ForegroundColor Yellow
+}
+
+$shell = New-Object -ComObject WScript.Shell
+$startMenu = [Environment]::GetFolderPath("Programs")
+$shortcutPath = Join-Path $startMenu "Nido.lnk"
+$shortcut = $shell.CreateShortcut($shortcutPath)
+$shortcut.TargetPath = "$binDir\nido.exe"
+$shortcut.Arguments = "gui"
+$shortcut.WorkingDirectory = "$nidoHome"
+$shortcut.Description = "The Universal VM Nest"
+if (Test-Path $iconPath) {
+    $shortcut.IconLocation = "$iconPath"
+}
+$shortcut.Save()
+Write-Host "✅ Start Menu shortcut created" -ForegroundColor Green
+
 Write-Host ""
 Write-Host "🎉 Installation complete!" -ForegroundColor Green
 Write-Host ""
