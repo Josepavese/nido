@@ -448,8 +448,12 @@ func ApplyUpdate() tea.Cmd {
 			exe = "nido" // Fallback
 		}
 		cmd := exec.Command(exe, "update")
-		err = cmd.Run()
-		return ApplyUpdateMsg{Err: err}
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			// Wrap the error with the output so the user sees WHY it failed
+			return ApplyUpdateMsg{Err: fmt.Errorf("%s: %s", err, string(out))}
+		}
+		return ApplyUpdateMsg{Err: nil}
 	}
 }
 

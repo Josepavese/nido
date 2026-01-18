@@ -204,6 +204,9 @@ jobs:
           </p>
           EOF
 
+      - name: Verify dist contents
+        run: ls -R dist/
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -216,6 +219,7 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -12,19 +12,19 @@ mkdir -p $OUTPUT_DIR
 
 # Linux (amd64)
 echo "Building for Linux (amd64)..."
-GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=$VERSION" -o $OUTPUT_DIR/nido-linux-amd64 ./cmd/nido
+GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o $OUTPUT_DIR/nido-linux-amd64 ./cmd/nido
 
 # macOS (Intel)
 echo "Building for macOS (Intel)..."
-GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.Version=$VERSION" -o $OUTPUT_DIR/nido-darwin-amd64 ./cmd/nido
+GOOS=darwin GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o $OUTPUT_DIR/nido-darwin-amd64 ./cmd/nido
 
 # macOS (Apple Silicon)
 echo "Building for macOS (Apple Silicon)..."
-GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.Version=$VERSION" -o $OUTPUT_DIR/nido-darwin-arm64 ./cmd/nido
+GOOS=darwin GOARCH=arm64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o $OUTPUT_DIR/nido-darwin-arm64 ./cmd/nido
 
 # Windows (amd64)
 echo "Building for Windows (amd64)..."
-GOOS=windows GOARCH=amd64 go build -ldflags "-X main.Version=$VERSION" -o $OUTPUT_DIR/nido-windows-amd64.exe ./cmd/nido
+GOOS=windows GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o $OUTPUT_DIR/nido-windows-amd64.exe ./cmd/nido
 
 echo ""
 echo "✅ Build complete! Binaries in $OUTPUT_DIR/"
