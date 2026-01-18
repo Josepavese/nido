@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "nido-local-vm-manager": {
-      "command": "/home/jose/.nido/bin/nido",
-      "args": ["mcp"]
-    }
-  }
-}
