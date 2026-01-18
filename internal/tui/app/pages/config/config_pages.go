@@ -714,3 +714,111 @@ func (p *ConfigPageAppearance) Shortcuts() []fv.Shortcut {
 		{Key: "esc", Label: "back"},
 	}
 }
+
+// --- Uninstall Page (Danger Zone) ---
+
+type ConfigPageUninstall struct {
+	fv.BaseViewlet
+	Parent *Config
+
+	Form            *widget.Form
+	Header          *widget.Card
+	WarningText     *widget.Card
+	UninstallButton *widget.Button
+	Modal           *widget.Modal
+}
+
+func NewConfigPageUninstall(parent *Config) *ConfigPageUninstall {
+	p := &ConfigPageUninstall{Parent: parent}
+	p.Header = widget.NewCard(theme.IconSelfDestruct, "Self Destruct", "Uninstall Nido and delete all templates.")
+
+	p.Modal = widget.NewModal(
+		"SELF DESTRUCT",
+		"Are you absolutely sure?\nThis will permanently delete all data, templates, images, and the application itself.",
+		func() tea.Cmd {
+			return func() tea.Msg { return ops.RequestUninstallMsg{} }
+		},
+		nil,
+	)
+	p.Modal.SetWidth(60)
+	// Make the modal scary
+	p.Modal.BorderColor = theme.Current().Palette.Error
+
+	p.UninstallButton = widget.NewSubmitButton("", "UNINSTALL NIDO", func() tea.Cmd {
+		p.Modal.Show()
+		return nil
+	})
+	p.UninstallButton.SetColor(theme.Current().Palette.Error)
+
+	p.Form = widget.NewForm(p.Header, p.UninstallButton)
+	p.Form.Spacing = 0
+	return p
+}
+
+func (p *ConfigPageUninstall) Init() tea.Cmd { return nil }
+
+func (p *ConfigPageUninstall) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
+	if p.Modal != nil && p.Modal.IsActive() {
+		newModal, cmd := p.Modal.Update(msg)
+		p.Modal = newModal
+		return p, cmd
+	}
+
+	if !p.Focused() {
+		return p, nil
+	}
+
+	newForm, cmd := p.Form.Update(msg)
+	p.Form = newForm
+	return p, cmd
+}
+
+func (p *ConfigPageUninstall) View() string {
+	w := p.Width()
+	safeWidth := w - 4
+	if safeWidth > 60 {
+		safeWidth = 60
+	}
+	p.Form.Width = safeWidth
+
+	if p.Modal.IsActive() {
+		return ""
+	}
+
+	return p.Form.View(safeWidth)
+}
+
+func (p *ConfigPageUninstall) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
+func (p *ConfigPageUninstall) Blur()          { p.BaseViewlet.Blur(); p.Form.Blur() }
+func (p *ConfigPageUninstall) HasActiveTextInput() bool {
+	return p.Form != nil && p.Form.HasActiveTextInput()
+}
+
+func (p *ConfigPageUninstall) HasActiveFocus() bool {
+	return p.Form != nil && p.Form.HasActiveFocus()
+}
+
+func (p *ConfigPageUninstall) IsModalActive() bool {
+	return p.Modal != nil && p.Modal.IsActive()
+}
+
+func (p *ConfigPageUninstall) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, tea.Cmd, bool) {
+	if p.Modal != nil && p.Modal.IsActive() {
+		cmd, handled := p.Modal.HandleMouse(x, y, msg)
+		return p, cmd, handled
+	}
+	return p, nil, false
+}
+
+func (p *ConfigPageUninstall) Shortcuts() []fv.Shortcut {
+	if p.IsModalActive() {
+		return []fv.Shortcut{
+			{Key: "enter", Label: "confirm destruction"},
+			{Key: "esc", Label: "abort"},
+		}
+	}
+	return []fv.Shortcut{
+		{Key: "enter", Label: "initiate"},
+		{Key: "esc", Label: "back"},
+	}
+}

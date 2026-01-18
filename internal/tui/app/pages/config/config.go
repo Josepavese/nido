@@ -49,6 +49,8 @@ func (i ConfigItem) Icon() string {
 		return theme.IconCache // Artifacts
 	case "DOCTOR":
 		return theme.IconDoctor // Health
+	case "UNINSTALL":
+		return theme.IconSelfDestruct // Danger
 	}
 	return theme.IconSystem
 }
@@ -84,6 +86,7 @@ type Config struct {
 	PageUpdate     *ConfigPageUpdate
 	PageCache      *ConfigPageCache
 	PageDoctor     *ConfigPageDoctor
+	PageUninstall  *ConfigPageUninstall
 }
 
 type CacheStats struct {
@@ -150,6 +153,7 @@ func (c *Config) RefreshItems() {
 		{Key: "UPDATE", Label: "Evolution", Desc: "Update Nido versions", Type: "page"},
 		{Key: "DOCTOR", Label: "Health", Desc: "System health check", Type: "page"},
 		{Key: "CACHE", Label: "Artifacts", Desc: "Manage image storage", Type: "page"},
+		{Key: "UNINSTALL", Label: "Self Destruct", Desc: "Uninstall Nido", Type: "page"},
 	}
 
 	// Update Sidebar
@@ -195,6 +199,10 @@ func (c *Config) RefreshItems() {
 	if c.PageCache == nil {
 		c.PageCache = NewConfigPageCache(c)
 		c.Pages.AddPage("CACHE", c.PageCache)
+	}
+	if c.PageUninstall == nil {
+		c.PageUninstall = NewConfigPageUninstall(c)
+		c.Pages.AddPage("UNINSTALL", c.PageUninstall)
 	}
 
 	// Restore selection logic?
@@ -315,6 +323,8 @@ func (c *Config) View() string {
 				} else {
 					modal = pu.ConfirmModal
 				}
+			} else if pun, ok := p.(*ConfigPageUninstall); ok {
+				modal = pun.Modal
 			}
 
 			if modal != nil {
