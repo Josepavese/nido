@@ -1,5 +1,3 @@
-# ![Nido Header](resources/nido_header_80s.png)
-
 > **"Hatch your agents. Let them fly."** 🐣💾
 
 [![Release](https://img.shields.io/github/v/release/Josepavese/nido?style=flat-square&color=ff00ff)](https://github.com/Josepavese/nido/releases)
@@ -48,13 +46,22 @@ irm https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-inst
 nido version
 ```
 
+### 🪄 Cheat Codes (Auto-Complete)
+
+Tab-completion is enabled by default. If it's missing, equip it manually:
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+source <(nido completion bash)  # or zsh / fish / powershell
+```
+
 ---
 
 ## 🦄 Select Your Flavour
 
 ![Select Flavour](resources/nido_flavours_select.png)
 
-Nido supports a wide roster of "fighters" (Cloud Images). Ubuntu, Debian, Alpine, Arch—choose your pixelated champion.
+Nido supports a wide roster of "fighters" (Cloud Images). Ubuntu, Debian, Alpine, Arch, choose your pixelated champion.
 
 ### 🎮 Real World Example (Combo Move)
 
@@ -104,51 +111,51 @@ Here is the full move list for the Nido console.
 
 ### 🐣 Life Cycle (The Game Loop)
 
-| Command | Action | Arcade Analog |
-| :--- | :--- | :--- |
-| `nido spawn <name> [--image <img>]` | Create & start a new VM | **START GAME** |
-| `nido start <name> [--gui]` | Revive a stopped VM | **CONTINUE? 10..9..** |
-| `nido stop <name>` | ACPI Shutdown signal | **PAUSE** |
-| `nido delete <name>` | Destroy VM permanently | **GAME OVER** |
-| `nido prune` | Delete ALL stopped VMs | **CLEAR HIGH SCORES** |
+| Command                               | Action                  | Arcade Analog               |
+| :------------------------------------ | :---------------------- | :-------------------------- |
+| `nido spawn <name> [--image <img>]` | Create & start a new VM | **START GAME**        |
+| `nido start <name> [--gui]`         | Revive a stopped VM     | **CONTINUE? 10..9..** |
+| `nido stop <name>`                  | ACPI Shutdown signal    | **PAUSE**             |
+| `nido delete <name>`                | Destroy VM permanently  | **GAME OVER**         |
+| `nido prune`                        | Delete ALL stopped VMs  | **CLEAR HIGH SCORES** |
 
 ### 🔍 Observability (HUD)
 
-| Command | Action | Arcade Analog |
-| :--- | :--- | :--- |
-| `nido ls` | List all VMs | **PLAYER SELECT** |
-| `nido info <name>` | Show IP, Ports, PID | **STATS SCREEN** |
-| `nido gui` | Interactive TUI Dashboard | **ARCADE MODE** |
-| `nido doctor` | Diagnose system health | **TEST MENU** |
+| Command              | Action                    | Arcade Analog           |
+| :------------------- | :------------------------ | :---------------------- |
+| `nido ls`          | List all VMs              | **PLAYER SELECT** |
+| `nido info <name>` | Show IP, Ports, PID       | **STATS SCREEN**  |
+| `nido gui`         | Interactive TUI Dashboard | **ARCADE MODE**   |
+| `nido doctor`      | Diagnose system health    | **TEST MENU**     |
 
 ### 🔌 Connectivity (Link Cable)
 
-| Command | Action | Arcade Analog |
-| :--- | :--- | :--- |
+| Command             | Action      | Arcade Analog        |
+| :------------------ | :---------- | :------------------- |
 | `nido ssh <name>` | SSH into VM | **LINK CABLE** |
 
 ### 🧬 Genetic Engineering (Images & Templates)
 
-| Command | Action | Arcade Analog |
-| :--- | :--- | :--- |
-| `nido images list` | Browse cloud images | **CHARACTER ROSTER** |
-| `nido images pull <tag>` | Download image | **LOAD ROM** |
-| `nido cache ls` | View local cache | **MEMORY CARD** |
-| `nido cache prune` | Clear unused images | **DELETE SAVE** |
-| `nido template list` | List custom templates | **USER SKINS** |
-| `nido template create <vm> <name>` | Save VM state as template | **SAVE STATE** |
-| `nido template delete <name>` | Delete template | **ERASE** |
+| Command                              | Action                    | Arcade Analog              |
+| :----------------------------------- | :------------------------ | :------------------------- |
+| `nido images list`                 | Browse cloud images       | **CHARACTER ROSTER** |
+| `nido images pull <tag>`           | Download image            | **LOAD ROM**         |
+| `nido cache ls`                    | View local cache          | **MEMORY CARD**      |
+| `nido cache prune`                 | Clear unused images       | **DELETE SAVE**      |
+| `nido template list`               | List custom templates     | **USER SKINS**       |
+| `nido template create <vm> <name>` | Save VM state as template | **SAVE STATE**       |
+| `nido template delete <name>`      | Delete template           | **ERASE**            |
 
 ### ⚙️ System (Options Menu)
 
-| Command | Action | Arcade Analog |
-| :--- | :--- | :--- |
-| `nido config` | View/Edit settings | **OPTIONS** |
-| `nido register` | Setup MCP integration | **CONTROLLER CONFIG** |
-| `nido update` | Self-update from GitHub | **OTA PATCH** |
-| `nido uninstall` | Nuclear cleanup | **SELF DESTRUCT** |
-| `nido version` | Show version info | **CREDITS** |
-| `nido help` | Show usage guide | **TUTORIAL** |
+| Command            | Action                  | Arcade Analog               |
+| :----------------- | :---------------------- | :-------------------------- |
+| `nido config`    | View/Edit settings      | **OPTIONS**           |
+| `nido register`  | Setup MCP integration   | **CONTROLLER CONFIG** |
+| `nido update`    | Self-update from GitHub | **OTA PATCH**         |
+| `nido uninstall` | Nuclear cleanup         | **SELF DESTRUCT**     |
+| `nido version`   | Show version info       | **CREDITS**           |
+| `nido help`      | Show usage guide        | **TUTORIAL**          |
 
 ---
 
