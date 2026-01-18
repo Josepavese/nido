@@ -72,7 +72,7 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		n.Shell.SwitchTo("fleet")
 		id, cmd := n.Shell.StartAction(fmt.Sprintf("Spawning %s", msg.Name))
 		n.activeActions[opName] = id
-		return n, tea.Batch(cmd, ops.SpawnVM(n.prov, msg.Name, msg.Source, msg.UserData, msg.GUI))
+		return n, tea.Batch(cmd, ops.SpawnVM(n.prov, msg.Name, msg.Source, msg.UserData, msg.GUI, msg.Ports))
 
 	case ops.RequestCreateTemplateMsg:
 		opName := "create-template"

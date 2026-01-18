@@ -115,6 +115,7 @@ func (s *Server) handleToolsList(req JSONRPCRequest) {
 					"image":     map[string]interface{}{"type": "string", "description": "Cloud image to pull and use (e.g. ubuntu:24.04)"},
 					"user_data": map[string]interface{}{"type": "string", "description": "Optional cloud-init user-data content"},
 					"gui":       map[string]interface{}{"type": "boolean", "description": "Enable GUI (VNC) for graphical desktop environments"},
+					"ports":     map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Port mappings in format [LABEL:]GUEST[:HOST][/PROTO], e.g. web:80:32080"},
 				},
 				"required": []string{"name"},
 			},
@@ -202,6 +203,42 @@ func (s *Server) handleToolsList(req JSONRPCRequest) {
 				"type": "object",
 				"properties": map[string]interface{}{
 					"name": map[string]interface{}{"type": "string", "description": "Name of the template to delete"},
+				},
+				"required": []string{"name"},
+			},
+		},
+		{
+			"name":        "vm_port_forward",
+			"description": "Add or update a port forwarding rule for a VM",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"name":    map[string]interface{}{"type": "string", "description": "Name of the VM"},
+					"mapping": map[string]interface{}{"type": "string", "description": "Mapping in format [LABEL:]GUEST[:HOST][/PROTO]"},
+				},
+				"required": []string{"name", "mapping"},
+			},
+		},
+		{
+			"name":        "vm_port_unforward",
+			"description": "Remove a port forwarding rule from a VM",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"name":       map[string]interface{}{"type": "string", "description": "Name of the VM"},
+					"guest_port": map[string]interface{}{"type": "integer", "description": "The guest port to stop forwarding"},
+					"protocol":   map[string]interface{}{"type": "string", "description": "Protocol (tcp or udp), defaults to tcp"},
+				},
+				"required": []string{"name", "guest_port"},
+			},
+		},
+		{
+			"name":        "vm_port_list",
+			"description": "List all active port forwarding rules for a VM",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{"type": "string", "description": "Name of the VM"},
 				},
 				"required": []string{"name"},
 			},
@@ -318,15 +355,29 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		result = string(data)
 	case "vm_create":
 		var args struct {
-			Name     string `json:"name"`
-			Template string `json:"template"`
-			Image    string `json:"image"`
-			UserData string `json:"user_data"`
-			Gui      bool   `json:"gui"`
+			Name     string   `json:"name"`
+			Template string   `json:"template"`
+			Image    string   `json:"image"`
+			UserData string   `json:"user_data"`
+			Gui      bool     `json:"gui"`
+			Ports    []string `json:"ports"`
 		}
 		json.Unmarshal(params.Arguments, &args)
 
 		opts := provider.VMOptions{}
+
+		// Parse ports if provided
+		for _, ps := range args.Ports {
+			pf, errp := parsePortString(ps)
+			if errp != nil {
+				err = errp
+				break
+			}
+			opts.Forwarding = append(opts.Forwarding, pf)
+		}
+		if err != nil {
+			break
+		}
 
 		// Handle UserData
 		if args.UserData != "" {
@@ -662,6 +713,47 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			result = fmt.Sprintf("Pruned %d cached image(s)", removed)
 		}
 
+	case "vm_port_forward":
+		var args struct {
+			Name    string `json:"name"`
+			Mapping string `json:"mapping"`
+		}
+		json.Unmarshal(params.Arguments, &args)
+		pf, errp := parsePortString(args.Mapping)
+		if errp != nil {
+			err = errp
+			break
+		}
+		res, e := s.Provider.PortForward(args.Name, pf)
+		if e != nil {
+			err = e
+		} else {
+			result = fmt.Sprintf("Port %d forwarded to host %d/%s.", res.GuestPort, res.HostPort, res.Protocol)
+		}
+
+	case "vm_port_unforward":
+		var args struct {
+			Name      string `json:"name"`
+			GuestPort int    `json:"guest_port"`
+			Protocol  string `json:"protocol"`
+		}
+		json.Unmarshal(params.Arguments, &args)
+		err = s.Provider.PortUnforward(args.Name, args.GuestPort, args.Protocol)
+		result = fmt.Sprintf("Port %d/%s mapping removed.", args.GuestPort, args.Protocol)
+
+	case "vm_port_list":
+		var args struct {
+			Name string `json:"name"`
+		}
+		json.Unmarshal(params.Arguments, &args)
+		list, e := s.Provider.PortList(args.Name)
+		if e != nil {
+			err = e
+		} else {
+			data, _ := json.Marshal(list)
+			result = string(data)
+		}
+
 	default:
 		s.sendError(req.ID, -32601, "Tool not found")
 		return
@@ -704,4 +796,49 @@ func (s *Server) sendError(id interface{}, code int, message string) {
 	fmt.Fprintf(os.Stderr, "[MCP] Sending error: %s\n", string(data))
 	os.Stdout.Write(data)
 	os.Stdout.Write([]byte("\n"))
+}
+
+// parsePortString is a helper for MCP to reuse parsing logic.
+// Implements Section 5.1 of advanced-port-forwarding.md for MCP.
+func parsePortString(val string) (provider.PortForward, error) {
+	pf := provider.PortForward{Protocol: "tcp"}
+
+	// Split label if present
+	if strings.Contains(val, ":") {
+		parts := strings.SplitN(val, ":", 2)
+		if _, err := provider.ParseInt(parts[0]); err != nil {
+			pf.Label = parts[0]
+			val = parts[1]
+		}
+	}
+
+	// Handle protocol
+	if strings.Contains(val, "/") {
+		parts := strings.SplitN(val, "/", 2)
+		pf.Protocol = strings.ToLower(parts[1])
+		val = parts[0]
+	}
+
+	// Handle Guest:Host
+	if strings.Contains(val, ":") {
+		parts := strings.SplitN(val, ":", 2)
+		gp, err := provider.ParseInt(parts[0])
+		if err != nil {
+			return pf, fmt.Errorf("invalid guest port: %v", err)
+		}
+		hp, err := provider.ParseInt(parts[1])
+		if err != nil {
+			return pf, fmt.Errorf("invalid host port: %v", err)
+		}
+		pf.GuestPort = gp
+		pf.HostPort = hp
+	} else {
+		gp, err := provider.ParseInt(val)
+		if err != nil {
+			return pf, fmt.Errorf("invalid port: %v", err)
+		}
+		pf.GuestPort = gp
+	}
+
+	return pf, nil
 }

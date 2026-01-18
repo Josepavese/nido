@@ -49,7 +49,7 @@ func TestBuildQemuArgs_CrossPlatform(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Note: We can't actually mock runtime.GOOS in tests,
 			// but we can verify the logic by checking the current platform
-			args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 0, "/tmp/run")
+			args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 0, nil, "/tmp/run")
 
 			// Verify common arguments are present
 			if !contains(args, "-name") {
@@ -118,7 +118,7 @@ func TestBuildQemuArgs_CommonArguments(t *testing.T) {
 		Config:  &config.Config{},
 	}
 
-	args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 0, "/tmp/run")
+	args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 0, nil, "/tmp/run")
 
 	requiredArgs := map[string]bool{
 		"-name":      false,
@@ -152,7 +152,7 @@ func TestBuildQemuArgs_DiskPath(t *testing.T) {
 	}
 
 	diskPath := "/path/to/vm.qcow2"
-	args := p.buildQemuArgs("test-vm", diskPath, 50022, 0, "/tmp/run")
+	args := p.buildQemuArgs("test-vm", diskPath, 50022, 0, nil, "/tmp/run")
 
 	found := false
 	for _, arg := range args {
@@ -175,7 +175,7 @@ func TestBuildQemuArgs_VNC(t *testing.T) {
 	}
 
 	// 1. Test with VNC enabled (port 5901)
-	args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 5901, "/tmp/run")
+	args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 5901, nil, "/tmp/run")
 	if !contains(args, "-vnc") {
 		t.Error("Missing -vnc argument when port is provided")
 	}
@@ -185,12 +185,39 @@ func TestBuildQemuArgs_VNC(t *testing.T) {
 	}
 
 	// 2. Test with VNC disabled (port 0)
-	argsNoVNC := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 0, "/tmp/run")
+	argsNoVNC := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 0, nil, "/tmp/run")
 	if contains(argsNoVNC, "-vnc") {
 		t.Error("-vnc argument should not be present when port is 0")
 	}
 	if !contains(argsNoVNC, "-display") || !contains(argsNoVNC, "none") {
 		t.Error("Should have -display none when VNC is disabled")
+	}
+}
+
+// TestBuildNetDevArgs verifies multiple port forwardings
+func TestBuildNetDevArgs(t *testing.T) {
+	p := &QemuProvider{}
+
+	fw := []PortForward{
+		{Label: "web", GuestPort: 80, HostPort: 32080, Protocol: "tcp"},
+		{Label: "api", GuestPort: 8080, HostPort: 32808, Protocol: "tcp"},
+		{Label: "dns", GuestPort: 53, HostPort: 32053, Protocol: "udp"},
+	}
+
+	got := p.BuildNetDevArgs(50022, fw)
+
+	expectedParts := []string{
+		"user,id=net0",
+		"hostfwd=tcp::50022-:22",
+		"hostfwd=tcp::32080-:80",
+		"hostfwd=tcp::32808-:8080",
+		"hostfwd=udp::32053-:53",
+	}
+
+	for _, part := range expectedParts {
+		if !strings.Contains(got, part) {
+			t.Errorf("Expected BuildNetDevArgs result to contain %q, got: %q", part, got)
+		}
 	}
 }
 

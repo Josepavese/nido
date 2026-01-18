@@ -128,7 +128,7 @@ func FetchVMInfo(prov provider.VMProvider, name string) tea.Cmd {
 }
 
 // SpawnVM creates a new VM options. It automatically pulls the image if missing.
-func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool) tea.Cmd {
+func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool, ports []provider.PortForward) tea.Cmd {
 	opName := "spawn"
 
 	return func() tea.Msg {
@@ -164,6 +164,7 @@ func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool) 
 				DiskPath:     source,
 				UserDataPath: userData,
 				Gui:          gui,
+				Forwarding:   ports,
 			}
 			err := prov.Spawn(name, opts)
 			return OpResultMsg{Op: opName, Err: err}
@@ -206,6 +207,7 @@ func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool) 
 					DiskPath:     source,
 					UserDataPath: userData,
 					Gui:          gui,
+					Forwarding:   ports,
 				}
 				err := prov.Spawn(name, opts)
 				ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: err}}
@@ -312,6 +314,7 @@ func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool) 
 				UserDataPath: userData,
 				Gui:          gui,
 				SSHUser:      img.SSHUser, // Use user from catalog if available
+				Forwarding:   ports,
 			}
 			err = prov.Spawn(name, opts)
 			ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: err}}

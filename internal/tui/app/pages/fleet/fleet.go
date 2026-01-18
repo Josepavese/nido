@@ -52,6 +52,7 @@ type FleetDetail struct {
 	DiskMissing    bool
 	BackingPath    string
 	BackingMissing bool
+	Forwarding     []provider.PortForward
 }
 
 // Fleet implements the Viewlet interface using MasterDetail
@@ -250,6 +251,7 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 				DiskMissing:    msg.Detail.DiskMissing,
 				BackingPath:    msg.Detail.BackingPath,
 				BackingMissing: msg.Detail.BackingMissing,
+				Forwarding:     msg.Detail.Forwarding,
 			}
 			f.DetailView.UpdateDetail(f.detail)
 
@@ -496,7 +498,8 @@ type ComponentsDetail struct {
 	sshInput *widget.Input
 	vncInput *widget.Input
 
-	diskInput *widget.Input
+	diskInput  *widget.Input
+	portsInput *widget.Input
 }
 
 func NewComponentsDetail(parent *Fleet) *ComponentsDetail {
@@ -525,6 +528,9 @@ func NewComponentsDetail(parent *Fleet) *ComponentsDetail {
 	c.diskInput = widget.NewInput("Disk", "", nil)
 	c.diskInput.Disabled = true
 
+	c.portsInput = widget.NewInput("Ports", "", nil)
+	c.portsInput.Disabled = true
+
 	// Build form with rows
 	c.rebuildForm()
 
@@ -543,6 +549,7 @@ func (c *ComponentsDetail) rebuildForm() {
 		row1,
 		row2,
 		c.diskInput,
+		c.portsInput,
 	)
 	c.Form.Spacing = 0
 }
@@ -586,6 +593,21 @@ func (c *ComponentsDetail) UpdateDetail(d FleetDetail) {
 		c.diskInput.Error = "Disk image not found"
 	} else if d.BackingMissing {
 		c.diskInput.Error = "Backing file (template) missing"
+	}
+
+	// Update ports
+	if len(d.Forwarding) == 0 {
+		c.portsInput.SetValue("None")
+	} else {
+		var pfStrings []string
+		for _, pf := range d.Forwarding {
+			label := pf.Label
+			if label == "" {
+				label = fmt.Sprintf("%d/%s", pf.GuestPort, pf.Protocol)
+			}
+			pfStrings = append(pfStrings, fmt.Sprintf("%s ⮕  %d", label, pf.HostPort))
+		}
+		c.portsInput.SetValue(strings.Join(pfStrings, ", "))
 	}
 
 	// Update button states and labels

@@ -113,7 +113,20 @@ func main() {
 				if vm.State == "running" {
 					stateColor = ui.Green
 				}
-				fmt.Printf(" %-20s %s%-12s%s %-10d %d\n", vm.Name, stateColor, vm.State, ui.Reset, vm.PID, vm.SSHPort)
+
+				// Port Summary (Compact)
+				// Implements Section 6.2 of advanced-port-forwarding.md.
+				portSum := fmt.Sprintf("%d", vm.SSHPort)
+				for _, f := range vm.Forwarding {
+					if f.HostPort > 0 {
+						portSum += fmt.Sprintf(",%d->%d", f.GuestPort, f.HostPort)
+					}
+				}
+				if len(portSum) > 25 {
+					portSum = portSum[:22] + "..."
+				}
+
+				fmt.Printf(" %-20s %s%-12s%s %-10d %s\n", vm.Name, stateColor, vm.State, ui.Reset, vm.PID, portSum)
 			}
 			fmt.Println("")
 		}
@@ -163,6 +176,24 @@ func main() {
 		if info.VNCPort > 0 {
 			ui.FancyLabel("GUI (VNC)", fmt.Sprintf("127.0.0.1:%d", info.VNCPort))
 		}
+
+		// Forwarded Ports Table
+		// Implements Section 6.1 of advanced-port-forwarding.md.
+		if len(info.Forwarding) > 0 {
+			fmt.Printf("\n %s%-15s %-10s %-10s %s%s\n", ui.Bold, "LABEL", "GUEST", "HOST", "LINK", ui.Reset)
+			fmt.Printf(" %s%s%s\n", ui.Dim, strings.Repeat("-", 60), ui.Reset)
+			for _, f := range info.Forwarding {
+				label := f.Label
+				if label == "" {
+					label = "-"
+				}
+				link := "-"
+				if f.Protocol == "tcp" || f.Protocol == "" {
+					link = fmt.Sprintf("http://127.0.0.1:%d", f.HostPort)
+				}
+				fmt.Printf(" %-15s %-10d %-10d %s%s%s\n", label, f.GuestPort, f.HostPort, ui.Dim, link, ui.Reset)
+			}
+		}
 		fmt.Println("")
 	case "spawn":
 		// The main hatching event. Can spawn from images, templates, or defaults.
@@ -203,18 +234,33 @@ func main() {
 		imageTag := ""
 		userDataPath := ""
 		gui := false
+		var forwardings []provider.PortForward
 
 		for i := 1; i < len(rest); i++ {
-			if rest[i] == "--image" && i+1 < len(rest) {
+			arg := rest[i]
+			if (arg == "--image") && i+1 < len(rest) {
 				imageTag = rest[i+1]
 				i++
-			} else if rest[i] == "--user-data" && i+1 < len(rest) {
+			} else if (arg == "--user-data") && i+1 < len(rest) {
 				userDataPath = rest[i+1]
 				i++
-			} else if rest[i] == "--gui" {
+			} else if arg == "--gui" {
 				gui = true
-			} else if tpl == "" {
-				tpl = rest[i]
+			} else if (arg == "--port" || arg == "-p") && i+1 < len(rest) {
+				pf, err := parsePortFlag(rest[i+1])
+				if err != nil {
+					ui.Error("Invalid port mapping: %v", err)
+					os.Exit(1)
+				}
+				forwardings = append(forwardings, pf)
+				i++
+			} else if arg == "--web" {
+				forwardings = append(forwardings, provider.PortForward{Label: "HTTP", GuestPort: 80, Protocol: "tcp"})
+				forwardings = append(forwardings, provider.PortForward{Label: "HTTPS", GuestPort: 443, Protocol: "tcp"})
+			} else if arg == "--ftp" {
+				forwardings = append(forwardings, provider.PortForward{Label: "FTP", GuestPort: 21, Protocol: "tcp"})
+			} else if tpl == "" && !strings.HasPrefix(arg, "-") {
+				tpl = arg
 			}
 		}
 
@@ -367,6 +413,7 @@ func main() {
 			UserDataPath: userDataPath,
 			Gui:          gui,
 			SSHUser:      customSshUser,
+			Forwarding:   forwardings,
 		}); err != nil {
 			if jsonOut {
 				code := "ERR_INTERNAL"
@@ -734,6 +781,7 @@ func main() {
 			ui.Warn("This will PERMANENTLY DELETE:")
 			fmt.Printf("  - Configuration & Data: %s\n", nidoDir)
 			fmt.Printf("  - Local Templates:      %s\n", filepath.Join(nidoDir, "templates"))
+			fmt.Printf("  - Desktop Entries:      Launcher / Start Menu / Applications\n")
 			exe, _ := os.Executable()
 			fmt.Printf("  - Nido Binary:          %s\n", exe)
 			fmt.Println("")
@@ -842,11 +890,13 @@ func getBashCompletion() string {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="ls spawn start ssh info stop images cache template config register version delete doctor prune completion update help"
+    opts="ls spawn start ssh info stop images cache template config register version delete doctor prune completion update uninstall help"
 
     case "${prev}" in
         spawn)
-            COMPREPLY=( $(compgen -W "$(nido completion list-templates) --image --user-data --gui --json" -- ${cur}) )
+            # 1st arg after spawn is Name. We don't have specific completion for a new name,
+            # but we suggest flags if they start typing one.
+            COMPREPLY=( $(compgen -W "--image --user-data --port --web --ftp --gui --json" -- ${cur}) )
             return 0
             ;;
         start)
@@ -856,15 +906,6 @@ func getBashCompletion() string {
         ssh)
             COMPREPLY=( $(compgen -W "$(nido completion list-vms)" -- ${cur}) )
             return 0
-            ;;
-        info|stop|delete)
-            if [[ ${COMP_CWORD} -eq 2 ]]; then
-                COMPREPLY=( $(compgen -W "$(nido completion list-vms) --json" -- ${cur}) )
-                return 0
-            elif [[ ${COMP_WORDS[COMP_CWORD-2]} == "template" ]]; then
-                COMPREPLY=( $(compgen -W "$(nido completion list-templates) --force" -- ${cur}) )
-                return 0
-            fi
             ;;
         ls|list|version|prune|doctor|register)
             COMPREPLY=( $(compgen -W "--json" -- ${cur}) )
@@ -918,6 +959,27 @@ func getBashCompletion() string {
             fi
             ;;
         *)
+            # Position-based completion for 'nido spawn <name> <template>'
+            if [[ ${COMP_WORDS[1]} == "spawn" ]]; then
+                if [[ ${COMP_CWORD} -eq 2 ]]; then
+                    # Position 1: VM Name (suggest flags if starting with -)
+                    COMPREPLY=( $(compgen -W "--image --user-data --port --web --ftp --gui --json" -- ${cur}) )
+                    return 0
+                elif [[ ${COMP_CWORD} -eq 3 ]] && [[ ! ${prev} == -* ]]; then
+                    # Position 2: Template (if previous wasn't a flag needing a value)
+                    COMPREPLY=( $(compgen -W "$(nido completion list-templates) --image --user-data --port --web --ftp --gui --json" -- ${cur}) )
+                    return 0
+                fi
+            fi
+
+            # Existing logic for other commands
+            if [[ ${COMP_CWORD} -eq 2 ]]; then
+                COMPREPLY=( $(compgen -W "$(nido completion list-vms) --json" -- ${cur}) )
+                return 0
+            elif [[ ${COMP_CWORD} -eq 3 ]] && [[ ${COMP_WORDS[COMP_CWORD-2]} == "template" ]] && [[ ${COMP_WORDS[COMP_CWORD-1]} == "delete" ]]; then
+                COMPREPLY=( $(compgen -W "$(nido completion list-templates) --force" -- ${cur}) )
+                return 0
+            fi
             # Fallback for flags and deeper levels
             if [[ ${COMP_WORDS[COMP_CWORD-2]} == "delete" ]] && [[ ${COMP_WORDS[COMP_CWORD-3]} == "template" ]]; then
                 COMPREPLY=( $(compgen -W "--force" -- ${cur}) )
@@ -939,6 +1001,7 @@ func getZshCompletion() string {
 	return `_nido_completion() {
   local -a commands
   commands=(
+    'spawn:Create and hatch a new VM'
     'ssh:Connect to a VM via SSH bridge'
     'ls:List all life forms in the nest'
     'start:Revive VM from deep sleep'
@@ -947,12 +1010,14 @@ func getZshCompletion() string {
     'cache:Manage cached cloud images'
     'delete:Evict VM from the nest'
     'prune:Vaporize all stopped life forms'
+    'template:Manage cold templates'
     'config:Modify genetic configuration'
     'register:Prepare MCP handshake'
     'version:Check evolutionary state'
     'doctor:Run a system health check'
     'completion:Generate shell completions'
     'update:Ascend to the latest evolutionary state'
+    'uninstall:Nuclear option: Remove Nido and all its data'
   )
 
   _arguments -C \
@@ -967,9 +1032,13 @@ func getZshCompletion() string {
       case $words[1] in
         spawn)
           _arguments \
-            '1:template:$(nido completion list-templates)' \
+            '1:name: ' \
+            '2:template:$(nido completion list-templates)' \
             '--image[Cloud image to use]:image:($(nido completion list-images))' \
             '--user-data[Cloud-init user-data file]:file:_files' \
+            '--port[Port mapping (LABEL:GUEST:HOST/PROTO)]:mapping' \
+            '--web[Shortcut for HTTP/HTTPS]' \
+            '--ftp[Shortcut for FTP]' \
             '--gui[Enable GUI (VNC)]' \
             '--json[Structured JSON output]'
           ;;
@@ -1112,7 +1181,7 @@ func printUsage() {
 
 	fmt.Printf("%sVM MANAGEMENT%s\n", ui.Bold, ui.Reset)
 	fmt.Printf("  %-10s %sCreate and hatch a new VM%s\n", "spawn", ui.Dim, ui.Reset)
-	fmt.Printf("    %sFlags: --image <tag>, --user-data <file>, --gui, --json%s\n", ui.Dim, ui.Reset)
+	fmt.Printf("    %sFlags: --image <tag>, --user-data <file>, --port <mapping>, --web, --ftp, --gui, --json%s\n", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sRevive a VM from deep sleep%s\n", "start", ui.Dim, ui.Reset)
 	fmt.Printf("    %sFlags: --gui, --json%s\n", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sConnect to a VM via SSH bridge%s\n", "ssh", ui.Dim, ui.Reset)
@@ -1134,7 +1203,7 @@ func printUsage() {
 	fmt.Printf("  %-10s %sCheck the evolutionary state of Nido%s\n", "version", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sGenerate shell completion scripts%s\n", "completion", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sAscend to the latest evolutionary state (Update)%s\n", "update", ui.Dim, ui.Reset)
-	fmt.Printf("  %-10s %sManage cloud image catalog%s\n", "images", ui.Dim, ui.Reset)
+	fmt.Printf("  %-10s %sNuclear option: Remove Nido and all its data%s\n", "uninstall", ui.Dim, ui.Reset)
 
 	fmt.Printf("\n%s\"It's not a VM, it's a lifestyle.\"%s\n\n", ui.Dim, ui.Reset)
 }
@@ -1688,4 +1757,50 @@ func cmdCache(nidoDir string, args []string, prov provider.VMProvider) {
 		ui.Error("Available: ls, info, rm, prune")
 		os.Exit(1)
 	}
+}
+
+// parsePortFlag parses strings like "web:80:32080/tcp" or "80".
+// Implements Section 5.1 of advanced-port-forwarding.md.
+func parsePortFlag(val string) (provider.PortForward, error) {
+	pf := provider.PortForward{Protocol: "tcp"}
+
+	// Split label if present
+	if strings.Contains(val, ":") {
+		parts := strings.SplitN(val, ":", 2)
+		// Check if first part is a number (GuestPort) or a Label
+		if _, err := provider.ParseInt(parts[0]); err != nil {
+			pf.Label = parts[0]
+			val = parts[1]
+		}
+	}
+
+	// Handle protocol
+	if strings.Contains(val, "/") {
+		parts := strings.SplitN(val, "/", 2)
+		pf.Protocol = strings.ToLower(parts[1])
+		val = parts[0]
+	}
+
+	// Handle Guest:Host
+	if strings.Contains(val, ":") {
+		parts := strings.SplitN(val, ":", 2)
+		gp, err := provider.ParseInt(parts[0])
+		if err != nil {
+			return pf, fmt.Errorf("invalid guest port: %v", err)
+		}
+		hp, err := provider.ParseInt(parts[1])
+		if err != nil {
+			return pf, fmt.Errorf("invalid host port: %v", err)
+		}
+		pf.GuestPort = gp
+		pf.HostPort = hp
+	} else {
+		gp, err := provider.ParseInt(val)
+		if err != nil {
+			return pf, fmt.Errorf("invalid port: %v", err)
+		}
+		pf.GuestPort = gp
+	}
+
+	return pf, nil
 }

@@ -129,6 +129,62 @@ if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ]; then
   esac
 fi
 
+# Desktop Integration
+echo "${CYAN}🎨 Setting up Desktop Integration...${RESET}"
+# Download icon if possible, or use a default. For quick install, we can skip icon or use a generic one if we don't want to bundle it.
+# However, we can try to download it from the repo.
+ICON_URL="https://raw.githubusercontent.com/Josepavese/nido/main/resources/nido.png"
+if curl -fsSL "$ICON_URL" -o "${NIDO_HOME}/nido.png"; then
+    echo "${GREEN}✅ Icon downloaded${RESET}"
+else
+    # Fallback to chick emoji if download fails (not really possible as icon, but better than nothing)
+    echo "${YELLOW}⚠️ Could not download icon, using generic${RESET}"
+fi
+
+if [ "$OS" = "linux" ]; then
+    DESKTOP_DIR="${HOME}/.local/share/applications"
+    mkdir -p "$DESKTOP_DIR"
+    
+    # Create compact launcher wrapper
+    cat > "${NIDO_HOME}/bin/nido-launcher" <<EOF
+#!/bin/bash
+if command -v gnome-terminal >/dev/null 2>&1; then
+    gnome-terminal --geometry=80x24 -- "${NIDO_HOME}/bin/nido" gui
+elif command -v x-terminal-emulator >/dev/null 2>&1; then
+    x-terminal-emulator -e "${NIDO_HOME}/bin/nido" gui
+else
+    "${NIDO_HOME}/bin/nido" gui
+fi
+EOF
+    chmod +x "${NIDO_HOME}/bin/nido-launcher"
+
+    cat > "${DESKTOP_DIR}/nido.desktop" <<EOF
+[Desktop Entry]
+Name=Nido
+Comment=The Universal VM Nest
+Exec=${NIDO_HOME}/bin/nido-launcher
+Icon=${NIDO_HOME}/nido.png
+Terminal=false
+Type=Application
+Categories=System;Utility;
+EOF
+    chmod +x "${DESKTOP_DIR}/nido.desktop"
+    echo "${GREEN}✅ Launcher entry created${RESET}"
+elif [ "$OS" = "darwin" ]; then
+    APP_DIR="${HOME}/Applications/Nido.app"
+    mkdir -p "${APP_DIR}/Contents/MacOS"
+    cat > "${APP_DIR}/Contents/MacOS/Nido" <<EOF
+#!/bin/bash
+osascript -e 'tell application "Terminal"
+    activate
+    set newWin to (do script "${NIDO_HOME}/bin/nido gui")
+    set bounds of window 1 of (application "Terminal") to {100, 100, 750, 550}
+end tell'
+EOF
+    chmod +x "${APP_DIR}/Contents/MacOS/Nido"
+    echo "${GREEN}✅ Application bundle created${RESET}"
+fi
+
 echo ""
 echo "${BOLD}${GREEN}🎉 Installation complete!${RESET}"
 echo ""
