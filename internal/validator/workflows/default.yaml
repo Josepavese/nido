@@ -1,0 +1,31 @@
+workflows:
+  template:
+    steps:
+      - action: spawn
+        vm_var: vm_template_src
+        use_base_template: true
+        use_base_image: true
+      - action: template_create
+        vm_var: vm_template_src
+        template_var: tpl_primary
+      - action: spawn
+        vm_var: vm_from_template
+        template_var: tpl_primary
+        expect_cache_hit: true
+      - action: delete_vm
+        vm_var: vm_from_template
+      - action: delete_vm
+        vm_var: vm_template_src
+      - action: template_delete
+        template_var: tpl_primary
+  image_pool:
+    steps:
+      - action: image_pull
+        image: ""
+      - action: spawn
+        vm_var: vm_from_image
+        use_base_image: true
+      - action: delete_vm
+        vm_var: vm_from_image
+      - action: cache_rm
+        image: ""
