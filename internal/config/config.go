@@ -15,6 +15,8 @@ type Config struct {
 	SSHUser         string
 	ImageDir        string // Directory for downloaded images (default: ~/.nido/images)
 	LinkedClones    bool   // Whether to use Copy-on-Write linked clones (default: true)
+	PortRangeStart  int    // Start of custom port range (default: 30000)
+	PortRangeEnd    int    // End of custom port range (default: 32767)
 	TUI             TUIConfig
 }
 
@@ -54,6 +56,8 @@ func LoadConfig(path string) (*Config, error) {
 		SSHUser:         "vmuser",
 		ImageDir:        "",   // Will be set to ~/.nido/images if not specified
 		LinkedClones:    true, // Default to true (space saving)
+		PortRangeStart:  30000,
+		PortRangeEnd:    32767,
 		TUI: TUIConfig{
 			SidebarWidth:     30,
 			SidebarWideWidth: 38,
@@ -125,7 +129,14 @@ func LoadConfig(path string) (*Config, error) {
 			if len(parts) >= 5 {
 				cfg.TUI.TabLabels = parts
 			}
-
+		case "PORT_RANGE_START":
+			if parsed, ok := parseInt(val); ok {
+				cfg.PortRangeStart = parsed
+			}
+		case "PORT_RANGE_END":
+			if parsed, ok := parseInt(val); ok {
+				cfg.PortRangeEnd = parsed
+			}
 		}
 	}
 	return cfg, nil
@@ -159,6 +170,12 @@ func (c *Config) ApplyEnvOverrides() {
 		if len(parts) >= 5 {
 			c.TUI.TabLabels = parts
 		}
+	}
+	if v, ok := parseInt(os.Getenv("NIDO_PORT_RANGE_START")); ok {
+		c.PortRangeStart = v
+	}
+	if v, ok := parseInt(os.Getenv("NIDO_PORT_RANGE_END")); ok {
+		c.PortRangeEnd = v
 	}
 }
 

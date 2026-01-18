@@ -30,10 +30,10 @@ const (
 	IconDoctor  = "🩺" // Doctor
 
 	// Fleet States
-	IconBird   = "🐦" // Running
-	IconSleep  = "💤" // Stopped
-	IconLayout = "🎨" // Appearance / Rice
-
+	IconBird         = "🐦" // Running
+	IconSleep        = "💤" // Stopped
+	IconLayout       = "🎨" // Appearance / Rice
+	IconSelfDestruct = "🍳" // The Nest is Cooked
 )
 
 // IconForType maps a string type (e.g., from API or config) to an icon.

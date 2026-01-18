@@ -45,9 +45,10 @@ type Incubator struct {
 	Form           *widget.Form
 
 	// Accessors for dynamic updates
-	header *widget.Card
-	input  *widget.Input
-	toggle *widget.Toggle
+	header     *widget.Card
+	input      *widget.Input
+	portsInput *widget.Input
+	toggle     *widget.Toggle
 
 	// Styles
 	LabelStyle  lipgloss.Style
@@ -84,6 +85,13 @@ func NewIncubator(parent *Hatchery) *Incubator {
 		return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.'
 	}
 
+	// 2.1 Ports Input
+	// Implements Section 6.3 of advanced-port-forwarding.md.
+	inc.portsInput = widget.NewInput("Ports", "web:80:32080,8080", nil)
+	inc.portsInput.Filter = func(r rune) bool {
+		return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ':' || r == '/' || r == ',' || r == '.' || r == '-' || r == '_'
+	}
+
 	// 3. Toggle
 	inc.toggle = widget.NewToggle("GUI Mode", true)
 
@@ -97,6 +105,7 @@ func NewIncubator(parent *Hatchery) *Incubator {
 	inc.Form = widget.NewForm(
 		inc.header,
 		inc.input,
+		inc.portsInput,
 		inc.toggle,
 		btn,
 	)
@@ -116,12 +125,15 @@ func (i *Incubator) submitSpawn() tea.Cmd {
 		return nil // Form handles visual error state
 	}
 
+	ports, _ := parseTuiPorts(i.portsInput.Value())
+
 	// Construct Msg
 	req := ops.RequestSpawnMsg{
 		Name:     i.input.Value(),
 		Source:   i.SelectedSource.Title(),
 		GUI:      i.toggle.Checked,
 		UserData: "",
+		Ports:    ports,
 	}
 
 	// Reset
@@ -209,6 +221,7 @@ func (i *Incubator) SetSource(item *SourceItem) {
 	// The Form.FocusIndex might be 0 (Header is -1/unfocusable).
 	// Let's reset input.
 	i.input.SetValue("")
+	i.portsInput.SetValue("")
 }
 
 func (i *Incubator) Shortcuts() []fv.Shortcut {
@@ -520,5 +533,63 @@ func (h *Hatchery) HasActiveFocus() bool {
 }
 
 // --- Wrapper for Sidebar with Header ---
+
+// parseTuiPorts handles a comma-separated list of port mappings.
+// Implements Section 5.1 of advanced-port-forwarding.md for TUI.
+func parseTuiPorts(val string) ([]provider.PortForward, error) {
+	if val == "" {
+		return nil, nil
+	}
+	parts := strings.Split(val, ",")
+	results := make([]provider.PortForward, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		pf, err := parsePortString(p)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, pf)
+	}
+	return results, nil
+}
+
+func parsePortString(val string) (provider.PortForward, error) {
+	pf := provider.PortForward{Protocol: "tcp"}
+	if strings.Contains(val, ":") {
+		parts := strings.SplitN(val, ":", 2)
+		if _, err := provider.ParseInt(parts[0]); err != nil {
+			pf.Label = parts[0]
+			val = parts[1]
+		}
+	}
+	if strings.Contains(val, "/") {
+		parts := strings.SplitN(val, "/", 2)
+		pf.Protocol = strings.ToLower(parts[1])
+		val = parts[0]
+	}
+	if strings.Contains(val, ":") {
+		parts := strings.SplitN(val, ":", 2)
+		gp, err := provider.ParseInt(parts[0])
+		if err != nil {
+			return pf, err
+		}
+		hp, err := provider.ParseInt(parts[1])
+		if err != nil {
+			return pf, err
+		}
+		pf.GuestPort = gp
+		pf.HostPort = hp
+	} else {
+		gp, err := provider.ParseInt(val)
+		if err != nil {
+			return pf, err
+		}
+		pf.GuestPort = gp
+	}
+	return pf, nil
+}
 
 // End of Hatchery Viewlet

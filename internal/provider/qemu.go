@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	nidonet "github.com/Josepavese/nido/internal/net"
+
 	"github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/image"
 )
@@ -161,12 +163,47 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 		vncPort = p.findAvailablePort(59000, reserved)
 	}
 
-	// 6. Save Initial State (with GUI preference, SSH user, and assigned ports)
-	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser); err != nil {
+	// 5.1. Custom Port Assignment
+	// Implements Sections 5.4.B and 8.1 of advanced-port-forwarding.md.
+	for i := range opts.Forwarding {
+		if opts.Forwarding[i].HostPort == 0 {
+			// Find a port in the configured range
+			pRangeStart := p.Config.PortRangeStart
+			pRangeEnd := p.Config.PortRangeEnd
+			if pRangeStart == 0 {
+				pRangeStart = 30000
+			}
+			if pRangeEnd == 0 {
+				pRangeEnd = 32767
+			}
+
+			// Mark current selections as reserved to avoid collisions within the same VM spawn
+			reserved[sshPort] = true
+			if vncPort > 0 {
+				reserved[vncPort] = true
+			}
+			for _, f := range opts.Forwarding {
+				if f.HostPort > 0 {
+					reserved[f.HostPort] = true
+				}
+			}
+
+			// Use internal nidonet package for scanning
+			hp, err := nidonet.FindAvailablePort(pRangeStart, pRangeEnd, reserved)
+			if err != nil {
+				return fmt.Errorf("failed to allocate host port for %s: %w", opts.Forwarding[i].Label, err)
+			}
+			opts.Forwarding[i].HostPort = hp
+			reserved[hp] = true
+		}
+	}
+
+	// 6. Save Initial State (with GUI preference, SSH user, assigned ports, and forwardings)
+	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser, opts.Forwarding); err != nil {
 		return fmt.Errorf("failed to save initial state: %w", err)
 	}
 
-	// 6. Start
+	// 7. Start
 	return p.Start(name, opts)
 }
 
@@ -220,11 +257,12 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 		updated = true
 	}
 	if updated {
-		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser)
+		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding)
 	}
 
 	// 3. Build Arguments (cross-platform)
-	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, runDir)
+	// Implements Sections 5.4.C and 11.Phase1.4 of advanced-port-forwarding.md.
+	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, state.Forwarding, runDir)
 
 	cmd := exec.Command("qemu-system-x86_64", args...)
 	// In TUI mode, we should NOT print to stderr/stdout as it corrupts the UI.
@@ -258,7 +296,7 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	}
 
 	// 6. Update State with PID (0 if unknown)
-	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser)
+	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding)
 
 	return nil
 }
@@ -266,7 +304,7 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 // buildQemuArgs constructs the heavy-duty command line arguments for QEMU.
 // It detects the host OS to enable hardware acceleration: KVM for Linux,
 // HVF for macOS, and WHPX for Windows.
-func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort int, runDir string) []string {
+func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort int, fw []PortForward, runDir string) []string {
 	args := []string{
 		"-name", name,
 		"-m", "2048",
@@ -296,7 +334,7 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", diskPath),
 		"-daemonize",
 		"-pidfile", filepath.Join(runDir, name+".pid"),
-		"-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", sshPort),
+		"-netdev", p.BuildNetDevArgs(sshPort, fw),
 		"-device", "virtio-net-pci,netdev=net0",
 		"-boot", "menu=off,strict=on,splash-time=0", // Fast boot: skip menu, no splash timeout
 		"-serial", "file:"+filepath.Join(runDir, name+".serial.log"),
@@ -362,14 +400,14 @@ func (p *QemuProvider) List() ([]VMStatus, error) {
 			// Stop() removes pid/qmp but currently leaves json? No, Stop() doesn't remove json in qemu.go currently.
 			// Let's check Stop implementation. It removes pid, qmp. It does NOT remove json.
 			vmState, _ := p.loadState(name)
-
 			results = append(results, VMStatus{
-				Name:    name,
-				State:   stateStr,
-				PID:     pid,
-				SSHPort: vmState.SSHPort,
-				SSHUser: vmState.SSHUser,
-				VNCPort: vmState.VNCPort, // Added VNCPort to struct if available
+				Name:       name,
+				State:      stateStr,
+				PID:        pid,
+				SSHPort:    vmState.SSHPort,
+				SSHUser:    vmState.SSHUser,
+				VNCPort:    vmState.VNCPort,
+				Forwarding: vmState.Forwarding,
 			})
 		}
 	}
@@ -420,6 +458,7 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 		SSHUser:        state.SSHUser,
 		SSHPort:        state.SSHPort,
 		VNCPort:        state.VNCPort,
+		Forwarding:     state.Forwarding,
 		DiskPath:       diskPath,
 		DiskMissing:    statErr != nil,
 		BackingPath:    backingPath,
@@ -632,16 +671,25 @@ func (p *QemuProvider) findAvailablePort(start int, reserved map[int]bool) int {
 }
 
 type VMState struct {
-	Name    string `json:"name"`
-	PID     int    `json:"pid"`
-	SSHPort int    `json:"ssh_port"`
-	VNCPort int    `json:"vnc_port,omitempty"`
-	Gui     bool   `json:"gui,omitempty"`
-	SSHUser string `json:"ssh_user,omitempty"`
+	Name       string        `json:"name"`
+	PID        int           `json:"pid"`
+	SSHPort    int           `json:"ssh_port"`
+	VNCPort    int           `json:"vnc_port,omitempty"`
+	Gui        bool          `json:"gui,omitempty"`
+	SSHUser    string        `json:"ssh_user,omitempty"`
+	Forwarding []PortForward `json:"forwarding,omitempty"`
 }
 
-func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser string) error {
-	state := VMState{Name: name, PID: pid, SSHPort: sshPort, VNCPort: vncPort, Gui: gui, SSHUser: sshUser}
+func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser string, fw []PortForward) error {
+	state := VMState{
+		Name:       name,
+		PID:        pid,
+		SSHPort:    sshPort,
+		VNCPort:    vncPort,
+		Gui:        gui,
+		SSHUser:    sshUser,
+		Forwarding: fw,
+	}
 	data, _ := json.MarshalIndent(state, "", "  ")
 	return os.WriteFile(filepath.Join(p.RootDir, "run", name+".json"), data, 0644)
 }
@@ -654,6 +702,24 @@ func (p *QemuProvider) loadState(name string) (VMState, error) {
 	}
 	err = json.Unmarshal(data, &state)
 	return state, err
+}
+
+// BuildNetDevArgs translates state to QEMU runtime arguments.
+// Implements Section 5.4.C of advanced-port-forwarding.md.
+func (p *QemuProvider) BuildNetDevArgs(sshPort int, fw []PortForward) string {
+	fwd := fmt.Sprintf("tcp::%d-:22", sshPort)
+	for _, f := range fw {
+		proto := f.Protocol
+		if proto == "" {
+			proto = "tcp"
+		}
+		// If HostPort is 0, it means it's not yet allocated or failed.
+		// Usually we allocate before calling this.
+		if f.HostPort > 0 {
+			fwd += fmt.Sprintf(",hostfwd=%s::%d-:%d", proto, f.HostPort, f.GuestPort)
+		}
+	}
+	return fmt.Sprintf("user,id=net0,hostfwd=%s", fwd)
 }
 
 func (p *QemuProvider) SSHCommand(name string) (string, error) {
@@ -996,6 +1062,71 @@ func (p *QemuProvider) CacheRemove(name, version string) error {
 	}
 
 	return os.Remove(fullPath)
+}
+
+func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, error) {
+	state, err := p.loadState(name)
+	if err != nil {
+		return pf, err
+	}
+
+	// Allocate HostPort if 0
+	if pf.HostPort == 0 {
+		reserved := p.getReservedPorts()
+		pRangeStart := p.Config.PortRangeStart
+		pRangeEnd := p.Config.PortRangeEnd
+		if pRangeStart == 0 {
+			pRangeStart = 30000
+		}
+		if pRangeEnd == 0 {
+			pRangeEnd = 32767
+		}
+
+		hp, err := nidonet.FindAvailablePort(pRangeStart, pRangeEnd, reserved)
+		if err != nil {
+			return pf, err
+		}
+		pf.HostPort = hp
+	}
+
+	// Check if GuestPort already forwarded for this protocol
+	for i, f := range state.Forwarding {
+		if f.GuestPort == pf.GuestPort && f.Protocol == pf.Protocol {
+			// Update existing rule
+			state.Forwarding[i] = pf
+			p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding)
+			return pf, nil
+		}
+	}
+
+	// Add new rule
+	state.Forwarding = append(state.Forwarding, pf)
+	err = p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding)
+	return pf, err
+}
+
+func (p *QemuProvider) PortUnforward(name string, guestPort int, protocol string) error {
+	state, err := p.loadState(name)
+	if err != nil {
+		return err
+	}
+
+	for i, f := range state.Forwarding {
+		if f.GuestPort == guestPort && (f.Protocol == protocol || protocol == "") {
+			state.Forwarding = append(state.Forwarding[:i], state.Forwarding[i+1:]...)
+			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding)
+		}
+	}
+
+	return fmt.Errorf("port mapping not found: %d/%s", guestPort, protocol)
+}
+
+func (p *QemuProvider) PortList(name string) ([]PortForward, error) {
+	state, err := p.loadState(name)
+	if err != nil {
+		return nil, err
+	}
+	return state.Forwarding, nil
 }
 
 func formatBytes(bytes int64) string {

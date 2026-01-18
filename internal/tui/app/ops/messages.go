@@ -1,5 +1,9 @@
 package ops
 
+import (
+	"github.com/Josepavese/nido/internal/provider"
+)
+
 // RequestSpawnMsg requests a VM spawn.
 type RequestSpawnMsg struct {
 	Name     string
@@ -7,6 +11,7 @@ type RequestSpawnMsg struct {
 	IsFile   bool
 	UserData string
 	GUI      bool
+	Ports    []provider.PortForward
 }
 
 // RequestCreateTemplateMsg requests a template creation.

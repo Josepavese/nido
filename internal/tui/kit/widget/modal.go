@@ -34,6 +34,9 @@ type Modal struct {
 	MessageAlign lipgloss.Position
 }
 
+func (m *Modal) SetWidth(w int)  { m.width = w }
+func (m *Modal) SetHeight(h int) { m.height = h }
+
 func NewModal(title, message string, onConfirm, onCancel func() tea.Cmd) *Modal {
 	return &Modal{
 		Title:        title,
