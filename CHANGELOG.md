@@ -5,6 +5,21 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.2] - 2026-01-18 "The Bulletproof Nest" 🛡️🪺
+
+### ✨ New Toys
+
+- **Nido Validator:** A new CLI tool `nido-validator` for contributors. It puts the nest through a rigorous bootcamp, verifying CLI commands and MCP protocols. Perfect for ensuring your code doesn't break the matrix. 🏋️‍♂️
+
+### 🔧 Fixes & Polish
+
+- **Evolution Protocol Repaired:** The `update` command now correctly identifies empty releases and reports errors with surgical precision ("Binary not found" vs "exit status 1"). 🏥
+- **Pipeline Hardening:** Our release droids now refuse to ship empty crates. The CI workflow explicitly verifies asset existence before publishing. 🤖
+- **TUI Synchronization:**
+  - **ASCII Validation:** Swapped emojis for rock-solid ASCII `[!]` indicators.
+  - **Focus Logic:** `Tab` navigation now dives deep into nested rows (like port forwarding controls).
+  - **Layout:** Reverted specific config pages to 50/50 splits for visual harmony.
+
 ## [4.4.1] - 2026-01-18 "The Polished Nest" 🧼🪺
 
 ### 🎉 Major Features

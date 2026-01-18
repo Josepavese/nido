@@ -178,8 +178,9 @@ Every VM you spawn is just a **diff layer** (mutation) on top of that ROM.
 
 1. Fork the repo.
 2. `go run ./cmd/nido gui` to test the Arcade UI.
-3. Submit a PR.
-4. High Scores are recorded in `AUTHORS`.
+3. Run `go run ./cmd/nido-validator` to insure your code withstands the pressure.
+4. Submit a PR.
+5. High Scores are recorded in `AUTHORS`.
 
 ## 📜 License
 
