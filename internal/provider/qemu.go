@@ -466,6 +466,15 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 	}, nil
 }
 
+// safeRemove removes a file but ignores "not found" errors.
+func safeRemove(path string) error {
+	err := os.Remove(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 // backingInfo returns backing filename and whether it's missing.
 func backingInfo(diskPath string) (string, bool) {
 	if diskPath == "" {
@@ -512,14 +521,15 @@ func (p *QemuProvider) Stop(name string, graceful bool) error {
 	return nil
 }
 
-// Delete evicts a VM from the nest permanently. No going back.
 func (p *QemuProvider) Delete(name string) error {
 	p.Stop(name, false)
 	vmsDir := filepath.Join(p.RootDir, "vms")
 	diskPath := filepath.Join(vmsDir, name+".qcow2")
-	os.Remove(filepath.Join(p.RootDir, "run", name+".json"))
-	os.Remove(filepath.Join(vmsDir, name+"-seed.iso"))
-	return os.Remove(diskPath)
+
+	// We use safeRemove for all files to be idempotent
+	_ = safeRemove(filepath.Join(p.RootDir, "run", name+".json"))
+	_ = safeRemove(filepath.Join(vmsDir, name+"-seed.iso"))
+	return safeRemove(diskPath)
 }
 
 // CreateTemplate archives a VM into "cold storage" (a compressed qcow2).
@@ -550,31 +560,25 @@ func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (strin
 
 func (p *QemuProvider) DeleteTemplate(name string, force bool) error {
 	templatePath := filepath.Join(p.Config.BackupDir, name+".compact.qcow2")
-	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
-		return fmt.Errorf("template not found: %s", name)
-	}
 
 	// Safety Check: Is it in use?
 	if !force {
-		used, err := p.GetUsedBackingFiles()
-		if err != nil {
-			return fmt.Errorf("failed to check template usage: %v", err)
-		}
-		// used contains absolute paths. We need to check if our template path is in there.
-		// There's a slight risk of path mismatch (abs vs relative), so we resolve both.
-		absTemplate, err := filepath.Abs(templatePath)
-		if err != nil {
-			absTemplate = templatePath
-		}
-
-		for _, u := range used {
-			if u == absTemplate || u == templatePath {
-				return fmt.Errorf("template '%s' is in use by one or more VMs (use --force to override)", name)
+		// We only check usage if the template actually exists
+		if _, err := os.Stat(templatePath); err == nil {
+			used, err := p.GetUsedBackingFiles()
+			if err != nil {
+				return fmt.Errorf("failed to check template usage: %v", err)
+			}
+			absTemplate, _ := filepath.Abs(templatePath)
+			for _, u := range used {
+				if u == absTemplate || u == templatePath {
+					return fmt.Errorf("template '%s' is in use by one or more VMs (use --force to override)", name)
+				}
 			}
 		}
 	}
 
-	return os.Remove(templatePath)
+	return safeRemove(templatePath)
 }
 
 // CreateDisk prepares the execution surface (the qcow2 file).

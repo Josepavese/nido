@@ -62,9 +62,9 @@ func main() {
 		cmdGUI(prov, cfg)
 	case "update":
 		cmdUpdate(nidoDir)
-	case "mcp-json-list":
-		// Secret handshake for MCP servers to list VMs efficiently
-		cmdMcpJsonList(prov)
+	case "mcp-help":
+		// List MCP tools and their schemas
+		cmdMcpHelp()
 	case "ls", "list":
 		// Scan the nest and report all detected life forms
 		jsonOut, _ := consumeJSONFlag(args)
@@ -882,6 +882,15 @@ func cmdCompletion(bashOrZsh string) {
 		ui.Error("Unsupported shell: %s. Only bash and zsh are supported.", bashOrZsh)
 		os.Exit(1)
 	}
+}
+
+// cmdMcpHelp emits the MCP tool catalog as JSON for clients.
+func cmdMcpHelp() {
+	tools := mcp.ToolsCatalog()
+	resp := clijson.NewResponseOK("mcp-help", map[string]interface{}{
+		"tools": tools,
+	})
+	_ = clijson.PrintJSON(resp)
 }
 
 func getBashCompletion() string {
