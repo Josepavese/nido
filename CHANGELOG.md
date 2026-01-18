@@ -5,6 +5,19 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.1] - 2026-01-18 "The Polished Nest" 🧼🪺
+
+### 🎉 Major Features
+
+- **Desktop Integration:** Native launcher icons and shortcuts for Linux (with improved ~/.desktop entries), macOS (App Bundles), and Windows (Start Menu). Use `nido` like a real desktop app! 🖥️
+- **Uninstall Protocol:** Added `nido uninstall`. A "nuclear option" that cleanly removes the binary, data directory (~/.nido), shell config lines, and all desktop shortcuts. 🧹
+- **New Iconography:** Default icon updated to an 80s-themed pixel art CRT nest. Retains the "nerdy" soul of the project. 🕹️
+
+### 🔧 Improvements
+
+- **TUI Synchronization:** Merged experimental TUI features relative to configuration pages and modal styling.
+- **Housekeeping:** Removed legacy debug/repro scripts that cluttered the repo.
+
 ## [4.4.0] - 2026-01-16 "The Arcade Nest" 🕹️🐦
 
 ### 🎉 Major Features

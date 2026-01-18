@@ -1,4 +1,4 @@
-# 🪺 nido
+# ![Nido 80s Banner](resources/nido_header_80s.png)
 
 Hatch a VM, do the work, let it fly away. Your AI agents will feel at home.
 
