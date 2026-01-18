@@ -9,6 +9,25 @@ import (
 	"strings"
 )
 
+// VMName validates VM names: 1-32 chars, alnum, hyphen, underscore; must not start with hyphen/underscore and no dots/spaces.
+func VMName(s string) error {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return fmt.Errorf("name cannot be empty")
+	}
+	if len(s) > 32 {
+		return fmt.Errorf("name too long (max 32 chars)")
+	}
+	pattern := regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`)
+	if !pattern.MatchString(s) {
+		return fmt.Errorf("invalid name (only alnum, -, _, no leading symbol)")
+	}
+	if strings.Contains(s, ".") || strings.Contains(s, " ") {
+		return fmt.Errorf("invalid name (no dots or spaces)")
+	}
+	return nil
+}
+
 // FilePath validates that a path exists and is readable.
 func FilePath(s string) error {
 	s = strings.TrimSpace(s)

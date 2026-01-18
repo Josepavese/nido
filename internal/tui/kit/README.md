@@ -50,6 +50,7 @@ The `widget.Form` allows you to build complex forms declaratively using a list o
     ```
 
 * **`Button`**: An action button.
+  * `Centered: true`: Centers the button text and removes the label (useful for inline actions).
 
     ```go
     widget.NewButton("Label", "Button Text", actionFunc)
@@ -57,7 +58,7 @@ The `widget.Form` allows you to build complex forms declaratively using a list o
     widget.NewSubmitButton("Label", "Submit", actionFunc)
     ```
 
-* **`Row`**: Horizontal layout container for elements.
+* **`Row`**: Horizontal layout container for elements. Implements `Navigator` interface to support seamless `Tab` cycling through its children.
 
     ```go
     // Equal width distribution
