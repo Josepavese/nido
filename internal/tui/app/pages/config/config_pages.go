@@ -94,14 +94,7 @@ func (p *ConfigPageGlobalForm) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 		return p, nil
 	}
 
-	if msg, ok := msg.(tea.KeyMsg); ok && !p.Modal.IsActive() {
-		switch msg.String() {
-		case "tab":
-			return p, p.Form.NextField()
-		case "shift+tab":
-			return p, p.Form.PrevField()
-		}
-	}
+	// Tab handling delegated to Form widget
 
 	if p.Modal.IsActive() {
 		newModal, cmd := p.Modal.Update(msg)
@@ -168,6 +161,13 @@ func (p *ConfigPageGlobalForm) HasActiveFocus() bool {
 	return p.Form != nil && p.Form.HasActiveFocus()
 }
 
+func (p *ConfigPageGlobalForm) Focusable() bool {
+	if p.Form == nil {
+		return false
+	}
+	return p.Form.Focusable()
+}
+
 func (p *ConfigPageGlobalForm) Shortcuts() []fv.Shortcut {
 	if p.IsModalActive() {
 		return []fv.Shortcut{
@@ -202,10 +202,10 @@ func NewConfigPageUpdate(parent *Config) *ConfigPageUpdate {
 	p := &ConfigPageUpdate{Parent: parent}
 	p.Header = widget.NewCard(theme.IconTemplate, "Evolution", "Check for newer versions")
 
-	p.Current = widget.NewInput("Current Version", build.Version, nil)
+	p.Current = widget.NewInput("Current", build.Version, nil)
 	p.Current.Disabled = true
 
-	p.Latest = widget.NewInput("Latest Version", "Loading...", nil)
+	p.Latest = widget.NewInput("Latest", "Loading...", nil)
 	p.Latest.Disabled = true
 
 	p.CheckButton = widget.NewSubmitButton("Action", "CHECK", func() tea.Cmd {
@@ -334,6 +334,13 @@ func (p *ConfigPageUpdate) HasActiveFocus() bool {
 	return p.Form != nil && p.Form.HasActiveFocus()
 }
 
+func (p *ConfigPageUpdate) Focusable() bool {
+	if p.Form == nil {
+		return false
+	}
+	return p.Form.Focusable()
+}
+
 func (p *ConfigPageUpdate) Shortcuts() []fv.Shortcut {
 	if p.IsModalActive() {
 		return []fv.Shortcut{
@@ -410,6 +417,13 @@ func (p *ConfigPageCache) HasActiveTextInput() bool {
 
 func (p *ConfigPageCache) HasActiveFocus() bool {
 	return p.Form != nil && p.Form.HasActiveFocus()
+}
+
+func (p *ConfigPageCache) Focusable() bool {
+	if p.Form == nil {
+		return false
+	}
+	return p.Form.Focusable()
 }
 
 func (p *ConfigPageCache) Shortcuts() []fv.Shortcut {
@@ -528,6 +542,13 @@ func (p *ConfigPageDoctor) HasActiveTextInput() bool {
 
 func (p *ConfigPageDoctor) HasActiveFocus() bool {
 	return p.Form != nil && p.Form.HasActiveFocus()
+}
+
+func (p *ConfigPageDoctor) Focusable() bool {
+	if p.Form == nil {
+		return false
+	}
+	return p.Form.Focusable()
 }
 
 func (p *ConfigPageDoctor) Shortcuts() []fv.Shortcut {
@@ -712,14 +733,7 @@ func (p *ConfigPageAppearance) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 		return p, nil
 	}
 
-	if msg, ok := msg.(tea.KeyMsg); ok && !p.IsModalActive() {
-		switch msg.String() {
-		case "tab":
-			return p, p.Form.NextField()
-		case "shift+tab":
-			return p, p.Form.PrevField()
-		}
-	}
+	// Tab handling delegated to Form widget
 
 	if p.ThemeModal.IsActive() {
 		_, cmd := p.ThemeModal.Update(msg)
@@ -800,6 +814,13 @@ func (p *ConfigPageAppearance) HasActiveTextInput() bool {
 
 func (p *ConfigPageAppearance) HasActiveFocus() bool {
 	return p.Form != nil && p.Form.HasActiveFocus()
+}
+
+func (p *ConfigPageAppearance) Focusable() bool {
+	if p.Form == nil {
+		return false
+	}
+	return p.Form.Focusable()
 }
 
 func (p *ConfigPageAppearance) Shortcuts() []fv.Shortcut {
@@ -923,6 +944,13 @@ func (p *ConfigPageUninstall) HasActiveTextInput() bool {
 
 func (p *ConfigPageUninstall) HasActiveFocus() bool {
 	return p.Form != nil && p.Form.HasActiveFocus()
+}
+
+func (p *ConfigPageUninstall) Focusable() bool {
+	if p.Form == nil {
+		return false
+	}
+	return p.Form.Focusable()
 }
 
 func (p *ConfigPageUninstall) IsModalActive() bool {

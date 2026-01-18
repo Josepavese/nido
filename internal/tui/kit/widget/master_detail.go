@@ -78,11 +78,31 @@ func (m *MasterDetail) Update(msg tea.Msg) (viewlet.Viewlet, tea.Cmd) {
 	if kmsg, ok := msg.(tea.KeyMsg); ok && !m.IsModalActive() {
 		switch kmsg.String() {
 		case "tab", "right":
-			if m.ActiveFocus == FocusSidebar && m.Pages.Focusable() {
+			// Only switch focus if the active pane doesn't need the tab (i.e. no inputs)
+			// OR if we are in sidebar (no inputs usually)
+			shouldSwitch := true
+			if m.ActiveFocus == FocusDetail {
+				if m.Pages.HasActiveTextInput() {
+					shouldSwitch = false
+				}
+			}
+
+			if shouldSwitch && m.ActiveFocus == FocusSidebar && m.Pages.Focusable() {
 				cmds = append(cmds, m.SetFocus(FocusDetail))
 			}
 		case "shift+tab", "left", "esc":
-			if m.ActiveFocus == FocusDetail {
+			// Escape always goes back.
+			// Left always goes back.
+			// Shift+Tab go back ONLY if no input active?
+			// Actually Shift+Tab usually cycles backwards in form.
+			shouldSwitch := true
+			if kmsg.String() == "shift+tab" && m.ActiveFocus == FocusDetail {
+				if m.Pages.HasActiveTextInput() {
+					shouldSwitch = false
+				}
+			}
+
+			if shouldSwitch && m.ActiveFocus == FocusDetail {
 				cmds = append(cmds, m.SetFocus(FocusSidebar))
 			}
 		case "enter":

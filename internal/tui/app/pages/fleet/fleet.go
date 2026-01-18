@@ -498,8 +498,7 @@ type ComponentsDetail struct {
 	sshInput *widget.Input
 	vncInput *widget.Input
 
-	diskInput  *widget.Input
-	portsInput *widget.Input
+	diskInput *widget.Input
 }
 
 func NewComponentsDetail(parent *Fleet) *ComponentsDetail {
@@ -528,9 +527,6 @@ func NewComponentsDetail(parent *Fleet) *ComponentsDetail {
 	c.diskInput = widget.NewInput("Disk", "", nil)
 	c.diskInput.Disabled = true
 
-	c.portsInput = widget.NewInput("Ports", "", nil)
-	c.portsInput.Disabled = true
-
 	// Build form with rows
 	c.rebuildForm()
 
@@ -538,19 +534,68 @@ func NewComponentsDetail(parent *Fleet) *ComponentsDetail {
 }
 
 func (c *ComponentsDetail) rebuildForm() {
-	// 1. Standard Row (2 cols)
-	row1 := widget.NewRow(c.pidInput, c.ipInput)
+	var elements []widget.Element
 
-	// 2. Ports Row (2 cols)
-	row2 := widget.NewRow(c.sshInput, c.vncInput)
+	// 1. Header
+	elements = append(elements, c.header)
 
-	c.Form = widget.NewForm(
-		c.header,
-		row1,
-		row2,
-		c.diskInput,
-		c.portsInput,
-	)
+	// 2. Standard Row (2 cols)
+	elements = append(elements, widget.NewRow(c.pidInput, c.ipInput))
+
+	// 3. Ports Row (2 cols)
+	elements = append(elements, widget.NewRow(c.sshInput, c.vncInput))
+
+	// 4. Disk
+	elements = append(elements, c.diskInput)
+
+	// 5. Dynamic Ports
+	forwarding := c.Parent.detail.Forwarding
+	if len(forwarding) > 0 {
+		// Header for ports section? Or just rows
+		// User requested: label + proto | guest | host
+
+		for _, pf := range forwarding {
+			// Col 1: Label (+Proto)
+			lbl := pf.Label
+			if lbl == "" {
+				lbl = "-"
+			}
+			if pf.Protocol != "" {
+				lbl = fmt.Sprintf("%s (%s)", lbl, pf.Protocol)
+			}
+			btnLabel := widget.NewButton("Port", lbl, nil)
+			btnLabel.Disabled = true
+			btnLabel.Centered = true
+
+			// Col 2: Guest
+			btnGuest := widget.NewButton("Guest", fmt.Sprintf("%d", pf.GuestPort), nil)
+			btnGuest.Disabled = true
+			btnGuest.Centered = true
+
+			// Col 3: Host
+			btnHost := widget.NewButton("Host", fmt.Sprintf("%d", pf.HostPort), nil)
+			btnHost.Disabled = true
+			btnHost.Centered = true
+
+			// Weight 2:1:1 or 1:1:1? User said "all 3 on same row"
+			// Label can be long, so maybe 2:1:1
+			elements = append(elements, widget.NewRowWithWeights(
+				[]widget.Element{btnLabel, btnGuest, btnHost},
+				[]int{2, 1, 1},
+			))
+		}
+	} else {
+		// Show "No Ports" placeholder?
+		// User didn't ask for a placeholder, but maybe useful.
+		// For now, if empty, we show nothing extra or maybe a "Ports: None" disabled input?
+		// Existing code used c.portsInput.SetValue("None").
+		// If we want to keep that behavior:
+		noPorts := widget.NewInput("Ports", "None", nil)
+		noPorts.Disabled = true
+		elements = append(elements, noPorts)
+	}
+
+	c.Form = widget.NewForm(elements...)
 	c.Form.Spacing = 0
 }
 
@@ -595,24 +640,8 @@ func (c *ComponentsDetail) UpdateDetail(d FleetDetail) {
 		c.diskInput.Error = "Backing file (template) missing"
 	}
 
-	// Update ports
-	if len(d.Forwarding) == 0 {
-		c.portsInput.SetValue("None")
-	} else {
-		var pfStrings []string
-		for _, pf := range d.Forwarding {
-			label := pf.Label
-			if label == "" {
-				label = fmt.Sprintf("%d/%s", pf.GuestPort, pf.Protocol)
-			}
-			pfStrings = append(pfStrings, fmt.Sprintf("%s ⮕  %d", label, pf.HostPort))
-		}
-		c.portsInput.SetValue(strings.Join(pfStrings, ", "))
-	}
-
-	// Update button states and labels
-
-	// No buttons to update state for anymore as they are now keyboard shortcuts
+	// Update form structure with new ports
+	c.rebuildForm()
 }
 
 func (c *ComponentsDetail) openSSH() tea.Cmd {

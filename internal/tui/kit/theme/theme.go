@@ -127,7 +127,8 @@ func Current() Theme {
 
 	// 2. Check Registry
 	if p, ok := registry[mode]; ok {
-		return buildTheme(p, false)
+		isDark := mode == "dark"
+		return buildTheme(p, isDark)
 	}
 
 	// 3. Fallback / Auto Logic

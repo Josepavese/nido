@@ -32,10 +32,9 @@ const (
 	IconSelfDestruct = "🍳"  // The Nest is Cooked
 
 	// Fleet States
-	IconBird         = "🐦" // Running
-	IconSleep        = "💤" // Stopped
-	IconLayout       = "🎨" // Appearance / Rice
-	IconSelfDestruct = "🍳" // The Nest is Cooked
+	IconBird   = "🐦" // Running
+	IconSleep  = "💤" // Stopped
+	IconLayout = "🎨" // Appearance / Rice
 )
 
 // IconForType maps a string type (e.g., from API or config) to an icon.

@@ -32,6 +32,7 @@ type Input struct {
 	Filter     func(rune) bool
 	focused    bool
 	width      int
+	Multiline  bool // New: Allow wrapping if true
 }
 
 func NewInput(label, placeholder string, validator func(string) error) *Input {
@@ -50,10 +51,11 @@ func (i *Input) Focus() tea.Cmd {
 	i.focused = true
 	return i.InputModel.Focus()
 }
-func (i *Input) Blur()             { i.focused = false; i.InputModel.Blur() }
-func (i *Input) SetWidth(w int)    { i.width = w; i.updateInputWidth() }
-func (i *Input) Value() string     { return i.InputModel.Value() }
-func (i *Input) SetValue(s string) { i.InputModel.SetValue(s) }
+func (i *Input) Blur()              { i.focused = false; i.InputModel.Blur() }
+func (i *Input) SetWidth(w int)     { i.width = w; i.updateInputWidth() }
+func (i *Input) Value() string      { return i.InputModel.Value() }
+func (i *Input) SetValue(s string)  { i.InputModel.SetValue(s) }
+func (i *Input) SetCharLimit(n int) { i.InputModel.CharLimit = n }
 func (i *Input) updateInputWidth() {
 	// Sync strictly with RenderBoxedField logic
 	labelWidth := theme.Width.Label
@@ -65,7 +67,7 @@ func (i *Input) updateInputWidth() {
 	// If Error is present, Validation adds " 🔺" (len 2)
 	validationWidth := 1 // Default safety padding
 	if i.Error != "" {
-		validationWidth = 3 // 2 for icon + 1 extra safety
+		validationWidth = 4 // 3 for " [!]" + 1 safety
 	}
 
 	inner := i.width - 4 - labelWidth - validationWidth
@@ -163,16 +165,36 @@ func (i *Input) View(width int) string {
 		)
 	}
 
-	return RenderBoxedField(i.Label, i.InputModel.View(), i.Error, i.focused && !i.Disabled, i.width, lipgloss.Left, nil)
+	// If Disabled, bypass InputModel.View() to avoid ghost cursors/highlights
+	var content string
+	if i.Disabled {
+		val := i.InputModel.Value()
+		// If empty, show placeholder?
+		if val == "" {
+			content = i.InputModel.Placeholder
+			// Placeholder usually dim?
+			// Let's use TextDim for placeholder if we touch it, but Value for value.
+			// But for now, sticking to logic implies:
+			// If value, use Value style.
+		} else {
+			// Apply Theme Value Style to raw string
+			content = theme.Current().Styles.Value.Render(val)
+		}
+	} else {
+		content = i.InputModel.View()
+	}
+
+	return RenderBoxedField(i.Label, content, i.Error, i.focused && !i.Disabled, i.width, lipgloss.Left, nil, i.Multiline)
 }
 
 // --- 3. Toggle Element ---
 type Toggle struct {
-	Label    string
-	Checked  bool
-	Disabled bool
-	focused  bool
-	width    int
+	Label     string
+	Checked   bool
+	Disabled  bool
+	focused   bool
+	width     int
+	Multiline bool
 }
 
 func NewToggle(label string, initial bool) *Toggle {
@@ -216,7 +238,7 @@ func (t *Toggle) View(width int) string {
 		state = "[ ON ]"
 		st = lipgloss.NewStyle().Foreground(theme.Current().Palette.Success).Bold(true)
 	}
-	return RenderBoxedField(t.Label, st.Render(state), "", t.focused && !t.Disabled, width, lipgloss.Left, nil)
+	return RenderBoxedField(t.Label, st.Render(state), "", t.focused && !t.Disabled, width, lipgloss.Left, nil, t.Multiline)
 }
 
 // --- 4. Action Button Element ---
@@ -226,6 +248,8 @@ const (
 	RoleNormal ButtonRole = iota
 	RoleSubmit
 	RoleCancel
+	RoleDanger
+	RoleSuccess
 )
 
 type Button struct {
@@ -238,6 +262,8 @@ type Button struct {
 	width       int
 	Color       lipgloss.TerminalColor
 	BorderColor lipgloss.TerminalColor
+	Centered    bool
+	Multiline   bool
 }
 
 func NewButton(label, text string, action func() tea.Cmd) *Button {
@@ -280,7 +306,11 @@ func (b *Button) View(width int) string {
 	contStyle := lipgloss.NewStyle().Foreground(t.Palette.TextDim)
 	if b.focused {
 		var accent lipgloss.TerminalColor = t.Palette.Accent
-		if b.Color != nil {
+		if b.Role == RoleDanger {
+			accent = t.Palette.Error
+		} else if b.Role == RoleSuccess {
+			accent = t.Palette.Success
+		} else if b.Color != nil {
 			accent = b.Color
 		}
 		contStyle = lipgloss.NewStyle().Foreground(accent).Bold(true)
@@ -288,19 +318,23 @@ func (b *Button) View(width int) string {
 	// Pass center alignment for buttons and empty label if label is "SAVE" or specifically requested
 	displayLabel := b.Label
 	align := lipgloss.Left
-	if b.Role == RoleSubmit {
+	if b.Role == RoleSubmit || b.Centered {
 		displayLabel = "" // Centered buttons usually don't need a label
 		align = lipgloss.Center
 	}
 
 	bc := b.BorderColor
 	if bc == nil && b.focused {
-		if b.Color != nil {
+		if b.Role == RoleDanger {
+			bc = t.Palette.Error
+		} else if b.Role == RoleSuccess {
+			bc = t.Palette.Success
+		} else if b.Color != nil {
 			bc = b.Color
 		}
 	}
 
-	return RenderBoxedField(displayLabel, contStyle.Render(b.Text), "", b.focused, width, align, bc)
+	return RenderBoxedField(displayLabel, contStyle.Render(b.Text), "", b.focused, width, align, bc, b.Multiline)
 }
 
 // --- Smart Form ---
@@ -314,14 +348,31 @@ type Form struct {
 func (f *Form) HasActiveTextInput() bool {
 	res := false
 	for _, el := range f.Elements {
+		// Check for direct Input
 		if input, ok := el.(*Input); ok {
 			if input.Focused() {
 				res = true
 				break
 			}
 		}
+		// Recursive check for containers (e.g. Row)
+		if container, ok := el.(interface{ HasActiveTextInput() bool }); ok {
+			if container.HasActiveTextInput() {
+				res = true
+				break
+			}
+		}
 	}
 	return res
+}
+
+func (f *Form) Focusable() bool {
+	for _, el := range f.Elements {
+		if el.Focusable() {
+			return true
+		}
+	}
+	return false
 }
 
 func (f *Form) HasActiveFocus() bool {
@@ -335,13 +386,22 @@ func (f *Form) HasActiveFocus() bool {
 
 func (f *Form) Validate() bool {
 	valid := true
+	// Recursive validation
+	var inputs []*Input
 	for _, el := range f.Elements {
 		if input, ok := el.(*Input); ok {
-			if input.Validator != nil {
-				if err := input.Validator(input.Value()); err != nil {
-					valid = false
-					input.Error = err.Error()
-				}
+			inputs = append(inputs, input)
+		}
+		if collector, ok := el.(interface{ CollectInputs() []*Input }); ok {
+			inputs = append(inputs, collector.CollectInputs()...)
+		}
+	}
+
+	for _, input := range inputs {
+		if input.Validator != nil {
+			if err := input.Validator(input.Value()); err != nil {
+				valid = false
+				input.Error = err.Error()
 			}
 		}
 	}
@@ -369,8 +429,9 @@ func (f *Form) nextFocus(dir int) {
 		}
 
 		if f.Elements[idx].Focusable() {
+			// Don't focus disabled submit buttons
 			if btn, ok := f.Elements[idx].(*Button); ok {
-				if btn.Role == RoleSubmit && !f.Validate() {
+				if btn.Role == RoleSubmit && btn.Disabled {
 					continue
 				}
 			}
@@ -392,8 +453,20 @@ func (f *Form) Focus() tea.Cmd {
 	return nil
 }
 
+// Navigator is an interface for elements that manage their own internal focus (like Row).
+type Navigator interface {
+	Next() bool
+	Prev() bool
+}
+
 func (f *Form) NextField() tea.Cmd {
 	if f.FocusIndex >= 0 {
+		// Check if current element can handle "Next" internally
+		if nav, ok := f.Elements[f.FocusIndex].(Navigator); ok {
+			if nav.Next() {
+				return f.Elements[f.FocusIndex].Focus()
+			}
+		}
 		f.Elements[f.FocusIndex].Blur()
 	}
 	f.nextFocus(1)
@@ -402,6 +475,12 @@ func (f *Form) NextField() tea.Cmd {
 
 func (f *Form) PrevField() tea.Cmd {
 	if f.FocusIndex >= 0 {
+		// Check if current element can handle "Prev" internally
+		if nav, ok := f.Elements[f.FocusIndex].(Navigator); ok {
+			if nav.Prev() {
+				return f.Elements[f.FocusIndex].Focus()
+			}
+		}
 		f.Elements[f.FocusIndex].Blur()
 	}
 	f.nextFocus(-1)
@@ -421,20 +500,54 @@ func (f *Form) Blur() {
 func (f *Form) Update(msg tea.Msg) (*Form, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	// REACTIVE VALIDATION:
+	// 2. Button Action Handling
+	// If form is invalid, we MUST disable Submit buttons eagerly
+	// to prevent Tab navigation from reaching them.
+	isValid := f.Validate() // Recursive Check
+
+	// Helper to update button state
+	updateButtonState := func(b *Button) {
+		if b.Role == RoleSubmit {
+			b.Disabled = !isValid
+		}
+	}
+
+	for _, el := range f.Elements {
+		if btn, ok := el.(*Button); ok {
+			updateButtonState(btn)
+		}
+		// RECURSIVE CHECK for Rows/Containers
+		if collector, ok := el.(interface{ CollectButtons() []*Button }); ok {
+			for _, btn := range collector.CollectButtons() {
+				updateButtonState(btn)
+			}
+		}
+	}
+	// Recursive check for buttons in Rows?
+	// Note: We might need a CollectButtons helper if we want to support Submit buttons in Rows too.
+	// For now, assume Submit buttons are top-level or ensure they are handled if in Rows.
+	// Since Row doesn't expose Elements easily for modification without casting...
+	// But in Nido, Submit buttons are usually top-level.
+
 	if kmsg, ok := msg.(tea.KeyMsg); ok {
 		switch kmsg.String() {
-		case "up":
+		case "up", "shift+tab":
 			cmds = append(cmds, f.PrevField())
 			return f, tea.Batch(cmds...)
-		case "down":
+		case "down", "tab":
 			cmds = append(cmds, f.NextField())
 			return f, tea.Batch(cmds...)
 		}
 	}
 
-	if f.FocusIndex >= 0 && f.FocusIndex < len(f.Elements) {
-		el, cmd := f.Elements[f.FocusIndex].Update(msg)
-		f.Elements[f.FocusIndex] = el
+	idx := f.FocusIndex // Cache index: callbacks inside Update might reset it (e.g. Blur)
+	if idx >= 0 && idx < len(f.Elements) {
+		el, cmd := f.Elements[idx].Update(msg)
+		// Check again if we're still in bounds (callbacks can do anything)
+		if idx >= 0 && idx < len(f.Elements) {
+			f.Elements[idx] = el
+		}
 		cmds = append(cmds, cmd)
 	}
 	return f, tea.Batch(cmds...)
@@ -502,7 +615,7 @@ func (f *Form) HandleMouse(x int, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
 }
 
 // Shared Renderer
-func RenderBoxedField(label, content, errorMsg string, focused bool, width int, align lipgloss.Position, forcedBorderColor lipgloss.TerminalColor) string {
+func RenderBoxedField(label, content, errorMsg string, focused bool, width int, align lipgloss.Position, forcedBorderColor lipgloss.TerminalColor, multiline bool) string {
 	t := theme.Current()
 
 	// 1. Determine Label Width
@@ -510,7 +623,7 @@ func RenderBoxedField(label, content, errorMsg string, focused bool, width int, 
 	if label == "" {
 		labelWidth = 0
 	} else if width > 0 && width < 34 {
-		labelWidth = 10 // Compact label for small boxes (enough for "SSH Port")
+		labelWidth = 14 // Compact label for small boxes (enough for "Linked Clones")
 	}
 
 	// 2. Define Styles
@@ -519,16 +632,15 @@ func RenderBoxedField(label, content, errorMsg string, focused bool, width int, 
 		MaxWidth(labelWidth).
 		Align(lipgloss.Left)
 
-	contentStyle := t.Styles.Value.Copy()
+	// Determine Border Color
 	var borderColor lipgloss.TerminalColor = t.Palette.SurfaceHighlight
 	validation := ""
 	if errorMsg != "" {
 		borderColor = t.Palette.Error
-		validation = lipgloss.NewStyle().Foreground(t.Palette.Error).Render(" 🔺")
+		validation = lipgloss.NewStyle().Foreground(t.Palette.Error).Render(" [!]")
 	} else if focused {
 		borderColor = t.Palette.Accent
 		labelStyle = labelStyle.Foreground(t.Palette.Accent).Bold(true)
-		contentStyle = contentStyle.Foreground(t.Palette.Accent).Bold(true)
 	}
 
 	if forcedBorderColor != nil {
@@ -546,8 +658,8 @@ func RenderBoxedField(label, content, errorMsg string, focused bool, width int, 
 	renderedLabel := ""
 	if label != "" {
 		if lipgloss.Width(label) > labelWidth {
-			if labelWidth > 3 {
-				label = label[:labelWidth-2] + "." // Compact truncation
+			if labelWidth > 1 { // Updated safety
+				label = label[:labelWidth-1] + "…" // Single char ellipsis
 			} else {
 				label = label[:labelWidth]
 			}
@@ -561,21 +673,23 @@ func RenderBoxedField(label, content, errorMsg string, focused bool, width int, 
 		contentAvail = 0
 	}
 
-	// 4. Truncate Content if necessary (Strict)
-	contentWidth := lipgloss.Width(content)
-	if contentWidth > contentAvail {
-		truncateLen := contentAvail
-		if truncateLen > 3 {
-			content = content[:truncateLen-3] + "..."
-		} else if truncateLen > 0 {
-			content = content[:truncateLen]
-		} else {
-			content = ""
-		}
+	// 4. Content Block (Strict single-line or multi-line)
+	contentStyle := t.Styles.Value.Copy()
+	if focused {
+		contentStyle = contentStyle.Foreground(t.Palette.Accent).Bold(true)
 	}
 
-	// 5. Compose Inner String (Force precisely innerWidth)
-	middleBlock := lipgloss.PlaceHorizontal(contentAvail, align, contentStyle.Render(content))
+	displayContent := content
+	if !multiline {
+		// MATHEMATICAL FIX: Use MaxHeight(1) to strictly prevent overflow/wrapping
+		// and MaxWidth to ensure it fits in the available space.
+		displayContent = lipgloss.NewStyle().
+			MaxWidth(contentAvail).
+			MaxHeight(1).
+			Render(content)
+	}
+
+	middleBlock := lipgloss.PlaceHorizontal(contentAvail, align, displayContent)
 
 	inner := lipgloss.JoinHorizontal(lipgloss.Top,
 		renderedLabel,

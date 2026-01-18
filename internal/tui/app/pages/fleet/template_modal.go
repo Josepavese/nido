@@ -14,18 +14,29 @@ type CreateTemplateModal struct {
 	KnownTemplates []string
 
 	// Component
-	Modal *widget.PromptModal
+	Modal *widget.FormModal
 }
 
 // NewCreateTemplateModal creates the modal.
 func NewCreateTemplateModal() *CreateTemplateModal {
-	m := &CreateTemplateModal{
-		Modal: widget.NewPromptModal("Create Template", "", "Template Name", "e.g. customized-ubuntu"),
-	}
+	m := &CreateTemplateModal{}
 
-	// Connect validation and submission
-	m.Modal.Input.Validator = m.Validate
-	m.Modal.OnSubmit = m.HandleSubmit
+	m.Modal = widget.NewFormModal(
+		"Create Template",
+		func(res map[string]string) tea.Cmd {
+			return m.HandleSubmit(res["name"])
+		},
+		nil, // Default cancel handles hiding
+	)
+
+	// Add the single input field
+	m.Modal.AddRow(&widget.FormEntry{
+		Key:         "name",
+		Label:       "Template Name",
+		Placeholder: "e.g. customized-ubuntu",
+		Validator:   m.Validate,
+		Width:       30,
+	})
 
 	return m
 }
@@ -55,8 +66,9 @@ func (m *CreateTemplateModal) HandleSubmit(name string) tea.Cmd {
 func (m *CreateTemplateModal) Show(vmName string, known []string) tea.Cmd {
 	m.VMName = vmName
 	m.KnownTemplates = known
-	m.Modal.Message = fmt.Sprintf("Create a template from '%s'", vmName)
-	return m.Modal.Show("")
+	m.Modal.Description = fmt.Sprintf("Create a template from '%s'", vmName)
+	m.Modal.Show()
+	return nil
 }
 
 // Hide closes the modal.

@@ -16,6 +16,7 @@ type Select struct {
 
 	// OnActivate is called when the user hits Enter while focused
 	OnActivate func() tea.Cmd
+	Multiline  bool
 }
 
 func NewSelect(label, value string, onActivate func() tea.Cmd) *Select {
@@ -90,14 +91,17 @@ func (s *Select) View(width int) string {
 		borderColor = t.Palette.Focus
 	}
 
+	// Apply Value style to text and chevron
+	val := t.Styles.Value.Render(s.Value + " ▼")
 	return RenderBoxedField(
 		s.Label,
-		s.Value+" ▼",
+		val,
 		"",
 		s.focused,
 		width,
 		lipgloss.Left,
 		borderColor,
+		s.Multiline,
 	)
 }
 

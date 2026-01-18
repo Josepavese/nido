@@ -43,12 +43,14 @@ type Incubator struct {
 	// State
 	SelectedSource *SourceItem
 	Form           *widget.Form
+	PendingPorts   []provider.PortForward
 
 	// Accessors for dynamic updates
 	header     *widget.Card
 	input      *widget.Input
-	portsInput *widget.Input
+	addPortBtn *widget.Button
 	toggle     *widget.Toggle
+	spawnBtn   *widget.Button
 
 	// Styles
 	LabelStyle  lipgloss.Style
@@ -81,38 +83,91 @@ func NewIncubator(parent *Hatchery) *Incubator {
 		return nil
 	})
 	// Real-time filtering for valid VM name characters
-	inc.input.Filter = func(r rune) bool {
-		return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.'
-	}
+	inc.input.Filter = widget.FilterHostName
 
-	// 2.1 Ports Input
-	// Implements Section 6.3 of advanced-port-forwarding.md.
-	inc.portsInput = widget.NewInput("Ports", "web:80:32080,8080", nil)
-	inc.portsInput.Filter = func(r rune) bool {
-		return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ':' || r == '/' || r == ',' || r == '.' || r == '-' || r == '_'
-	}
+	// 3. Ports List (Read Only) - INTEGRATED INTO FORM
 
-	// 3. Toggle
+	// 3b. Add Port Button
+	inc.addPortBtn = widget.NewButton("Ports", "Add Forwarding", func() tea.Cmd {
+		return inc.Parent.OpenAddPortModal()
+	})
+	inc.addPortBtn.Centered = true
+
+	// 4. Toggle
 	inc.toggle = widget.NewToggle("GUI Mode", true)
 
-	// 4. Action Button
-	// "Il testo del bottone puo essere Spawn" -> Content="SPAWN"
-	// "allineato a destra come le label" -> Label="Action" (Right aligned by kit)
-	btn := widget.NewSubmitButton("Action", "SPAWN", func() tea.Cmd {
+	// 5. Action Button
+	inc.spawnBtn = widget.NewSubmitButton("Action", "SPAWN", func() tea.Cmd {
 		return inc.submitSpawn()
 	})
 
-	inc.Form = widget.NewForm(
-		inc.header,
-		inc.input,
-		inc.portsInput,
-		inc.toggle,
-		btn,
-	)
-	// Enable configurable spacing if needed, defaults to 0
-	inc.Form.Spacing = 0
+	inc.rebuildForm()
 
 	return inc
+}
+
+func (i *Incubator) rebuildForm() {
+	var elements []widget.Element
+
+	// 1. Fixed Top
+	elements = append(elements, i.header)
+	elements = append(elements, i.input)
+
+	// 2. GUI Toggle + Add Port Btn (Weighted 1:1 for equal 50/50 split)
+	elements = append(elements, widget.NewRowWithWeights([]widget.Element{i.toggle, i.addPortBtn}, []int{1, 1}))
+
+	// 3. Dynamic Ports (if any)
+	if len(i.PendingPorts) > 0 {
+		for idx, p := range i.PendingPorts {
+			// Col 1: Label + Proto
+			lbl := p.Label
+			if lbl == "" {
+				lbl = "-"
+			}
+			proto := strings.ToUpper(p.Protocol)
+			if proto != "" {
+				lbl = fmt.Sprintf("%s (%s)", lbl, proto)
+			}
+			btnInfo := widget.NewButton("", lbl, nil)
+			btnInfo.Disabled = true
+			btnInfo.Centered = true
+
+			// Col 2: Host:Guest
+			hostVal := "Auto"
+			if p.HostPort > 0 {
+				hostVal = fmt.Sprint(p.HostPort)
+			}
+			val := fmt.Sprintf("%s : %d", hostVal, p.GuestPort)
+			btnValue := widget.NewButton("", val, nil)
+			btnValue.Disabled = true
+			btnValue.Centered = true
+
+			// Col 3: Delete Action
+			id := idx // capture for closure
+			btnDel := widget.NewButton("", "DEL", func() tea.Cmd {
+				return i.Parent.OpenDeletePortModal(id)
+			})
+			btnDel.Centered = true
+			btnDel.Role = widget.RoleDanger // Red when focused
+
+			// Add as a 3-column row
+			// Weights: 2, 2, 1 (Delete button smaller)
+			elements = append(elements, widget.NewRowWithWeights([]widget.Element{btnInfo, btnValue, btnDel}, []int{2, 2, 1}))
+		}
+	}
+
+	// 4. Action Button
+	elements = append(elements, i.spawnBtn)
+
+	// Preserve width if form already exists
+	w := 0
+	if i.Form != nil {
+		w = i.Form.Width
+	}
+
+	i.Form = widget.NewForm(elements...)
+	i.Form.Width = w
+	i.Form.Spacing = 0
 }
 
 func (i *Incubator) submitSpawn() tea.Cmd {
@@ -125,22 +180,35 @@ func (i *Incubator) submitSpawn() tea.Cmd {
 		return nil // Form handles visual error state
 	}
 
-	ports, _ := parseTuiPorts(i.portsInput.Value())
-
 	// Construct Msg
 	req := ops.RequestSpawnMsg{
 		Name:     i.input.Value(),
 		Source:   i.SelectedSource.Title(),
 		GUI:      i.toggle.Checked,
 		UserData: "",
-		Ports:    ports,
+		Ports:    i.PendingPorts,
 	}
 
 	// Reset
 	i.input.SetValue("")
+	i.PendingPorts = nil
+	i.rebuildForm()
 
 	// Return command
 	return func() tea.Msg { return req }
+}
+
+func (i *Incubator) AddPort(p provider.PortForward) {
+	i.PendingPorts = append(i.PendingPorts, p)
+	i.rebuildForm()
+}
+
+func (i *Incubator) RemovePort(index int) {
+	if index < 0 || index >= len(i.PendingPorts) {
+		return
+	}
+	i.PendingPorts = append(i.PendingPorts[:index], i.PendingPorts[index+1:]...)
+	i.rebuildForm()
 }
 
 func (i *Incubator) Init() tea.Cmd { return nil }
@@ -161,24 +229,7 @@ func (i *Incubator) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 		return i, nil
 	}
 
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "tab", "down":
-			return i, i.Form.NextField()
-		case "shift+tab", "up":
-			return i, i.Form.PrevField()
-		}
-
-	case tea.MouseMsg:
-		// Mouse handling is tricky with generic form elements without hit testing logic in Kit.
-		// For now, improved declarative form sacrifices custom mouse regions unless added to Kit.
-		// User didn't strictly request mouse support for this refactor, but we should preserve it if possible.
-		// Given complexity, let's rely on Keyboard for this iteration or simple click-to-focus if Form supported it.
-		// Disabling custom mouse logic for this pass to ensure cleanliness.
-	}
-
-	// Delegate rest to Form
+	// Navigation handled by Form or Parent
 	newForm, cmd := i.Form.Update(msg)
 	i.Form = newForm
 
@@ -217,11 +268,9 @@ func (i *Incubator) SetSource(item *SourceItem) {
 	i.header.Title = item.Title()
 	i.header.Subtitle = string(item.Type)
 
-	// Reset form focus to Input?
-	// The Form.FocusIndex might be 0 (Header is -1/unfocusable).
-	// Let's reset input.
 	i.input.SetValue("")
-	i.portsInput.SetValue("")
+	i.PendingPorts = nil
+	i.rebuildForm()
 }
 
 func (i *Incubator) Shortcuts() []fv.Shortcut {
@@ -255,9 +304,12 @@ type Hatchery struct {
 	MasterDetail  *widget.MasterDetail
 	Pages         *widget.PageManager
 	ConfirmDelete *widget.Modal
+	ModalAddPort  *widget.FormModal // New Form Modal
 
-	prov               provider.VMProvider
-	pendingDeleteForce bool
+	prov                     provider.VMProvider
+	pendingDeleteForce       bool
+	ConfirmDeletePort        *widget.Modal
+	PendingPortToDeleteIndex int
 }
 
 // NewHatchery returns a new Hatchery viewlet.
@@ -300,15 +352,14 @@ func NewHatchery(prov provider.VMProvider) *Hatchery {
 	)
 	h.MasterDetail.AutoSwitch = false
 
-	// 5. Modal
+	// 5. Modals
 	h.ConfirmDelete = widget.NewModal(
 		"Delete Template",
-		"Are you sure?", // Text updated dynamically
+		"Are you sure?",
 		func() tea.Cmd {
 			if item := h.Sidebar.SelectedItem(); item != nil {
 				if srcItem, ok := item.(SourceItem); ok && srcItem.Type == "TEMPLATE" {
 					return func() tea.Msg {
-						// Pass the force flag determined by the check
 						return ops.RequestDeleteTemplateMsg{Name: srcItem.Label, Force: h.pendingDeleteForce}
 					}
 				}
@@ -319,25 +370,143 @@ func NewHatchery(prov provider.VMProvider) *Hatchery {
 	)
 	h.ConfirmDelete.SetLevel(widget.ModalLevelDanger)
 
+	h.ConfirmDeletePort = widget.NewModal(
+		"Remove Port",
+		"",
+		func() tea.Cmd {
+			h.Incubator.RemovePort(h.PendingPortToDeleteIndex)
+			return nil
+		},
+		nil,
+	)
+	h.ConfirmDeletePort.SetLevel(widget.ModalLevelDanger)
+
+	// Add Port Form Config
+	h.ModalAddPort = widget.NewFormModal("Add Port Forwarding", func(res map[string]string) tea.Cmd {
+		// Parse result
+		lbl := res["label"]
+		gp, _ := provider.ParseInt(res["guest"]) // Validated
+		hp, _ := provider.ParseInt(res["host"])  // Validated (0 if empty)
+		proto := res["proto"]
+
+		pf := provider.PortForward{
+			GuestPort: gp,
+			HostPort:  hp,
+			Protocol:  proto,
+			Label:     lbl,
+		}
+
+		h.Incubator.AddPort(pf)
+		return nil
+	}, nil)
+
+	// Row 1: Label
+	// Row 1: Label (2/3) + Proto (1/3)
+	h.ModalAddPort.AddRow(
+		&widget.FormEntry{
+			Key:         "label",
+			Label:       "Label",
+			Placeholder: "e.g. web-admin",
+			Width:       20,
+			MaxChars:    20,
+			Filter:      widget.FilterLabel, // Block spaces and weird chars
+			Validator: func(s string) error {
+				if len(s) > 20 {
+					return fmt.Errorf("too long")
+				}
+				// Space check redundant due to Filter, but safe to keep
+				if strings.Contains(s, " ") {
+					return fmt.Errorf("no spaces")
+				}
+				return nil
+			},
+		},
+		&widget.FormEntry{
+			Key: "proto", Label: "Proto", Placeholder: "tcp", Width: 10, MaxChars: 4,
+			Filter:    widget.FilterAlphaNumeric, // Only letters/nums
+			Validator: nil,                       // Allow free typing (filter handles safety)
+		},
+	)
+
+	// Row 2: Ports (Guest + Host)
+	h.ModalAddPort.AddRow(
+		&widget.FormEntry{
+			Key: "guest", Label: "Guest*", Placeholder: "8080", MaxChars: 5,
+			Filter: widget.FilterNumber, // Digits only
+			Validator: func(s string) error {
+				if s == "" {
+					return fmt.Errorf("required")
+				}
+				v, err := provider.ParseInt(s)
+				if err != nil {
+					return fmt.Errorf("number")
+				}
+				if v < 1 || v > 65535 {
+					return fmt.Errorf("range")
+				}
+				return nil
+			},
+		},
+		&widget.FormEntry{
+			Key: "host", Label: "Host", Placeholder: "Auto", MaxChars: 5,
+			Filter: widget.FilterNumber, // Digits only
+			Validator: func(s string) error {
+				if s == "" {
+					return nil
+				}
+				if _, err := provider.ParseInt(s); err != nil {
+					return fmt.Errorf("number")
+				}
+				return nil
+			},
+		},
+	)
+
 	return h
+}
+
+func (h *Hatchery) OpenDeletePortModal(index int) tea.Cmd {
+	h.PendingPortToDeleteIndex = index
+	p := h.Incubator.PendingPorts[index]
+	label := p.Label
+	if label == "" {
+		label = fmt.Sprintf("Port %d", p.GuestPort)
+	}
+	h.ConfirmDeletePort.Message = fmt.Sprintf("Remove port forwarding for '%s'?", label)
+	h.ConfirmDeletePort.Show()
+	return nil
+}
+
+func (h *Hatchery) OpenAddPortModal() tea.Cmd {
+	return h.ModalAddPort.Show()
 }
 
 func (h *Hatchery) Init() tea.Cmd {
 	return tea.Batch(
 		h.MasterDetail.Init(),
-		h.Sidebar.Focus(), // Initially focus Sidebar
-		// 1. Fast Load (Cache Only) -> Shows data instantly
+		h.Sidebar.Focus(),
 		ops.FetchSources(h.prov, ops.SourceActionSpawn, true, false),
-		// 2. Background Refresh (Force Remote) -> Updates UI later
 		ops.FetchSources(h.prov, ops.SourceActionSpawn, false, true),
 	)
 }
 
 func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
-	// 1. Modal Interception (Blocking)
+	// 1. Modals Interception (Blocking)
 	if h.ConfirmDelete.IsActive() {
 		newModal, cmd := h.ConfirmDelete.Update(msg)
 		h.ConfirmDelete = newModal
+		return h, cmd
+	}
+
+	if h.ConfirmDeletePort.IsActive() {
+		newModal, cmd := h.ConfirmDeletePort.Update(msg)
+		h.ConfirmDeletePort = newModal
+		return h, cmd
+	}
+
+	if h.ModalAddPort.IsActive() {
+		_, cmd := h.ModalAddPort.Update(msg)
+		// No need to reassign ptr as it modifies internal state of struct
 		return h, cmd
 	}
 
@@ -346,8 +515,6 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 	switch msg := msg.(type) {
 	case ops.TemplateUsageMsg:
 		if msg.Err != nil {
-			// If check failed, assume not used but show error? Or just proceed with standard modal?
-			// Let's safe-fail to standard modal but warn in logs if we had them.
 			h.pendingDeleteForce = false
 			h.ConfirmDelete.Message = fmt.Sprintf("Delete template '%s'?\n(Usage check failed: %v)", msg.Name, msg.Err)
 			h.ConfirmDelete.Show()
@@ -358,8 +525,6 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 			h.pendingDeleteForce = true
 			h.ConfirmDelete.Title = "CRITICAL WARNING"
 			h.ConfirmDelete.Message = fmt.Sprintf("Template '%s' is IN USE by %d VM(s)!\n\nDeleting it will BREAK those VMs.\nAre you absolutely sure?", msg.Name, len(msg.UsedBy))
-			// Ideally we'd color this red or something, but the widget.Modal is simple.
-			// The content is enough.
 		} else {
 			h.pendingDeleteForce = false
 			h.ConfirmDelete.Title = "Delete Template"
@@ -368,7 +533,6 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 		h.ConfirmDelete.Show()
 		return h, nil
 
-	// 1. Data Loaded
 	case ops.SourcesLoadedMsg:
 		if msg.Err != nil {
 			// Show error if we are in loading state OR empty
@@ -397,8 +561,6 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 			// We got data!
 			items := make([]widget.SidebarItem, 0)
 			for _, s := range msg.Sources {
-				// Parse "TYPE Name" or "[TYPE] Name"
-				// Clean up prefixes for display, keeping raw type for Icon()
 				parts := strings.SplitN(s, " ", 2)
 				if len(parts) == 2 {
 					sType := strings.Trim(parts[0], "[]")
@@ -408,7 +570,6 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 			}
 			if len(items) > 0 {
 				h.Sidebar.SetItems(items)
-				// Initial Selection: Auto-select first item
 				if first, ok := items[0].(SourceItem); ok {
 					h.Incubator.SetSource(&first)
 				}
@@ -422,36 +583,26 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 			}
 		}
 
-	// 2. Sidebar Selection
 	case fv.SelectionMsg:
 		if item, ok := msg.Item.(SourceItem); ok {
 			h.Incubator.SetSource(&item)
-			// Remove focus switching: Navigation (arrows) should ONLY update content.
-			// Focus switch is explicit via Tab/Click.
 		}
 
-	// 3. Spawn Request
-
 	case tea.KeyMsg:
-		// Focus Management: Tab / Shift+Tab / Esc
 		if h.Sidebar.Focused() && msg.String() == "enter" {
 			cmds = append(cmds, h.MasterDetail.SetFocus(widget.FocusDetail))
 		}
 
-		// Delete Template Action - NOW CHECKS USAGE FIRST
 		if h.Sidebar.Focused() && (msg.String() == "delete" || msg.String() == "backspace") {
 			if item := h.Sidebar.SelectedItem(); item != nil {
-				// Only delete templates
 				srcItem, ok := item.(SourceItem)
 				if ok && srcItem.Type == "TEMPLATE" {
-					// Async check
 					return h, ops.CheckTemplateUsage(h.prov, srcItem.Label)
 				}
 			}
 		}
 	}
 
-	// Delegate to MasterDetail
 	newMD, cmd := h.MasterDetail.Update(msg)
 	h.MasterDetail = newMD.(*widget.MasterDetail)
 	cmds = append(cmds, cmd)
@@ -460,9 +611,22 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 }
 
 func (h *Hatchery) View() string {
-	// If Modal is Active, we show it INSTEAD of the content (Blocking Overlay)
 	if h.ConfirmDelete.IsActive() {
 		return h.ConfirmDelete.View(h.Width(), h.Height())
+	}
+	if h.ConfirmDeletePort.IsActive() {
+		return h.ConfirmDeletePort.View(h.Width(), h.Height())
+	}
+	if h.ModalAddPort.IsActive() {
+		// Render content dim/blurred behind?
+		// For now just plain overlay logic from kit
+		// But MasterDetail should be rendered as "background"
+		// h.MasterDetail.View() // Ideally we render this to buffer if needed for overlay effects
+		return h.ModalAddPort.View(h.Width(), h.Height())
+		// NOTE: Ideally FormModal.View takes a "background" string to overlay properly
+		// if utilizing lipgloss.PlaceOverlay correctly, but here we pass dims.
+		// If FormModal uses PlaceOverlay, it pads with whitespace.
+		// TODO: Advanced Overlay support in Kit.
 	}
 	return h.MasterDetail.View()
 }
@@ -474,7 +638,10 @@ func (h *Hatchery) Resize(r layout.Rect) {
 
 func (h *Hatchery) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, tea.Cmd, bool) {
 	if h.ConfirmDelete.IsActive() {
-		return h, nil, true // Consume all mouse events if modal active to block interaction
+		return h, nil, true
+	}
+	if h.ModalAddPort.IsActive() {
+		return h, nil, true
 	}
 	return h.MasterDetail.HandleMouse(x, y, msg)
 }
@@ -484,10 +651,17 @@ func (h *Hatchery) Focus() tea.Cmd {
 }
 
 func (h *Hatchery) Shortcuts() []fv.Shortcut {
-	if h.ConfirmDelete.IsActive() {
+	if h.ConfirmDelete.IsActive() || h.ConfirmDeletePort.IsActive() {
 		return []fv.Shortcut{
 			{Key: "enter", Label: "engage"},
 			{Key: "esc", Label: "back"},
+		}
+	}
+	if h.ModalAddPort.IsActive() {
+		return []fv.Shortcut{
+			{Key: "tab", Label: "next"},
+			{Key: "enter", Label: "add"},
+			{Key: "esc", Label: "cancel"},
 		}
 	}
 
@@ -495,9 +669,6 @@ func (h *Hatchery) Shortcuts() []fv.Shortcut {
 		{Key: "↑/↓", Label: "glide"},
 	}
 
-	// Delegate to MasterDetail for local pane shortcuts
-	// But Hatchery.Shortcuts overrides it, so we manually merge or pick.
-	// We want to combine Sidebar glide with Incubator actions if possible.
 	if h.MasterDetail.ActiveFocus == widget.FocusDetail {
 		shortcuts = append(shortcuts, h.Incubator.Shortcuts()...)
 		shortcuts = append(shortcuts, fv.Shortcut{Key: "esc", Label: "back"})
@@ -505,7 +676,6 @@ func (h *Hatchery) Shortcuts() []fv.Shortcut {
 		shortcuts = append(shortcuts, fv.Shortcut{Key: "enter", Label: "engage"})
 	}
 
-	// Contextual Actions
 	if item := h.Sidebar.SelectedItem(); item != nil {
 		if srcItem, ok := item.(SourceItem); ok && srcItem.Type == "TEMPLATE" {
 			shortcuts = append(shortcuts, fv.Shortcut{Key: "delete", Label: "cull"})
@@ -516,10 +686,18 @@ func (h *Hatchery) Shortcuts() []fv.Shortcut {
 }
 
 func (h *Hatchery) IsModalActive() bool {
-	return h.ConfirmDelete != nil && h.ConfirmDelete.IsActive()
+	return (h.ConfirmDelete != nil && h.ConfirmDelete.IsActive()) ||
+		(h.ConfirmDeletePort != nil && h.ConfirmDeletePort.IsActive()) ||
+		(h.ModalAddPort != nil && h.ModalAddPort.IsActive())
 }
 
 func (h *Hatchery) HasActiveTextInput() bool {
+	if h.ConfirmDeletePort != nil && h.ConfirmDeletePort.IsActive() {
+		return false
+	}
+	if h.ModalAddPort != nil && h.ModalAddPort.IsActive() {
+		return true
+	}
 	if h.Incubator != nil {
 		return h.Incubator.HasActiveTextInput()
 	}
@@ -527,6 +705,12 @@ func (h *Hatchery) HasActiveTextInput() bool {
 }
 
 func (h *Hatchery) HasActiveFocus() bool {
+	if h.ConfirmDeletePort != nil && h.ConfirmDeletePort.IsActive() {
+		return true
+	}
+	if h.ModalAddPort != nil && h.ModalAddPort.IsActive() {
+		return true
+	}
 	if h.Incubator != nil {
 		return h.Incubator.HasActiveFocus()
 	}

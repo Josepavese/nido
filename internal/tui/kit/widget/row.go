@@ -7,27 +7,38 @@ import (
 
 // Row represents a horizontal group of Elements.
 type Row struct {
-	Elements []Element
-	Weights  []int
-	width    int
+	Elements   []Element
+	Weights    []int
+	FocusIndex int
+	width      int
 }
 
 // NewRow creates a new Row with equal width distribution.
 func NewRow(elements ...Element) *Row {
-	return &Row{Elements: elements}
+	return &Row{Elements: elements, FocusIndex: -1}
 }
 
 // NewRowWithWeights creates a new Row with specified column weights.
 func NewRowWithWeights(elements []Element, weights []int) *Row {
-	return &Row{Elements: elements, Weights: weights}
+	return &Row{Elements: elements, Weights: weights, FocusIndex: -1}
 }
 
 // Interface compliance for Form Element
 
 func (r *Row) Focus() tea.Cmd {
-	// Focusing a row focuses its first focusable element
-	for _, el := range r.Elements {
+	if r.FocusIndex < 0 {
+		r.FocusIndex = 0
+	}
+	// Try to focus current index
+	if r.FocusIndex < len(r.Elements) {
+		if r.Elements[r.FocusIndex].Focusable() {
+			return r.Elements[r.FocusIndex].Focus()
+		}
+	}
+	// Fallback scanning
+	for i, el := range r.Elements {
 		if el.Focusable() {
+			r.FocusIndex = i
 			return el.Focus()
 		}
 	}
@@ -38,6 +49,7 @@ func (r *Row) Blur() {
 	for _, el := range r.Elements {
 		el.Blur()
 	}
+	r.FocusIndex = -1
 }
 
 func (r *Row) Focused() bool {
@@ -58,14 +70,129 @@ func (r *Row) Focusable() bool {
 	return false
 }
 
-func (r *Row) Update(msg tea.Msg) (Element, tea.Cmd) {
-	var cmds []tea.Cmd
-	for i, el := range r.Elements {
-		newEl, cmd := el.Update(msg)
-		r.Elements[i] = newEl
-		cmds = append(cmds, cmd)
+func (r *Row) HasActiveTextInput() bool {
+	for _, el := range r.Elements {
+		// Check for direct Input
+		if input, ok := el.(*Input); ok {
+			if input.Focused() {
+				return true
+			}
+		}
+		// Recursive check for containers
+		if container, ok := el.(interface{ HasActiveTextInput() bool }); ok {
+			if container.HasActiveTextInput() {
+				return true
+			}
+		}
 	}
-	return r, tea.Batch(cmds...)
+	return false
+}
+
+// CollectInputs returns all Input fields within this Row (recursive).
+func (r *Row) CollectInputs() []*Input {
+	var inputs []*Input
+	for _, el := range r.Elements {
+		if input, ok := el.(*Input); ok {
+			inputs = append(inputs, input)
+		}
+		if collector, ok := el.(interface{ CollectInputs() []*Input }); ok {
+			inputs = append(inputs, collector.CollectInputs()...)
+		}
+	}
+	return inputs
+}
+
+// CollectButtons returns all Button fields within this Row (recursive).
+func (r *Row) CollectButtons() []*Button {
+	var btns []*Button
+	for _, el := range r.Elements {
+		if btn, ok := el.(*Button); ok {
+			btns = append(btns, btn)
+		}
+		if collector, ok := el.(interface{ CollectButtons() []*Button }); ok {
+			btns = append(btns, collector.CollectButtons()...)
+		}
+	}
+	return btns
+}
+
+// Navigator Implementation
+
+func (r *Row) Next() bool {
+	start := r.FocusIndex
+	if start < 0 {
+		start = -1
+	}
+
+	// Try to find next focusable element
+	for i := start + 1; i < len(r.Elements); i++ {
+		if r.Elements[i].Focusable() {
+			r.Elements[r.FocusIndex].Blur()
+			r.FocusIndex = i
+			return true
+		}
+	}
+	// No more elements
+	return false
+}
+
+func (r *Row) Prev() bool {
+	start := r.FocusIndex
+	if start > len(r.Elements) {
+		start = len(r.Elements)
+	}
+
+	// Try to find prev focusable element
+	for i := start - 1; i >= 0; i-- {
+		if r.Elements[i].Focusable() {
+			r.Elements[r.FocusIndex].Blur()
+			r.FocusIndex = i
+			return true
+		}
+	}
+	// No earlier elements
+	return false
+}
+
+func (r *Row) Update(msg tea.Msg) (Element, tea.Cmd) {
+	var cmd tea.Cmd
+
+	// Horizontal Navigation
+	if kmsg, ok := msg.(tea.KeyMsg); ok {
+		switch kmsg.String() {
+		case "left":
+			if r.FocusIndex > 0 {
+				r.Elements[r.FocusIndex].Blur()
+				r.FocusIndex--
+				return r, r.Elements[r.FocusIndex].Focus()
+			}
+		case "right":
+			if r.FocusIndex < len(r.Elements)-1 {
+				r.Elements[r.FocusIndex].Blur()
+				r.FocusIndex++
+				return r, r.Elements[r.FocusIndex].Focus()
+			}
+		}
+	}
+
+	// Update only the focused element (standard for forms) or all?
+	// Row usually updates all because some might show status?
+	// But mostly we only care about the active one receiving input.
+	// However, if we broadcast to all, typing in one input might affect others?
+	// Safest matches Form logic: Update active if index valid.
+	if r.FocusIndex >= 0 && r.FocusIndex < len(r.Elements) {
+		idx := r.FocusIndex
+		el, c := r.Elements[idx].Update(msg)
+		r.Elements[idx] = el
+		cmd = c
+	} else {
+		// If no focus, update none? Or update all?
+		// For passive display elements inside a row, they might need updates (spinner?)
+		// But Form only updates focused element usually.
+		// Let's stick to active-only for input safety.
+	}
+
+	return r, cmd
 }
 
 func (r *Row) SetWidth(w int) {

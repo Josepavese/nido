@@ -451,3 +451,10 @@ func (d *RegistryDetail) HasActiveTextInput() bool {
 func (d *RegistryDetail) HasActiveFocus() bool {
 	return d.Form != nil && d.Form.HasActiveFocus()
 }
+
+func (d *RegistryDetail) Focusable() bool {
+	if d.Form == nil {
+		return false
+	}
+	return d.Form.Focusable()
+}
