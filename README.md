@@ -1,318 +1,135 @@
-# ![Nido 80s Banner](resources/nido_header_80s.png)
+# ![Nido Header](resources/nido_header_80s.png)
 
-Hatch a VM, do the work, let it fly away. Your AI agents will feel at home.
+> **"It's not a container. It's a lifestyle."** 🐣💾
 
-Nido is a **fast, lightweight, AI-first VM automation tool**.
+[![Release](https://img.shields.io/github/v/release/Josepavese/nido?style=flat-square&color=ff00ff)](https://github.com/Josepavese/nido/releases)
+[![License](https://img.shields.io/github/license/Josepavese/nido?style=flat-square&color=00ffff)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Josepavese/nido?style=flat-square)](https://goreportcard.com/report/github.com/Josepavese/nido)
 
-You install it in seconds, get a clean CLI, and AI agents can start spawning **real virtual machines** immediately.
-No clusters. No dashboards. No babysitting.
+**Nido** is a hyper-fast, AI-first automation tool that **spawns real Virtual Machines** in milliseconds.
 
-Built on QEMU and hardware acceleration, Nido feels like a small CLI —
-but it gives agents what containers can’t: **a full operating system, on demand**.
+Containers are cages. Your AI agents deserve a **Home**. A Nest. 🪺
 
-Think of it as a nest 🪺 for automation:
-machines hatch 🐣, do their job, and fly away 🐦.
-
-If your AI workflows need a real OS with zero friction, Nido stays out of the way and lets them run.
+Built on QEMU and fueled by 80s nostalgia, Nido gives your autonomous agents a full constrained-free Operating System to break things in, fix them, and fly away without leaving a trace.
 
 ---
 
-## Use case: hatch, fix, fly away
+## 🕹️ The Concept: Spawn -> Execute -> Destroy
 
-Say a CI agent needs a clean OS to reproduce a bug, apply a patch, and leave nothing behind.
-With Nido, it hatches a VM from an image **even if it isn't local yet**, does the job, and lets it fly away. 🐣🐦
+![The Lifecycle](resources/nido_diagram_hatch.png)
 
-```bash
-# 1) See what's in the nest (no download yet)
-nido images list
+1. **INSERT COIN (Spawn)**: An agent requests a VM. Nido hatches one from a cached image instantly using **Linked Clones** (Copy-on-Write).
+2. **PLAY (Execute)**: The agent has full `root` access. No shared kernels. No syscall filters. Pure freedom.
+3. **GAME OVER (Destroy)**: The task is done. The VM is vaporized. The host system remains pristine.
 
-# 2) Hatch fast: Nido pulls the image on the fly if it's not cached
-nido spawn bugfix-vm --image ubuntu:24.04
+---
 
-# 3) (optional) hop in and do the work
-nido ssh bugfix-vm
+## ⚡ Loading... (Installation)
 
-# 4) Cleanup at light speed
-nido delete bugfix-vm
-```
+> **SYSTEM REQUIREMENTS:** Linux, macOS, or Windows (WSL2/PowerShell). QEMU must be installed.
 
-Bottom line: a real OS as an execution surface for agents, minus the babysitting.
+### 💾 Quick Install (Web)
 
-## Quick Start
+Run this command in your terminal. Do not turn off the console while saving.
 
-### 1. Installation
-
-> **⚡ Lightning-Fast Install** - Just ~4MB download. No Git required!
-
-#### Linux & macOS
+**Linux & macOS:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.sh | bash
-source ~/.bashrc  # or ~/.zshrc
-nido version
+source ~/.nido/env   # Power up the path
+nido version         # Check checksum
 ```
 
-#### Windows (PowerShell)
+**Windows (PowerShell):**
 
 ```powershell
 irm https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.ps1 | iex
-# Restart terminal, then:
+# Restart your terminal to initialize the matrix
 nido version
 ```
 
-> **📖 More Options:** See [`installers/README.md`](installers/README.md) for alternative installation methods, including a lightweight build-from-source option for tinkerers who want bleeding-edge features without cloning the entire repository.
+---
 
-#### Manual Installation (All Platforms)
+## 🦾 Neural Interface (For AI Agents)
 
-Download the latest binary from [GitHub Releases](https://github.com/Josepavese/nido/releases/latest):
+Nido is designed to be driven by **Large Language Models** (Claude, GPT-4, Gemini).
 
-```bash
-# Linux
-curl -L https://github.com/Josepavese/nido/releases/latest/download/nido-linux-amd64 -o nido
-chmod +x nido && sudo mv nido /usr/local/bin/
+### 🤖 Model Context Protocol (MCP)
 
-# macOS (Intel)
-curl -L https://github.com/Josepavese/nido/releases/latest/download/nido-darwin-amd64 -o nido
-chmod +x nido && sudo mv nido /usr/local/bin/
-
-# macOS (Apple Silicon)
-curl -L https://github.com/Josepavese/nido/releases/latest/download/nido-darwin-arm64 -o nido
-chmod +x nido && sudo mv nido /usr/local/bin/
-```
-
-#### Install QEMU (Required)
-
-Nido needs QEMU to run VMs:
+Nido speaks the universal language of agents. It includes a built-in **MCP Server** that exposes `vm_spawn`, `vm_exec`, and `vm_prune` tools directly to your AI.
 
 ```bash
-# Linux (Debian/Ubuntu)
-sudo apt install qemu-system-x86 qemu-utils
-
-# macOS
-brew install qemu
-
-# Windows
-choco install qemu
+# Register Nido with your Claude Desktop or Agent configuration
+nido register
 ```
 
-> **💡 Tip:** Run `nido doctor` after installation to verify your setup!
+### 🧠 JSON Mode
 
-### 2. Usage
+Every command supports `--json` for structured, machine-readable output. No distinct parsing required.
 
 ```bash
-# The essentials
-nido spawn my-vm                   # Hatch a new VM from default template
-nido ls                            # List all life forms in the nest
-nido ssh my-vm                     # Instant bridge via SSH
-nido stop my-vm                    # Put VM into deep sleep
-nido delete my-vm                  # Evict VM permanently
-
-# Template management
-nido template list                 # See what's in cold storage
-nido template create my-vm golden  # Archive VM as reusable template
-nido template delete golden        # Erase template from history
-
-# Power user moves
-nido start my-vm                   # Revive a stopped VM
-nido prune                         # Vaporize all stopped VMs
-nido info my-vm                    # Inspect neural links (IP, Port)
-nido doctor                        # Run system health check
-nido config                        # View current genetics
-nido help                          # Show detailed usage instructions
-
-# AI agent setup
-nido register                      # Get MCP config for Claude/Antigravity
-
-# Image & Cache Management 🆕
-nido images list                    # Browse cloud images (shows file sizes)
-nido images pull ubuntu:24.04       # Pull official Ubuntu 24.04 image
-nido cache ls                       # List cached images and their sizes
-nido cache info                     # Show cache stats (total size, age)
-nido spawn my-vm --image ubuntu:24.04  # Spawn directly from any cloud image
+nido spawn test-vm --image ubuntu:24.04 --json
+# Output: {"status": "hatched", "ip": "10.0.2.15", "ssh_port": 34822}
 ```
 
-## Killer Feature: Linked Clones 🧬
+---
 
-This is Nido's secret weapon for speed and efficiency.
+## 🕹️ Player 1 Controls (CLI)
 
-By default, Nido uses **Linked Clones** technology (QCOW2 `backing_file` backing).
-When you spawn a VM from an image (e.g., `ubuntu:24.04`), Nido **does not copy the whole 2GB file**.
+The CLI feels like a modern tool but remembers where it came from. Fast. Typed. Colorful.
 
-Instead, it creates a tiny overlay file that only stores the *changes* you make.
+| Command | Action | Arcade Analog |
+| :--- | :--- | :--- |
+| `nido spawn <name>` | Create a new VM | **START GAME** |
+| `nido ssh <name>` | Connect via SSH | **LINK CABLE** |
+| `nido gui` | Open TUI Dashboard | **ARCADE MODE** |
+| `nido delete <name>` | Destroy VM | **GAME OVER** |
+| `nido images pull` | Download OS Image | **LOAD ROM** |
+| `nido uninstall` | Remove Nido completely | **SELF DESTRUCT** |
 
-### Space Savings Simulation
+**Pro Tip:** Use `nido gui` to enter the **Arcade Dashboard**. It features a retro-futuristic interface, real-time stats, and a synthesizer-inspired color palette.
 
-| Setup                      | Traditional VM / Full Copy | Nido Linked Clones         |
-| :------------------------- | :------------------------- | :------------------------- |
-| **Base Image**       | 2.5 GB                     | 2.5 GB (Stored once)       |
-| **VM 1**             | 2.5 GB                     | **< 1 MB** (Overlay) |
-| **VM 2**             | 2.5 GB                     | **< 1 MB** (Overlay) |
-| **VM 10**            | 2.5 GB                     | **< 1 MB** (Overlay) |
-| **Total for 10 VMs** | **~27.5 GB** 😱      | **~2.6 GB** 🚀       |
+---
 
-### Smart Cache Protection 🛡️
+## 📼 Features Tape
 
-Because VMs depend on the base image, you might worry about deleting it.
-Don't. Nido's `cache prune` command is smart: **it refuses to delete any image that is active**.
+* **⚡ Instant Start**: Uses QCOW2 backing chains. Boots in seconds. Uses <1MB disk space per clone.
+* **🔌 Universal Networking**: Auto-forwarded SSH ports. HTTP/HTTPS ports mapped automatically.
+* **📺 TUI Dashboard**: A full terminal user interface for monitoring your fleet. 80s aesthetics included.
+* **📦 Smart Registry**: Pulls optimized, cloud-init ready images (`ubuntu`, `alpine`, `debian`, `arch`).
+* **🖥️ Desktop Integration**: Creates native launchers on Linux, macOS, and Windows. Alt-Tab to your VMs!
+* **🍳 Nuclear Uninstall**: `nido uninstall` cleans up everything. No artifacts left behind.
 
-### Quick Configuration
+---
 
-If you prefer completely independent VMs (e.g., for exporting a single file), you can disable this:
+## 🧬 Killer Feature: Linked Clones
 
-```bash
-nido config set LINKED_CLONES false
-```
+Why download 2GB every time? Nido downloads the generic "Common ROM" (Base Image) once.
 
-When disabled, Nido performs a full copy of the image and deletes the downloaded cache file to save space (since the data is now in the VM disk).
+Every VM you spawn is just a **diff layer** on top of that ROM.
+* **Base Image:** Read-Only. Safe.
+* **VM Disk:** Read-Write. Ephemeral.
 
-## Nido Flavours & Split Distribution 🧁📦
+**Result:** Spawn 100 VMs, use disk space for 1. 🚀
 
-Nido Flavours are pre-built, optimized VM environments (like Lubuntu, XFCE, or specialized dev stacks) maintained by the community.
+---
 
-To bypass storage limits and ensure fast downloads:
+## 🤝 Contributing
 
-- **Zero-Touch Registry:** Flavours are automatically discovered from GitHub Releases using our smart scanning strategy. No manual registration needed. 🤖
-- **Split Distribution:** Large images (>2GiB) are automatically distributed in segments via GitHub Releases to ensure high availability.
-- **Auto-Reassembly:** `nido` handles multi-part downloads and reassembles images on the fly.
-- **Trusted Provenance:** Recognized flavours are marked with a bold `[PRECONFIGURED]` badge in `nido image list`.
+**Insert Coin to Join.**
 
-## Shell Completion 🆕
+1. Fork the repo.
+2. `go run ./cmd/nido gui` to test the Arcade UI.
+3. Submit a PR.
+4. High Scores are recorded in `AUTHORS`.
 
-`nido` now supports full shell completion for **Bash** and **Zsh**. Never guess a command or template name again!
+## 📜 License
 
-```bash
-# Generate completion script (Bash)
-nido completion bash > ~/.nido/bash_completion
-echo "source ~/.nido/bash_completion" >> ~/.bashrc
-
-# Generate completion script (Zsh)
-mkdir -p ~/.zsh/completion
-nido completion zsh > ~/.zsh/completion/_nido
-echo "fpath=(~/.zsh/completion \$fpath)" >> ~/.zshrc
-echo "autoload -Uz compinit && compinit" >> ~/.zshrc
-```
-
-## Commands
-
-| Command                                | What it does                            | Example                                     |
-| :------------------------------------- | :-------------------------------------- | :------------------------------------------ |
-| `spawn <name> [--image <img> --gui]` | Create and start a VM with optional GUI | `nido spawn vm1 --image xfce:24.04 --gui` |
-| `start <name> [--gui]`               | Revive a stopped VM with optional GUI   | `nido start test-vm --gui`                |
-| `stop <name>`                        | Put VM into deep sleep                  | `nido stop test-vm`                       |
-| `delete <name>`                      | Evict VM permanently                    | `nido delete test-vm`                     |
-| `prune`                              | Remove all stopped VMs                  | `nido prune`                              |
-| `ls`                                 | List all VMs                            | `nido ls`                                 |
-| `info <name>`                        | Get VM details                          | `nido info test-vm`                       |
-| `ssh <name>`                         | SSH into VM                             | `nido ssh test-vm`                        |
-| `image list`                         | List cloud images                       | `nido image list`                         |
-| `image pull <image>`                 | Download image                          | `nido image pull ubuntu:24.04`            |
-| `template list`                      | List templates                          | `nido template list`                      |
-| `template create <vm> <tpl>`         | Archive VM                              | `nido template create my-vm golden`       |
-| `template delete <name> [--force]`   | Delete template                         | `nido template delete golden --force`     |
-| `doctor`                             | System diagnostics                      | `nido doctor`                             |
-| `config`                             | View configuration                      | `nido config`                             |
-| `register`                           | MCP setup helper                        | `nido register`                           |
-| `cache ls`                           | List cached images                      | `nido cache ls`                           |
-| `cache info`                         | Show cache statistics                   | `nido cache info`                         |
-| `cache prune`                        | Remove all cached images                | `nido cache prune`                        |
-| `help`                               | Show usage information                  | `nido help`                               |
-
-### Structured Output (JSON)
-
-For automation and GUI integrations, Nido can speak JSON. Use `--json` on supported commands to get stable, machine‑readable output (including `doctor`, `config`, and `register`):
-
-```bash
-nido ls --json
-nido info my-vm --json
-nido spawn my-vm --image ubuntu:24.04 --json
-```
-
-It keeps human output friendly for interactive use, and gives scripts a clean, deterministic payload when they need it. 🪺
-
-### GUI Support (VNC)
-
-Nido can expose a graphical interface for VMs:
-
-- Use the `--gui` flag with `spawn` or `start`.
-- Run `nido info <name>` to see the VNC endpoint.
-- Connect with any VNC client to `127.0.0.1:5900X`.
-
-### Interactive TUI (Bubble Tea)
-
-- Launch: `nido gui`
-- Includes progress/loader rail, VM list + detail pane, and spawn form (name, template, user-data, GUI toggle).
-
-![Nido TUI - Registry Mode](assets/img/tui_registry.png)
-*The new Registry Manager — Browse and pull cloud images with ease.*
-
-### Automation
-
-To add a new image source, submit a PR to `registry/sources.yaml`. The `registry-builder` tool will automatically fetch the latest versions and checksums.
-
-### Themes & Customization 🎨
-
-Make Nido yours. You can now define custom color palettes via a simple JSON configuration.
-
-1. Create `~/.nido/themes.json`.
-2. Define your colors (light/dark supported).
-3. Select your theme in **SYSTEM** > **Rice**.
-
-[👉 Read the Customization Guide](docs/customization.md)
-
-### Custom Storage
-
-By default, images are stored in `~/.nido/images/`. You can change this via an environment variable:
-
-```bash
-export NIDO_IMAGE_DIR="/path/to/my/images"
-```
-
-## 💡 Tips & Tricks (The "Matryoshka" Section)
-
-### 🪺 VM inside VM (Nested Virtualization)
-
-Yes, you can hatch a bird inside a bird. This is perfect for testing hypervisors or creating complex labs.
-
-- **How it works:** We pass the right CPU flags to enable nested virtualization
-- **Warning:** Expect a small performance hit. It's like inception—the deeper you go, the slower time (and your VM) becomes.
-
-### 🐳 VM inside Container (KVM-in-Docker)
-
-Want to hatch a bird inside a whale? Nido doesn't judge your technical curiosities.
-
-- **Prerequisite:** Container needs `--privileged` and `--device /dev/kvm`
-- **Pro Tip:** This is the cleanest way to have a portable VM automation environment without cluttering your host system.
-
-## Why Nido?
-
-| Feature                  |    nido    |  Vagrant  |  Multipass  |   E2B   |
-| :----------------------- | :--------: | :--------: | :---------: | :------: |
-| **AI Integration** |   ✅ MCP   |     ❌     |     ❌     | ✅ Cloud |
-| **Local-first**    |     ✅     |     ✅     |     ✅     |    ❌    |
-| **Storage**        | Compressed | Full boxes | Full images |  Cloud  |
-| **Cross-Platform** |     ✅     |     ✅     |     ✅     |    ✅    |
-| **Simplicity**     |   ⭐⭐⭐   |    ⭐⭐    |   ⭐⭐⭐   |   ⭐⭐   |
-| **Humor Level**    |   🐣🐣🐣   |     😐     |     😐     |    🤖    |
-
-## Roadmap
-
-The single source of truth lives here: `docs/ROADMAP.md`.
-
-## Contributing
-
-Found a bug? Have a feature idea? Want to teach the bird new tricks?
-
-1. Open an issue on GitHub
-2. Fork, hack, and submit a PR
-3. Follow the [tone of voice guidelines](docs/.tone_of_voice.md) (keep it fun!)
-
-## License
-
-MIT License - See [LICENSE](LICENSE) for details.
+MIT License. Free as in "Free Play".
 
 ---
 
 <p align="center">
-  <i>Made with ❤️ for the Agentic future.</i><br>
-  <i>"It's not a VM, it's a lifestyle."</i> 🪺
+  <i>Made with 💜 and ☕ by digital artisans.</i><br>
+  <i>EST. 2025 • "The Grid. A digital frontier."</i>
 </p>
