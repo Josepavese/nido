@@ -200,6 +200,29 @@
           ]
         }
       ]
+    },
+    {
+      "name": "ubuntu-24.04-apache-wordpress",
+      "registry": "nido",
+      "description": "Ubuntu 24.04 with Apache 2 and Wordpress pre-installed.",
+      "homepage": "https://github.com/Josepavese/nido",
+      "versions": [
+        {
+          "version": "v1.0.0",
+          "aliases": [
+            "v1.0.0"
+          ],
+          "arch": "amd64",
+          "url": "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-apache-wordpress.qcow2.001",
+          "checksum_type": "sha256",
+          "checksum": "c89c01c7819b395f03dd6ef0836bc3813bff659e3cf12abc4fc3d6bae3ad3149",
+          "size_bytes": 933625856,
+          "format": "qcow2",
+          "part_urls": [
+            "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-apache-wordpress.qcow2.001"
+          ]
+        }
+      ]
     }
   ]
 }

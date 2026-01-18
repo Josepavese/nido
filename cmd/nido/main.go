@@ -1446,6 +1446,23 @@ func cmdUpdate(nidoDir string) {
 		os.Exit(1)
 	}
 
+	// Check if we have write permissions to the binary
+	// We do a simple check by trying to open it for appending (without writing)
+	// or checking file mode/ownership if we were more pedantic.
+	// A practical test is to try to touch it or open RDWR.
+	f, err := os.OpenFile(exePath, os.O_RDWR, 0666)
+	if err != nil {
+		if os.IsPermission(err) {
+			ui.Error("Permission denied: Cannot write to %s", exePath)
+			ui.Info("Please run the upgrade command with sudo:")
+			fmt.Printf("  sudo nido upgrade\n")
+			os.Exit(1)
+		}
+		// Logic continues if other error, though it will likely fail later
+	} else {
+		f.Close()
+	}
+
 	// Download to temp file
 	tmpPath := exePath + ".tmp"
 	out, err := os.Create(tmpPath)
