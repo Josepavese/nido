@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-01-18T11:58:34.373568579Z",
+  "updated_at": "2026-01-19T14:01:50.318112921Z",
   "images": [
     {
       "name": "ubuntu",
@@ -164,9 +164,9 @@
           ],
           "arch": "amd64",
           "url": "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-lubuntu-minimal.qcow2.zst.aa",
-          "checksum_type": "sha256",
-          "checksum": "a90253f67ad366095f2c96854b9ee9762803e1db7500cdace6b1147ec24eda22",
-          "size_bytes": 3328599654,
+          "checksum_type": "",
+          "checksum": "",
+          "size_bytes": 3327448432,
           "format": "qcow2",
           "part_urls": [
             "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-lubuntu-minimal.qcow2.zst.aa",
@@ -191,7 +191,7 @@
           "arch": "amd64",
           "url": "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-xfce-development.qcow2.zst.aa",
           "checksum_type": "sha256",
-          "checksum": "a5fd04343b55e03bde753753e456a060f66dc1ae29c0465f6e2bbc7a005d0569",
+          "checksum": "887c85a9835a216eac079a50a646349fd404619c63e6c8d6a19dd9c8cd033d16",
           "size_bytes": 1055867011,
           "format": "qcow2",
           "part_urls": [
@@ -208,18 +208,33 @@
       "homepage": "https://github.com/Josepavese/nido",
       "versions": [
         {
-          "version": "v1.0.0",
+          "version": "v4.4.1",
           "aliases": [
-            "v1.0.0"
+            "v4.4.1"
           ],
           "arch": "amd64",
           "url": "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-apache-wordpress.qcow2.zst",
-          "checksum_type": "sha256",
-          "checksum": "74b61c34f594d089f8c5fc1ede86bbacc07cc50a175244a56e231b58305b0f9f",
+          "checksum_type": "",
+          "checksum": "",
           "size_bytes": 915821054,
           "format": "qcow2",
           "part_urls": [
             "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-apache-wordpress.qcow2.zst"
+          ]
+        },
+        {
+          "version": "v4.4.0",
+          "aliases": [
+            "v4.4.0"
+          ],
+          "arch": "amd64",
+          "url": "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-apache-wordpress.qcow2.001",
+          "checksum_type": "sha256",
+          "checksum": "c89c01c7819b395f03dd6ef0836bc3813bff659e3cf12abc4fc3d6bae3ad3149",
+          "size_bytes": 933625856,
+          "format": "qcow2",
+          "part_urls": [
+            "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-apache-wordpress.qcow2.001"
           ]
         }
       ]
@@ -231,16 +246,19 @@
       "homepage": "https://github.com/Josepavese/nido",
       "versions": [
         {
-          "version": "v1.0.0",
+          "version": "v4.4.1",
           "aliases": [
-            "v1.0.0"
+            "v4.4.1"
           ],
           "arch": "amd64",
           "url": "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-plesk-web.qcow2.zst",
-          "checksum_type": "sha256",
-          "checksum": "e5d868027c1fa9c8dffcd971bc99949101dda6f1f69d70dd46bdfb4cab5c5f10",
+          "checksum_type": "",
+          "checksum": "",
           "size_bytes": 1008572623,
-          "format": "qcow2"
+          "format": "qcow2",
+          "part_urls": [
+            "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-plesk-web.qcow2.zst"
+          ]
         }
       ]
     },
@@ -251,14 +269,14 @@
       "homepage": "https://github.com/Josepavese/nido",
       "versions": [
         {
-          "version": "v1.0.0",
+          "version": "v4.4.1",
           "aliases": [
-            "v1.0.0"
+            "v4.4.1"
           ],
           "arch": "amd64",
           "url": "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-comfyui.qcow2.zst.aa",
-          "checksum_type": "sha256",
-          "checksum": "3296eca0d4a9ef23fe2401d83b5440292bdefba7c4fd9aeb2c5628804198a2b9",
+          "checksum_type": "",
+          "checksum": "",
           "size_bytes": 4168020437,
           "format": "qcow2",
           "part_urls": [

@@ -87,10 +87,30 @@ sources:
         owner: "Josepavese"
         repo: "nido"
 
-  - name: server-hardened
+  - name: ubuntu-24.04-apache-wordpress
     registry: nido
     provider: "Nido Premium Flavours"
-    description: "Hardened Debian with wireguard and firewall pre-configured."
+    description: "Ubuntu 24.04 with Apache 2 and Wordpress pre-installed."
+    homepage: "https://github.com/Josepavese/nido"
+    strategies:
+      - type: "github-release"
+        owner: "Josepavese"
+        repo: "nido"
+
+  - name: ubuntu-24.04-plesk-web
+    registry: nido
+    provider: "Nido Premium Flavours"
+    description: "Ubuntu 24.04 with Plesk Obsidian pre-installed."
+    homepage: "https://github.com/Josepavese/nido"
+    strategies:
+      - type: "github-release"
+        owner: "Josepavese"
+        repo: "nido"
+
+  - name: ubuntu-24.04-comfyui
+    registry: nido
+    provider: "Nido Premium Flavours"
+    description: "Ubuntu 24.04 with ComfyUI and AI tools pre-installed."
     homepage: "https://github.com/Josepavese/nido"
     strategies:
       - type: "github-release"

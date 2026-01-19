@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -323,7 +324,6 @@ func fetchGithubRelease(src Source, strat Strategy) ([]image.Version, error) {
 	}
 
 	req, _ := http.NewRequest("GET", apiURL, nil)
-	// Add token if available in environment
 	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
 		req.Header.Set("Authorization", "token "+token)
 	}
@@ -355,67 +355,95 @@ func fetchGithubRelease(src Source, strat Strategy) ([]image.Version, error) {
 	var results []image.Version
 
 	for _, rel := range releases {
-		// Group assets by "image-version"
-		// Key: version
 		type group struct {
-			parts    []string
-			size     int64
-			checksum string
-			chkType  string
+			parts       []string
+			size        int64
+			checksum    string
+			chkType     string
+			compression string // "zst" or "none"
 		}
+		// Key: image version string
 		groups := make(map[string]*group)
 
-		// Regex to parse asset name: flavour-<name>-<version>-amd64.qcow2.<part>
-		// or flavour-<name>-<version>-amd64.qcow2.sha256
-		// We use greedy match for the name and enforce 'v' followed by digits for the version to disambiguate.
-		assetRegex := regexp.MustCompile(`flavour-(.+)-(v\d+\..+)-amd64\.qcow2(\..+)?`)
+		// Temporary map to track the "best" version name for each flavour in this release
+		flavourToVersion := make(map[string]string)
 
+		// Regex to parse asset name: flavour-<name>[-<version>][-amd64].qcow2[.<suffix>]
+		assetRegex := regexp.MustCompile(`flavour-(.+?)(?:-(v\d+.*))?(?:-amd64)?\.qcow2(\..+)?`)
+
+		// First pass: Find specific versions for each flavour
 		for _, asset := range rel.Assets {
 			matches := assetRegex.FindStringSubmatch(asset.Name)
-			if matches == nil {
+			if matches == nil || matches[1] != src.Name {
+				continue
+			}
+			if matches[2] != "" {
+				flavourToVersion[matches[1]] = strings.TrimSuffix(matches[2], "-amd64")
+			}
+		}
+
+		// Second pass: Categorize and group assets
+		for _, asset := range rel.Assets {
+			matches := assetRegex.FindStringSubmatch(asset.Name)
+			if matches == nil || matches[1] != src.Name {
 				continue
 			}
 
 			flavourName := matches[1]
-			version := matches[2]
+			version := strings.TrimSuffix(matches[2], "-amd64")
 			suffix := matches[3]
 
-			// Skip if this isn't the flavour we are looking for in this source
-			if flavourName != src.Name {
-				continue
+			// Fallback logic for version: Prefer specific version from filename, then release tag
+			if version == "" {
+				if best, ok := flavourToVersion[flavourName]; ok {
+					version = best
+				} else {
+					version = rel.TagName
+				}
 			}
 
-			key := version
-			if groups[key] == nil {
-				groups[key] = &group{parts: []string{}}
+			if groups[version] == nil {
+				groups[version] = &group{parts: []string{}, compression: "none"}
 			}
+			g := groups[version]
 
 			if strings.HasSuffix(suffix, ".sha256") {
-				groups[key].chkType = "sha256"
+				g.chkType = "sha256"
 				ch, _ := fetchString(asset.DownloadURL)
-				groups[key].checksum = strings.Fields(ch)[0]
+				g.checksum = strings.Fields(ch)[0]
 			} else if strings.HasSuffix(suffix, ".sha512") {
-				groups[key].chkType = "sha512"
+				g.chkType = "sha512"
 				ch, _ := fetchString(asset.DownloadURL)
-				groups[key].checksum = strings.Fields(ch)[0]
-			} else if regexp.MustCompile(`\.\d{3}$`).MatchString(suffix) {
-				// It's a part
-				groups[key].parts = append(groups[key].parts, asset.DownloadURL)
-				groups[key].size += asset.Size
+				g.checksum = strings.Fields(ch)[0]
+			} else {
+				isZst := strings.Contains(suffix, ".zst")
+				isPart := regexp.MustCompile(`\.(zst\.[a-z]{2}|\d{3})$`).MatchString(suffix) || suffix == ".zst"
+
+				if isPart {
+					if isZst && g.compression == "none" {
+						g.parts = []string{}
+						g.size = 0
+						g.compression = "zst"
+					}
+					if isZst == (g.compression == "zst") {
+						g.parts = append(g.parts, asset.DownloadURL)
+						g.size += asset.Size
+					}
+				}
 			}
 		}
 
-		// 3. Convert groups to versions
 		for ver, g := range groups {
 			if len(g.parts) == 0 {
 				continue
 			}
 
+			sort.Strings(g.parts)
 			results = append(results, image.Version{
 				Version:      ver,
 				Aliases:      []string{ver},
 				Arch:         "amd64",
-				URL:          g.parts[0], // First part as main URL for compatibility
+				URL:          g.parts[0],
 				PartURLs:     g.parts,
 				ChecksumType: g.chkType,
 				Checksum:     g.checksum,
@@ -425,7 +453,6 @@ func fetchGithubRelease(src Source, strat Strategy) ([]image.Version, error) {
 		}
 	}
 
-	// 4. Deduplicate and return
 	finalVersions := []image.Version{}
 	seen := make(map[string]bool)
 	for _, v := range results {
