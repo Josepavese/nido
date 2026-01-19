@@ -9,6 +9,7 @@ GREEN="$(tput setaf 2 2>/dev/null || echo '')"
 CYAN="$(tput setaf 6 2>/dev/null || echo '')"
 YELLOW="$(tput setaf 3 2>/dev/null || echo '')"
 RED="$(tput setaf 1 2>/dev/null || echo '')"
+MAGENTA="$(tput setaf 5 2>/dev/null || echo '')"
 RESET="$(tput sgr0 2>/dev/null || echo '')"
 
 echo "${BOLD}${CYAN}"

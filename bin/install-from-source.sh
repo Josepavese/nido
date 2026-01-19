@@ -13,6 +13,7 @@ GREEN="$(tput setaf 2 || echo '')"
 YELLOW="$(tput setaf 3 || echo '')"
 RED="$(tput setaf 1 || echo '')"
 CYAN="$(tput setaf 6 || echo '')"
+MAGENTA="$(tput setaf 5 || echo '')"
 RESET="$(tput sgr0 || echo '')"
 
 INFO="[${BLUE}i${RESET}]"
