@@ -185,16 +185,22 @@ EOF
     echo "${GREEN}✅ Application bundle created${RESET}"
 fi
 
+# --- Final Tip ---
+QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils"
+if [ "$ARCH" = "arm64" ]; then
+    QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-utils"
+fi
+
 echo ""
 echo "${BOLD}${GREEN}🎉 Installation complete!${RESET}"
 echo ""
 echo "${BOLD}Next steps:${RESET}"
-echo "  1. Reload shell: ${CYAN}source ${SHELL_RC:-~/.bashrc}${RESET}"
+echo "  1. Reload shell:  ${CYAN}source ${SHELL_RC:-~/.bashrc}${RESET}"
 echo "  2. Verify install: ${CYAN}nido version${RESET}"
-echo "  3. Check system: ${CYAN}nido doctor${RESET}"
+echo "  3. Check system:   ${CYAN}nido doctor${RESET}"
 echo ""
 echo "${YELLOW}💡 Note: You'll need QEMU installed to run VMs${RESET}"
-echo "   Linux: ${CYAN}sudo apt install qemu-system-x86 qemu-utils${RESET}"
+echo "   Linux: ${CYAN}${QEMU_CMD}${RESET}"
 echo "   macOS: ${CYAN}brew install qemu${RESET}"
 echo ""
 echo "${BOLD}\"It's not a VM, it's a lifestyle.\" 🪺${RESET}"

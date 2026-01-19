@@ -5,6 +5,13 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.7] - 2026-01-19 "The Actionable Nest" 🛠️🪺
+
+### 🚀 Improved
+
+- **Robust Quick-Install**: The installer is now architecture-aware, recommending `qemu-system-arm` on ARM64 and automatically including `sudo apt update` to prevent repository sync failures.
+- **Actionable Doctor**: `nido doctor` now provides direct, copy-pasteable installation commands when QEMU or KVM are missing.
+
 ## [4.4.6] - 2026-01-19 "The Final Descent" 💀🪺
 
 ### 🔧 Fixes & Polish

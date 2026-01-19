@@ -794,15 +794,40 @@ func (p *QemuProvider) Doctor() []string {
 
 	// 2. Binaries
 	qemu, err := exec.LookPath("qemu-system-x86_64")
-	add("Binary: QEMU", err == nil, qemu)
+	if err != nil {
+		// Try generic qemu-system for non-x86 if needed, but the doctor check usually targets the host arch
+		qemu, err = exec.LookPath("qemu-system")
+	}
+
+	qemuHint := ""
+	if err != nil {
+		if runtime.GOOS == "linux" {
+			pkg := "qemu-system-x86"
+			if runtime.GOARCH == "arm64" {
+				pkg = "qemu-system-arm"
+			}
+			qemuHint = fmt.Sprintf("(Try: sudo apt update && sudo apt install %s qemu-utils)", pkg)
+		} else if runtime.GOOS == "darwin" {
+			qemuHint = "(Try: brew install qemu)"
+		}
+	}
+	add("Binary: QEMU", err == nil, qemu+" "+qemuHint)
 
 	qimg, err := exec.LookPath("qemu-img")
-	add("Binary: qemu-img", err == nil, qimg)
+	qimgHint := ""
+	if err != nil && runtime.GOOS == "linux" {
+		qimgHint = "(Included in qemu-utils)"
+	}
+	add("Binary: qemu-img", err == nil, qimg+" "+qimgHint)
 
 	// 3. KVM (Linux only)
 	if runtime.GOOS == "linux" {
 		_, err := os.Stat("/dev/kvm")
-		add("Accel: KVM", err == nil, "/dev/kvm accessibility")
+		kvmHint := ""
+		if err != nil {
+			kvmHint = "(Ensure virtualization is enabled in BIOS/UEFI and 'kvm' module is loaded)"
+		}
+		add("Accel: KVM", err == nil, "/dev/kvm accessibility "+kvmHint)
 	}
 
 	return reports

@@ -45,12 +45,20 @@ if ! command -v qemu-img >/dev/null 2>&1; then
     QEMU_MISSING=1
 fi
 
+# OS and Architecture Detection
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+ARCH="$(uname -m)"
+
 if [[ $QEMU_MISSING -eq 0 ]]; then
     echo "  ${OK} QEMU binaries found."
 else
+    QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils"
+    if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
+        QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-utils"
+    fi
     echo "  ${INFO} Note: You'll need to install QEMU before spawning VMs."
-    echo "        Linux: sudo apt install qemu-system-x86 qemu-utils"
-    echo "        macOS: brew install qemu"
+    echo "        Linux: ${CYAN}${QEMU_CMD}${RESET}"
+    echo "        macOS: ${CYAN}brew install qemu${RESET}"
 fi
 
 # 2. Build
