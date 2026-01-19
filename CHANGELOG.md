@@ -5,6 +5,14 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.4] - 2026-01-19 "The Responsive Nest" 🕹️🪺
+
+### 🔧 Fixes & Polish
+
+- **Sanitized Self-Destruct:** The GUI now correctly terminates after a `self-destruct` operation. The application successfully shuts down once the uninstallation sequence is complete. 🧹
+- **Evolutionary Feedback:** Added explicit feedback when checking for updates. If your Nest is already at the latest evolutionary state, a modal now confirms that no further ascension is required. 🧬
+- **Life-Cycle Synchronization:** Improved internal message propagation to ensure and state changes are correctly reflected across the TUI.
+
 ## [4.4.3] - 2026-01-19 "The Turbo Nest" 🚀🪺
 
 ### ✨ New Toys
