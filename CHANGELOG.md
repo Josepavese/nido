@@ -5,6 +5,14 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.1] - 2026-01-19 "The Resilient Nest" 🛡️🩹🐣
+
+### 🚀 Improved
+
+- **Interactive Installers**: Fixed a critical bug where interactive prompts (like the KVM permission fix) failed when the installer was piped (e.g., `curl | bash`). Redirection to `/dev/tty` now ensures 100% human-interactive success.
+- **Enhanced OOM Diagnostics**: The GUI now detects memory exhaustion errors (`Cannot allocate memory`) and provides a dedicated diagnostic modal (ERR_MEM 🧠) with hardware optimization advice.
+- **Vocal KVM Checks**: Both the installer and `nido doctor` are now more verbose and explicit about the mandatory session restart (or `newgrp` usage) required after applying virtualization permissions.
+
 ## [4.5.0] - 2026-01-19 "The Nested Nest" 🪆🪺🧪
 
 ### 🚀 Improved
