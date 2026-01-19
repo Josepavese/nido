@@ -241,7 +241,7 @@ func (c *Config) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 				cmds = append(cmds, func() tea.Msg { return RequestCacheMsg{} })
 			}
 			if item.Key == "UPDATE" {
-				cmds = append(cmds, func() tea.Msg { return ops.RequestUpdateMsg{Manual: true} })
+				cmds = append(cmds, func() tea.Msg { return ops.RequestUpdateMsg{Manual: false} })
 			}
 		}
 
