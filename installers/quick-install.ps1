@@ -102,6 +102,29 @@ if (Test-Path $iconPath) {
 $shortcut.Save()
 Write-Host "✅ Start Menu shortcut created" -ForegroundColor Green
 
+# --- Dependency Check & Proactive Install ---
+Write-Host "🔍 Checking flight readiness (dependencies)..." -ForegroundColor Cyan
+$qemuInstalled = $false
+try {
+    if (Get-Command "qemu-system-x86_64" -ErrorAction SilentlyContinue) { $qemuInstalled = $true }
+    elseif (Get-Command "qemu-system-aarch64" -ErrorAction SilentlyContinue) { $qemuInstalled = $true }
+    elseif (Get-Command "qemu-system" -ErrorAction SilentlyContinue) { $qemuInstalled = $true }
+} catch {}
+
+if (-not $qemuInstalled) {
+    Write-Host "⚠️  QEMU is missing. Nido needs it to hatch VMs." -ForegroundColor Yellow
+    $response = Read-Host "📦 Would you like to install QEMU dependencies automatically via winget? (y/N)"
+    if ($response -eq "y") {
+        Write-Host "🛠️  Installing QEMU via winget..." -ForegroundColor Cyan
+        winget install --id=SoftwareFreedomConservancy.QEMU -e --accept-package-agreements --accept-source-agreements
+        Write-Host "💡 Note: You might need to restart your terminal for QEMU to be in your PATH." -ForegroundColor Yellow
+    } else {
+        Write-Host "💡 Skipping automatic installation. You'll need to install it manually." -ForegroundColor Gray
+    }
+} else {
+    Write-Host "✅ QEMU is already present and ready for liftoff." -ForegroundColor Green
+}
+
 Write-Host ""
 Write-Host "🎉 Installation complete!" -ForegroundColor Green
 Write-Host ""
@@ -110,9 +133,14 @@ Write-Host "  1. Restart your terminal" -ForegroundColor Cyan
 Write-Host "  2. Verify install: " -NoNewline; Write-Host "nido version" -ForegroundColor Cyan
 Write-Host "  3. Check system: " -NoNewline; Write-Host "nido doctor" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "💡 Note: You'll need QEMU installed to run VMs" -ForegroundColor Yellow
-Write-Host "   Install via: " -NoNewline; Write-Host "choco install qemu" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "💡 Tip: PowerShell completion is not yet automatic. Run " -NoNewline; Write-Host "nido completion powershell" -ForegroundColor Cyan -NoNewline; Write-Host " to check status."
+
+if ($qemuInstalled -or (Get-Command "qemu-system-x86_64" -ErrorAction SilentlyContinue)) {
+    Write-Host "✨ QEMU detected. You are ready to fly!" -ForegroundColor Green
+} else {
+    Write-Host "💡 Note: You still need QEMU to run VMs" -ForegroundColor Yellow
+    Write-Host "   Install manually: " -NoNewline; Write-Host "winget install SoftwareFreedomConservancy.QEMU" -ForegroundColor Cyan
+}
+
+Write-Host "💡 Pro Tip: Ensure 'Windows Hypervisor Platform' is enabled in Windows Features for max speed!" -ForegroundColor Magenta
 Write-Host ""
 Write-Host '"It''s not a VM, it''s a lifestyle." 🪺' -ForegroundColor White
