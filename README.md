@@ -185,7 +185,7 @@ Every VM you spawn is just a **diff layer** (mutation) on top of that ROM.
 
 ## 📜 License
 
-MIT License. Free as in "Free Play".
+[MIT License](LICENSE). Free as in "Free Play".
 
 ---
 
