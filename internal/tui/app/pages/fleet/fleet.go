@@ -775,7 +775,21 @@ func (f *Fleet) mapError(err error) (string, string) {
 				" • Note: If you just ran the fixer, you MUST restart your terminal session."
 	}
 
-	// 3. Port Conflict
+	// 3. Out of Memory
+	if strings.Contains(raw, "Cannot allocate memory") {
+		return "Hypervisor Error (ERR_MEM) 🧠",
+			" The host system does not have enough free RAM to hatch this VM.\n\n" +
+				" • Hint: Close other applications or VMs.\n" +
+				" • Hint: If running nested, increase the host VM's memory."
+	}
+
+	// 4. Port Conflict
+	if strings.Contains(raw, "bind: address already in use") {
+		return "Port Conflict (ERR_NET)",
+			" The VM could not start because its SSH or VNC port is already in use.\n\n" +
+				" • Hint: Check if another VM is using these ports.\n" +
+				" • Hint: Wait a few seconds if you just stopped it."
+	}
 
 	// 3. Generic QEMU Exit Code
 	if strings.Contains(raw, "exit status") {
