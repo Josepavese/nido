@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-01-18T11:58:34.373568579Z",
+  "updated_at": "2026-01-19T08:27:25.973601458Z",
   "images": [
     {
       "name": "ubuntu",
@@ -163,16 +163,16 @@
             "v3.0.0-dev"
           ],
           "arch": "amd64",
-          "url": "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.001",
+          "url": "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.001",
           "checksum_type": "",
           "checksum": "",
           "size_bytes": 3353804800,
           "format": "qcow2",
           "part_urls": [
-            "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.001",
-            "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.002",
-            "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.003",
-            "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.004"
+            "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.001",
+            "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.002",
+            "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.003",
+            "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-lubuntu-minimal-v3.0.0-dev-amd64.qcow2.004"
           ]
         }
       ]
@@ -189,37 +189,14 @@
             "v4.1.1"
           ],
           "arch": "amd64",
-          "url": "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.001",
+          "url": "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.001",
           "checksum_type": "sha256",
           "checksum": "887c85a9835a216eac079a50a646349fd404619c63e6c8d6a19dd9c8cd033d16",
           "size_bytes": 1071513600,
           "format": "qcow2",
           "part_urls": [
-            "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.001",
-            "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.002"
-          ]
-        }
-      ]
-    },
-    {
-      "name": "ubuntu-24.04-apache-wordpress",
-      "registry": "nido",
-      "description": "Ubuntu 24.04 with Apache 2 and Wordpress pre-installed.",
-      "homepage": "https://github.com/Josepavese/nido",
-      "versions": [
-        {
-          "version": "v1.0.0",
-          "aliases": [
-            "v1.0.0"
-          ],
-          "arch": "amd64",
-          "url": "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-apache-wordpress.qcow2.001",
-          "checksum_type": "sha256",
-          "checksum": "c89c01c7819b395f03dd6ef0836bc3813bff659e3cf12abc4fc3d6bae3ad3149",
-          "size_bytes": 933625856,
-          "format": "qcow2",
-          "part_urls": [
-            "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-apache-wordpress.qcow2.001"
+            "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.001",
+            "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-xfce-development-v4.1.1-amd64.qcow2.002"
           ]
         }
       ]
