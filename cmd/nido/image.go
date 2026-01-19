@@ -265,13 +265,24 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 		ui.Info("Size:   %s", ui.HumanSize(ver.SizeBytes))
 	}
 
+	// Determine if compression is needed based on URL extension
+	isCompressed := strings.HasSuffix(ver.URL, ".zst") || strings.HasSuffix(ver.URL, ".zstandard")
+	if len(ver.PartURLs) > 0 {
+		isCompressed = strings.HasSuffix(ver.PartURLs[0], ".zst") || strings.HasSuffix(ver.PartURLs[0], ".zstandard")
+	}
+
+	downloadPath := destPath
+	if isCompressed {
+		downloadPath = destPath + ".zst"
+	}
+
 	// Download
 	downloader := image.Downloader{Quiet: jsonOut}
 	var downloadErr error
 	if len(ver.PartURLs) > 0 {
-		downloadErr = downloader.DownloadMultiPart(ver.PartURLs, destPath, ver.SizeBytes)
+		downloadErr = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
 	} else {
-		downloadErr = downloader.Download(ver.URL, destPath, ver.SizeBytes)
+		downloadErr = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
 	}
 
 	if downloadErr != nil {
@@ -281,14 +292,15 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 			os.Exit(1)
 		}
 		ui.Error("Download failed: %v", downloadErr)
+		os.Remove(downloadPath) // Cleanup
 		os.Exit(1)
 	}
 
-	// Verify Checksum
+	// Verify Checksum (on the downloaded file)
 	if !jsonOut {
 		ui.Ironic("Verifying genetic integrity...")
 	}
-	if err := image.VerifyChecksum(destPath, ver.Checksum, ver.ChecksumType); err != nil {
+	if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
 		if jsonOut {
 			resp := clijson.NewResponseError("image pull", "ERR_IO", "Checksum verification failed", err.Error(), "Retry the download or choose a different image.", nil)
 			_ = clijson.PrintJSON(resp)
@@ -297,8 +309,27 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 			ui.Warn("The downloaded file may be corrupted or tampered with.")
 			ui.Warn("Deleting corrupted file...")
 		}
-		os.Remove(destPath)
+		os.Remove(downloadPath)
 		os.Exit(1)
+	}
+
+	// Decompress if needed
+	if isCompressed {
+		if !jsonOut {
+			ui.Ironic("Decompressing compressed flavour...")
+		}
+		if err := downloader.Decompress(downloadPath, destPath); err != nil {
+			if jsonOut {
+				resp := clijson.NewResponseError("image pull", "ERR_IO", "Decompression failed", err.Error(), "Ensure zstd is installed on your system.", nil)
+				_ = clijson.PrintJSON(resp)
+			} else {
+				ui.Error("Decompression failed: %v", err)
+			}
+			os.Remove(downloadPath)
+			os.Exit(1)
+		}
+		// Final cleanup of the compressed part
+		os.Remove(downloadPath)
 	}
 
 	if jsonOut {

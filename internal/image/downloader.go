@@ -182,6 +182,15 @@ func (d *Downloader) Decompress(src, dest string) error {
 		fmt.Printf("📦 Decompressing %s...\n", filepath.Base(src))
 	}
 
+	if strings.HasSuffix(src, ".zst") || strings.HasSuffix(src, ".zstandard") {
+		// zstd -d src -o dest
+		cmd := exec.Command("zstd", "-d", src, "-o", dest)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("zstd decompression failed: %v (%s)", err, string(out))
+		}
+		return nil
+	}
+
 	if strings.HasSuffix(src, ".tar.xz") {
 		// Kali images are tarballs containing the qcow2
 		// tar -xJf src -C dir
