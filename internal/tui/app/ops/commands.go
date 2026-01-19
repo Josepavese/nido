@@ -62,6 +62,7 @@ type OpResultMsg struct {
 type UpdateCheckMsg struct {
 	Current string
 	Latest  string
+	Manual  bool
 	Err     error
 }
 
@@ -422,12 +423,13 @@ func FetchTemplatesList(prov provider.VMProvider) tea.Cmd {
 // --- Config Commands ---
 
 // CheckUpdate checks for available updates via GitHub.
-func CheckUpdate() tea.Cmd {
+func CheckUpdate(manual bool) tea.Cmd {
 	return func() tea.Msg {
 		latest, err := build.GetLatestVersion()
 		return UpdateCheckMsg{
 			Current: build.Version,
 			Latest:  latest,
+			Manual:  manual,
 			Err:     err,
 		}
 	}

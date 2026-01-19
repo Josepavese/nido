@@ -112,7 +112,7 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return n, tea.Batch(cmd, ops.DeleteTemplate(n.prov, msg.Name, msg.Force))
 
 	case ops.RequestUpdateMsg:
-		return n, ops.CheckUpdate()
+		return n, ops.CheckUpdate(msg.Manual)
 
 	case ops.RequestCacheMsg:
 		return n, ops.FetchCacheStats(n.prov)
@@ -235,6 +235,9 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
+
+	case tea.QuitMsg:
+		return n, tea.Quit
 	}
 
 	// Delegate to Kit App

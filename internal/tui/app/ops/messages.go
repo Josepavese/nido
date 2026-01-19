@@ -71,7 +71,9 @@ type RequestPruneMsg struct {
 }
 
 // RequestUpdateMsg requests a version check.
-type RequestUpdateMsg struct{}
+type RequestUpdateMsg struct {
+	Manual bool
+}
 
 // RequestCacheMsg requests cache statistics.
 type RequestCacheMsg struct{}

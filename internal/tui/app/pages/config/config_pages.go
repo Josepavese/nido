@@ -210,7 +210,7 @@ func NewConfigPageUpdate(parent *Config) *ConfigPageUpdate {
 
 	p.CheckButton = widget.NewSubmitButton("Action", "CHECK", func() tea.Cmd {
 		parent.UpdateChecking = true
-		return func() tea.Msg { return ops.RequestUpdateMsg{} }
+		return func() tea.Msg { return ops.RequestUpdateMsg{Manual: true} }
 	})
 
 	p.ConfirmModal = widget.NewModal(
@@ -249,6 +249,24 @@ func (p *ConfigPageUpdate) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case ops.UpdateCheckMsg:
+		if msg.Manual && msg.Latest == msg.Current && msg.Err == nil {
+			p.ResultModal = widget.NewAlertModal(
+				"Evolutionary Peak",
+				"Your Nest is already at the latest evolutionary state.\nNo ascension required.",
+				nil,
+			)
+			p.ResultModal.Show()
+		} else if msg.Manual && msg.Err != nil {
+			p.ResultModal = widget.NewAlertModal(
+				"Check Failed",
+				fmt.Sprintf("Failed to communicate with the mother nest:\n%v", msg.Err),
+				nil,
+			)
+			p.ResultModal.Show()
+		}
+		return p, nil
+
 	case ops.ApplyUpdateMsg:
 		if msg.Err == nil {
 			p.ResultModal = widget.NewAlertModal(

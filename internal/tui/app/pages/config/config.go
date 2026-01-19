@@ -135,7 +135,7 @@ func (c *Config) Init() tea.Cmd {
 	return tea.Batch(
 		c.MasterDetail.Init(),
 		c.Spinner.Tick,
-		func() tea.Msg { return ops.RequestUpdateMsg{} },
+		func() tea.Msg { return ops.RequestUpdateMsg{Manual: false} },
 		func() tea.Msg { return ops.RequestCacheMsg{} },
 	)
 }
@@ -241,7 +241,7 @@ func (c *Config) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 				cmds = append(cmds, func() tea.Msg { return RequestCacheMsg{} })
 			}
 			if item.Key == "UPDATE" {
-				cmds = append(cmds, func() tea.Msg { return ops.RequestUpdateMsg{} })
+				cmds = append(cmds, func() tea.Msg { return ops.RequestUpdateMsg{Manual: true} })
 			}
 		}
 
