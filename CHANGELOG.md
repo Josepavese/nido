@@ -5,6 +5,20 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.3] - 2026-01-19 "The Turbo Nest" 🚀🪺
+
+### ✨ New Toys
+
+- **Ultra-Fast Decompression:** Migrated all Nido flavours to Zstandard (Zstd). Your agents can now hatch faster than ever with superior compression ratios. 📼
+- **ComfyUI Flavour:** Added the `ubuntu-24.04-comfyui` flavour to the official registry. A heavy-duty stable diffusion environment, pre-optimized and split for smooth delivery. 🎨
+- **Enhanced Viewport:** Expanded the arcade viewport dimensions to **84x26**. More columns for your terminal data, more rows for your agent's logs. 📺
+
+### 🔧 Fixes & Polish
+
+- **Genetic Path Expansion:** Repaired a glitch in the matrix where `${HOME}` in `config.env` wasn't being correctly synthesized. Environment variables are now fully expanded in your configuration paths. 🧬
+- **Sanitized Cleanup:** The `uninstall` sequence now surgically removes Nido entries from your shell configuration files ($HOME/.bashrc, $HOME/.zshrc), ensuring a clean exit. 🧹
+- **Documentation Sync:** Harmonized the README with the modern installer behavior. No more hunting for the non-existent `~/.nido/env` file. 🕹️
+
 ## [4.4.2] - 2026-01-18 "The Bulletproof Nest" 🛡️🪺
 
 ### ✨ New Toys
