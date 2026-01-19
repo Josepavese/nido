@@ -766,13 +766,16 @@ func (f *Fleet) mapError(err error) (string, string) {
 				" • Hint: Try deleting and re-creating this VM."
 	}
 
-	// 2. Port Conflict
-	if strings.Contains(raw, "bind: address already in use") {
-		return "Port Conflict (ERR_NET)",
-			" The VM could not start because its SSH or VNC port is already in use.\n\n" +
-				" • Hint: Check if another VM is using these ports.\n" +
-				" • Hint: Wait a few seconds if you just stopped it."
+	// 2. KVM Permission Denied
+	if strings.Contains(raw, "Permission denied") && (strings.Contains(raw, "KVM") || strings.Contains(raw, "kvm")) {
+		return "Hypervisor Error (ERR_QEMU) 🔐",
+			" Nido could not access the KVM acceleration module.\n\n" +
+				" • Problem: Your user does not have permission to use /dev/kvm.\n" +
+				" • Fix: Run 'sudo usermod -aG kvm $USER && newgrp kvm'\n" +
+				" • Note: If you just ran the fixer, you MUST restart your terminal session."
 	}
+
+	// 3. Port Conflict
 
 	// 3. Generic QEMU Exit Code
 	if strings.Contains(raw, "exit status") {

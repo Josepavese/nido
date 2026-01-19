@@ -90,7 +90,13 @@ if [[ "$OS" == "linux" ]]; then
             if [[ "$RESPONSE" =~ ^[Yy]$ ]]; then
                 echo "  ${STEP} Adding $USER to 'kvm' group..."
                 sudo usermod -aG kvm "$USER"
-                echo "  ${OK} Permissions granted. You may need to logout or run 'newgrp kvm'."
+                echo ""
+                echo "  ${BOLD}${MAGENTA}🚨 IMPORTANT: SESSION RESTART REQUIRED${RESET}"
+                echo "  To apply nested virtualization permissions, you MUST either:"
+                echo "    • Restart your terminal session (logout and login)"
+                echo "    • Run ${CYAN}newgrp kvm${RESET} in the current terminal before launching Nido."
+                echo ""
+                echo "  ${OK} Permissions granted."
             fi
         else
             echo "  ${OK} KVM is accessible."

@@ -834,7 +834,7 @@ func (p *QemuProvider) Doctor() []string {
 			f, err := os.OpenFile(kvmPath, os.O_RDWR, 0)
 			if err != nil {
 				kvmOk = false
-				kvmHint = "(Permission denied. Try: sudo usermod -aG kvm $USER && newgrp kvm)"
+				kvmHint = "(Permission denied. Try: sudo usermod -aG kvm $USER && newgrp kvm. NOTE: You MUST restart your session for this to take effect globally.)"
 			} else {
 				f.Close()
 			}
