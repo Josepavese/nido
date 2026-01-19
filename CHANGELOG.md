@@ -5,6 +5,13 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.6] - 2026-01-19 "The Final Descent" 💀🪺
+
+### 🔧 Fixes & Polish
+
+- **Absolute Self-Destruct:** Fixed a critical message-type mismatch where the `tea.Quit` signal was being sent as a function reference instead of a realized message. The TUI now terminates with surgical precision after an uninstallation. 🏁
+- **Genome Hardening:** Final cleanup of redundant lifecycle interceptors.
+
 ## [4.4.5] - 2026-01-19 "The Stoic Nest" 🏺🪺
 
 ### 🔧 Fixes & Polish

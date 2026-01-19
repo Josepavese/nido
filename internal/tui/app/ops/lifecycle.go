@@ -30,6 +30,6 @@ func UninstallCmd() tea.Cmd {
 		}
 
 		// Quit immediately on success
-		return tea.Quit
+		return tea.Quit()
 	}
 }
