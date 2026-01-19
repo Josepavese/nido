@@ -149,7 +149,7 @@ if [ "$OS" = "linux" ]; then
     cat > "${NIDO_HOME}/bin/nido-launcher" <<EOF
 #!/bin/bash
 if command -v gnome-terminal >/dev/null 2>&1; then
-    gnome-terminal --geometry=80x24 -- "${NIDO_HOME}/bin/nido" gui
+    gnome-terminal --geometry=84x26 -- "${NIDO_HOME}/bin/nido" gui
 elif command -v x-terminal-emulator >/dev/null 2>&1; then
     x-terminal-emulator -e "${NIDO_HOME}/bin/nido" gui
 else
@@ -178,7 +178,7 @@ elif [ "$OS" = "darwin" ]; then
 osascript -e 'tell application "Terminal"
     activate
     set newWin to (do script "${NIDO_HOME}/bin/nido gui")
-    set bounds of window 1 of (application "Terminal") to {100, 100, 750, 550}
+    set bounds of window 1 of (application "Terminal") to {100, 100, 780, 580}
 end tell'
 EOF
     chmod +x "${APP_DIR}/Contents/MacOS/Nido"

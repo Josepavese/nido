@@ -54,7 +54,7 @@ func TestCalculateGrid(t *testing.T) {
 		wantBodyH   int
 		wantFooterY int
 	}{
-		{"Standard (80x24)", 80, 24, 19, 23}, // 24 - 5 = 19
+		{"Standard (84x26)", 84, 26, 21, 25}, // 26 - 5 = 21
 		{"Exact Chrome (80x5)", 80, 5, 0, 4}, // Body is 0
 		{"Too Small (80x4)", 80, 4, 0, 3},    // Footer is at y=3 (last line), Header takes 3, SubHeader takes 1?
 		// Logic trace: H=3 (avail 1), SH=1 (avail 0), F=0? Let's check test result.
