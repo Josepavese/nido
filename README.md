@@ -34,7 +34,8 @@ Run this command in your terminal. Do not turn off the console while saving.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.sh | bash
-source ~/.nido/env   # Power up the path
+# Restart your terminal or source your config to initialize the matrix
+source ~/.bashrc  # or ~/.zshrc, power up the path
 nido version         # Check checksum
 ```
 
