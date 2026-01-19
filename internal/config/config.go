@@ -82,7 +82,7 @@ func LoadConfig(path string) (*Config, error) {
 			continue
 		}
 		key := parts[0]
-		val := parts[1]
+		val := os.ExpandEnv(parts[1])
 
 		switch key {
 		// Update LoadConfig loop
