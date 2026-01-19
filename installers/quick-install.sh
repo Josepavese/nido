@@ -218,14 +218,24 @@ else
 fi
 
 # KVM Permissions (Linux Only)
-if [ "$OS" = "linux" ] && [ -e /dev/kvm ] && [ ! -w /dev/kvm ]; then
-    echo "${YELLOW}⚠️  KVM detected but you don't have permission to use it.${RESET}"
-    read -p "🔐 Would you like to grant permissions to the current user? (y/N) " -n 1 -r < /dev/tty
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "${CYAN}🛠️  Adding $USER to 'kvm' group...${RESET}"
-        sudo usermod -aG kvm $USER
-        echo "${GREEN}✅ Permissions granted. You may need to logout or run 'newgrp kvm'.${RESET}"
+if [ "$OS" = "linux" ]; then
+    echo "${CYAN}🔍 Checking KVM accessibility...${RESET}"
+    if [ -e /dev/kvm ]; then
+        if [ ! -w /dev/kvm ]; then
+            echo "${YELLOW}⚠️  KVM detected but you don't have permission to use it.${RESET}"
+            echo -n "🔐 Would you like to grant permissions to the current user? (y/N) " > /dev/tty
+            read -n 1 -r RESPONSE < /dev/tty
+            echo ""
+            if [[ "$RESPONSE" =~ ^[Yy]$ ]]; then
+                echo "${CYAN}🛠️  Adding $USER to 'kvm' group...${RESET}"
+                sudo usermod -aG kvm "$USER"
+                echo "${GREEN}✅ Permissions granted. You may need to logout or run 'newgrp kvm'.${RESET}"
+            fi
+        else
+            echo "${GREEN}✅ KVM is accessible.${RESET}"
+        fi
+    else
+        echo "${YELLOW}ℹ️  KVM not found. Nested virtualization might be disabled in host.${RESET}"
     fi
 fi
 

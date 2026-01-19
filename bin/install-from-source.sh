@@ -79,14 +79,24 @@ else
 fi
 
 # KVM Permissions (Linux Only)
-if [[ "$OS" == "linux" && -e /dev/kvm && ! -w /dev/kvm ]]; then
-    echo "  ${WARN} KVM detected but you don't have permission to use it."
-    read -p "  🔐 Would you like to grant permissions to the current user? (y/N) " -n 1 -r < /dev/tty
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "  ${STEP} Adding $USER to 'kvm' group..."
-        sudo usermod -aG kvm $USER
-        echo "  ${OK} Permissions granted. You may need to logout or run 'newgrp kvm'."
+if [[ "$OS" == "linux" ]]; then
+    echo "${STEP} Checking KVM accessibility..."
+    if [[ -e /dev/kvm ]]; then
+        if [[ ! -w /dev/kvm ]]; then
+            echo "  ${WARN} KVM detected but you don't have permission to use it."
+            echo -n "  🔐 Would you like to grant permissions to the current user? (y/N) " > /dev/tty
+            read -n 1 -r RESPONSE < /dev/tty
+            echo ""
+            if [[ "$RESPONSE" =~ ^[Yy]$ ]]; then
+                echo "  ${STEP} Adding $USER to 'kvm' group..."
+                sudo usermod -aG kvm "$USER"
+                echo "  ${OK} Permissions granted. You may need to logout or run 'newgrp kvm'."
+            fi
+        else
+            echo "  ${OK} KVM is accessible."
+        fi
+    else
+        echo "  ${INFO} KVM not found. Nested virtualization might be disabled in host."
     fi
 fi
 
