@@ -211,10 +211,22 @@ if [ $QEMU_INSTALLED -eq 0 ]; then
             fi
         fi
     else
-        echo "${INFO} Skipping automatic installation. You'll need to install it manually."
+        echo "${YELLOW}⚠️  Skipping automatic installation. You'll need to install it manually.${RESET}"
     fi
 else
-    echo "${GREEN}✅ QEMU is already present and ready for liftoff.${RESET}"
+    echo "${GREEN}✅ QEMU is already present.${RESET}"
+fi
+
+# KVM Permissions (Linux Only)
+if [ "$OS" = "linux" ] && [ -e /dev/kvm ] && [ ! -w /dev/kvm ]; then
+    echo "${YELLOW}⚠️  KVM detected but you don't have permission to use it.${RESET}"
+    read -p "🔐 Would you like to grant permissions to the current user? (y/N) " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "${CYAN}🛠️  Adding $USER to 'kvm' group...${RESET}"
+        sudo usermod -aG kvm $USER
+        echo "${GREEN}✅ Permissions granted. You may need to logout or run 'newgrp kvm'.${RESET}"
+    fi
 fi
 
 # --- Final Tip ---
@@ -227,7 +239,11 @@ echo "  2. Verify install: ${CYAN}nido version${RESET}"
 echo "  3. Check system:   ${CYAN}nido doctor${RESET}"
 echo ""
 if command -v qemu-system-x86_64 >/dev/null 2>&1 || command -v qemu-system-aarch64 >/dev/null 2>&1 || command -v qemu-system >/dev/null 2>&1; then
-    echo "${GREEN}✨ QEMU detected. You are ready to fly!${RESET}"
+    if [ "$OS" = "linux" ] && [ ! -w /dev/kvm ]; then
+        echo "${YELLOW}⚠️  KVM needs permission: sudo usermod -aG kvm \$USER && newgrp kvm${RESET}"
+    else
+        echo "${GREEN}✨ QEMU is ready for liftoff!${RESET}"
+    fi
 else
     QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils"
     [ "$ARCH" = "arm64" ] && QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-utils"

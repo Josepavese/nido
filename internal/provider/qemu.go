@@ -822,12 +822,24 @@ func (p *QemuProvider) Doctor() []string {
 
 	// 3. KVM (Linux only)
 	if runtime.GOOS == "linux" {
-		_, err := os.Stat("/dev/kvm")
+		kvmPath := "/dev/kvm"
+		_, err := os.Stat(kvmPath)
 		kvmHint := ""
+		kvmOk := err == nil
+
 		if err != nil {
 			kvmHint = "(Ensure virtualization is enabled in BIOS/UEFI and 'kvm' module is loaded)"
+		} else {
+			// File exists, check permissions
+			f, err := os.OpenFile(kvmPath, os.O_RDWR, 0)
+			if err != nil {
+				kvmOk = false
+				kvmHint = "(Permission denied. Try: sudo usermod -aG kvm $USER && newgrp kvm)"
+			} else {
+				f.Close()
+			}
 		}
-		add("Accel: KVM", err == nil, "/dev/kvm accessibility "+kvmHint)
+		add("Accel: KVM", kvmOk, kvmPath+" accessibility "+kvmHint)
 	}
 
 	return reports
