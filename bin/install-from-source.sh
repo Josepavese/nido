@@ -52,13 +52,30 @@ ARCH="$(uname -m)"
 if [[ $QEMU_MISSING -eq 0 ]]; then
     echo "  ${OK} QEMU binaries found."
 else
-    QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils"
-    if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
-        QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-utils"
+    echo "  ${WARN} QEMU is missing. Nido needs it to hatch VMs."
+    read -p "  📦 Would you like to install QEMU dependencies automatically? (y/N) " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if [[ "$OS" == "linux" ]]; then
+            PKG="qemu-system-x86 qemu-utils"
+            [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]] && PKG="qemu-system-arm qemu-utils"
+            echo "  ${STEP} Updating repositories and installing ${PKG}..."
+            sudo apt update && sudo apt install -y $PKG
+        elif [[ "$OS" == "darwin" ]]; then
+            if command -v brew >/dev/null 2>&1; then
+                echo "  ${STEP} Installing QEMU via Homebrew..."
+                brew install qemu
+            else
+                echo "  ${ERR} Homebrew not found. Please install Homebrew or QEMU manually."
+            fi
+        fi
+    else
+        QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils"
+        [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]] && QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-utils"
+        echo "  ${INFO} Skipping automatic installation. You'll need to install it manually."
+        echo "        Linux: ${CYAN}${QEMU_CMD}${RESET}"
+        echo "        macOS: ${CYAN}brew install qemu${RESET}"
     fi
-    echo "  ${INFO} Note: You'll need to install QEMU before spawning VMs."
-    echo "        Linux: ${CYAN}${QEMU_CMD}${RESET}"
-    echo "        macOS: ${CYAN}brew install qemu${RESET}"
 fi
 
 # 2. Build

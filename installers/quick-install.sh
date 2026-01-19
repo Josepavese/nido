@@ -185,12 +185,39 @@ EOF
     echo "${GREEN}✅ Application bundle created${RESET}"
 fi
 
-# --- Final Tip ---
-QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils"
-if [ "$ARCH" = "arm64" ]; then
-    QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-utils"
+# --- Dependency Check & Proactive Install ---
+echo "${CYAN}🔍 Checking flight readiness (dependencies)...${RESET}"
+QEMU_INSTALLED=0
+if command -v qemu-system-x86_64 >/dev/null 2>&1 || command -v qemu-system-aarch64 >/dev/null 2>&1 || command -v qemu-system >/dev/null 2>&1; then
+    QEMU_INSTALLED=1
 fi
 
+if [ $QEMU_INSTALLED -eq 0 ]; then
+    echo "${YELLOW}⚠️  QEMU is missing. Nido needs it to hatch VMs.${RESET}"
+    read -p "📦 Would you like to install QEMU dependencies automatically? (y/N) " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if [ "$OS" = "linux" ]; then
+            PKG="qemu-system-x86 qemu-utils"
+            [ "$ARCH" = "arm64" ] && PKG="qemu-system-arm qemu-utils"
+            echo "${CYAN}🛠️  Updating repositories and installing ${PKG}...${RESET}"
+            sudo apt update && sudo apt install -y $PKG
+        elif [ "$OS" = "darwin" ]; then
+            if command -v brew >/dev/null 2>&1; then
+                echo "${CYAN}🛠️  Installing QEMU via Homebrew...${RESET}"
+                brew install qemu
+            else
+                echo "${RED}❌ Homebrew not found. Please install Homebrew or QEMU manually.${RESET}"
+            fi
+        fi
+    else
+        echo "${INFO} Skipping automatic installation. You'll need to install it manually."
+    fi
+else
+    echo "${GREEN}✅ QEMU is already present and ready for liftoff.${RESET}"
+fi
+
+# --- Final Tip ---
 echo ""
 echo "${BOLD}${GREEN}🎉 Installation complete!${RESET}"
 echo ""
@@ -199,8 +226,14 @@ echo "  1. Reload shell:  ${CYAN}source ${SHELL_RC:-~/.bashrc}${RESET}"
 echo "  2. Verify install: ${CYAN}nido version${RESET}"
 echo "  3. Check system:   ${CYAN}nido doctor${RESET}"
 echo ""
-echo "${YELLOW}💡 Note: You'll need QEMU installed to run VMs${RESET}"
-echo "   Linux: ${CYAN}${QEMU_CMD}${RESET}"
-echo "   macOS: ${CYAN}brew install qemu${RESET}"
+if command -v qemu-system-x86_64 >/dev/null 2>&1 || command -v qemu-system-aarch64 >/dev/null 2>&1 || command -v qemu-system >/dev/null 2>&1; then
+    echo "${GREEN}✨ QEMU detected. You are ready to fly!${RESET}"
+else
+    QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils"
+    [ "$ARCH" = "arm64" ] && QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-utils"
+    echo "${YELLOW}💡 Note: You still need QEMU to run VMs${RESET}"
+    echo "   Linux: ${CYAN}${QEMU_CMD}${RESET}"
+    echo "   macOS: ${CYAN}brew install qemu${RESET}"
+fi
 echo ""
 echo "${BOLD}\"It's not a VM, it's a lifestyle.\" 🪺${RESET}"
