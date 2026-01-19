@@ -194,7 +194,7 @@ fi
 
 if [ $QEMU_INSTALLED -eq 0 ]; then
     echo "${YELLOW}⚠️  QEMU is missing. Nido needs it to hatch VMs.${RESET}"
-    read -p "📦 Would you like to install QEMU dependencies automatically? (y/N) " -n 1 -r
+    read -p "📦 Would you like to install QEMU dependencies automatically? (y/N) " -n 1 -r < /dev/tty
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         if [ "$OS" = "linux" ]; then
@@ -220,7 +220,7 @@ fi
 # KVM Permissions (Linux Only)
 if [ "$OS" = "linux" ] && [ -e /dev/kvm ] && [ ! -w /dev/kvm ]; then
     echo "${YELLOW}⚠️  KVM detected but you don't have permission to use it.${RESET}"
-    read -p "🔐 Would you like to grant permissions to the current user? (y/N) " -n 1 -r
+    read -p "🔐 Would you like to grant permissions to the current user? (y/N) " -n 1 -r < /dev/tty
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "${CYAN}🛠️  Adding $USER to 'kvm' group...${RESET}"

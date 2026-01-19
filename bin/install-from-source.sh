@@ -53,7 +53,7 @@ if [[ $QEMU_MISSING -eq 0 ]]; then
     echo "  ${OK} QEMU binaries found."
 else
     echo "  ${WARN} QEMU is missing. Nido needs it to hatch VMs."
-    read -p "  📦 Would you like to install QEMU dependencies automatically? (y/N) " -n 1 -r
+    read -p "  📦 Would you like to install QEMU dependencies automatically? (y/N) " -n 1 -r < /dev/tty
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         if [[ "$OS" == "linux" ]]; then
@@ -81,7 +81,7 @@ fi
 # KVM Permissions (Linux Only)
 if [[ "$OS" == "linux" && -e /dev/kvm && ! -w /dev/kvm ]]; then
     echo "  ${WARN} KVM detected but you don't have permission to use it."
-    read -p "  🔐 Would you like to grant permissions to the current user? (y/N) " -n 1 -r
+    read -p "  🔐 Would you like to grant permissions to the current user? (y/N) " -n 1 -r < /dev/tty
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "  ${STEP} Adding $USER to 'kvm' group..."
