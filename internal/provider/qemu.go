@@ -824,6 +824,28 @@ func (p *QemuProvider) Doctor() []string {
 	}
 	add("Binary: qemu-img", err == nil, qimg+" "+qimgHint)
 
+	// 2.1 ISO Creation Tools (for cloud-init)
+	isoTools := []string{"cloud-localds", "genisoimage", "mkisofs", "xorriso"}
+	foundTool := ""
+	for _, tool := range isoTools {
+		if path, err := exec.LookPath(tool); err == nil {
+			foundTool = path
+			break
+		}
+	}
+
+	isoHint := foundTool
+	if foundTool == "" {
+		if runtime.GOOS == "linux" {
+			isoHint = "(Missing. Install 'cloud-utils' or 'genisoimage')"
+		} else if runtime.GOOS == "darwin" {
+			isoHint = "(Missing. Install 'cdrtools' via brew)"
+		} else {
+			isoHint = "(Missing. Install 'cdrtools' or 'xorriso')"
+		}
+	}
+	add("Tools: ISO Creator", foundTool != "", isoHint)
+
 	// 3. KVM (Linux only)
 	if runtime.GOOS == "linux" {
 		kvmPath := "/dev/kvm"

@@ -111,6 +111,13 @@ try {
     elseif (Get-Command "qemu-system" -ErrorAction SilentlyContinue) { $qemuInstalled = $true }
 } catch {}
 
+$isoToolInstalled = $false
+try {
+    if (Get-Command "mkisofs" -ErrorAction SilentlyContinue) { $isoToolInstalled = $true }
+    elseif (Get-Command "genisoimage" -ErrorAction SilentlyContinue) { $isoToolInstalled = $true }
+    elseif (Get-Command "xorriso" -ErrorAction SilentlyContinue) { $isoToolInstalled = $true }
+} catch {}
+
 if (-not $qemuInstalled) {
     Write-Host "⚠️  QEMU is missing. Nido needs it to hatch VMs." -ForegroundColor Yellow
     $response = Read-Host "📦 Would you like to install QEMU dependencies automatically via winget? (y/N)"
@@ -118,11 +125,20 @@ if (-not $qemuInstalled) {
         Write-Host "🛠️  Installing QEMU via winget..." -ForegroundColor Cyan
         winget install --id=SoftwareFreedomConservancy.QEMU -e --accept-package-agreements --accept-source-agreements
         Write-Host "💡 Note: You might need to restart your terminal for QEMU to be in your PATH." -ForegroundColor Yellow
+        $qemuInstalled = $true
     } else {
         Write-Host "💡 Skipping automatic installation. You'll need to install it manually." -ForegroundColor Gray
     }
 } else {
-    Write-Host "✅ QEMU is already present and ready for liftoff." -ForegroundColor Green
+    Write-Host "✅ QEMU is already present." -ForegroundColor Green
+}
+
+if (-not $isoToolInstalled) {
+    Write-Host "⚠️  ISO creation tool missing (mkisofs/genisoimage)." -ForegroundColor Yellow
+    Write-Host "   Cloud-init seed generation will fail without it." -ForegroundColor Yellow
+    Write-Host "   Recommended: Use 'choco install cdrtools' or install specific tools manually." -ForegroundColor Gray
+} else {
+    Write-Host "✅ ISO creation tools are present." -ForegroundColor Green
 }
 
 Write-Host ""
@@ -134,11 +150,10 @@ Write-Host "  2. Verify install: " -NoNewline; Write-Host "nido version" -Foregr
 Write-Host "  3. Check system: " -NoNewline; Write-Host "nido doctor" -ForegroundColor Cyan
 Write-Host ""
 
-if ($qemuInstalled -or (Get-Command "qemu-system-x86_64" -ErrorAction SilentlyContinue)) {
-    Write-Host "✨ QEMU detected. You are ready to fly!" -ForegroundColor Green
+if ($qemuInstalled -and $isoToolInstalled) {
+    Write-Host "✨ All systems go! You are ready to fly!" -ForegroundColor Green
 } else {
-    Write-Host "💡 Note: You still need QEMU to run VMs" -ForegroundColor Yellow
-    Write-Host "   Install manually: " -NoNewline; Write-Host "winget install SoftwareFreedomConservancy.QEMU" -ForegroundColor Cyan
+    Write-Host "💡 Note: Missing dependencies may limit functionality." -ForegroundColor Yellow
 }
 
 Write-Host "💡 Pro Tip: Ensure 'Windows Hypervisor Platform' is enabled in Windows Features for max speed!" -ForegroundColor Magenta

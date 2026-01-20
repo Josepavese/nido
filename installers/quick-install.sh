@@ -193,29 +193,37 @@ if command -v qemu-system-x86_64 >/dev/null 2>&1 || command -v qemu-system-aarch
     QEMU_INSTALLED=1
 fi
 
-if [ $QEMU_INSTALLED -eq 0 ]; then
-    echo "${YELLOW}⚠️  QEMU is missing. Nido needs it to hatch VMs.${RESET}"
-    read -p "📦 Would you like to install QEMU dependencies automatically? (y/N) " -n 1 -r < /dev/tty
+ISO_TOOL_INSTALLED=0
+if command -v cloud-localds >/dev/null 2>&1 || command -v genisoimage >/dev/null 2>&1 || command -v mkisofs >/dev/null 2>&1 || command -v xorriso >/dev/null 2>&1; then
+    ISO_TOOL_INSTALLED=1
+fi
+
+if [ $QEMU_INSTALLED -eq 0 ] || [ $ISO_TOOL_INSTALLED -eq 0 ]; then
+    echo "${YELLOW}⚠️  Missing dependencies. Nido needs QEMU and ISO tools (cloud-utils/genisoimage).${RESET}"
+    if [ $QEMU_INSTALLED -eq 0 ]; then echo "   - QEMU: Missing"; else echo "   - QEMU: OK"; fi
+    if [ $ISO_TOOL_INSTALLED -eq 0 ]; then echo "   - ISO Tools: Missing"; else echo "   - ISO Tools: OK"; fi
+    
+    read -p "📦 Would you like to install dependencies automatically? (y/N) " -n 1 -r < /dev/tty
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         if [ "$OS" = "linux" ]; then
-            PKG="qemu-system-x86 qemu-utils"
-            [ "$ARCH" = "arm64" ] && PKG="qemu-system-arm qemu-utils"
+            PKG="qemu-system-x86 qemu-utils cloud-utils"
+            [ "$ARCH" = "arm64" ] && PKG="qemu-system-arm qemu-utils cloud-utils"
             echo "${CYAN}🛠️  Updating repositories and installing ${PKG}...${RESET}"
             sudo apt update && sudo apt install -y $PKG
         elif [ "$OS" = "darwin" ]; then
             if command -v brew >/dev/null 2>&1; then
-                echo "${CYAN}🛠️  Installing QEMU via Homebrew...${RESET}"
-                brew install qemu
+                echo "${CYAN}🛠️  Installing QEMU & cdrtools via Homebrew...${RESET}"
+                brew install qemu cdrtools
             else
-                echo "${RED}❌ Homebrew not found. Please install Homebrew or QEMU manually.${RESET}"
+                echo "${RED}❌ Homebrew not found. Please install Homebrew manually.${RESET}"
             fi
         fi
     else
-        echo "${YELLOW}⚠️  Skipping automatic installation. You'll need to install it manually.${RESET}"
+        echo "${YELLOW}⚠️  Skipping automatic installation. You'll need to install them manually.${RESET}"
     fi
 else
-    echo "${GREEN}✅ QEMU is already present.${RESET}"
+    echo "${GREEN}✅ Dependencies (QEMU & ISO tools) are ready.${RESET}"
 fi
 
 # KVM Permissions (Linux Only)
@@ -262,11 +270,11 @@ if command -v qemu-system-x86_64 >/dev/null 2>&1 || command -v qemu-system-aarch
         echo "${GREEN}✨ QEMU is ready for liftoff!${RESET}"
     fi
 else
-    QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils"
-    [ "$ARCH" = "arm64" ] && QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-utils"
-    echo "${YELLOW}💡 Note: You still need QEMU to run VMs${RESET}"
+    QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils cloud-utils"
+    [ "$ARCH" = "arm64" ] && QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-utils cloud-utils"
+    echo "${YELLOW}💡 Note: You still need QEMU & ISO tools to run VMs${RESET}"
     echo "   Linux: ${CYAN}${QEMU_CMD}${RESET}"
-    echo "   macOS: ${CYAN}brew install qemu${RESET}"
+    echo "   macOS: ${CYAN}brew install qemu cdrtools${RESET}"
 fi
 echo ""
 echo "${BOLD}\"It's not a VM, it's a lifestyle.\" 🪺${RESET}"
