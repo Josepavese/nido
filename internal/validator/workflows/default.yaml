@@ -3,7 +3,6 @@ workflows:
     steps:
       - action: spawn
         vm_var: vm_template_src
-        use_base_template: true
         use_base_image: true
       - action: template_create
         vm_var: vm_template_src
