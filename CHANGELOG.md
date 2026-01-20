@@ -5,6 +5,20 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.2] - 2026-01-20 "The Clean Break" 🧼📺✨
+
+### Fixed 🐛
+
+- **Hatchery TUI**: Resolved focus synchronization issue where list selection didn't update after pulling a new image.
+- **Registry & Catalog**: Fixed duplicate image entries caused by dirty local caches; implemented auto-deduplication.
+- **Port Allocation**: Fixed collision issue where stopped VMs' reserved ports were ignored during new spawns.
+- **Validator**: Corrected `default` workflow to stop assuming a default template exists (bootstraps from base image now).
+
+### Changed 🔧
+
+- **Legacy Cleanup**: Vaporized `TemplateDefault`, `TUI.FooterLink`, and `TUI.TabLabels` from the codebase. `nido spawn` now demands explicit intent (image or template) instead of failing on a phantom default.
+- **Error Feedback**: Prominent modals for destructive failures (Template/Image deletion) are now standard.
+
 ## [4.5.1] - 2026-01-19 "The Resilient Nest" 🛡️🩹🐣
 
 ### 🚀 Improved
