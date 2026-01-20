@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-01-19T14:01:50.318112921Z",
+  "updated_at": "2026-01-20T10:31:10.520977333Z",
   "images": [
     {
       "name": "ubuntu",
@@ -220,21 +220,6 @@
           "format": "qcow2",
           "part_urls": [
             "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-apache-wordpress.qcow2.zst"
-          ]
-        },
-        {
-          "version": "v4.4.0",
-          "aliases": [
-            "v4.4.0"
-          ],
-          "arch": "amd64",
-          "url": "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-apache-wordpress.qcow2.001",
-          "checksum_type": "sha256",
-          "checksum": "c89c01c7819b395f03dd6ef0836bc3813bff659e3cf12abc4fc3d6bae3ad3149",
-          "size_bytes": 933625856,
-          "format": "qcow2",
-          "part_urls": [
-            "https://github.com/Josepavese/nido/releases/download/v4.4.0/flavour-ubuntu-24.04-apache-wordpress.qcow2.001"
           ]
         }
       ]

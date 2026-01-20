@@ -453,16 +453,12 @@ func fetchGithubRelease(src Source, strat Strategy) ([]image.Version, error) {
 		}
 	}
 
-	finalVersions := []image.Version{}
-	seen := make(map[string]bool)
-	for _, v := range results {
-		if !seen[v.Version] {
-			finalVersions = append(finalVersions, v)
-			seen[v.Version] = true
-		}
+	// Deduplicate: Keep only the latest version (first one found since we process releases in order)
+	if len(results) > 0 {
+		return []image.Version{results[0]}, nil
 	}
 
-	return finalVersions, nil
+	return nil, fmt.Errorf("no versions found for flavour %s", src.Name)
 }
 
 type githubRelease struct {

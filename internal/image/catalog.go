@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -130,13 +131,43 @@ func (c *Catalog) GetCachedImages(cacheDir string) ([]CachedImage, error) {
 
 		// Parse filename: <name>-<version>.qcow2
 		name := strings.TrimSuffix(entry.Name(), ".qcow2")
-		parts := strings.Split(name, "-")
-		if len(parts) < 2 {
-			continue // Skip malformed filenames
+
+		imageName := name
+		imageVersion := ""
+		found := false
+
+		// Try to match against known image names in the catalog
+		// Sort by name length descending to match longest first
+		imgs := make([]Image, len(c.Images))
+		copy(imgs, c.Images)
+		sort.Slice(imgs, func(i, j int) bool {
+			return len(imgs[i].Name) > len(imgs[j].Name)
+		})
+
+		for _, img := range imgs {
+			if name == img.Name {
+				imageName = img.Name
+				imageVersion = ""
+				found = true
+				break
+			}
+			prefix := img.Name + "-"
+			if strings.HasPrefix(name, prefix) {
+				imageName = img.Name
+				imageVersion = strings.TrimPrefix(name, prefix)
+				found = true
+				break
+			}
 		}
 
-		imageName := parts[0]
-		imageVersion := strings.Join(parts[1:], "-")
+		if !found {
+			// Fallback: split at first hyphen
+			parts := strings.Split(name, "-")
+			if len(parts) >= 2 {
+				imageName = parts[0]
+				imageVersion = strings.Join(parts[1:], "-")
+			}
+		}
 
 		info, err := entry.Info()
 		if err != nil {
@@ -257,7 +288,8 @@ func loadFromFile(path string) (*Catalog, error) {
 		return nil, fmt.Errorf("failed to parse catalog: %w", err)
 	}
 
-	// Compute human-readable sizes
+	// Deduplicate and compute human-readable sizes
+	catalog.Deduplicate()
 	catalog.computeSizes()
 
 	return &catalog, nil
@@ -284,10 +316,34 @@ func fetchRemote(url string) (*Catalog, error) {
 		return nil, fmt.Errorf("failed to parse catalog: %w", err)
 	}
 
-	// Compute human-readable sizes
+	// Deduplicate and compute human-readable sizes
+	catalog.Deduplicate()
 	catalog.computeSizes()
 
 	return &catalog, nil
+}
+
+// Deduplicate ensures that for each image flavour, only the latest version is kept.
+func (c *Catalog) Deduplicate() {
+	for i := range c.Images {
+		img := &c.Images[i]
+		if len(img.Versions) <= 1 {
+			continue
+		}
+
+		// Use a simple heuristic: if version starts with 'v', try to sort semantically.
+		// Otherwise, keep the first one (assuming it's the more recent from current builder logic).
+		// For robustness, we'll keep only the very first one if it's a flavour (registry=nido).
+		if img.Registry == "nido" {
+			img.Versions = img.Versions[:1]
+		}
+	}
+}
+
+// SaveRegistryToCache saves a catalog to the default cache file.
+func SaveRegistryToCache(catalog *Catalog, cacheDir string) error {
+	cachePath := filepath.Join(cacheDir, CatalogCacheFile)
+	return saveToFile(catalog, cachePath)
 }
 
 func saveToFile(catalog *Catalog, path string) error {

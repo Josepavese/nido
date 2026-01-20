@@ -47,7 +47,16 @@ func cmdImageList(nidoDir string, args []string, jsonOut bool) {
 	imageDir := filepath.Join(nidoDir, "images")
 
 	// Load catalog
-	catalog, err := image.LoadCatalog(imageDir, image.DefaultCacheTTL)
+	var catalog *image.Catalog
+	var err error
+	cwd, _ := os.Getwd()
+	localRegistry := filepath.Join(cwd, "registry", "images.json")
+	if _, statErr := os.Stat(localRegistry); statErr == nil {
+		catalog, err = image.LoadCatalogFromFile(localRegistry)
+	} else {
+		catalog, err = image.LoadCatalog(imageDir, image.DefaultCacheTTL)
+	}
+
 	if err != nil {
 		if jsonOut {
 			resp := clijson.NewResponseError("image list", "ERR_IO", "Catalog load failed", err.Error(), "Check your network connection and try again.", nil)
@@ -212,7 +221,16 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 	imageDir := filepath.Join(nidoDir, "images")
 
 	// Load catalog
-	catalog, err := image.LoadCatalog(imageDir, image.DefaultCacheTTL)
+	var catalog *image.Catalog
+	var err error
+	cwd, _ := os.Getwd()
+	localRegistry := filepath.Join(cwd, "registry", "images.json")
+	if _, statErr := os.Stat(localRegistry); statErr == nil {
+		catalog, err = image.LoadCatalogFromFile(localRegistry)
+	} else {
+		catalog, err = image.LoadCatalog(imageDir, image.DefaultCacheTTL)
+	}
+
 	if err != nil {
 		if jsonOut {
 			resp := clijson.NewResponseError("image pull", "ERR_IO", "Catalog load failed", err.Error(), "Check your network connection and try again.", nil)
@@ -266,9 +284,9 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 	}
 
 	// Determine if compression is needed based on URL extension
-	isCompressed := strings.HasSuffix(ver.URL, ".zst") || strings.HasSuffix(ver.URL, ".zstandard")
+	isCompressed := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
 	if len(ver.PartURLs) > 0 {
-		isCompressed = strings.HasSuffix(ver.PartURLs[0], ".zst") || strings.HasSuffix(ver.PartURLs[0], ".zstandard")
+		isCompressed = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
 	}
 
 	downloadPath := destPath
@@ -297,20 +315,24 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 	}
 
 	// Verify Checksum (on the downloaded file)
-	if !jsonOut {
-		ui.Ironic("Verifying genetic integrity...")
-	}
-	if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
-		if jsonOut {
-			resp := clijson.NewResponseError("image pull", "ERR_IO", "Checksum verification failed", err.Error(), "Retry the download or choose a different image.", nil)
-			_ = clijson.PrintJSON(resp)
-		} else {
-			ui.Error("Checksum verification failed: %v", err)
-			ui.Warn("The downloaded file may be corrupted or tampered with.")
-			ui.Warn("Deleting corrupted file...")
+	if ver.Checksum != "" {
+		if !jsonOut {
+			ui.Ironic("Verifying genetic integrity...")
 		}
-		os.Remove(downloadPath)
-		os.Exit(1)
+		if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+			if jsonOut {
+				resp := clijson.NewResponseError("image pull", "ERR_IO", "Checksum verification failed", err.Error(), "Retry the download or choose a different image.", nil)
+				_ = clijson.PrintJSON(resp)
+			} else {
+				ui.Error("Checksum verification failed: %v", err)
+				ui.Warn("The downloaded file may be corrupted or tampered with.")
+				ui.Warn("Deleting corrupted file...")
+			}
+			os.Remove(downloadPath)
+			os.Exit(1)
+		}
+	} else if !jsonOut {
+		ui.Warn("⚠️ No checksum provided for this image. Integrity cannot be verified.")
 	}
 
 	// Decompress if needed
