@@ -150,8 +150,8 @@ type VMProvider interface {
 	CacheInfo() (CacheInfoResult, error)
 
 	// CachePrune removes cached images. If unusedOnly is true, only removes
-	// images not used by any VM.
-	CachePrune(unusedOnly bool) error
+	// images not used by any VM. Returns count of removed files and total bytes reclaimed.
+	CachePrune(unusedOnly bool) (int, int64, error)
 
 	// CacheRemove removes a specific cached image by name and version.
 	CacheRemove(name, version string) error

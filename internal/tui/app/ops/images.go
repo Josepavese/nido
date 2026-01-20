@@ -80,8 +80,17 @@ func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, for
 			var catalog *image.Catalog
 			var catErr error
 
+			cwd, _ := os.Getwd()
+			localRegistry := filepath.Join(cwd, "registry", "images.json")
+
 			if cachedOnly {
 				catalog, catErr = image.LoadCatalogFromFile(filepath.Join(catalogDir, image.CatalogCacheFile))
+			} else if _, statErr := os.Stat(localRegistry); statErr == nil {
+				catalog, catErr = image.LoadCatalogFromFile(localRegistry)
+				// SYNC: Replace local cache with project registry to ensure consistency
+				if catErr == nil && catalog != nil {
+					_ = image.SaveRegistryToCache(catalog, catalogDir)
+				}
 			} else if forceRemote {
 				catalog, catErr = image.LoadCatalog(catalogDir, 0)
 			} else {
@@ -170,11 +179,22 @@ func FetchRegistryImages(prov provider.VMProvider, forceRemote bool) tea.Cmd {
 			catalogDir = filepath.Join(home, ".nido", "images")
 		}
 
+		cwd, _ := os.Getwd()
+		localRegistry := filepath.Join(cwd, "registry", "images.json")
+
 		ttl := image.DefaultCacheTTL
 		if forceRemote {
 			ttl = 0
 		}
-		catalog, err := image.LoadCatalog(catalogDir, ttl)
+
+		var catalog *image.Catalog
+		var err error
+		if _, statErr := os.Stat(localRegistry); statErr == nil {
+			catalog, err = image.LoadCatalogFromFile(localRegistry)
+		} else {
+			catalog, err = image.LoadCatalog(catalogDir, ttl)
+		}
+
 		if err != nil {
 			return RegistryListMsg{Err: err}
 		}
@@ -279,9 +299,16 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 			}
 
 			downloadPath := destPath
-			isCompressed := strings.HasSuffix(ver.URL, ".tar.xz")
-			if isCompressed {
+			isTarXz := strings.HasSuffix(ver.URL, ".tar.xz")
+			isZst := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
+			if len(ver.PartURLs) > 0 {
+				isZst = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
+			}
+
+			if isTarXz {
 				downloadPath = destPath + ".tar.xz"
+			} else if isZst {
+				downloadPath = destPath + ".zst"
 			}
 
 			if len(ver.PartURLs) > 0 {
@@ -305,13 +332,15 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 				},
 			}
 
-			if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
-				os.Remove(downloadPath)
-				ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("verification failed: %w", err)}}
-				return
+			if ver.Checksum != "" {
+				if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+					os.Remove(downloadPath)
+					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("verification failed: %w", err)}}
+					return
+				}
 			}
 
-			if isCompressed {
+			if isTarXz || isZst {
 				ch <- ProgressMsg{
 					OpName: opName,
 					Status: view.StatusMsg{

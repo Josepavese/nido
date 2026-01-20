@@ -382,6 +382,7 @@ type ConfigPageCache struct {
 	Header      *widget.Card
 	Stats       *widget.Input
 	PruneButton *widget.Button
+	ResultModal *widget.Modal
 }
 
 func NewConfigPageCache(parent *Config) *ConfigPageCache {
@@ -402,6 +403,49 @@ func NewConfigPageCache(parent *Config) *ConfigPageCache {
 func (p *ConfigPageCache) Init() tea.Cmd { return nil }
 
 func (p *ConfigPageCache) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
+	if p.ResultModal != nil && p.ResultModal.IsActive() {
+		newModal, cmd := p.ResultModal.Update(msg)
+		p.ResultModal = newModal
+		return p, cmd
+	}
+
+	// Handle Prune Result locally to show Modal
+	if res, ok := msg.(ops.OpResultMsg); ok && res.Op == "prune" && res.Err == nil {
+		t := theme.Current()
+		title := "Prune Complete"
+		body := "Cache is clean."
+
+		if stats, ok := res.Data.(ops.PruneStats); ok {
+			if stats.Count == 0 {
+				body = "Nothing to prune.\nYour cache is already efficient."
+			} else {
+				// We still need to import "github.com/Josepavese/nido/internal/image" if we want FormatBytes
+				// But we can rely on wiring.go for logging, and just show simple text here?
+				// Or better, let's just show raw numbers or simple format if we don't want to add import.
+				// Wait, "image" package is not imported in this file.
+				// I'll stick to simple formatting to avoid import cycle or mess, or I can add the import.
+				// Actually, `wiring.go` uses `image.FormatBytes`.
+				// Let's assume we can add the import or use a simple string.
+				// Check imports at top of file.
+				// It does NOT import `internal/image`.
+				// I'll add the import in a separate edit if needed, or just format simply.
+				// Since I'm in `ConfigPageCache.Update`, I can't easily add import in this block.
+				// I will use a simple "bytes" suffix or similar.
+				// Wait, I can use `theme.FormatBytes` if it existed? It was removed/didn't exist.
+				// I'll use simple integer division for MB if large enough, or just show bytes.
+				// Or I can add the import. Let's add the import first in a separate step to be clean.
+				// For now, I'll place a placeholder and fix import in next step.
+				mb := float64(stats.Reclaimed) / 1024 / 1024
+				body = fmt.Sprintf("Removed %d images.\nReclaimed %.2f MB.", stats.Count, mb)
+			}
+		}
+
+		p.ResultModal = widget.NewAlertModal(title, body, nil)
+		p.ResultModal.BorderColor = t.Palette.Success
+		p.ResultModal.Show()
+		return p, nil
+	}
+
 	// Sync Stats
 	stats := "Loading..."
 	// We use p.Parent.CacheStats.TotalSize != "" as a signal that data has arrived at least once
@@ -425,6 +469,17 @@ func (p *ConfigPageCache) View() string {
 		safeWidth = 60
 	}
 	p.Form.Width = safeWidth
+
+	if p.ResultModal != nil && p.ResultModal.IsActive() {
+		// If using full screen replace:
+		// return p.ResultModal.View()
+		// But usually we hide form? ConfigPageUpdate returns empty string to let parent handle?
+		// Note lines 118-121 in ConfigPageGlobalForm: "if p.Modal.IsActive() { return "" }"
+		// ConfigPageUpdate also does "if p.IsModalActive() { return "" }"
+		// So I should do the same.
+		return ""
+	}
+
 	return p.Form.View(safeWidth)
 }
 func (p *ConfigPageCache) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
@@ -445,10 +500,29 @@ func (p *ConfigPageCache) Focusable() bool {
 }
 
 func (p *ConfigPageCache) Shortcuts() []fv.Shortcut {
+	if p.ResultModal != nil && p.ResultModal.IsActive() {
+		return []fv.Shortcut{
+			{Key: "enter", Label: "ok"},
+			{Key: "esc", Label: "close"},
+		}
+	}
 	return []fv.Shortcut{
 		{Key: "enter", Label: "purge"},
 		{Key: "esc", Label: "back"},
 	}
+}
+
+// Added missing interface method for Modal support if parent checks it
+func (p *ConfigPageCache) IsModalActive() bool {
+	return p.ResultModal != nil && p.ResultModal.IsActive()
+}
+
+func (p *ConfigPageCache) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, tea.Cmd, bool) {
+	if p.ResultModal != nil && p.ResultModal.IsActive() {
+		cmd, handled := p.ResultModal.HandleMouse(x, y, msg)
+		return p, cmd, handled
+	}
+	return p, nil, false
 }
 
 // --- Doctor Page ---

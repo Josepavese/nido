@@ -15,9 +15,10 @@ import (
 
 // RegistryItem represents an image in the sidebar (either remote or local).
 type RegistryItem struct {
-	Name    string
-	Version string
-	IsLocal bool // True = Cache, False = Remote Catalog
+	Name     string
+	Version  string
+	Provider string // "nido" or "official"
+	IsLocal  bool   // True = Cache, False = Remote Catalog
 }
 
 func (i RegistryItem) Title() string {
@@ -28,7 +29,11 @@ func (i RegistryItem) Description() string {
 	if i.IsLocal {
 		return fmt.Sprintf("Cached • %s", i.Version)
 	}
-	return fmt.Sprintf("Remote • %s", i.Version)
+	// "nido" => Flavour, "official" => Cloud
+	if i.Provider == "nido" {
+		return fmt.Sprintf("Flavour • %s", i.Version)
+	}
+	return fmt.Sprintf("Cloud • %s", i.Version)
 }
 
 func (i RegistryItem) FilterValue() string { return i.Name }
@@ -37,7 +42,9 @@ func (i RegistryItem) Icon() string {
 	if i.IsLocal {
 		return theme.IconCache
 	}
-	// Remote items are "Cloud Images", so they match Hatchery's "CLOUD" type
+	if i.Provider == "nido" {
+		return theme.IconFlavour
+	}
 	return theme.IconPackage
 }
 func (i RegistryItem) IsAction() bool { return false }
@@ -224,9 +231,10 @@ func (r *Registry) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 		var items []RegistryItem
 		for _, img := range msg.Images {
 			items = append(items, RegistryItem{
-				Name:    img.Name,
-				Version: img.Version,
-				IsLocal: false,
+				Name:     img.Name,
+				Version:  img.Version,
+				Provider: img.Registry, // "nido" or "official"
+				IsLocal:  false,
 			})
 		}
 		r.remoteItems = items

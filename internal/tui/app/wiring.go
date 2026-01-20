@@ -7,6 +7,7 @@ import (
 
 	// Added import
 	"github.com/Josepavese/nido/internal/config" // Global config
+	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/provider"
 
 	"github.com/Josepavese/nido/internal/tui/kit/app"
@@ -33,6 +34,7 @@ type NidoApp struct {
 	Registry      *registry.Registry // Keep reference for background updates
 	Config        *configpage.Config // Keep reference for background updates
 	activeActions map[string]string  // Map OpName -> ActionID
+	ErrorModal    *widget.Modal      // Global alert modal
 }
 
 func (n *NidoApp) Init() tea.Cmd {
@@ -41,10 +43,17 @@ func (n *NidoApp) Init() tea.Cmd {
 
 // Update intercepts messages to handle Nido domain logic.
 func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// 0. Modal Interception
+	if n.ErrorModal.IsActive() {
+		newModal, cmd := n.ErrorModal.Update(msg)
+		n.ErrorModal = newModal
+		return n, cmd
+	}
+
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
-	case ops.SourcesLoadedMsg:
+	case ops.SourcesLoadedMsg, ops.VMListMsg:
 		// Broadcast to Hatchery even if not active
 		if n.Hatchery != nil {
 			_, cmd := n.Hatchery.Update(msg)
@@ -222,17 +231,54 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Just log warning if needed, or ignore.
 		}
 		cmds = append(cmds, ops.RefreshFleet(n.prov))
-		// Also refresh sources (e.g. after template delete/create)
-		cmds = append(cmds, ops.FetchSources(n.prov, ops.SourceActionSpawn, false, true))
+		// We moved FetchSources to the heuristic block below for more targeted refresh
+		// but keeping it here for general safety if needed. Actually let's keep it consistent.
 
-		// Check if we need to refresh Registry (Prune/Delete/Pull)
-		// Heuristic: if op starts with "pull", "delete", "prune"
-		if msg.Op == "prune" || strings.HasPrefix(msg.Op, "delete ") || strings.HasPrefix(msg.Op, "pull ") {
-			// Forward as CachePruneMsg to trigger Registry refresh
+		// 4. Handle Errors
+		if msg.Err != nil {
+			n.Shell.SetStatus(false, fmt.Sprintf("ERROR: %v", msg.Err), 0)
+			// Show prominent modal for failed dangerous ops
+			if msg.Op == "prune" || msg.Op == "delete-template" || strings.HasPrefix(msg.Op, "delete") || strings.HasPrefix(msg.Op, "pull") {
+				n.ErrorModal.Title = "Operation Failed"
+				n.ErrorModal.Message = fmt.Sprintf("Error during %s:\n%v", msg.Op, msg.Err)
+				n.ErrorModal.Show()
+			}
+		} else if msg.Op != "prune" {
+			n.Shell.SetStatus(false, fmt.Sprintf("SUCCESS: %s completed", msg.Op), 0)
+		}
+
+		// 5. Heuristic-based Refreshes
+		// If it's a destructive or acquisition op, refresh the registry/sources
+		if msg.Op == "prune" || strings.HasPrefix(msg.Op, "delete") || strings.HasPrefix(msg.Op, "pull") {
+			// Refresh Sources (Dropdowns in Hatchery/Spawn)
+			cmds = append(cmds, ops.FetchSources(n.prov, ops.SourceActionSpawn, false, true))
+
+			// Refresh Registry (Image list in Registry)
 			if n.Registry != nil {
-				// We misuse CachePruneMsg slightly as a "Something Changed" signal
+				cmds = append(cmds, ops.FetchRegistryImages(n.prov, false))
+				// Also refresh local cache list
 				_, cmd := n.Registry.Update(ops.CachePruneMsg{})
 				cmds = append(cmds, cmd)
+			}
+
+			// UX: If this was a pull, auto-select the new image in Hatchery
+			if strings.HasPrefix(msg.Op, "pull ") && n.Hatchery != nil {
+				imgName := strings.TrimPrefix(msg.Op, "pull ")
+				n.Hatchery.SetPendingSelection(imgName)
+			}
+
+			// Special Feedback for Prune
+			if msg.Op == "prune" && msg.Err == nil {
+				stats, ok := msg.Data.(ops.PruneStats)
+				if !ok {
+					n.Shell.SetStatus(false, "Prune completed.", 0)
+				} else {
+					if stats.Count == 0 {
+						n.Shell.SetStatus(false, "Nothing to prune from cache.", 0)
+					} else {
+						n.Shell.SetStatus(false, fmt.Sprintf("Pruned %d images (%s reclaimed).", stats.Count, image.FormatBytes(stats.Reclaimed)), 0)
+					}
+				}
 			}
 		}
 
@@ -251,6 +297,14 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// For now, let's rely on Shell.Logs aggregation.
 
 	return n, tea.Batch(cmds...)
+}
+
+// View delegates to Shell but overlays global modals
+func (n *NidoApp) View() string {
+	if n.ErrorModal.IsActive() {
+		return n.ErrorModal.View(n.Shell.Width, n.Shell.Height)
+	}
+	return n.App.View()
 }
 
 // Run starts the Nido TUI.
@@ -305,7 +359,10 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) erro
 		activeActions: make(map[string]string),
 	}
 
-	// 7. Run
+	// 7. Initialize Global Modal
+	nidoApp.ErrorModal = widget.NewAlertModal("Error", "", nil)
+
+	// 8. Run
 	p := tea.NewProgram(nidoApp, tea.WithContext(ctx), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
 	return err

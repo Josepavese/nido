@@ -75,11 +75,24 @@ func FetchCacheStats(prov provider.VMProvider) tea.Cmd {
 	}
 }
 
+// PruneStats contains the result of a prune operation.
+type PruneStats struct {
+	Count     int
+	Reclaimed int64
+}
+
 // PruneCache removes unused cached images.
 func PruneCache(prov provider.VMProvider) tea.Cmd {
 	return func() tea.Msg {
-		err := prov.CachePrune(true) // unused only
-		return OpResultMsg{Op: "prune", Err: err}
+		count, reclaimed, err := prov.CachePrune(true) // unused only
+		return OpResultMsg{
+			Op:  "prune",
+			Err: err,
+			Data: PruneStats{
+				Count:     count,
+				Reclaimed: reclaimed,
+			},
+		}
 	}
 }
 

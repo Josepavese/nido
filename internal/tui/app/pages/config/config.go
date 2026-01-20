@@ -327,6 +327,8 @@ func (c *Config) View() string {
 				}
 			} else if pun, ok := p.(*ConfigPageUninstall); ok {
 				modal = pun.Modal
+			} else if pc, ok := p.(*ConfigPageCache); ok {
+				modal = pc.ResultModal
 			}
 
 			if modal != nil {

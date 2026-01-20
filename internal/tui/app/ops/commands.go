@@ -56,6 +56,7 @@ type OpResultMsg struct {
 	Op   string
 	Err  error
 	Path string // Optional: for templates
+	Data any    // Generic data (e.g., stats)
 }
 
 // UpdateCheckMsg contains version check results.
@@ -248,9 +249,16 @@ func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool, 
 				}
 
 				downloadPath := destPath
-				isCompressed := strings.HasSuffix(ver.URL, ".tar.xz")
-				if isCompressed {
+				isTarXz := strings.HasSuffix(ver.URL, ".tar.xz")
+				isZst := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
+				if len(ver.PartURLs) > 0 {
+					isZst = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
+				}
+
+				if isTarXz {
 					downloadPath = destPath + ".tar.xz"
+				} else if isZst {
+					downloadPath = destPath + ".zst"
 				}
 
 				if len(ver.PartURLs) > 0 {
@@ -274,13 +282,15 @@ func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool, 
 					},
 				}
 
-				if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
-					os.Remove(downloadPath)
-					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("verification failed: %w", err)}}
-					return
+				if ver.Checksum != "" {
+					if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+						os.Remove(downloadPath)
+						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("verification failed: %w", err)}}
+						return
+					}
 				}
 
-				if isCompressed {
+				if isTarXz || isZst {
 					ch <- ProgressMsg{
 						OpName: opName,
 						Status: view.StatusMsg{

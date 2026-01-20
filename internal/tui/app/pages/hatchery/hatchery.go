@@ -80,6 +80,9 @@ func NewIncubator(parent *Hatchery) *Incubator {
 		if len(s) < 3 {
 			return fmt.Errorf("too short")
 		}
+		if parent.ExistingVMs[s] {
+			return fmt.Errorf("already exists")
+		}
 		return nil
 	})
 	// Real-time filtering for valid VM name characters
@@ -230,8 +233,15 @@ func (i *Incubator) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 	}
 
 	// Navigation handled by Form or Parent
+	// Capture current form pointer to detect if it changes during Update (e.g. by submitSpawn)
+	formBefore := i.Form
+
 	newForm, cmd := i.Form.Update(msg)
-	i.Form = newForm
+
+	// Only assign the result of Update if the form pointer hasn't been replaced by an action
+	if i.Form == formBefore {
+		i.Form = newForm
+	}
 
 	return i, cmd
 }
@@ -310,12 +320,15 @@ type Hatchery struct {
 	pendingDeleteForce       bool
 	ConfirmDeletePort        *widget.Modal
 	PendingPortToDeleteIndex int
+	ExistingVMs              map[string]bool // Cache of existing names
+	PendingSelection         string          // Name of the source to auto-select on next load
 }
 
 // NewHatchery returns a new Hatchery viewlet.
 func NewHatchery(prov provider.VMProvider) *Hatchery {
 	h := &Hatchery{
-		prov: prov,
+		prov:        prov,
+		ExistingVMs: make(map[string]bool),
 	}
 
 	// 1. Sidebar (Sources)
@@ -466,6 +479,9 @@ func NewHatchery(prov provider.VMProvider) *Hatchery {
 }
 
 func (h *Hatchery) OpenDeletePortModal(index int) tea.Cmd {
+	if index < 0 || index >= len(h.Incubator.PendingPorts) {
+		return nil // Safety check
+	}
 	h.PendingPortToDeleteIndex = index
 	p := h.Incubator.PendingPorts[index]
 	label := p.Label
@@ -475,6 +491,17 @@ func (h *Hatchery) OpenDeletePortModal(index int) tea.Cmd {
 	h.ConfirmDeletePort.Message = fmt.Sprintf("Remove port forwarding for '%s'?", label)
 	h.ConfirmDeletePort.Show()
 	return nil
+}
+
+func (i *Incubator) Reset() {
+	i.input.SetValue("")
+	i.PendingPorts = nil
+	i.toggle.Checked = true // Default to GUI on
+	i.rebuildForm()
+}
+
+func (h *Hatchery) SetPendingSelection(name string) {
+	h.PendingSelection = name
 }
 
 func (h *Hatchery) OpenAddPortModal() tea.Cmd {
@@ -487,6 +514,7 @@ func (h *Hatchery) Init() tea.Cmd {
 		h.Sidebar.Focus(),
 		ops.FetchSources(h.prov, ops.SourceActionSpawn, true, false),
 		ops.FetchSources(h.prov, ops.SourceActionSpawn, false, true),
+		ops.RefreshFleet(h.prov), // Fetch fleet for validation
 	)
 }
 
@@ -513,6 +541,15 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case ops.VMListMsg:
+		if msg.Err == nil {
+			// Update cache of existing names
+			h.ExistingVMs = make(map[string]bool)
+			for _, item := range msg.Items {
+				h.ExistingVMs[item.Name] = true
+			}
+		}
+
 	case ops.TemplateUsageMsg:
 		if msg.Err != nil {
 			h.pendingDeleteForce = false
@@ -570,8 +607,25 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 			}
 			if len(items) > 0 {
 				h.Sidebar.SetItems(items)
-				if first, ok := items[0].(SourceItem); ok {
-					h.Incubator.SetSource(&first)
+
+				// Auto-select logic
+				selectedIndex := 0 // Default to first
+				if h.PendingSelection != "" {
+					for i, item := range items {
+						if s, ok := item.(SourceItem); ok {
+							// Check match (Label is typically "name:tag" or "name")
+							if s.Label == h.PendingSelection {
+								selectedIndex = i
+								break
+							}
+						}
+					}
+					h.PendingSelection = "" // Clear after use
+				}
+
+				h.Sidebar.Select(selectedIndex)
+				if selected, ok := items[selectedIndex].(SourceItem); ok {
+					h.Incubator.SetSource(&selected)
 				}
 			} else {
 				emptyItem := SourceItem{
@@ -591,6 +645,18 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 	case tea.KeyMsg:
 		if h.Sidebar.Focused() && msg.String() == "enter" {
 			cmds = append(cmds, h.MasterDetail.SetFocus(widget.FocusDetail))
+		}
+
+		if h.MasterDetail.ActiveFocus == widget.FocusDetail && msg.String() == "esc" {
+			h.Incubator.Reset()
+			// MasterDetail handles focus switch on ESC internally, but we intercepted it.
+			// Actually MasterDetail.Update handles ESC by switching focus?
+			// Let's check MasterDetail logic. It usually does.
+			// But if we want to hook, we should do it before or rely on callback?
+			// MasterDetail doesn't have "OnBack".
+			// So we manually switch and return.
+			cmds = append(cmds, h.MasterDetail.SetFocus(widget.FocusSidebar))
+			return h, tea.Batch(cmds...)
 		}
 
 		if h.Sidebar.Focused() && (msg.String() == "delete" || msg.String() == "backspace") {
