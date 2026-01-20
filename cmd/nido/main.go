@@ -325,9 +325,16 @@ func main() {
 
 				// Check if the URL points to a compressed file
 				downloadPath := imgPath
-				isCompressed := strings.HasSuffix(ver.URL, ".tar.xz")
-				if isCompressed {
+				isTarXz := strings.HasSuffix(ver.URL, ".tar.xz")
+				isZst := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
+				if len(ver.PartURLs) > 0 {
+					isZst = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
+				}
+
+				if isTarXz {
 					downloadPath = imgPath + ".tar.xz"
+				} else if isZst {
+					downloadPath = imgPath + ".zst"
 				}
 
 				var downloadErr error
@@ -347,21 +354,25 @@ func main() {
 					os.Exit(1)
 				}
 
-				// Decompress first if it's a tarball
-				if isCompressed {
-					// We verify the archive integrity first
-					if !jsonOut {
-						ui.Ironic("Verifying genetic integrity (archive)...")
-					}
-					if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
-						if jsonOut {
-							resp := clijson.NewResponseError("spawn", "ERR_IO", "Verification failed", err.Error(), "Retry the download or choose a different image.", nil)
-							_ = clijson.PrintJSON(resp)
-						} else {
-							ui.Error("Verification failed: %v", err)
+				// Decompress first if it's an archive
+				if isTarXz || isZst {
+					// We verify the archive integrity first if checksum is available
+					if ver.Checksum != "" {
+						if !jsonOut {
+							ui.Ironic("Verifying genetic integrity (archive)...")
 						}
-						os.Remove(downloadPath)
-						os.Exit(1)
+						if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+							if jsonOut {
+								resp := clijson.NewResponseError("spawn", "ERR_IO", "Verification failed", err.Error(), "Retry the download or choose a different image.", nil)
+								_ = clijson.PrintJSON(resp)
+							} else {
+								ui.Error("Verification failed: %v", err)
+							}
+							os.Remove(downloadPath)
+							os.Exit(1)
+						}
+					} else if !jsonOut {
+						ui.Warn("⚠️ No checksum provided. Integrity cannot be verified.")
 					}
 
 					if err := downloader.Decompress(downloadPath, imgPath); err != nil {
@@ -380,19 +391,23 @@ func main() {
 						ui.Success("Image extracted successfully.")
 					}
 				} else {
-					// Standard verify for direct qcow2
-					if !jsonOut {
-						ui.Ironic("Verifying genetic integrity...")
-					}
-					if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
-						if jsonOut {
-							resp := clijson.NewResponseError("spawn", "ERR_IO", "Verification failed", err.Error(), "Retry the download or choose a different image.", nil)
-							_ = clijson.PrintJSON(resp)
-						} else {
-							ui.Error("Verification failed: %v", err)
+					// Standard verify for direct qcow2 if checksum is available
+					if ver.Checksum != "" {
+						if !jsonOut {
+							ui.Ironic("Verifying genetic integrity...")
 						}
-						os.Remove(downloadPath)
-						os.Exit(1)
+						if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+							if jsonOut {
+								resp := clijson.NewResponseError("spawn", "ERR_IO", "Verification failed", err.Error(), "Retry the download or choose a different image.", nil)
+								_ = clijson.PrintJSON(resp)
+							} else {
+								ui.Error("Verification failed: %v", err)
+							}
+							os.Remove(downloadPath)
+							os.Exit(1)
+						}
+					} else if !jsonOut {
+						ui.Warn("⚠️ No checksum provided. Integrity cannot be verified.")
 					}
 					if !jsonOut {
 						ui.Success("Image prepared successfully.")
@@ -1264,7 +1279,6 @@ func cmdConfig(cfg *config.Config, path string, jsonOut bool, args []string) {
 		resp := clijson.NewResponseOK("config", map[string]interface{}{
 			"config_path":   path,
 			"backup_dir":    cfg.BackupDir,
-			"default_tpl":   cfg.TemplateDefault,
 			"ssh_user":      cfg.SSHUser,
 			"linked_clones": cfg.LinkedClones,
 		})
@@ -1276,7 +1290,6 @@ func cmdConfig(cfg *config.Config, path string, jsonOut bool, args []string) {
 	ui.FancyLabel("Config Path", path)
 	// fmt.Println("") // Removed based on user feedback
 	ui.FancyLabel("Backup Dir", cfg.BackupDir)
-	ui.FancyLabel("Default Tpl", cfg.TemplateDefault)
 	ui.FancyLabel("SSH User", cfg.SSHUser)
 	cloneStatus := "Enabled (Space Saving)"
 	if !cfg.LinkedClones {
@@ -1714,51 +1727,29 @@ func cmdCache(nidoDir string, args []string, prov provider.VMProvider) {
 		// Previously --unused might have meant "not in a running VM".
 		// Now we define "used" as "is a backing file for ANY VM (stopped or running)".
 
-		cached, err := catalog.GetCachedImages(imgDir)
-		if err != nil {
-			ui.Error("Failed to list cache: %v", err)
-			os.Exit(1)
-		}
-
-		usedFiles, err := prov.GetUsedBackingFiles()
-		if err != nil {
-			ui.Error("Failed to determine used backing files: %v", err)
-			ui.Error("Aborting to prevent breakage.")
-			os.Exit(1)
-		}
-
-		isUsed := make(map[string]bool)
-		for _, f := range usedFiles {
-			isUsed[f] = true
-		}
+		// Note: CachePrune in provider now handles the "used" check internally if we trust it,
+		// but the CLI implementation here was doing its own check (lines 1732-1777).
+		// The Provider interface update allows us to simplify this significantly by deferring to the provider.
+		// However, to keep identical behavior with the explicit "Skipping..." logs if we want them,
+		// we'd have to keep the manual loop.
+		// BUT, the user request is about the "System Menu" prune, which uses ops.PruneCache -> CachePrune.
+		// So `CachePrune` MUST do the work.
+		// The CLI implementation below was ACTUALLY IMPLEMENTING PRUNE MANUALLY via RemoveCachedImage.
+		// Let's switch it to use prov.CachePrune to match the GUI behavior and be DRY.
 
 		if !jsonOut {
 			ui.Ironic("Cleaning the cache (safely)...")
 		}
 
-		count := 0
-		reclaimed := int64(0)
-		for _, img := range cached {
-			// Construct absolute path for check
-			// Catalog stores Name/Version. File is <imgDir>/<Name>-<Version>.qcow2
-			fullPath, _ := filepath.Abs(filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, img.Version)))
-
-			if isUsed[fullPath] {
-				if !jsonOut {
-					ui.Info("Skipping %s:%s (backing file for existing VM)", img.Name, img.Version)
-				}
-				continue
+		count, reclaimed, err := prov.CachePrune(true)
+		if err != nil {
+			if jsonOut {
+				resp := clijson.NewResponseError("cache prune", "ERR_INTERNAL", "Prune failed", err.Error(), "Try again.", nil)
+				_ = clijson.PrintJSON(resp)
+				os.Exit(1)
 			}
-
-			if err := catalog.RemoveCachedImage(imgDir, img.Name, img.Version); err == nil {
-				count++
-				reclaimed += img.Size // Corrected field name
-				if !jsonOut {
-					ui.Success("Removed %s:%s", img.Name, img.Version)
-				}
-			} else {
-				ui.Error("Failed to remove %s:%s: %v", img.Name, img.Version, err)
-			}
+			ui.Error("Pruning failed: %v", err)
+			os.Exit(1)
 		}
 
 		if jsonOut {

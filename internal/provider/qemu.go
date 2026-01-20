@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -50,10 +51,8 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	}
 
 	// 1. Template/Image Resolution
+	// 1. Template/Image Resolution
 	tpl := opts.DiskPath
-	if tpl == "" {
-		tpl = p.Config.TemplateDefault
-	}
 
 	// If it's not an absolute path and doesn't contain a slash, it's either a Template or an Image Tag
 	if !filepath.IsAbs(tpl) && !strings.Contains(tpl, "/") {
@@ -655,6 +654,11 @@ func (p *QemuProvider) getReservedPorts() map[int]bool {
 			if state.VNCPort > 0 {
 				reserved[state.VNCPort] = true
 			}
+			for _, fw := range state.Forwarding {
+				if fw.HostPort > 0 {
+					reserved[fw.HostPort] = true
+				}
+			}
 		}
 	}
 	return reserved
@@ -997,12 +1001,53 @@ func (p *QemuProvider) ListCachedImages() ([]CachedImage, error) {
 		}
 		// Parse name and version from filename (e.g., "ubuntu-24.04.qcow2")
 		name := strings.TrimSuffix(f.Name(), ".qcow2")
-		parts := strings.Split(name, "-")
-		imageName := parts[0]
+
+		imageName := name
 		version := ""
-		if len(parts) > 1 {
-			version = strings.Join(parts[1:], "-")
+
+		// Smarter splitting: Try to match against known image names in catalog
+		catPath := filepath.Join(imagesDir, image.CatalogCacheFile)
+		if catalog, err := image.LoadCatalogFromFile(catPath); err == nil {
+			found := false
+			// Sort images by name length descending to match longest name first (e.g. ubuntu-24.04-apache-wordpress vs ubuntu)
+			imgs := catalog.Images
+			sort.Slice(imgs, func(i, j int) bool {
+				return len(imgs[i].Name) > len(imgs[j].Name)
+			})
+
+			for _, img := range imgs {
+				if name == img.Name {
+					imageName = img.Name
+					version = ""
+					found = true
+					break
+				}
+				prefix := img.Name + "-"
+				if strings.HasPrefix(name, prefix) {
+					imageName = img.Name
+					version = strings.TrimPrefix(name, prefix)
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				// Fallback to simple split if not in catalog
+				parts := strings.Split(name, "-")
+				imageName = parts[0]
+				if len(parts) > 1 {
+					version = strings.Join(parts[1:], "-")
+				}
+			}
+		} else {
+			// Fallback: simple split
+			parts := strings.Split(name, "-")
+			imageName = parts[0]
+			if len(parts) > 1 {
+				version = strings.Join(parts[1:], "-")
+			}
 		}
+
 		items = append(items, CachedImage{
 			Name:    imageName,
 			Version: version,
@@ -1044,7 +1089,7 @@ func (p *QemuProvider) CacheInfo() (CacheInfoResult, error) {
 }
 
 // CachePrune removes cached images.
-func (p *QemuProvider) CachePrune(unusedOnly bool) error {
+func (p *QemuProvider) CachePrune(unusedOnly bool) (int, int64, error) {
 	imagesDir := p.Config.ImageDir
 	if imagesDir == "" {
 		imagesDir = filepath.Join(p.RootDir, "images")
@@ -1052,7 +1097,7 @@ func (p *QemuProvider) CachePrune(unusedOnly bool) error {
 
 	usedBacking, err := p.GetUsedBackingFiles()
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	usedMap := make(map[string]bool)
 	for _, path := range usedBacking {
@@ -1061,8 +1106,11 @@ func (p *QemuProvider) CachePrune(unusedOnly bool) error {
 
 	files, err := os.ReadDir(imagesDir)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
+
+	count := 0
+	reclaimed := int64(0)
 
 	for _, f := range files {
 		if f.IsDir() || !strings.HasSuffix(f.Name(), ".qcow2") {
@@ -1072,9 +1120,17 @@ func (p *QemuProvider) CachePrune(unusedOnly bool) error {
 		if unusedOnly && usedMap[fullPath] {
 			continue // Skip images in use
 		}
-		os.Remove(fullPath)
+
+		info, err := f.Info()
+		if err == nil {
+			reclaimed += info.Size()
+		}
+
+		if err := os.Remove(fullPath); err == nil {
+			count++
+		}
 	}
-	return nil
+	return count, reclaimed, nil
 }
 
 // CacheRemove removes a specific cached image.

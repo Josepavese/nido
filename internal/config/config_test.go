@@ -53,9 +53,6 @@ TEMPLATE_DEFAULT=my-tpl
 	if cfg.SSHUser != "testuser" {
 		t.Errorf("Expected SSHUser 'testuser', got '%s'", cfg.SSHUser)
 	}
-	if cfg.TemplateDefault != "my-tpl" {
-		t.Errorf("Expected TemplateDefault 'my-tpl', got '%s'", cfg.TemplateDefault)
-	}
 }
 
 func TestLoadConfig_MissingFile(t *testing.T) {

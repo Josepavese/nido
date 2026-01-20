@@ -10,15 +10,14 @@ import (
 // Config defines the DNA of a Nido nest. It controls where life is archived,
 // default hatching species, and how disk cloning should evolve.
 type Config struct {
-	BackupDir       string
-	TemplateDefault string
-	SSHUser         string
-	ImageDir        string // Directory for downloaded images (default: ~/.nido/images)
-	LinkedClones    bool   // Whether to use Copy-on-Write linked clones (default: true)
-	Theme           string // Active UI theme name (default: auto)
-	PortRangeStart  int    // Start of custom port range (default: 30000)
-	PortRangeEnd    int    // End of custom port range (default: 32767)
-	TUI             TUIConfig
+	BackupDir      string
+	SSHUser        string
+	ImageDir       string // Directory for downloaded images (default: ~/.nido/images)
+	LinkedClones   bool   // Whether to use Copy-on-Write linked clones (default: true)
+	Theme          string // Active UI theme name (default: auto)
+	PortRangeStart int    // Start of custom port range (default: 30000)
+	PortRangeEnd   int    // End of custom port range (default: 32767)
+	TUI            TUIConfig
 }
 
 // parseInt attempts to parse an integer string, returning the value and a flag.
@@ -37,8 +36,6 @@ type TUIConfig struct {
 	InsetContent     int
 	TabMinWidth      int
 	ExitZoneWidth    int
-	FooterLink       string
-	TabLabels        []string
 	GapScale         int
 }
 
@@ -52,21 +49,18 @@ func LoadConfig(path string) (*Config, error) {
 	defer file.Close()
 
 	cfg := &Config{
-		BackupDir:       "/tmp/libvirt-pool/backups",
-		TemplateDefault: "template-headless",
-		SSHUser:         "vmuser",
-		ImageDir:        "",   // Will be set to ~/.nido/images if not specified
-		LinkedClones:    true, // Default to true (space saving)
-		PortRangeStart:  30000,
-		PortRangeEnd:    32767,
+		BackupDir:      "/tmp/libvirt-pool/backups",
+		SSHUser:        "vmuser",
+		ImageDir:       "",   // Will be set to ~/.nido/images if not specified
+		LinkedClones:   true, // Default to true (space saving)
+		PortRangeStart: 30000,
+		PortRangeEnd:   32767,
 		TUI: TUIConfig{
 			SidebarWidth:     30,
 			SidebarWideWidth: 38,
 			InsetContent:     4,
 			TabMinWidth:      6,
 			ExitZoneWidth:    4,
-			FooterLink:       "https://github.com/Josepavese",
-			TabLabels:        []string{"1 FLEET", "2 HATCHERY", "3 REGISTRY", "4 SYSTEM"},
 			GapScale:         1,
 		},
 	}
@@ -90,8 +84,6 @@ func LoadConfig(path string) (*Config, error) {
 			cfg.Theme = val
 		case "BACKUP_DIR":
 			cfg.BackupDir = val
-		case "TEMPLATE_DEFAULT":
-			cfg.TemplateDefault = val
 		case "SSH_USER":
 			cfg.SSHUser = val
 		case "IMAGE_DIR":
@@ -126,13 +118,6 @@ func LoadConfig(path string) (*Config, error) {
 			if parsed, ok := parseInt(val); ok {
 				cfg.TUI.GapScale = parsed
 			}
-		case "TUI_FOOTER_LINK":
-			cfg.TUI.FooterLink = val
-		case "TUI_TAB_LABELS":
-			parts := strings.Split(val, ",")
-			if len(parts) >= 5 {
-				cfg.TUI.TabLabels = parts
-			}
 		case "PORT_RANGE_START":
 			if parsed, ok := parseInt(val); ok {
 				cfg.PortRangeStart = parsed
@@ -165,15 +150,6 @@ func (c *Config) ApplyEnvOverrides() {
 	}
 	if v, ok := parseInt(os.Getenv("NIDO_TUI_GAP_SCALE")); ok && v > 0 {
 		c.TUI.GapScale = v
-	}
-	if v := strings.TrimSpace(os.Getenv("NIDO_TUI_FOOTER_LINK")); v != "" {
-		c.TUI.FooterLink = v
-	}
-	if v := strings.TrimSpace(os.Getenv("NIDO_TUI_TAB_LABELS")); v != "" {
-		parts := strings.Split(v, ",")
-		if len(parts) >= 5 {
-			c.TUI.TabLabels = parts
-		}
 	}
 	if v, ok := parseInt(os.Getenv("NIDO_PORT_RANGE_START")); ok {
 		c.PortRangeStart = v
