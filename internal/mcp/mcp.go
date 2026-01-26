@@ -56,8 +56,8 @@ func NewServer(p provider.VMProvider) *Server {
 func ToolsCatalog() []map[string]interface{} {
 	return []map[string]interface{}{
 		{"name": "vm_list", "description": "List all virtual machines", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
-		{"name": "vm_create", "description": "Create a VM from image or template", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "template": map[string]interface{}{"type": "string"}, "image": map[string]interface{}{"type": "string"}, "user_data": map[string]interface{}{"type": "string"}, "gui": map[string]interface{}{"type": "boolean"}, "ports": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}}}, "required": []string{"name"}}},
-		{"name": "vm_start", "description": "Start a VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "gui": map[string]interface{}{"type": "boolean"}}, "required": []string{"name"}}},
+		{"name": "vm_create", "description": "Create a VM from image or template", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "template": map[string]interface{}{"type": "string"}, "image": map[string]interface{}{"type": "string"}, "user_data": map[string]interface{}{"type": "string"}, "gui": map[string]interface{}{"type": "boolean"}, "cmdline": map[string]interface{}{"type": "string"}, "ports": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}}}, "required": []string{"name"}}},
+		{"name": "vm_start", "description": "Start a VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "gui": map[string]interface{}{"type": "boolean"}, "cmdline": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
 		{"name": "vm_stop", "description": "Stop a VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
 		{"name": "vm_delete", "description": "Delete a VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
 		{"name": "vm_info", "description": "Get VM info", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
@@ -153,6 +153,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			Image    string   `json:"image"`
 			UserData string   `json:"user_data"`
 			Gui      bool     `json:"gui"`
+			Cmdline  string   `json:"cmdline"`
 			Ports    []string `json:"ports"`
 		}
 		json.Unmarshal(params.Arguments, &args)
@@ -255,16 +256,18 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			opts.DiskPath = args.Template
 		}
 		opts.Gui = args.Gui
+		opts.Cmdline = args.Cmdline
 
 		err = s.Provider.Spawn(args.Name, opts)
 		result = fmt.Sprintf("VM %s created successfully.", args.Name)
 	case "vm_start":
 		var args struct {
-			Name string `json:"name"`
-			Gui  bool   `json:"gui"`
+			Name    string `json:"name"`
+			Gui     bool   `json:"gui"`
+			Cmdline string `json:"cmdline"`
 		}
 		json.Unmarshal(params.Arguments, &args)
-		err = s.Provider.Start(args.Name, provider.VMOptions{Gui: args.Gui})
+		err = s.Provider.Start(args.Name, provider.VMOptions{Gui: args.Gui, Cmdline: args.Cmdline})
 		result = fmt.Sprintf("VM %s started.", args.Name)
 	case "vm_stop":
 		var args struct {

@@ -3,6 +3,7 @@ package scenario
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ func VMLifecycle() Scenario {
 			infoVM,
 			listVM,
 			sshCheck,
+			cmdlineTest,
 			stopVM,
 			startVM,
 			deleteVM,
@@ -313,6 +315,63 @@ func pruneVM(ctx *Context) report.StepResult {
 	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
 	finalize(&res)
 	return res
+}
+
+func cmdlineTest(ctx *Context) report.StepResult {
+	vmName, ok := getVar(ctx, "vm_primary")
+	if !ok {
+		return skipResult(ctx.Config.NidoBin, []string{"cmdline-test"}, "vm_primary not set")
+	}
+	sshPort, okPort := getVar(ctx, "vm_primary_ssh_port")
+	sshUser, okUser := getVar(ctx, "vm_primary_ssh_user")
+	host := "127.0.0.1"
+	if ip, ok := getVar(ctx, "vm_primary_ip"); ok && ip != "" {
+		host = ip
+	}
+
+	if !okPort || !okUser {
+		return skipResult("ssh", []string{}, "ssh metadata missing")
+	}
+
+	// 1. Stop the VM first
+	stopArgs := []string{"stop", vmName, "--json"}
+	stopRes := runNido(ctx, "stop", stopArgs, 30*time.Second)
+	if stopRes.ExitCode != 0 {
+		return stopRes
+	}
+
+	// 2. Start with custom --cmdline
+	magicParam := "nido_val_" + util.NewRunID()[:8]
+	startArgs := []string{"start", vmName, "--cmdline", "root=/dev/sda rw console=ttyS0 console=tty0 " + magicParam, "--json"}
+	startRes := runNido(ctx, "start", startArgs, ctx.Config.BootTimeout)
+	addAssertion(&startRes, "exit_zero", startRes.ExitCode == 0, startRes.Stderr)
+	if startRes.ExitCode != 0 {
+		finalize(&startRes)
+		return startRes
+	}
+
+	// 3. Wait for SSH and check /proc/cmdline
+	if err := waitForPort(host, sshPort, ctx.Config.BootTimeout); err != nil {
+		addAssertion(&startRes, "ssh_ready", false, err.Error())
+		finalize(&startRes)
+		return startRes
+	}
+
+	checkRes := runSSHCommand(ctx, sshPort, sshUser, host, "cat /proc/cmdline", 15*time.Second)
+
+	// Only assert match if we are in Direct Kernel Boot mode
+	home, _ := os.UserHomeDir()
+	vmsDir := filepath.Join(home, ".nido", "vms")
+	kernelPath := filepath.Join(vmsDir, vmName+".kernel")
+	if _, err := os.Stat(kernelPath); err == nil {
+		found := strings.Contains(checkRes.Stdout, magicParam)
+		addAssertion(&startRes, "cmdline_match", found, fmt.Sprintf("Expected '%s' in /proc/cmdline, got: %s", magicParam, checkRes.Stdout))
+	} else {
+		addAssertion(&startRes, "cmdline_test", true, "Skipped match check (not Direct Kernel Boot)")
+	}
+
+	finalize(&startRes)
+	return startRes
 }
 
 func ensureUserData(ctx *Context) (string, error) {

@@ -234,6 +234,7 @@ func main() {
 		imageTag := ""
 		userDataPath := ""
 		gui := false
+		cmdline := ""
 		var forwardings []provider.PortForward
 		var ver *image.Version
 
@@ -260,6 +261,9 @@ func main() {
 				forwardings = append(forwardings, provider.PortForward{Label: "HTTPS", GuestPort: 443, Protocol: "tcp"})
 			} else if arg == "--ftp" {
 				forwardings = append(forwardings, provider.PortForward{Label: "FTP", GuestPort: 21, Protocol: "tcp"})
+			} else if (arg == "--cmdline") && i+1 < len(rest) {
+				cmdline = rest[i+1]
+				i++
 			} else if tpl == "" && !strings.HasPrefix(arg, "-") {
 				tpl = arg
 			}
@@ -422,8 +426,7 @@ func main() {
 			tpl = imgPath
 		}
 
-		cmdline := ""
-		if ver != nil {
+		if cmdline == "" && ver != nil {
 			cmdline = ver.Cmdline
 		}
 
@@ -495,16 +498,20 @@ func main() {
 		}
 		name := rest[0]
 		gui := false
+		startCmdline := ""
 		for i := 1; i < len(rest); i++ {
 			if rest[i] == "--gui" {
 				gui = true
+			} else if (rest[i] == "--cmdline") && i+1 < len(rest) {
+				startCmdline = rest[i+1]
+				i++
 			}
 		}
 
 		if !jsonOut {
 			ui.Ironic("Reviving digital consciousness...")
 		}
-		if err := prov.Start(name, provider.VMOptions{Gui: gui}); err != nil {
+		if err := prov.Start(name, provider.VMOptions{Gui: gui, Cmdline: startCmdline}); err != nil {
 			if jsonOut {
 				resp := clijson.NewResponseError("start", "ERR_INTERNAL", "Start failed", err.Error(), "Check the VM state and try again.", nil)
 				_ = clijson.PrintJSON(resp)
@@ -927,13 +934,12 @@ func getBashCompletion() string {
 
     case "${prev}" in
         spawn)
-            # 1st arg after spawn is Name. We don't have specific completion for a new name,
             # but we suggest flags if they start typing one.
-            COMPREPLY=( $(compgen -W "--image --user-data --port --web --ftp --gui --json" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "--image --user-data --port --web --ftp --gui --cmdline --json" -- ${cur}) )
             return 0
             ;;
         start)
-            COMPREPLY=( $(compgen -W "$(nido completion list-vms) --gui --json" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "$(nido completion list-vms) --gui --cmdline --json" -- ${cur}) )
             return 0
             ;;
         ssh)
@@ -1000,7 +1006,7 @@ func getBashCompletion() string {
                     return 0
                 elif [[ ${COMP_CWORD} -eq 3 ]] && [[ ! ${prev} == -* ]]; then
                     # Position 2: Template (if previous wasn't a flag needing a value)
-                    COMPREPLY=( $(compgen -W "$(nido completion list-templates) --image --user-data --port --web --ftp --gui --json" -- ${cur}) )
+                    COMPREPLY=( $(compgen -W "$(nido completion list-templates) --image --user-data --port --web --ftp --gui --cmdline --json" -- ${cur}) )
                     return 0
                 fi
             fi
@@ -1073,12 +1079,14 @@ func getZshCompletion() string {
             '--web[Shortcut for HTTP/HTTPS]' \
             '--ftp[Shortcut for FTP]' \
             '--gui[Enable GUI (VNC)]' \
+            '--cmdline[Custom kernel command line parameters]:cmdline' \
             '--json[Structured JSON output]'
           ;;
         start)
           _arguments \
             '1:vm:$(nido completion list-vms)' \
             '--gui[Enable GUI (VNC)]' \
+            '--cmdline[Custom kernel command line parameters]:cmdline' \
             '--json[Structured JSON output]'
           ;;
         ssh)
@@ -1214,9 +1222,9 @@ func printUsage() {
 
 	fmt.Printf("%sVM MANAGEMENT%s\n", ui.Bold, ui.Reset)
 	fmt.Printf("  %-10s %sCreate and hatch a new VM%s\n", "spawn", ui.Dim, ui.Reset)
-	fmt.Printf("    %sFlags: --image <tag>, --user-data <file>, --port <mapping>, --web, --ftp, --gui, --json%s\n", ui.Dim, ui.Reset)
+	fmt.Printf("    %sFlags: --image <tag>, --user-data <file>, --port <mapping>, --web, --ftp, --gui, --cmdline, --json%s\n", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sRevive a VM from deep sleep%s\n", "start", ui.Dim, ui.Reset)
-	fmt.Printf("    %sFlags: --gui, --json%s\n", ui.Dim, ui.Reset)
+	fmt.Printf("    %sFlags: --gui, --cmdline, --json%s\n", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sConnect to a VM via SSH bridge%s\n", "ssh", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sList all life forms currently in the nest%s\n", "ls", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sInspect a specific VM's neural links%s\n", "info", ui.Dim, ui.Reset)

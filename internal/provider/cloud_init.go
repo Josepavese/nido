@@ -50,6 +50,7 @@ func (c *CloudInit) GenerateISO(outPath string) error {
 		userData = "#cloud-config\n"
 		userData += "users:\n"
 		userData += fmt.Sprintf("  - name: %s\n", c.User)
+		userData += "    groups: [wheel]\n"
 		userData += "    sudo: ['ALL=(ALL) NOPASSWD:ALL']\n"
 		if c.SSHKey != "" {
 			userData += "    ssh_authorized_keys:\n"
@@ -64,6 +65,7 @@ func (c *CloudInit) GenerateISO(outPath string) error {
 		userData += "runcmd:\n"
 		userData += "  - if [ -f /etc/default/grub ]; then sed -i 's/GRUB_TIMEOUT=[0-9]*/GRUB_TIMEOUT=0/' /etc/default/grub && (update-grub || grub-mkconfig -o /boot/grub/grub.cfg); fi\n"
 		userData += "  - if [ -f /boot/extlinux.conf ]; then sed -i 's/^TIMEOUT [0-9]*/TIMEOUT 0/' /boot/extlinux.conf; fi\n"
+		userData += fmt.Sprintf("  - if [ -x /usr/bin/doas ]; then mkdir -p /etc/doas.d && echo \"permit nopass %s as root\" > /etc/doas.d/nido.conf && chmod 0400 /etc/doas.d/nido.conf; fi\n", c.User)
 	}
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "user-data"), []byte(userData), 0644); err != nil {

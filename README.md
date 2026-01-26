@@ -114,8 +114,8 @@ Here is the full move list for the Nido console.
 
 | Command                               | Action                  | Arcade Analog               |
 | :------------------------------------ | :---------------------- | :-------------------------- |
-| `nido spawn <name> [--image <img>]` | Create & start a new VM | **START GAME**        |
-| `nido start <name> [--gui]`         | Revive a stopped VM     | **CONTINUE? 10..9..** |
+| `nido spawn <name> [--image <img>] [--cmdline <args>]` | Create & start a new VM | **START GAME**        |
+| `nido start <name> [--gui] [--cmdline <args>]`     | Revive a stopped VM     | **CONTINUE? 10..9..** |
 | `nido stop <name>`                  | ACPI Shutdown signal    | **PAUSE**             |
 | `nido delete <name>`                | Destroy VM permanently  | **GAME OVER**         |
 | `nido prune`                        | Delete ALL stopped VMs  | **CLEAR HIGH SCORES** |
