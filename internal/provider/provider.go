@@ -49,6 +49,7 @@ type VMOptions struct {
 	SSHUser      string
 	// Forwarding requested by the user during spawn/start
 	Forwarding []PortForward
+	Cmdline    string
 }
 
 // VMDetail contains comprehensive data about a VM.

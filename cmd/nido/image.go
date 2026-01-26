@@ -258,100 +258,132 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 	destPath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
 
 	// Check if already exists and verified
-	// Note: Ideally we'd verify checksum here too, but that's slow.
-	// We assume if file exists at final path, it's good.
+	// Note: We used to return early here, but now we MUST continue to check
+	// for associated kernel/initrd artifacts that might be missing.
+	diskExists := false
 	if _, err := os.Stat(destPath); err == nil {
-		if jsonOut {
-			resp := clijson.NewResponseOK("image pull", map[string]interface{}{
-				"action": map[string]interface{}{
-					"name":    img.Name,
-					"version": ver.Version,
-					"result":  "already_present",
-				},
-			})
-			_ = clijson.PrintJSON(resp)
-			return
-		}
-		ui.Success("Image %s:%s is already downloaded.", img.Name, ver.Version)
-		return
+		diskExists = true
 	}
 
-	// Announce download
-	if !jsonOut {
-		ui.Header(fmt.Sprintf("Pulling %s:%s", img.Name, ver.Version))
-		ui.Info("Source: %s", ver.URL)
-		ui.Info("Size:   %s", ui.HumanSize(ver.SizeBytes))
-	}
-
-	// Determine if compression is needed based on URL extension
-	isCompressed := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
-	if len(ver.PartURLs) > 0 {
-		isCompressed = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
-	}
-
-	downloadPath := destPath
-	if isCompressed {
-		downloadPath = destPath + ".zst"
-	}
-
-	// Download
 	downloader := image.Downloader{Quiet: jsonOut}
-	var downloadErr error
-	if len(ver.PartURLs) > 0 {
-		downloadErr = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
-	} else {
-		downloadErr = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
-	}
 
-	if downloadErr != nil {
-		if jsonOut {
-			resp := clijson.NewResponseError("image pull", "ERR_IO", "Download failed", downloadErr.Error(), "Check your connection and try again.", nil)
-			_ = clijson.PrintJSON(resp)
-			os.Exit(1)
-		}
-		ui.Error("Download failed: %v", downloadErr)
-		os.Remove(downloadPath) // Cleanup
-		os.Exit(1)
-	}
-
-	// Verify Checksum (on the downloaded file)
-	if ver.Checksum != "" {
+	if !diskExists {
+		// Announce download
 		if !jsonOut {
-			ui.Ironic("Verifying genetic integrity...")
+			ui.Header(fmt.Sprintf("Pulling %s:%s", img.Name, ver.Version))
+			ui.Info("Source: %s", ver.URL)
+			ui.Info("Size:   %s", ui.HumanSize(ver.SizeBytes))
 		}
-		if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+
+		// Determine if compression is needed based on URL extension
+		isCompressed := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
+		if len(ver.PartURLs) > 0 {
+			isCompressed = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
+		}
+
+		downloadPath := destPath
+		if isCompressed {
+			downloadPath = destPath + ".zst"
+		}
+
+		// Download
+		var downloadErr error
+		if len(ver.PartURLs) > 0 {
+			downloadErr = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
+		} else {
+			downloadErr = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
+		}
+
+		if downloadErr != nil {
 			if jsonOut {
-				resp := clijson.NewResponseError("image pull", "ERR_IO", "Checksum verification failed", err.Error(), "Retry the download or choose a different image.", nil)
+				resp := clijson.NewResponseError("image pull", "ERR_IO", "Disk download failed", downloadErr.Error(), "Check your connection and try again.", nil)
 				_ = clijson.PrintJSON(resp)
-			} else {
-				ui.Error("Checksum verification failed: %v", err)
-				ui.Warn("The downloaded file may be corrupted or tampered with.")
-				ui.Warn("Deleting corrupted file...")
+				os.Exit(1)
 			}
-			os.Remove(downloadPath)
+			ui.Error("Disk download failed: %v", downloadErr)
+			os.Remove(downloadPath) // Cleanup
 			os.Exit(1)
+		}
+
+		// Verify Checksum (on the downloaded file)
+		if ver.Checksum != "" {
+			if !jsonOut {
+				ui.Ironic("Verifying disk genetic integrity...")
+			}
+			if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+				if jsonOut {
+					resp := clijson.NewResponseError("image pull", "ERR_IO", "Disk checksum verification failed", err.Error(), "Retry the download or choose a different image.", nil)
+					_ = clijson.PrintJSON(resp)
+				} else {
+					ui.Error("Disk checksum verification failed: %v", err)
+				}
+				os.Remove(downloadPath)
+				os.Exit(1)
+			}
+		}
+
+		// Decompress if needed
+		if isCompressed {
+			if !jsonOut {
+				ui.Ironic("Decompressing compressed flavour...")
+			}
+			if err := downloader.Decompress(downloadPath, destPath); err != nil {
+				if jsonOut {
+					resp := clijson.NewResponseError("image pull", "ERR_IO", "Decompression failed", err.Error(), "Ensure zstd is installed on your system.", nil)
+					_ = clijson.PrintJSON(resp)
+				} else {
+					ui.Error("Decompression failed: %v", err)
+				}
+				os.Remove(downloadPath)
+				os.Exit(1)
+			}
+			// Final cleanup of the compressed part
+			os.Remove(downloadPath)
 		}
 	} else if !jsonOut {
-		ui.Warn("⚠️ No checksum provided for this image. Integrity cannot be verified.")
+		ui.Success("Image disk %s:%s is already downloaded.", img.Name, ver.Version)
 	}
 
-	// Decompress if needed
-	if isCompressed {
-		if !jsonOut {
-			ui.Ironic("Decompressing compressed flavour...")
-		}
-		if err := downloader.Decompress(downloadPath, destPath); err != nil {
-			if jsonOut {
-				resp := clijson.NewResponseError("image pull", "ERR_IO", "Decompression failed", err.Error(), "Ensure zstd is installed on your system.", nil)
-				_ = clijson.PrintJSON(resp)
-			} else {
-				ui.Error("Decompression failed: %v", err)
+	// --- 2. Download Kernel (if defined) ---
+	if ver.KernelURL != "" {
+		kernelPath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.kernel", img.Name, ver.Version))
+		if _, err := os.Stat(kernelPath); os.IsNotExist(err) {
+			if !jsonOut {
+				ui.Info("Pulling kernel from %s...", ver.KernelURL)
 			}
-			os.Remove(downloadPath)
-			os.Exit(1)
+			if err := downloader.Download(ver.KernelURL, kernelPath, 0); err != nil {
+				ui.Error("Kernel download failed: %v", err)
+				os.Exit(1)
+			}
+			if ver.KernelChecksum != "" {
+				if err := image.VerifyChecksum(kernelPath, ver.KernelChecksum, ver.ChecksumType); err != nil {
+					ui.Error("Kernel verification failed: %v", err)
+					os.Remove(kernelPath)
+					os.Exit(1)
+				}
+			}
 		}
-		// Final cleanup of the compressed part
-		os.Remove(downloadPath)
+	}
+
+	// --- 3. Download Initrd (if defined) ---
+	if ver.InitrdURL != "" {
+		initrdPath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.initrd", img.Name, ver.Version))
+		if _, err := os.Stat(initrdPath); os.IsNotExist(err) {
+			if !jsonOut {
+				ui.Info("Pulling initrd from %s...", ver.InitrdURL)
+			}
+			if err := downloader.Download(ver.InitrdURL, initrdPath, 0); err != nil {
+				ui.Error("Initrd download failed: %v", err)
+				os.Exit(1)
+			}
+			if ver.InitrdChecksum != "" {
+				if err := image.VerifyChecksum(initrdPath, ver.InitrdChecksum, ver.ChecksumType); err != nil {
+					ui.Error("Initrd verification failed: %v", err)
+					os.Remove(initrdPath)
+					os.Exit(1)
+				}
+			}
+		}
 	}
 
 	if jsonOut {

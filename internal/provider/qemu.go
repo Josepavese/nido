@@ -198,8 +198,30 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	}
 
 	// 6. Save Initial State (with GUI preference, SSH user, assigned ports, and forwardings)
-	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser, opts.Forwarding); err != nil {
+	// Track kernel/initrd/cmdline if they were part of the template resolution
+	// (currently handled implicitly by Start checking for files, but let's be explicit if we can)
+
+	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser, opts.Forwarding, opts.Cmdline); err != nil {
 		return fmt.Errorf("failed to save initial state: %w", err)
+	}
+
+	// 6.1. Copy Kernel/Initrd if they exist for the template
+	if tpl != "" {
+		// If tpl is a cached image (ends in .qcow2), check for .kernel/.initrd
+		if strings.HasSuffix(tpl, ".qcow2") {
+			base := strings.TrimSuffix(tpl, ".qcow2")
+			kernelSrc := base + ".kernel"
+			initrdSrc := base + ".initrd"
+
+			if _, err := os.Stat(kernelSrc); err == nil {
+				os.WriteFile(filepath.Join(vmsDir, name+".kernel"), nil, 0644) // marker or copy?
+				// Better copy
+				exec.Command("cp", kernelSrc, filepath.Join(vmsDir, name+".kernel")).Run()
+			}
+			if _, err := os.Stat(initrdSrc); err == nil {
+				exec.Command("cp", initrdSrc, filepath.Join(vmsDir, name+".initrd")).Run()
+			}
+		}
 	}
 
 	// 7. Start
@@ -255,17 +277,20 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 		state.VNCPort = p.findAvailablePort(59000, reserved)
 		updated = true
 	}
+	// If opts.Cmdline is provided, override the state's cmdline
+	if opts.Cmdline != "" {
+		state.Cmdline = opts.Cmdline
+		updated = true
+	}
+
 	if updated {
-		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding)
+		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline)
 	}
 
 	// 3. Build Arguments (cross-platform)
-	// Implements Sections 5.4.C and 11.Phase1.4 of advanced-port-forwarding.md.
-	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, state.Forwarding, runDir)
+	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, state.Forwarding, runDir, state.Cmdline)
 
 	cmd := exec.Command("qemu-system-x86_64", args...)
-	// In TUI mode, we should NOT print to stderr/stdout as it corrupts the UI.
-	// We rely on returning errors to be logged by the caller.
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -274,13 +299,9 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	}
 
 	// 4. Skip Bootloader (Background)
-	// We send "Enter" key via QMP to skip any guest countdowns (Alpine, GRUB, etc.)
-	// because agents don't have time to wait for timers.
 	go p.skipBootloader(name)
 
 	// 5. Read daemon PID from QEMU pidfile
-	// QEMU daemonizes itself, so we wait for it to write its PID to disk
-	// so we can keep track of our hatchlings.
 	pidFile := filepath.Join(runDir, name+".pid")
 	pid := 0
 	for i := 0; i < 10; i++ {
@@ -295,19 +316,17 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	}
 
 	// 6. Update State with PID (0 if unknown)
-	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding)
+	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline)
 
 	return nil
 }
 
 // buildQemuArgs constructs the heavy-duty command line arguments for QEMU.
-// It detects the host OS to enable hardware acceleration: KVM for Linux,
-// HVF for macOS, and WHPX for Windows.
-func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort int, fw []PortForward, runDir string) []string {
+func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort int, fw []PortForward, runDir string, cmdline string) []string {
+	vmsDir := filepath.Join(p.RootDir, "vms")
 	args := []string{
 		"-name", name,
 		"-m", "2048",
-		// Using 'pc' (i440fx) by default for maximum compatibility with legacy images (CirrOS, etc.)
 		"-machine", "pc",
 	}
 
@@ -317,7 +336,6 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 		if _, err := os.Stat("/dev/kvm"); err == nil {
 			args = append(args, "-enable-kvm", "-cpu", "host")
 		} else {
-			// Fallback to TCG (no acceleration) for CI/CD environments without KVM
 			args = append(args, "-cpu", "qemu64")
 		}
 	case "darwin": // macOS
@@ -328,9 +346,27 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 		args = append(args, "-cpu", "qemu64")
 	}
 
+	// Direct Kernel Boot Support
+	kernelPath := filepath.Join(vmsDir, name+".kernel")
+	initrdPath := filepath.Join(vmsDir, name+".initrd")
+	if _, err := os.Stat(kernelPath); err == nil {
+		args = append(args, "-kernel", kernelPath)
+		if _, err := os.Stat(initrdPath); err == nil {
+			args = append(args, "-initrd", initrdPath)
+		}
+		finalCmdline := cmdline
+		if finalCmdline == "" {
+			// Default cmdline for cloud images (vga console + serial + root)
+			// For now we use a sensible default that matches nido-init's needs.
+			finalCmdline = "root=/dev/sda rw console=ttyS0 console=tty0"
+		}
+		args = append(args, "-append", finalCmdline)
+	}
+
 	// Common arguments
 	args = append(args,
 		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", diskPath),
+
 		"-daemonize",
 		"-pidfile", filepath.Join(runDir, name+".pid"),
 		"-netdev", p.BuildNetDevArgs(sshPort, fw),
@@ -528,6 +564,8 @@ func (p *QemuProvider) Delete(name string) error {
 	// We use safeRemove for all files to be idempotent
 	_ = safeRemove(filepath.Join(p.RootDir, "run", name+".json"))
 	_ = safeRemove(filepath.Join(vmsDir, name+"-seed.iso"))
+	_ = safeRemove(filepath.Join(vmsDir, name+".kernel"))
+	_ = safeRemove(filepath.Join(vmsDir, name+".initrd"))
 	return safeRemove(diskPath)
 }
 
@@ -686,9 +724,10 @@ type VMState struct {
 	Gui        bool          `json:"gui,omitempty"`
 	SSHUser    string        `json:"ssh_user,omitempty"`
 	Forwarding []PortForward `json:"forwarding,omitempty"`
+	Cmdline    string        `json:"cmdline,omitempty"`
 }
 
-func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser string, fw []PortForward) error {
+func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser string, fw []PortForward, cmdline string) error {
 	state := VMState{
 		Name:       name,
 		PID:        pid,
@@ -697,6 +736,7 @@ func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int,
 		Gui:        gui,
 		SSHUser:    sshUser,
 		Forwarding: fw,
+		Cmdline:    cmdline,
 	}
 	data, _ := json.MarshalIndent(state, "", "  ")
 	return os.WriteFile(filepath.Join(p.RootDir, "run", name+".json"), data, 0644)
@@ -1213,14 +1253,14 @@ func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, er
 		if f.GuestPort == pf.GuestPort && f.Protocol == pf.Protocol {
 			// Update existing rule
 			state.Forwarding[i] = pf
-			p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding)
+			p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline)
 			return pf, nil
 		}
 	}
 
 	// Add new rule
 	state.Forwarding = append(state.Forwarding, pf)
-	err = p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding)
+	err = p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline)
 	return pf, err
 }
 
@@ -1233,7 +1273,7 @@ func (p *QemuProvider) PortUnforward(name string, guestPort int, protocol string
 	for i, f := range state.Forwarding {
 		if f.GuestPort == guestPort && (f.Protocol == protocol || protocol == "") {
 			state.Forwarding = append(state.Forwarding[:i], state.Forwarding[i+1:]...)
-			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding)
+			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline)
 		}
 	}
 

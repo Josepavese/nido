@@ -230,11 +230,8 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 	opName := fmt.Sprintf("pull %s", imageRef)
 
 	return func() tea.Msg {
-		// Channel to receive progress updates from the goroutine
-		// Buffer it slightly to avoid blocking the downloader too much
 		ch := make(chan ProgressMsg, 10)
 
-		// Start the work in a goroutine
 		go func() {
 			defer close(ch)
 
@@ -269,92 +266,147 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 				return
 			}
 
+			// --- 1. Download Main Image ---
 			destPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
-			if _, err := os.Stat(destPath); err == nil {
-				// Already exists
-				ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: nil}}
-				return
-			}
+			if _, err := os.Stat(destPath); os.IsNotExist(err) {
+				downloader := image.Downloader{
+					Quiet: true,
+					OnProgress: func(current, total int64) {
+						ratio := 0.0
+						if total > 0 {
+							ratio = float64(current) / float64(total)
+						}
+						ch <- ProgressMsg{
+							OpName: opName,
+							Status: view.StatusMsg{
+								Loading:   true,
+								Operation: fmt.Sprintf("Pulling %s (Disk)", imageRef),
+								Progress:  ratio,
+							},
+						}
+					},
+				}
 
-			// Configure Downloader with Progress Callback
-			downloader := image.Downloader{
-				Quiet: true,
-				OnProgress: func(current, total int64) {
-					ratio := 0.0
-					if total > 0 {
-						ratio = float64(current) / float64(total)
+				// Determine if compression is needed based on URL extension
+				isCompressed := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
+				if len(ver.PartURLs) > 0 {
+					isCompressed = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
+				}
+
+				downloadPath := destPath
+				if isCompressed {
+					downloadPath = destPath + ".zst"
+				}
+
+				// Download
+				var downloadErr error
+				if len(ver.PartURLs) > 0 {
+					downloadErr = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
+				} else {
+					downloadErr = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
+				}
+
+				if downloadErr != nil {
+					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("disk download failed: %w", downloadErr)}}
+					return
+				}
+
+				// Verify Checksum (on the downloaded file)
+				if ver.Checksum != "" {
+					if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+						os.Remove(downloadPath)
+						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("disk verification failed: %w", err)}}
+						return
 					}
-					// Send status update
-					// Use non-blocking send logic or just blocking?
-					// Use blocking but the buffer helps.
+				}
+
+				// Decompress if needed
+				if isCompressed {
 					ch <- ProgressMsg{
 						OpName: opName,
 						Status: view.StatusMsg{
 							Loading:   true,
-							Operation: fmt.Sprintf("Pulling %s", imageRef),
-							Progress:  ratio,
+							Operation: fmt.Sprintf("Decompressing %s", pName),
+							Progress:  1.0,
 						},
 					}
-				},
-			}
-
-			downloadPath := destPath
-			isTarXz := strings.HasSuffix(ver.URL, ".tar.xz")
-			isZst := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
-			if len(ver.PartURLs) > 0 {
-				isZst = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
-			}
-
-			if isTarXz {
-				downloadPath = destPath + ".tar.xz"
-			} else if isZst {
-				downloadPath = destPath + ".zst"
-			}
-
-			if len(ver.PartURLs) > 0 {
-				err = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
-			} else {
-				err = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
-			}
-
-			if err != nil {
-				ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: err}}
-				return
-			}
-
-			// Verify & Decompress (Indeterminate progress)
-			ch <- ProgressMsg{
-				OpName: opName,
-				Status: view.StatusMsg{
-					Loading:   true,
-					Operation: fmt.Sprintf("Verifying %s", pName),
-					Progress:  1.0,
-				},
-			}
-
-			if ver.Checksum != "" {
-				if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+					if err := downloader.Decompress(downloadPath, destPath); err != nil {
+						os.Remove(downloadPath)
+						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("decompression failed: %w", err)}}
+						return
+					}
 					os.Remove(downloadPath)
-					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("verification failed: %w", err)}}
-					return
 				}
 			}
 
-			if isTarXz || isZst {
-				ch <- ProgressMsg{
-					OpName: opName,
-					Status: view.StatusMsg{
-						Loading:   true,
-						Operation: fmt.Sprintf("Decompressing %s", pName),
-						Progress:  1.0,
-					},
+			// --- 2. Download Kernel (if defined) ---
+			if ver.KernelURL != "" {
+				kernelPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.kernel", img.Name, ver.Version))
+				if _, err := os.Stat(kernelPath); os.IsNotExist(err) {
+					downloader := image.Downloader{
+						Quiet: true,
+						OnProgress: func(current, total int64) {
+							ratio := 0.0
+							if total > 0 {
+								ratio = float64(current) / float64(total)
+							}
+							ch <- ProgressMsg{
+								OpName: opName,
+								Status: view.StatusMsg{
+									Loading:   true,
+									Operation: fmt.Sprintf("Pulling %s (Kernel)", imageRef),
+									Progress:  ratio,
+								},
+							}
+						},
+					}
+					if err := downloader.Download(ver.KernelURL, kernelPath, 0); err != nil {
+						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("kernel download failed: %w", err)}}
+						return
+					}
+					if ver.KernelChecksum != "" {
+						if err := image.VerifyChecksum(kernelPath, ver.KernelChecksum, ver.ChecksumType); err != nil {
+							os.Remove(kernelPath)
+							ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("kernel verification failed: %w", err)}}
+							return
+						}
+					}
 				}
-				if err := downloader.Decompress(downloadPath, destPath); err != nil {
-					os.Remove(downloadPath)
-					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("decompression failed: %w", err)}}
-					return
+			}
+
+			// --- 3. Download Initrd (if defined) ---
+			if ver.InitrdURL != "" {
+				initrdPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.initrd", img.Name, ver.Version))
+				if _, err := os.Stat(initrdPath); os.IsNotExist(err) {
+					downloader := image.Downloader{
+						Quiet: true,
+						OnProgress: func(current, total int64) {
+							ratio := 0.0
+							if total > 0 {
+								ratio = float64(current) / float64(total)
+							}
+							ch <- ProgressMsg{
+								OpName: opName,
+								Status: view.StatusMsg{
+									Loading:   true,
+									Operation: fmt.Sprintf("Pulling %s (Initrd)", imageRef),
+									Progress:  ratio,
+								},
+							}
+						},
+					}
+					if err := downloader.Download(ver.InitrdURL, initrdPath, 0); err != nil {
+						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("initrd download failed: %w", err)}}
+						return
+					}
+					if ver.InitrdChecksum != "" {
+						if err := image.VerifyChecksum(initrdPath, ver.InitrdChecksum, ver.ChecksumType); err != nil {
+							os.Remove(initrdPath)
+							ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("initrd verification failed: %w", err)}}
+							return
+						}
+					}
 				}
-				os.Remove(downloadPath)
 			}
 
 			ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: nil}}

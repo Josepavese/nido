@@ -24,16 +24,21 @@ type Image struct {
 // Version represents a specific version of a VM image.
 // Includes download URL, checksum for verification, and metadata.
 type Version struct {
-	Version      string   `json:"version"`
-	Aliases      []string `json:"aliases,omitempty"` // e.g., ["latest", "lts"]
-	Arch         string   `json:"arch"`              // e.g., "amd64"
-	URL          string   `json:"url"`
-	ChecksumType string   `json:"checksum_type"` // "sha256" or "sha512"
-	Checksum     string   `json:"checksum"`
-	SizeBytes    int64    `json:"size_bytes"`
-	SizeHuman    string   `json:"size,omitempty"` // e.g., "1.2 GB"
-	Format       string   `json:"format"`         // "qcow2"
-	PartURLs     []string `json:"part_urls,omitempty"`
+	Version        string   `json:"version"`
+	Aliases        []string `json:"aliases,omitempty"` // e.g., ["latest", "lts"]
+	Arch           string   `json:"arch"`              // e.g., "amd64"
+	URL            string   `json:"url"`
+	ChecksumType   string   `json:"checksum_type"` // "sha256" or "sha512"
+	Checksum       string   `json:"checksum"`
+	SizeBytes      int64    `json:"size_bytes"`
+	SizeHuman      string   `json:"size,omitempty"` // e.g., "1.2 GB"
+	Format         string   `json:"format"`         // "qcow2"
+	PartURLs       []string `json:"part_urls,omitempty"`
+	KernelURL      string   `json:"kernel_url,omitempty"`
+	KernelChecksum string   `json:"kernel_checksum,omitempty"`
+	InitrdURL      string   `json:"initrd_url,omitempty"`
+	InitrdChecksum string   `json:"initrd_checksum,omitempty"`
+	Cmdline        string   `json:"cmdline,omitempty"`
 }
 
 // CachedImage represents a cached image file on disk.

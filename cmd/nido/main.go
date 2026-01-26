@@ -235,6 +235,7 @@ func main() {
 		userDataPath := ""
 		gui := false
 		var forwardings []provider.PortForward
+		var ver *image.Version
 
 		for i := 1; i < len(rest); i++ {
 			arg := rest[i]
@@ -302,7 +303,9 @@ func main() {
 				pName, pVer = parts[0], parts[1]
 			}
 
-			img, ver, err := catalog.FindImage(pName, pVer)
+			var img *image.Image
+			var err error
+			img, ver, err = catalog.FindImage(pName, pVer)
 			if err != nil {
 				if jsonOut {
 					resp := clijson.NewResponseError("spawn", "ERR_NOT_FOUND", "Image not found", err.Error(), "Run 'nido image list' to see available images.", nil)
@@ -419,6 +422,11 @@ func main() {
 			tpl = imgPath
 		}
 
+		cmdline := ""
+		if ver != nil {
+			cmdline = ver.Cmdline
+		}
+
 		if !jsonOut {
 			ui.Ironic("Initiating hypervisor handshake...")
 		}
@@ -429,6 +437,7 @@ func main() {
 			Gui:          gui,
 			SSHUser:      customSshUser,
 			Forwarding:   forwardings,
+			Cmdline:      cmdline,
 		}); err != nil {
 			if jsonOut {
 				code := "ERR_INTERNAL"
