@@ -1,0 +1,17 @@
+#!/sbin/openrc-run
+
+name="nido-init"
+description="Nido Guest Initialization Service"
+
+# Run once at boot
+depend() {
+    need localmount
+    after bootmisc
+    before sshd
+}
+
+start() {
+    ebegin "Starting nido-init"
+    /usr/local/bin/nido-init
+    eend $?
+}
