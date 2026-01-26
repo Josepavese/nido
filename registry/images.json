@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-01-20T10:31:10.520977333Z",
+  "updated_at": "2026-01-26T08:27:03.641868296Z",
   "images": [
     {
       "name": "ubuntu",
@@ -30,8 +30,8 @@
           "arch": "amd64",
           "url": "https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img",
           "checksum_type": "sha256",
-          "checksum": "2cbbe814d84c9dc7d749ea0afda924d9e26f771a3f824b48f33cf3a438a21f4b",
-          "size_bytes": 691721216,
+          "checksum": "f5d311aad28742200fabb183a8af42292ad4f22c941a4371b736c82089bf67ee",
+          "size_bytes": 688868864,
           "format": "qcow2"
         }
       ]
@@ -50,8 +50,8 @@
           "arch": "amd64",
           "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-Cloud.qcow2",
           "checksum_type": "sha256",
-          "checksum": "096d3e2a4ca89637499539cc399350debf761fa1c7853f164f4ded0551e95eb4",
-          "size_bytes": 295434240,
+          "checksum": "c369f4a67b14bf5576fcd53f17793a1e73a36c35a27a39ebb6d53e512bf8319b",
+          "size_bytes": 292499968,
           "format": "qcow2"
         }
       ]
