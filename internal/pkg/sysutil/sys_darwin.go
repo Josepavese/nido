@@ -2,6 +2,8 @@ package sysutil
 
 import (
 	"encoding/binary"
+	"fmt"
+	"os/exec"
 	"syscall"
 )
 
@@ -33,4 +35,19 @@ func getTotalSystemMemoryMB() int {
 	}
 
 	return 0
+}
+
+// TerminalCommand returns the command parts to open a terminal with a command.
+func TerminalCommand(cmd string) (string, []string) {
+	// Priority: iTerm2 > Terminal.app
+	if _, err := exec.LookPath("iterm2"); err == nil {
+		return "osascript", []string{"-e", fmt.Sprintf(`tell application "iTerm" to create window with default profile command "%s"`, cmd)}
+	}
+
+	return "osascript", []string{"-e", fmt.Sprintf(`tell application "Terminal" to do script "%s"`, cmd)}
+}
+
+// VNCCommand returns the command to open a VNC viewer.
+func VNCCommand(addr string) (string, []string) {
+	return "open", []string{"vnc://" + addr}
 }

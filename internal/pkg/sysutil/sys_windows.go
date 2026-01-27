@@ -1,6 +1,7 @@
 package sysutil
 
 import (
+	"os/exec"
 	"syscall"
 	"unsafe"
 )
@@ -45,4 +46,19 @@ func getTotalSystemMemoryMB() int {
 	}
 
 	return int(mse.ullTotalPhys / 1024 / 1024)
+}
+
+// TerminalCommand returns the command parts to open a terminal with a command.
+func TerminalCommand(cmd string) (string, []string) {
+	// Priority: Windows Terminal > cmd.exe start
+	if _, err := exec.LookPath("wt.exe"); err == nil {
+		return "wt.exe", []string{"-w", "0", "nt", "sh", "-c", cmd}
+	}
+
+	return "cmd.exe", []string{"/c", "start", "sh", "-c", cmd}
+}
+
+// VNCCommand returns the command to open a VNC viewer.
+func VNCCommand(addr string) (string, []string) {
+	return "cmd.exe", []string{"/c", "start", "vnc://" + addr}
 }

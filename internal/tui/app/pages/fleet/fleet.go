@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"github.com/Josepavese/nido/internal/provider"
 	"github.com/Josepavese/nido/internal/tui/app/ops"
 	"github.com/Josepavese/nido/internal/tui/kit/layout"
@@ -377,8 +378,11 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 				}
 			}
 		case "s":
-			// SSH Shortcut
-			cmds = append(cmds, f.DetailView.openSSH())
+			// SSH Shortcut (In-place)
+			cmds = append(cmds, f.DetailView.openSSH(false))
+		case "S":
+			// SSH Shortcut (Windowed)
+			cmds = append(cmds, f.DetailView.openSSH(true))
 		case "v":
 			// VNC Shortcut
 			cmds = append(cmds, f.DetailView.openVNC())
@@ -460,6 +464,7 @@ func (f *Fleet) Shortcuts() []view.Shortcut {
 			// Running specific
 			if item.State == "running" {
 				shortcuts = append(shortcuts, view.Shortcut{Key: "s", Label: "ssh"})
+				shortcuts = append(shortcuts, view.Shortcut{Key: "S", Label: "ssh (win)"})
 				shortcuts = append(shortcuts, view.Shortcut{Key: "v", Label: "vnc"})
 			} else {
 				// Stopped specific
@@ -663,7 +668,7 @@ func (c *ComponentsDetail) UpdateDetail(d FleetDetail) {
 	c.rebuildForm()
 }
 
-func (c *ComponentsDetail) openSSH() tea.Cmd {
+func (c *ComponentsDetail) openSSH(windowed bool) tea.Cmd {
 	d := c.Parent.detail
 	if d.State != "running" {
 		return nil
@@ -671,26 +676,42 @@ func (c *ComponentsDetail) openSSH() tea.Cmd {
 
 	sshCmd, err := c.Parent.provider.SSHCommand(d.Name)
 	if err != nil {
-		// If generation fails (e.g. no port), we can't open the terminal.
-		// We could update the error modal, but this function returns a Cmd,
-		// so we'd need to return a Msg that triggers the modal.
-		// For now, let's just log or ignore, or construct a safe fallback/error msg
 		return func() tea.Msg {
 			return ops.OpResultMsg{Err: fmt.Errorf("failed to generate SSH command: %w", err), Path: d.Name}
 		}
 	}
 
-	// TODO: Cross-platform terminal opening
-	return tea.ExecProcess(exec.Command("x-terminal-emulator", "-e", sshCmd), nil)
+	if windowed {
+		// Windowed: Spawn a separate terminal emulator window
+		termBin, termArgs := sysutil.TerminalCommand(sshCmd)
+		return tea.ExecProcess(exec.Command(termBin, termArgs...), nil)
+	}
+
+	// In-Place: Directly execute SSH in current terminal.
+	// We parse the sshCmd which looks like: ssh -o ... -p [port] [user]@[ip]
+	parts := strings.Split(sshCmd, " ")
+	if len(parts) < 1 {
+		return nil
+	}
+
+	// Reconstruct args avoiding the 'ssh' binary itself in args[0]
+	// Also add some quality of life options for TUI users
+	extraOpts := []string{"-o", "LogLevel=ERROR", "-o", "ConnectTimeout=5"}
+	allArgs := append(extraOpts, parts[1:]...)
+
+	return tea.ExecProcess(exec.Command("ssh", allArgs...), nil)
 }
+
 func (c *ComponentsDetail) openVNC() tea.Cmd {
 	d := c.Parent.detail
 	if d.State != "running" {
 		return nil
 	}
 	vncAddr := fmt.Sprintf("localhost:%d", d.VNCPort)
-	// TODO: Cross-platform VNC viewer opening
-	return tea.ExecProcess(exec.Command("vncviewer", vncAddr), nil)
+
+	// Use SSOT VNC opener from sysutil
+	vncBin, vncArgs := sysutil.VNCCommand(vncAddr)
+	return tea.ExecProcess(exec.Command(vncBin, vncArgs...), nil)
 }
 
 func (c *ComponentsDetail) togglePower() tea.Cmd {
