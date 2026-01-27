@@ -158,12 +158,13 @@ func main() {
 		if jsonOut {
 			resp := clijson.NewResponseOK("info", map[string]interface{}{
 				"vm": map[string]interface{}{
-					"name":     info.Name,
-					"state":    info.State,
-					"ip":       info.IP,
-					"ssh_user": info.SSHUser,
-					"ssh_port": info.SSHPort,
-					"vnc_port": info.VNCPort,
+					"name":         info.Name,
+					"state":        info.State,
+					"ip":           info.IP,
+					"ssh_user":     info.SSHUser,
+					"ssh_password": info.SSHPassword,
+					"ssh_port":     info.SSHPort,
+					"vnc_port":     info.VNCPort,
 				},
 			})
 			_ = clijson.PrintJSON(resp)
@@ -173,6 +174,9 @@ func main() {
 		ui.FancyLabel("State", info.State)
 		ui.FancyLabel("IP Address", info.IP)
 		ui.FancyLabel("SSH Command", fmt.Sprintf("ssh -p %d %s@%s", info.SSHPort, info.SSHUser, info.IP))
+		if info.SSHPassword != "" {
+			ui.FancyLabel("SSH Password", info.SSHPassword)
+		}
 		if info.VNCPort > 0 {
 			ui.FancyLabel("GUI (VNC)", fmt.Sprintf("127.0.0.1:%d", info.VNCPort))
 		}
@@ -270,6 +274,7 @@ func main() {
 		}
 
 		customSshUser := ""
+		customSshPassword := ""
 		if imageTag != "" {
 			// Resolve image
 			imgDir := filepath.Join(nidoDir, "images")
@@ -320,6 +325,11 @@ func main() {
 				os.Exit(1)
 			}
 			customSshUser = img.SSHUser
+			if ver.SSHPassword != "" {
+				customSshPassword = ver.SSHPassword
+			} else if img.SSHPassword != "" {
+				customSshPassword = img.SSHPassword
+			}
 
 			imgPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
 
@@ -439,6 +449,7 @@ func main() {
 			UserDataPath: userDataPath,
 			Gui:          gui,
 			SSHUser:      customSshUser,
+			SSHPassword:  customSshPassword,
 			Forwarding:   forwardings,
 			Cmdline:      cmdline,
 		}); err != nil {
@@ -1156,17 +1167,18 @@ func cmdSsh(prov provider.VMProvider, name string, args []string) {
 	}
 
 	parts := strings.Split(cmdStr, " ")
-	// ssh -p [port] [user]@[ip] [args...]
-	// Inject options to skip fingerprint check for ephemeral VMs
-	sshOptions := []string{
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
+	// cmdStr is: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p [port] [user]@[ip]
+
+	// Extra CLI-specific options for better experience
+	extraOptions := []string{
 		"-o", "LogLevel=ERROR", // Reduce noise
-		"-o", "BatchMode=yes", // Fail instead of prompting for password
+		"-o", "ConnectTimeout=5", // Fail fast on network issues
 	}
 
-	baseArgs := append(sshOptions, parts[1:]...)
-	finalArgs := append(baseArgs, args...)
+	// Reconstruct args: [ssh] [extraOptions] [originalOptions...] [args...]
+	finalArgs := append([]string{}, extraOptions...)
+	finalArgs = append(finalArgs, parts[1:]...)
+	finalArgs = append(finalArgs, args...)
 
 	cmd := exec.Command(parts[0], finalArgs...)
 	cmd.Stdout = os.Stdout

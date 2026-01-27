@@ -136,6 +136,7 @@
       "description": "CirrOS - Test Image",
       "homepage": "https://download.cirros-cloud.net",
       "ssh_user": "cirros",
+      "ssh_password": "gocubsgo",
       "versions": [
         {
           "version": "0.6.3",

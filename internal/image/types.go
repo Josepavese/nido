@@ -18,6 +18,7 @@ type Image struct {
 	Description string    `json:"description"`
 	Homepage    string    `json:"homepage,omitempty"`
 	SSHUser     string    `json:"ssh_user,omitempty"`
+	SSHPassword string    `json:"ssh_password,omitempty"`
 	Versions    []Version `json:"versions"`
 }
 
@@ -33,6 +34,8 @@ type Version struct {
 	SizeBytes      int64    `json:"size_bytes"`
 	SizeHuman      string   `json:"size,omitempty"` // e.g., "1.2 GB"
 	Format         string   `json:"format"`         // "qcow2"
+	SSHUser        string   `json:"ssh_user,omitempty"`
+	SSHPassword    string   `json:"ssh_password,omitempty"`
 	PartURLs       []string `json:"part_urls,omitempty"`
 	KernelURL      string   `json:"kernel_url,omitempty"`
 	KernelChecksum string   `json:"kernel_checksum,omitempty"`

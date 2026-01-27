@@ -47,6 +47,7 @@ type VMOptions struct {
 	UserDataPath string
 	Gui          bool
 	SSHUser      string
+	SSHPassword  string
 	// Forwarding requested by the user during spawn/start
 	Forwarding []PortForward
 	Cmdline    string
@@ -54,13 +55,14 @@ type VMOptions struct {
 
 // VMDetail contains comprehensive data about a VM.
 type VMDetail struct {
-	Name    string
-	State   string
-	PID     int
-	IP      string
-	SSHUser string
-	SSHPort int
-	VNCPort int
+	Name        string
+	State       string
+	PID         int
+	IP          string
+	SSHUser     string
+	SSHPassword string
+	SSHPort     int
+	VNCPort     int
 	// Active port forwardings
 	Forwarding []PortForward
 	// DiskPath is the absolute path to the VM disk image.

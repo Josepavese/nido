@@ -138,6 +138,9 @@ func getVarOrDefault(ctx *Context, key, def string) string {
 }
 
 func selectTemplateFallback(ctx *Context, list []interface{}) {
+	if ctx.Config.BaseTemplate == "none" {
+		return
+	}
 	if ctx.Config.BaseTemplate != "" {
 		found := false
 		for _, t := range list {

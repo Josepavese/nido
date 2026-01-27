@@ -105,6 +105,9 @@ func infoVM(ctx *Context) report.StepResult {
 				if user, ok := vm["ssh_user"].(string); ok {
 					setVar(ctx, "vm_primary_ssh_user", user)
 				}
+				if pwd, ok := vm["ssh_password"].(string); ok {
+					setVar(ctx, "vm_primary_ssh_password", pwd)
+				}
 				if ip, ok := vm["ip"].(string); ok && ip != "" {
 					setVar(ctx, "vm_primary_ip", ip)
 				}
@@ -166,6 +169,9 @@ func listVM(ctx *Context) report.StepResult {
 }
 
 func chooseTemplate(ctx *Context) string {
+	if ctx.Config.BaseTemplate == "none" {
+		return ""
+	}
 	if ctx.Config.BaseTemplate != "" {
 		return ctx.Config.BaseTemplate
 	}
@@ -198,6 +204,7 @@ func sshCheck(ctx *Context) report.StepResult {
 		}
 	}
 
+	sshPwd, okPwd := getVar(ctx, "vm_primary_ssh_password")
 	args := []string{
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
@@ -207,12 +214,19 @@ func sshCheck(ctx *Context) report.StepResult {
 		"--", "echo", "ok",
 	}
 
+	execCmd := "ssh"
+	execArgs := args
+	if okPwd && sshPwd != "" {
+		execCmd = "sshpass"
+		execArgs = append([]string{"-p", sshPwd, "ssh"}, args...)
+	}
+
 	var last report.StepResult
-	for attempt := 0; attempt < 5; attempt++ {
+	for attempt := 0; attempt < 15; attempt++ {
 		inv := runner.Invocation{
-			Command: "ssh",
-			Args:    args,
-			Timeout: 20 * time.Second,
+			Command: execCmd,
+			Args:    execArgs,
+			Timeout: 15 * time.Second,
 		}
 		execRes := ctx.Runner.Exec(inv)
 		res := report.StepResult{
@@ -251,7 +265,7 @@ func sshCheck(ctx *Context) report.StepResult {
 			return res
 		}
 		last = res
-		time.Sleep(3 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
 	last.DurationMs = time.Since(start).Milliseconds()
 	return last
@@ -266,9 +280,17 @@ func runSSHCommand(ctx *Context, port, user, host, cmd string, timeout time.Dura
 		fmt.Sprintf("%s@%s", user, host),
 		"--", cmd,
 	}
+
+	execCmd := "ssh"
+	execArgs := args
+	if pwd, ok := getVar(ctx, "vm_primary_ssh_password"); ok && pwd != "" {
+		execCmd = "sshpass"
+		execArgs = append([]string{"-p", pwd, "ssh"}, args...)
+	}
+
 	return ctx.Runner.Exec(runner.Invocation{
-		Command: "ssh",
-		Args:    args,
+		Command: execCmd,
+		Args:    execArgs,
 		Timeout: timeout,
 	})
 }

@@ -649,7 +649,8 @@ func (c *ComponentsDetail) openSSH() tea.Cmd {
 	if d.State != "running" {
 		return nil
 	}
-	sshCmd := fmt.Sprintf("ssh -p %d %s@localhost", d.SSHPort, d.SSHUser)
+	// Use flags to bypass strict host key checking and known hosts updates
+	sshCmd := fmt.Sprintf("ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -p %d %s@localhost", d.SSHPort, d.SSHUser)
 	// TODO: Cross-platform terminal opening
 	return tea.ExecProcess(exec.Command("x-terminal-emulator", "-e", sshCmd), nil)
 }

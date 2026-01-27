@@ -38,23 +38,21 @@ jobs:
         run: |
           brew install qemu
 
-      # Install QEMU on Windows
+      # Install QEMU (Windows)
       - name: Install QEMU (Windows)
         if: runner.os == 'Windows'
         run: |
-          choco install qemu -y
-          # Refresh PATH to include QEMU
-          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-          # Verify installation
-          & "C:\Program Files\qemu\qemu-system-x86_64.exe" --version
+          choco install qemu -y --no-progress
+          $qemuPath = "C:\Program Files\qemu"
+          echo "$qemuPath" >> $env:GITHUB_PATH
         shell: pwsh
 
       # Verify QEMU installation
       - name: Verify QEMU
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-            "/c/Program Files/qemu/qemu-system-x86_64.exe" --version
-            "/c/Program Files/qemu/qemu-img.exe" --version
+            qemu-system-x86_64 --version
+            qemu-img --version
           else
             qemu-system-x86_64 --version
             qemu-img --version
@@ -64,6 +62,16 @@ jobs:
       # Build Nido
       - name: Build Nido
         run: go build -o nido${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/nido
+
+      # Add bin to PATH
+      - name: Add bin to PATH
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            echo "$(pwd -W)/bin" >> $GITHUB_PATH
+          else
+            echo "$(pwd)/bin" >> $GITHUB_PATH
+          fi
+        shell: bash
 
       # Run unit tests
       - name: Run unit tests

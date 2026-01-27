@@ -75,14 +75,21 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 					parts := strings.Split(tpl, ":")
 					pName, pVer = parts[0], parts[1]
 				}
+				sshPassword := ""
 				img, ver, err := catalog.FindImage(pName, pVer)
 				if err == nil {
 					// Found! Update tpl to the cached image path
 					tpl = filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
-					// Also update SSH user if not explicitly provided
+					// Also update SSH user/password if not explicitly provided
 					if opts.SSHUser == "" && img.SSHUser != "" {
 						opts.SSHUser = img.SSHUser
 					}
+					if ver.SSHPassword != "" {
+						sshPassword = ver.SSHPassword
+					} else if img.SSHPassword != "" {
+						sshPassword = img.SSHPassword
+					}
+					opts.SSHPassword = sshPassword
 				}
 			}
 		}
@@ -201,7 +208,7 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	// Track kernel/initrd/cmdline if they were part of the template resolution
 	// (currently handled implicitly by Start checking for files, but let's be explicit if we can)
 
-	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser, opts.Forwarding, opts.Cmdline); err != nil {
+	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser, opts.SSHPassword, opts.Forwarding, opts.Cmdline); err != nil {
 		return fmt.Errorf("failed to save initial state: %w", err)
 	}
 
@@ -284,7 +291,7 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	}
 
 	if updated {
-		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline)
+		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline)
 	}
 
 	// 3. Build Arguments (cross-platform)
@@ -316,7 +323,7 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	}
 
 	// 6. Update State with PID (0 if unknown)
-	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline)
+	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline)
 
 	return nil
 }
@@ -491,6 +498,7 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 		PID:            pid,
 		IP:             "127.0.0.1",
 		SSHUser:        state.SSHUser,
+		SSHPassword:    state.SSHPassword,
 		SSHPort:        state.SSHPort,
 		VNCPort:        state.VNCPort,
 		Forwarding:     state.Forwarding,
@@ -717,26 +725,28 @@ func (p *QemuProvider) findAvailablePort(start int, reserved map[int]bool) int {
 }
 
 type VMState struct {
-	Name       string        `json:"name"`
-	PID        int           `json:"pid"`
-	SSHPort    int           `json:"ssh_port"`
-	VNCPort    int           `json:"vnc_port,omitempty"`
-	Gui        bool          `json:"gui,omitempty"`
-	SSHUser    string        `json:"ssh_user,omitempty"`
-	Forwarding []PortForward `json:"forwarding,omitempty"`
-	Cmdline    string        `json:"cmdline,omitempty"`
+	Name        string        `json:"name"`
+	PID         int           `json:"pid"`
+	SSHPort     int           `json:"ssh_port"`
+	VNCPort     int           `json:"vnc_port,omitempty"`
+	Gui         bool          `json:"gui,omitempty"`
+	SSHUser     string        `json:"ssh_user,omitempty"`
+	SSHPassword string        `json:"ssh_password,omitempty"`
+	Forwarding  []PortForward `json:"forwarding,omitempty"`
+	Cmdline     string        `json:"cmdline,omitempty"`
 }
 
-func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser string, fw []PortForward, cmdline string) error {
+func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser, sshPassword string, fw []PortForward, cmdline string) error {
 	state := VMState{
-		Name:       name,
-		PID:        pid,
-		SSHPort:    sshPort,
-		VNCPort:    vncPort,
-		Gui:        gui,
-		SSHUser:    sshUser,
-		Forwarding: fw,
-		Cmdline:    cmdline,
+		Name:        name,
+		PID:         pid,
+		SSHPort:     sshPort,
+		VNCPort:     vncPort,
+		Gui:         gui,
+		SSHUser:     sshUser,
+		SSHPassword: sshPassword,
+		Forwarding:  fw,
+		Cmdline:     cmdline,
 	}
 	data, _ := json.MarshalIndent(state, "", "  ")
 	return os.WriteFile(filepath.Join(p.RootDir, "run", name+".json"), data, 0644)
@@ -778,7 +788,8 @@ func (p *QemuProvider) SSHCommand(name string) (string, error) {
 	if info.SSHPort == 0 || info.State != "running" {
 		return "", fmt.Errorf("VM '%s' is not running or has no network access", name)
 	}
-	return fmt.Sprintf("ssh -p %d %s@%s", info.SSHPort, info.SSHUser, info.IP), nil
+	// Inject options to skip fingerprint check for ephemeral VMs
+	return fmt.Sprintf("ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p %d %s@%s", info.SSHPort, info.SSHUser, info.IP), nil
 }
 
 func (p *QemuProvider) ListTemplates() ([]string, error) {
@@ -813,6 +824,9 @@ func (p *QemuProvider) Prune() (int, error) {
 }
 
 func (p *QemuProvider) GetConfig() config.Config {
+	if p.Config == nil {
+		return config.Config{}
+	}
 	return *p.Config
 }
 
@@ -1253,14 +1267,14 @@ func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, er
 		if f.GuestPort == pf.GuestPort && f.Protocol == pf.Protocol {
 			// Update existing rule
 			state.Forwarding[i] = pf
-			p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline)
+			p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline)
 			return pf, nil
 		}
 	}
 
 	// Add new rule
 	state.Forwarding = append(state.Forwarding, pf)
-	err = p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline)
+	err = p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline)
 	return pf, err
 }
 
@@ -1273,7 +1287,7 @@ func (p *QemuProvider) PortUnforward(name string, guestPort int, protocol string
 	for i, f := range state.Forwarding {
 		if f.GuestPort == guestPort && (f.Protocol == protocol || protocol == "") {
 			state.Forwarding = append(state.Forwarding[:i], state.Forwarding[i+1:]...)
-			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline)
+			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline)
 		}
 	}
 
