@@ -48,6 +48,8 @@ type Incubator struct {
 	// Accessors for dynamic updates
 	header     *widget.Card
 	input      *widget.Input
+	memInput   *widget.Input
+	cpuInput   *widget.Input
 	addPortBtn *widget.Button
 	toggle     *widget.Toggle
 	spawnBtn   *widget.Button
@@ -88,15 +90,20 @@ func NewIncubator(parent *Hatchery) *Incubator {
 	// Real-time filtering for valid VM name characters
 	inc.input.Filter = widget.FilterHostName
 
-	// 3. Ports List (Read Only) - INTEGRATED INTO FORM
+	// 3. Resource Inputs (Memory & CPUs)
+	inc.memInput = widget.NewInput("Memory (MB)", "2048", nil)
+	inc.memInput.Filter = widget.FilterNumber
+	inc.cpuInput = widget.NewInput("vCPUs", "2", nil)
+	inc.cpuInput.Filter = widget.FilterNumber
 
-	// 3b. Add Port Button
+	// 4. Ports List (Read Only) - INTEGRATED INTO FORM
+	// ... (no changes to addPortBtn)
 	inc.addPortBtn = widget.NewButton("Ports", "Add Forwarding", func() tea.Cmd {
 		return inc.Parent.OpenAddPortModal()
 	})
 	inc.addPortBtn.Centered = true
 
-	// 4. Toggle
+	// 5. Toggle
 	inc.toggle = widget.NewToggle("GUI Mode", true)
 
 	// 5. Action Button
@@ -116,7 +123,10 @@ func (i *Incubator) rebuildForm() {
 	elements = append(elements, i.header)
 	elements = append(elements, i.input)
 
-	// 2. GUI Toggle + Add Port Btn (Weighted 1:1 for equal 50/50 split)
+	// 2. Resources (Memory & CPUs) - 50/50 split
+	elements = append(elements, widget.NewRow(i.memInput, i.cpuInput))
+
+	// 3. GUI Toggle + Add Port Btn (Weighted 1:1 for equal 50/50 split)
 	elements = append(elements, widget.NewRowWithWeights([]widget.Element{i.toggle, i.addPortBtn}, []int{1, 1}))
 
 	// 3. Dynamic Ports (if any)
@@ -183,11 +193,16 @@ func (i *Incubator) submitSpawn() tea.Cmd {
 		return nil // Form handles visual error state
 	}
 
+	mem, _ := provider.ParseInt(i.memInput.Value())
+	cpus, _ := provider.ParseInt(i.cpuInput.Value())
+
 	// Construct Msg
 	req := ops.RequestSpawnMsg{
 		Name:     i.input.Value(),
 		Source:   i.SelectedSource.Title(),
 		GUI:      i.toggle.Checked,
+		MemoryMB: mem,
+		VCPUs:    cpus,
 		UserData: "",
 		Ports:    i.PendingPorts,
 	}

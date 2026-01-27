@@ -46,10 +46,26 @@ func main() {
 		scenario.PreFlight(),
 		scenario.ImageCacheTemplate(),
 		scenario.VMLifecycle(),
+		scenario.VMMutableConfig(),
+		scenario.VMSpawnResources(),
 		scenario.WorkflowExec(),
 		scenario.MCPProtocol(),
 		scenario.Auxiliary(),
 		scenario.Cleanup(),
+	}
+
+	if cfg.Scenario != "" {
+		filtered := []scenario.Scenario{}
+		for _, sc := range scenarios {
+			if strings.EqualFold(sc.Name, cfg.Scenario) || sc.Name == "cleanup" {
+				filtered = append(filtered, sc)
+			}
+		}
+		if len(filtered) > 1 { // Only cleanup plus one scenario
+			scenarios = filtered
+		} else {
+			fmt.Printf(">> [WARN] Scenario '%s' not found. Running all.\n", cfg.Scenario)
+		}
 	}
 
 	ctx.Total = countSteps(scenarios)

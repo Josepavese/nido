@@ -11,6 +11,8 @@ type RequestSpawnMsg struct {
 	IsFile   bool
 	UserData string
 	GUI      bool
+	MemoryMB int
+	VCPUs    int
 	Ports    []provider.PortForward
 }
 

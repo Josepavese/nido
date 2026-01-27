@@ -49,7 +49,7 @@ const (
 func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, forceRemote bool) tea.Cmd {
 	return func() tea.Msg {
 		// DEBUG logging
-		f, _ := os.OpenFile("/tmp/nido-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		f, _ := os.OpenFile(filepath.Join(os.TempDir(), "nido-debug.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if f != nil {
 			fmt.Fprintf(f, "[%s] FetchSources Start: Action=%v, CachedOnly=%v, ForceRemote=%v\n", time.Now().Format(time.RFC3339), action, cachedOnly, forceRemote)
 			defer f.Close()

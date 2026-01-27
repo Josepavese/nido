@@ -23,6 +23,20 @@ func (s *State) AddVM(name string) {
 	s.VMs = append(s.VMs, name)
 }
 
+// RemoveVM removes a VM from the tracking list.
+func (s *State) RemoveVM(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, v := range s.VMs {
+		if v == name {
+			// Unordered delete
+			s.VMs[i] = s.VMs[len(s.VMs)-1]
+			s.VMs = s.VMs[:len(s.VMs)-1]
+			break
+		}
+	}
+}
+
 // AddTemplate records a template name.
 func (s *State) AddTemplate(name string) {
 	s.mu.Lock()

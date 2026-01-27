@@ -47,6 +47,8 @@ type FleetDetail struct {
 	IP             string
 	SSHPort        int
 	VNCPort        int
+	MemoryMB       int
+	VCPUs          int
 	SSHUser        string
 	DiskPath       string
 	DiskMissing    bool
@@ -248,6 +250,8 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 				IP:             msg.Detail.IP,
 				SSHPort:        msg.Detail.SSHPort,
 				VNCPort:        msg.Detail.VNCPort,
+				MemoryMB:       msg.Detail.MemoryMB,
+				VCPUs:          msg.Detail.VCPUs,
 				SSHUser:        msg.Detail.SSHUser,
 				DiskPath:       msg.Detail.DiskPath,
 				DiskMissing:    msg.Detail.DiskMissing,
@@ -499,6 +503,8 @@ type ComponentsDetail struct {
 	// Ports
 	sshInput *widget.Input
 	vncInput *widget.Input
+	memInput *widget.Input
+	cpuInput *widget.Input
 
 	diskInput *widget.Input
 }
@@ -526,6 +532,12 @@ func NewComponentsDetail(parent *Fleet) *ComponentsDetail {
 	c.vncInput = widget.NewInput("VNC Port", "", nil)
 	c.vncInput.Disabled = true
 
+	c.memInput = widget.NewInput("Memory", "", nil)
+	c.memInput.Disabled = true
+
+	c.cpuInput = widget.NewInput("vCPUs", "", nil)
+	c.cpuInput.Disabled = true
+
 	c.diskInput = widget.NewInput("Disk", "", nil)
 	c.diskInput.Disabled = true
 
@@ -547,7 +559,10 @@ func (c *ComponentsDetail) rebuildForm() {
 	// 3. Ports Row (2 cols)
 	elements = append(elements, widget.NewRow(c.sshInput, c.vncInput))
 
-	// 4. Disk
+	// 4. Resources Row (2 cols)
+	elements = append(elements, widget.NewRow(c.memInput, c.cpuInput))
+
+	// 5. Disk
 	elements = append(elements, c.diskInput)
 
 	// 5. Dynamic Ports
@@ -631,6 +646,8 @@ func (c *ComponentsDetail) UpdateDetail(d FleetDetail) {
 	c.ipInput.SetValue(d.IP)
 	c.sshInput.SetValue(fmt.Sprintf("%d", d.SSHPort))
 	c.vncInput.SetValue(fmt.Sprintf("%d", d.VNCPort))
+	c.memInput.SetValue(fmt.Sprintf("%d MB", d.MemoryMB))
+	c.cpuInput.SetValue(fmt.Sprintf("%d", d.VCPUs))
 
 	// Disk with error highlighting
 	c.diskInput.SetValue(d.DiskPath) // Always show the path cleanly

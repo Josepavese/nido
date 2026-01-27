@@ -165,6 +165,11 @@ func main() {
 					"ssh_password": info.SSHPassword,
 					"ssh_port":     info.SSHPort,
 					"vnc_port":     info.VNCPort,
+					"memory_mb":    info.MemoryMB,
+					"vcpus":        info.VCPUs,
+					"gui":          info.Gui,
+					"cmdline":      info.Cmdline,
+					"forwarding":   info.Forwarding,
 				},
 			})
 			_ = clijson.PrintJSON(resp)
@@ -179,6 +184,12 @@ func main() {
 		}
 		if info.VNCPort > 0 {
 			ui.FancyLabel("GUI (VNC)", fmt.Sprintf("127.0.0.1:%d", info.VNCPort))
+		}
+		ui.FancyLabel("Memory", fmt.Sprintf("%d MB", info.MemoryMB))
+		ui.FancyLabel("vCPUs", fmt.Sprintf("%d", info.VCPUs))
+		ui.FancyLabel("GUI Enabled", fmt.Sprintf("%v", info.Gui))
+		if info.Cmdline != "" {
+			ui.FancyLabel("Cmdline", info.Cmdline)
 		}
 
 		// Forwarded Ports Table
@@ -241,6 +252,8 @@ func main() {
 		cmdline := ""
 		var forwardings []provider.PortForward
 		var ver *image.Version
+		spawnMem := 0
+		spawnCPUs := 0
 
 		for i := 1; i < len(rest); i++ {
 			arg := rest[i]
@@ -267,6 +280,12 @@ func main() {
 				forwardings = append(forwardings, provider.PortForward{Label: "FTP", GuestPort: 21, Protocol: "tcp"})
 			} else if (arg == "--cmdline") && i+1 < len(rest) {
 				cmdline = rest[i+1]
+				i++
+			} else if (arg == "--memory" || arg == "--mem") && i+1 < len(rest) {
+				spawnMem, _ = provider.ParseInt(rest[i+1])
+				i++
+			} else if (arg == "--cpus") && i+1 < len(rest) {
+				spawnCPUs, _ = provider.ParseInt(rest[i+1])
 				i++
 			} else if tpl == "" && !strings.HasPrefix(arg, "-") {
 				tpl = arg
@@ -452,6 +471,8 @@ func main() {
 			SSHPassword:  customSshPassword,
 			Forwarding:   forwardings,
 			Cmdline:      cmdline,
+			MemoryMB:     spawnMem,
+			VCPUs:        spawnCPUs,
 		}); err != nil {
 			if jsonOut {
 				code := "ERR_INTERNAL"
@@ -522,7 +543,8 @@ func main() {
 		if !jsonOut {
 			ui.Ironic("Reviving digital consciousness...")
 		}
-		if err := prov.Start(name, provider.VMOptions{Gui: gui, Cmdline: startCmdline}); err != nil {
+		opts := provider.VMOptions{Gui: gui, Cmdline: startCmdline}
+		if err := prov.Start(name, opts); err != nil {
 			if jsonOut {
 				resp := clijson.NewResponseError("start", "ERR_INTERNAL", "Start failed", err.Error(), "Check the VM state and try again.", nil)
 				_ = clijson.PrintJSON(resp)
@@ -721,10 +743,33 @@ func main() {
 		} else {
 			ui.Error("Unknown template action: %s", subCmd)
 		}
-	case "config":
+	case "settings":
 		// View or modify the genetic code of your Nido environment.
 		jsonOut, rest := consumeJSONFlag(args)
-		cmdConfig(cfg, cfgPath, jsonOut, rest)
+		cmdEnvConfig(cfg, cfgPath, jsonOut, rest)
+	case "config":
+		// VM reconfiguration
+		// Usage: nido config <vm_name> [flags]
+		// Legacy: nido config <key> <value> (Global env) -> Detect if arg 1 is a known VM?
+		// Better: If flags are present (--memory, --cpu), it's VM config.
+		// Or strictly: nido config <vm> is VM, nido settings is global.
+		// I'll migrate 'config' to VM config and move global to 'settings', keeping 'config' as alias for global IF arg 1 is not a VM name?
+		// Simple approach: Check if first arg is "global" or keys?
+		// Let's implement logic:
+		// If len(args) > 0 and args[0] is NOT a flag and NOT a config key -> VM config.
+		// Known config keys are in config package.
+		// Robust: Rename global config command to `settings` and use `config` for VMs.
+		// I will update help text to reflect this change.
+		jsonOut, rest := consumeJSONFlag(args)
+		if len(rest) > 0 && isVMName(prov, rest[0]) {
+			cmdVMConfig(prov, jsonOut, rest)
+		} else {
+			// Fallback to Env Config for backward compat (or just move it)
+			// Let's check if they provided known keys?
+			// Simplest: `nido config` (no args) -> Env Config list.
+			// `nido config <name>` -> VM Config if exists, else Env key lookup.
+			cmdEnvConfig(cfg, cfgPath, jsonOut, rest)
+		}
 	case "register":
 		jsonOut, _ := consumeJSONFlag(args)
 		cmdRegister(jsonOut)
@@ -946,14 +991,10 @@ func getBashCompletion() string {
     case "${prev}" in
         spawn)
             # but we suggest flags if they start typing one.
-            COMPREPLY=( $(compgen -W "--image --user-data --port --web --ftp --gui --cmdline --json" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "--image --user-data --port --web --ftp --gui --cmdline --memory --cpus --json" -- ${cur}) )
             return 0
             ;;
-        start)
-            COMPREPLY=( $(compgen -W "$(nido completion list-vms) --gui --cmdline --json" -- ${cur}) )
-            return 0
-            ;;
-        ssh)
+        ssh|info|stop|delete|start)
             COMPREPLY=( $(compgen -W "$(nido completion list-vms)" -- ${cur}) )
             return 0
             ;;
@@ -962,7 +1003,7 @@ func getBashCompletion() string {
             return 0
             ;;
         config)
-            COMPREPLY=( $(compgen -W "set --json" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "set $(nido completion list-vms) --memory --cpus --ssh-port --vnc-port --gui --ssh-user --ssh-pass --cmdline --json" -- ${cur}) )
             return 0
             ;;
         set)
@@ -983,11 +1024,21 @@ func getBashCompletion() string {
             COMPREPLY=( $(compgen -W "ls list pull update info remove --json" -- ${cur}) )
             return 0
             ;;
-        pull|info|remove)
+        pull|update|remove)
             if [[ ${COMP_WORDS[COMP_CWORD-2]} == "images" ]]; then
                 COMPREPLY=( $(compgen -W "$(nido completion list-images)" -- ${cur}) )
                 return 0
             fi
+            ;;
+        info)
+            if [[ ${COMP_WORDS[COMP_CWORD-2]} == "images" ]]; then
+                COMPREPLY=( $(compgen -W "$(nido completion list-images)" -- ${cur}) )
+            elif [[ ${COMP_WORDS[COMP_CWORD-2]} == "cache" ]]; then
+                COMPREPLY=( $(compgen -W "$(nido completion list-images)" -- ${cur}) )
+            else
+                COMPREPLY=( $(compgen -W "$(nido completion list-vms)" -- ${cur}) )
+            fi
+            return 0
             ;;
         cache)
             COMPREPLY=( $(compgen -W "ls list info rm remove prune --unused --json" -- ${cur}) )
@@ -1009,15 +1060,26 @@ func getBashCompletion() string {
             fi
             ;;
         *)
+            # Position-based completion for 'nido config <vm> [flags]'
+            if [[ ${COMP_WORDS[1]} == "config" ]]; then
+                if [[ ${COMP_CWORD} -eq 2 ]]; then
+                    COMPREPLY=( $(compgen -W "set $(nido completion list-vms)" -- ${cur}) )
+                    return 0
+                else
+                    COMPREPLY=( $(compgen -W "--memory --cpus --ssh-port --vnc-port --gui --ssh-user --ssh-pass --cmdline --json" -- ${cur}) )
+                    return 0
+                fi
+            fi
+
             # Position-based completion for 'nido spawn <name> <template>'
             if [[ ${COMP_WORDS[1]} == "spawn" ]]; then
                 if [[ ${COMP_CWORD} -eq 2 ]]; then
                     # Position 1: VM Name (suggest flags if starting with -)
-                    COMPREPLY=( $(compgen -W "--image --user-data --port --web --ftp --gui --json" -- ${cur}) )
+                    COMPREPLY=( $(compgen -W "--image --user-data --port --web --ftp --gui --cmdline --memory --cpus --json" -- ${cur}) )
                     return 0
                 elif [[ ${COMP_CWORD} -eq 3 ]] && [[ ! ${prev} == -* ]]; then
                     # Position 2: Template (if previous wasn't a flag needing a value)
-                    COMPREPLY=( $(compgen -W "$(nido completion list-templates) --image --user-data --port --web --ftp --gui --cmdline --json" -- ${cur}) )
+                    COMPREPLY=( $(compgen -W "$(nido completion list-templates) --image --user-data --port --web --ftp --gui --cmdline --memory --cpus --json" -- ${cur}) )
                     return 0
                 fi
             fi
@@ -1091,6 +1153,8 @@ func getZshCompletion() string {
             '--ftp[Shortcut for FTP]' \
             '--gui[Enable GUI (VNC)]' \
             '--cmdline[Custom kernel command line parameters]:cmdline' \
+            '--memory[Requested RAM (MB)]:memory' \
+            '--cpus[Requested vCPUs]:cpus' \
             '--json[Structured JSON output]'
           ;;
         start)
@@ -1100,10 +1164,7 @@ func getZshCompletion() string {
             '--cmdline[Custom kernel command line parameters]:cmdline' \
             '--json[Structured JSON output]'
           ;;
-        ssh)
-          _values 'vms' $(nido completion list-vms)
-          ;;
-        info|stop|delete)
+        ssh|info|stop|delete)
           _arguments \
             '1:vm:$(nido completion list-vms)' \
             '--json[Structured JSON output]'
@@ -1113,15 +1174,30 @@ func getZshCompletion() string {
             '--json[Structured JSON output]'
           ;;
         config)
-          if (( CURRENT == 2 )); then
-            _values 'actions' 'set' '--json'
-          elif (( CURRENT == 3 )) && [[ $words[2] == "set" ]]; then
-            _values 'keys' 'BACKUP_DIR' 'TEMPLATE_DEFAULT' 'SSH_USER' 'IMAGE_DIR' 'LINKED_CLONES'
-          elif (( CURRENT == 4 )) && [[ $words[2] == "set" ]]; then
-             case $words[3] in
-                LINKED_CLONES) _values 'bool' 'true' 'false' ;;
-                *) ;;
-             esac
+          if [[ $words[2] == "set" ]]; then
+             if (( CURRENT == 3 )); then
+                _values 'keys' 'BACKUP_DIR' 'TEMPLATE_DEFAULT' 'SSH_USER' 'IMAGE_DIR' 'LINKED_CLONES'
+             elif (( CURRENT == 4 )); then
+                 case $words[3] in
+                    LINKED_CLONES) _values 'bool' 'true' 'false' ;;
+                    *) ;;
+                 esac
+             fi
+          else
+             if (( CURRENT == 2 )); then
+                 _values 'target' 'set' $(nido completion list-vms)
+             else
+                 _arguments \
+                   '--memory[Resize RAM (MB)]:memory' \
+                   '--cpus[Resize CPUs]:cpus' \
+                   '--ssh-port[Set SSH Port]:port' \
+                   '--vnc-port[Set VNC Port]:port' \
+                   '--gui[Enable/Disable GUI]:bool:(true false)' \
+                   '--ssh-user[Set SSH User]:user' \
+                   '--ssh-pass[Set SSH Password]:password' \
+                   '--cmdline[Set Kernel Args]:cmdline' \
+                   '--json[Structured JSON output]'
+             fi
           fi
           ;;
         template)
@@ -1233,8 +1309,8 @@ func printUsage() {
 	fmt.Printf("%sOutput:%s add --json for structured output on supported commands (ls, info, spawn, start, stop, delete, prune, template, images, cache, version, doctor, config, register).\n\n", ui.Dim, ui.Reset)
 
 	fmt.Printf("%sVM MANAGEMENT%s\n", ui.Bold, ui.Reset)
-	fmt.Printf("  %-10s %sCreate and hatch a new VM%s\n", "spawn", ui.Dim, ui.Reset)
-	fmt.Printf("    %sFlags: --image <tag>, --user-data <file>, --port <mapping>, --web, --ftp, --gui, --cmdline, --json%s\n", ui.Dim, ui.Reset)
+	fmt.Printf("  %-10s %sCreate and hatch a new VM (Defaults: min(2048MB, 50%% Host RAM), 1 vCPU)%s\n", "spawn", ui.Dim, ui.Reset)
+	fmt.Printf("    %sFlags: --image <tag>, --user-data <file>, --port <mapping>, --web, --ftp, --gui, --cmdline, --memory <MB>, --cpus <N>, --json%s\n", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sRevive a VM from deep sleep%s\n", "start", ui.Dim, ui.Reset)
 	fmt.Printf("    %sFlags: --gui, --cmdline, --json%s\n", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sConnect to a VM via SSH bridge%s\n", "ssh", ui.Dim, ui.Reset)
@@ -1251,7 +1327,8 @@ func printUsage() {
 
 	fmt.Printf("\n%sSYSTEM OPS%s\n", ui.Bold, ui.Reset)
 	fmt.Printf("  %-10s %sRun a system health check%s\n", "doctor", ui.Dim, ui.Reset)
-	fmt.Printf("  %-10s %sDump current genetic configuration%s\n", "config", ui.Dim, ui.Reset)
+	fmt.Printf("  %-10s %sModify a VM's resources (--memory, --cpu, --gui, --cmdline)%s\n", "config", ui.Dim, ui.Reset)
+	fmt.Printf("  %-10s %sView/Edit global Nido settings%s\n", "settings", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sPrepare the MCP handshake for AI agents%s\n", "register", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sCheck the evolutionary state of Nido%s\n", "version", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sGenerate shell completion scripts%s\n", "completion", ui.Dim, ui.Reset)
@@ -1261,7 +1338,7 @@ func printUsage() {
 	fmt.Printf("\n%s\"It's not a VM, it's a lifestyle.\"%s\n\n", ui.Dim, ui.Reset)
 }
 
-func cmdConfig(cfg *config.Config, path string, jsonOut bool, args []string) {
+func cmdEnvConfig(cfg *config.Config, path string, jsonOut bool, args []string) {
 	if len(args) > 0 {
 		if args[0] == "set" {
 			if len(args) < 3 {
@@ -1390,6 +1467,123 @@ func cmdVersion(jsonOut bool) {
 	// Give a tiny bit of time for the goroutine to potentially output,
 	// but don't block. For cmdVersion, we can wait 100ms.
 	time.Sleep(100 * time.Millisecond)
+}
+
+func isVMName(p provider.VMProvider, name string) bool {
+	vms, err := p.List()
+	if err != nil {
+		return false
+	}
+	for _, v := range vms {
+		if v.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func cmdVMConfig(p provider.VMProvider, jsonOut bool, args []string) {
+	if len(args) < 1 {
+		if jsonOut {
+			resp := clijson.NewResponseError("config", "ERR_INVALID_ARGS", "Missing VM name", "Usage: nido config <vm> [flags]", "", nil)
+			clijson.PrintJSON(resp)
+			os.Exit(1)
+		}
+		ui.Error("Usage: nido config <vm> [flags]")
+		os.Exit(1)
+	}
+
+	name := args[0]
+	updates := provider.VMConfigUpdates{}
+	hasUpdates := false
+
+	// Parse flags manually loop
+	for i := 1; i < len(args); i++ {
+		key := args[i]
+		if key == "--memory" && i+1 < len(args) {
+			val, _ := provider.ParseInt(args[i+1])
+			updates.MemoryMB = &val
+			hasUpdates = true
+			i++
+		} else if key == "--cpus" && i+1 < len(args) {
+			val, _ := provider.ParseInt(args[i+1])
+			updates.VCPUs = &val
+			hasUpdates = true
+			i++
+		} else if key == "--ssh-port" && i+1 < len(args) {
+			val, _ := provider.ParseInt(args[i+1])
+			updates.SSHPort = &val
+			hasUpdates = true
+			i++
+		} else if key == "--vnc-port" && i+1 < len(args) {
+			val, _ := provider.ParseInt(args[i+1])
+			updates.VNCPort = &val
+			hasUpdates = true
+			i++
+		} else if key == "--gui" {
+			// Toggle? Or explicitly true? CLI flags usually boolean arg.
+			// Standard bool flag: --gui or --gui=true/false
+			// For simplicity, let's assume --gui means true.
+			// BUT if already true, maybe no change?
+			// Let's support --gui=false by checking next arg
+			boolVal := true
+			if i+1 < len(args) && (args[i+1] == "false" || args[i+1] == "0") {
+				boolVal = false
+				i++
+			} else if i+1 < len(args) && (args[i+1] == "true" || args[i+1] == "1") {
+				boolVal = true
+				i++
+			}
+			updates.Gui = &boolVal
+			hasUpdates = true
+		} else if key == "--ssh-user" && i+1 < len(args) {
+			val := args[i+1]
+			updates.SSHUser = &val
+			hasUpdates = true
+			i++
+		} else if key == "--ssh-pass" && i+1 < len(args) {
+			val := args[i+1]
+			updates.SSHPassword = &val
+			hasUpdates = true
+			i++
+		} else if key == "--cmdline" && i+1 < len(args) {
+			val := args[i+1]
+			updates.Cmdline = &val
+			hasUpdates = true
+			i++
+		}
+	}
+
+	if !hasUpdates {
+		if !jsonOut {
+			ui.Info("No configuration changes requested.")
+		}
+		return
+	}
+
+	if !jsonOut {
+		ui.Ironic(fmt.Sprintf("Rewriting genetic sequence for %s...", name))
+	}
+
+	if err := p.UpdateConfig(name, updates); err != nil {
+		if jsonOut {
+			resp := clijson.NewResponseError("config", "ERR_UPDATE", "Config update failed", err.Error(), "", nil)
+			clijson.PrintJSON(resp)
+			os.Exit(1)
+		}
+		ui.Error("Mutation failed: %v", err)
+		os.Exit(1)
+	}
+
+	if jsonOut {
+		resp := clijson.NewResponseOK("config", map[string]interface{}{
+			"name":   name,
+			"result": "updated",
+		})
+		clijson.PrintJSON(resp)
+	} else {
+		ui.Success("Configuration updated. Restart VM to apply changes.")
+	}
 }
 
 func consumeJSONFlag(args []string) (bool, []string) {
