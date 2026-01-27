@@ -39,8 +39,7 @@ else
 fi
 
 # Create temporary build directory
-BUILD_DIR="/tmp/nido-build-$$"
-mkdir -p "$BUILD_DIR"
+BUILD_DIR="$(mktemp -d -t nido-build.XXXXXX)"
 cd "$BUILD_DIR"
 
 echo "${CYAN}📥 Downloading source files...${RESET}"

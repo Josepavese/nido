@@ -44,7 +44,7 @@ func NewConfigPageGlobalForm(parent *Config) *ConfigPageGlobalForm {
 	p.InputSSHUser = widget.NewInput("SSH User", "vmuser", nil)
 	p.InputSSHUser.SetValue(parent.cfg.SSHUser)
 
-	p.InputBackupDir = widget.NewInput("Backup Dir", "/tmp/libvirt-pool/backups", nil)
+	p.InputBackupDir = widget.NewInput("Backup Dir", parent.cfg.BackupDir, nil)
 	p.InputBackupDir.SetValue(parent.cfg.BackupDir)
 
 	p.InputImageDir = widget.NewInput("Image Dir", "~/.nido/images", nil)
