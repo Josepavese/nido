@@ -3,6 +3,7 @@ package scenario
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -193,7 +194,23 @@ func sshCheck(ctx *Context) report.StepResult {
 		return skipResult("ssh", []string{}, "ssh metadata missing")
 	}
 
-	if err := waitForPort(host, sshPort, ctx.Config.BootTimeout); err != nil {
+	// Safety check: ensure sshpass is available if needed
+	sshPwd, okPwd := getVar(ctx, "vm_primary_ssh_password")
+	if okPwd && sshPwd != "" {
+		if _, err := os.Stat("/usr/bin/sshpass"); os.IsNotExist(err) {
+			// Try to find in PATH if not at standard location
+			if _, err := exec.LookPath("sshpass"); err != nil {
+				return skipResult("sshpass", []string{}, "sshpass not found (required for password auth)")
+			}
+		}
+	}
+
+	// Cap wait for port to 90s to avoid long hangs
+	waitTimeout := 90 * time.Second
+	if ctx.Config.BootTimeout < waitTimeout {
+		waitTimeout = ctx.Config.BootTimeout
+	}
+	if err := waitForPort(host, sshPort, waitTimeout); err != nil {
 		return report.StepResult{
 			Command:    "ssh",
 			Args:       []string{},
@@ -204,7 +221,6 @@ func sshCheck(ctx *Context) report.StepResult {
 		}
 	}
 
-	sshPwd, okPwd := getVar(ctx, "vm_primary_ssh_password")
 	args := []string{
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
@@ -222,11 +238,12 @@ func sshCheck(ctx *Context) report.StepResult {
 	}
 
 	var last report.StepResult
-	for attempt := 0; attempt < 15; attempt++ {
+	// Reduced retries for safety (10 attempts * 5s sleep + execution time = ~2 mins max)
+	for attempt := 0; attempt < 10; attempt++ {
 		inv := runner.Invocation{
 			Command: execCmd,
 			Args:    execArgs,
-			Timeout: 15 * time.Second,
+			Timeout: 10 * time.Second, // Tighter execution timeout
 		}
 		execRes := ctx.Runner.Exec(inv)
 		res := report.StepResult{

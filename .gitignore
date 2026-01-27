@@ -33,7 +33,7 @@ nohup.out
 .vscode
 
 # asdp - .agent spec and all codespec.md - codetree.md - codemodel.md
-.agent
+#.agent
 codespec.md
 codetree.md
 codemodel.md

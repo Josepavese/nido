@@ -58,6 +58,7 @@ type FleetDetail struct {
 // Fleet implements the Viewlet interface using MasterDetail
 type Fleet struct {
 	view.BaseViewlet
+	provider provider.VMProvider // SSOT: Store provider reference
 
 	// Components
 	Sidebar      *widget.SidebarList
@@ -89,6 +90,7 @@ func NewFleet(prov provider.VMProvider) *Fleet {
 	s.Style = lipgloss.NewStyle().Foreground(t.Palette.Accent)
 
 	f := &Fleet{
+		provider:      prov,
 		detail:        FleetDetail{},
 		transitioning: make(map[string]bool),
 		spinner:       s,
@@ -649,12 +651,21 @@ func (c *ComponentsDetail) openSSH() tea.Cmd {
 	if d.State != "running" {
 		return nil
 	}
-	// Use flags to bypass strict host key checking and known hosts updates
-	sshCmd := fmt.Sprintf("ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -p %d %s@localhost", d.SSHPort, d.SSHUser)
+
+	sshCmd, err := c.Parent.provider.SSHCommand(d.Name)
+	if err != nil {
+		// If generation fails (e.g. no port), we can't open the terminal.
+		// We could update the error modal, but this function returns a Cmd,
+		// so we'd need to return a Msg that triggers the modal.
+		// For now, let's just log or ignore, or construct a safe fallback/error msg
+		return func() tea.Msg {
+			return ops.OpResultMsg{Err: fmt.Errorf("failed to generate SSH command: %w", err), Path: d.Name}
+		}
+	}
+
 	// TODO: Cross-platform terminal opening
 	return tea.ExecProcess(exec.Command("x-terminal-emulator", "-e", sshCmd), nil)
 }
-
 func (c *ComponentsDetail) openVNC() tea.Cmd {
 	d := c.Parent.detail
 	if d.State != "running" {
