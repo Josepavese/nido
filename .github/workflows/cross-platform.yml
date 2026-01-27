@@ -91,8 +91,8 @@ jobs:
         run: |
           # Create a minimal test template
           mkdir -p ~/.nido/vms
-          mkdir -p /tmp/libvirt-pool/backups
-          qemu-img create -f qcow2 /tmp/libvirt-pool/backups/template-test.compact.qcow2 1G
+          mkdir -p ~/.nido/backups
+          qemu-img create -f qcow2 ~/.nido/backups/template-test.compact.qcow2 1G
           
           # Test VM operations
           ./nido ls

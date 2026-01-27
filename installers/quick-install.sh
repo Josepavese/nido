@@ -53,7 +53,7 @@ fi
 DOWNLOAD_URL="https://github.com/Josepavese/nido/releases/download/${LATEST_RELEASE}/${BINARY_NAME}"
 
 echo "${CYAN}📥 Downloading ${BINARY_NAME}...${RESET}"
-TMP_FILE="/tmp/nido-${LATEST_RELEASE}"
+TMP_FILE="$(mktemp /tmp/nido-${LATEST_RELEASE}.XXXXXX)"
 
 if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_FILE"; then
   echo "${RED}❌ Download failed${RESET}"
