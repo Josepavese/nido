@@ -184,19 +184,31 @@ func chooseTemplate(ctx *Context) string {
 
 func sshCheck(ctx *Context) report.StepResult {
 	start := time.Now()
-	sshPort, okPort := getVar(ctx, "vm_primary_ssh_port")
+	sshPort, _ := getVar(ctx, "vm_primary_ssh_port")
 	sshUser, okUser := getVar(ctx, "vm_primary_ssh_user")
+	if !okUser || sshUser == "" {
+		if ctx.Config.SSHUser != "" {
+			sshUser = ctx.Config.SSHUser
+		} else {
+			sshUser = "vmuser" // ultimate fallback
+		}
+	}
 	host := "127.0.0.1"
 	if ip, ok := getVar(ctx, "vm_primary_ip"); ok && ip != "" {
 		host = ip
 	}
-	if !okPort || !okUser {
-		return skipResult("ssh", []string{}, "ssh metadata missing")
+	if sshPort == "" || sshUser == "" {
+		return skipResult("ssh", []string{}, "ssh metadata missing (port or user)")
 	}
 
 	// Safety check: ensure sshpass is available if needed
 	sshPwd, okPwd := getVar(ctx, "vm_primary_ssh_password")
-	if okPwd && sshPwd != "" {
+	if !okPwd || sshPwd == "" {
+		if ctx.Config.SSHPassword != "" {
+			sshPwd = ctx.Config.SSHPassword
+		}
+	}
+	if sshPwd != "" {
 		if _, err := os.Stat("/usr/bin/sshpass"); os.IsNotExist(err) {
 			// Try to find in PATH if not at standard location
 			if _, err := exec.LookPath("sshpass"); err != nil {
@@ -205,11 +217,8 @@ func sshCheck(ctx *Context) report.StepResult {
 		}
 	}
 
-	// Cap wait for port to 90s to avoid long hangs
-	waitTimeout := 90 * time.Second
-	if ctx.Config.BootTimeout < waitTimeout {
-		waitTimeout = ctx.Config.BootTimeout
-	}
+	// Use Config.BootTimeout for waiting for port
+	waitTimeout := ctx.Config.BootTimeout
 	if err := waitForPort(host, sshPort, waitTimeout); err != nil {
 		return report.StepResult{
 			Command:    "ssh",
@@ -232,14 +241,14 @@ func sshCheck(ctx *Context) report.StepResult {
 
 	execCmd := "ssh"
 	execArgs := args
-	if okPwd && sshPwd != "" {
+	if sshPwd != "" {
 		execCmd = "sshpass"
 		execArgs = append([]string{"-p", sshPwd, "ssh"}, args...)
 	}
 
 	var last report.StepResult
-	// Reduced retries for safety (10 attempts * 5s sleep + execution time = ~2 mins max)
-	for attempt := 0; attempt < 10; attempt++ {
+	// Increased retries for stability (40 attempts * 5s sleep + 10s exec = ~10 mins max)
+	for attempt := 0; attempt < 40; attempt++ {
 		inv := runner.Invocation{
 			Command: execCmd,
 			Args:    execArgs,
@@ -289,20 +298,32 @@ func sshCheck(ctx *Context) report.StepResult {
 }
 
 func runSSHCommand(ctx *Context, port, user, host, cmd string, timeout time.Duration) runner.Result {
+	sshUser := user
+	if ctx.Config.SSHUser != "" {
+		sshUser = ctx.Config.SSHUser
+	}
+
 	args := []string{
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "ConnectTimeout=10",
 		"-p", port,
-		fmt.Sprintf("%s@%s", user, host),
+		fmt.Sprintf("%s@%s", sshUser, host),
 		"--", cmd,
 	}
 
 	execCmd := "ssh"
 	execArgs := args
-	if pwd, ok := getVar(ctx, "vm_primary_ssh_password"); ok && pwd != "" {
+	sshPwd, okPwd := getVar(ctx, "vm_primary_ssh_password")
+	if ctx.Config.SSHPassword != "" {
+		sshPwd = ctx.Config.SSHPassword
+	} else if !okPwd {
+		sshPwd = ""
+	}
+
+	if sshPwd != "" {
 		execCmd = "sshpass"
-		execArgs = append([]string{"-p", pwd, "ssh"}, args...)
+		execArgs = append([]string{"-p", sshPwd, "ssh"}, args...)
 	}
 
 	return ctx.Runner.Exec(runner.Invocation{

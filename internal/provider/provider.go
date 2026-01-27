@@ -63,6 +63,10 @@ type VMDetail struct {
 	SSHPassword string
 	SSHPort     int
 	VNCPort     int
+	MemoryMB    int    `json:"memory_mb,omitempty"`
+	VCPUs       int    `json:"vcpus,omitempty"`
+	Gui         bool   `json:"gui,omitempty"`
+	Cmdline     string `json:"cmdline,omitempty"`
 	// Active port forwardings
 	Forwarding []PortForward
 	// DiskPath is the absolute path to the VM disk image.
@@ -181,5 +185,24 @@ type VMProvider interface {
 	// PortList returns all active port mappings for the VM.
 	PortList(name string) ([]PortForward, error)
 
+	// Config operations
+
+	// UpdateConfig modifies the persistent configuration of a VM.
+	// Updates are applied to the SSOT (VMState JSON) and take effect on next boot.
+	UpdateConfig(name string, updates VMConfigUpdates) error
+
 	Doctor() []string
+}
+
+// VMConfigUpdates holds pointer fields for partial updates to VM configuration.
+// A nil pointer means "do not update".
+type VMConfigUpdates struct {
+	MemoryMB    *int
+	VCPUs       *int
+	Gui         *bool
+	Cmdline     *string
+	SSHPort     *int
+	VNCPort     *int
+	SSHUser     *string
+	SSHPassword *string
 }

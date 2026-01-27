@@ -32,11 +32,8 @@ func TestLoadConfig_Values(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.env")
 
-	content := `
-BACKUP_DIR=/tmp/backups
-SSH_USER=testuser
-TEMPLATE_DEFAULT=my-tpl
-`
+	backups := filepath.Join(os.TempDir(), "backups")
+	content := "BACKUP_DIR=" + backups + "\nSSH_USER=testuser\nTEMPLATE_DEFAULT=my-tpl\n"
 	err := os.WriteFile(cfgPath, []byte(content), 0644)
 	if err != nil {
 		t.Fatal(err)
@@ -47,8 +44,8 @@ TEMPLATE_DEFAULT=my-tpl
 		t.Fatalf("LoadConfig failed: %v", err)
 	}
 
-	if cfg.BackupDir != "/tmp/backups" {
-		t.Errorf("Expected BackupDir '/tmp/backups', got '%s'", cfg.BackupDir)
+	if cfg.BackupDir != backups {
+		t.Errorf("Expected BackupDir %q, got %q", backups, cfg.BackupDir)
 	}
 	if cfg.SSHUser != "testuser" {
 		t.Errorf("Expected SSHUser 'testuser', got '%s'", cfg.SSHUser)
@@ -56,7 +53,7 @@ TEMPLATE_DEFAULT=my-tpl
 }
 
 func TestLoadConfig_MissingFile(t *testing.T) {
-	cfg, err := LoadConfig("/tmp/non-existent-nido-config.env")
+	cfg, err := LoadConfig(filepath.Join(os.TempDir(), "non-existent-nido-config.env"))
 	if err == nil {
 		t.Error("Expected error for missing file, got nil")
 	}

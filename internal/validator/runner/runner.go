@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -15,10 +16,12 @@ type Invocation struct {
 	Timeout time.Duration
 	Env     map[string]string
 	Workdir string
+	Stdin   string
 }
 
 // Result captures the outcome of a CLI invocation.
 type Result struct {
+	// ...
 	Stdout    string
 	Stderr    string
 	ExitCode  int
@@ -51,6 +54,11 @@ func (r Runner) Exec(inv Invocation) Result {
 
 	cmd := exec.CommandContext(ctx, inv.Command, inv.Args...)
 	cmd.Dir = inv.Workdir
+
+	// Wire up Stdin if present
+	if inv.Stdin != "" {
+		cmd.Stdin = strings.NewReader(inv.Stdin)
+	}
 
 	// Build env slice
 	env := append([]string{}, r.defaultEnv...)

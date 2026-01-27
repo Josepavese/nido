@@ -15,6 +15,7 @@ import (
 	"time"
 
 	nidonet "github.com/Josepavese/nido/internal/net"
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 
 	"github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/image"
@@ -208,7 +209,17 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	// Track kernel/initrd/cmdline if they were part of the template resolution
 	// (currently handled implicitly by Start checking for files, but let's be explicit if we can)
 
-	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser, opts.SSHPassword, opts.Forwarding, opts.Cmdline); err != nil {
+	// Default resources if not set (Dynamic resolution at spawn time via sysutil SSOT)
+	mem := opts.MemoryMB
+	if mem == 0 {
+		mem = sysutil.DefaultMemory()
+	}
+	cpu := opts.VCPUs
+	if cpu == 0 {
+		cpu = sysutil.DefaultVCPUs()
+	}
+
+	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser, opts.SSHPassword, opts.Forwarding, opts.Cmdline, mem, cpu); err != nil {
 		return fmt.Errorf("failed to save initial state: %w", err)
 	}
 
@@ -221,12 +232,10 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 			initrdSrc := base + ".initrd"
 
 			if _, err := os.Stat(kernelSrc); err == nil {
-				os.WriteFile(filepath.Join(vmsDir, name+".kernel"), nil, 0644) // marker or copy?
-				// Better copy
-				exec.Command("cp", kernelSrc, filepath.Join(vmsDir, name+".kernel")).Run()
+				sysutil.CopyFile(kernelSrc, filepath.Join(vmsDir, name+".kernel"))
 			}
 			if _, err := os.Stat(initrdSrc); err == nil {
-				exec.Command("cp", initrdSrc, filepath.Join(vmsDir, name+".initrd")).Run()
+				sysutil.CopyFile(initrdSrc, filepath.Join(vmsDir, name+".initrd"))
 			}
 		}
 	}
@@ -289,13 +298,29 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 		state.Cmdline = opts.Cmdline
 		updated = true
 	}
+	if opts.MemoryMB > 0 {
+		state.MemoryMB = opts.MemoryMB
+		updated = true
+	}
+	if opts.VCPUs > 0 {
+		state.VCPUs = opts.VCPUs
+		updated = true
+	}
+
+	// Ensure defaults for legacy states (Dynamic resolution for retro-compatibility via sysutil SSOT)
+	if state.MemoryMB == 0 {
+		state.MemoryMB = sysutil.DefaultMemory()
+	}
+	if state.VCPUs == 0 {
+		state.VCPUs = sysutil.DefaultVCPUs()
+	}
 
 	if updated {
-		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline)
+		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs)
 	}
 
 	// 3. Build Arguments (cross-platform)
-	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, state.Forwarding, runDir, state.Cmdline)
+	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, state.Forwarding, runDir, state.Cmdline, state.MemoryMB, state.VCPUs)
 
 	cmd := exec.Command("qemu-system-x86_64", args...)
 
@@ -323,36 +348,53 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	}
 
 	// 6. Update State with PID (0 if unknown)
-	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline)
+	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs)
 
 	return nil
 }
 
 // buildQemuArgs constructs the heavy-duty command line arguments for QEMU.
-func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort int, fw []PortForward, runDir string, cmdline string) []string {
+func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort int, fw []PortForward, runDir string, cmdline string, memoryMB, vcpus int) []string {
 	vmsDir := filepath.Join(p.RootDir, "vms")
+
+	// Safe minimums if 0 (for robustness, should be handled by Spawn)
+	if memoryMB == 0 {
+		fmt.Printf("⚠️  Warning: VM %s has 0MB RAM in state, using 128MB safe minimum\n", name)
+		memoryMB = 128
+	}
+	if vcpus == 0 {
+		fmt.Printf("⚠️  Warning: VM %s has 0 vCPUs in state, using 1 safe minimum\n", name)
+		vcpus = 1
+	}
+
 	args := []string{
 		"-name", name,
-		"-m", "2048",
+		"-m", fmt.Sprintf("%d", memoryMB),
 		"-machine", "pc",
 	}
 
 	// Platform-specific acceleration
+	cpuArg := "qemu64"
 	switch runtime.GOOS {
 	case "linux":
 		if _, err := os.Stat("/dev/kvm"); err == nil {
-			args = append(args, "-enable-kvm", "-cpu", "host")
-		} else {
-			args = append(args, "-cpu", "qemu64")
+			args = append(args, "-enable-kvm")
+			cpuArg = "host"
 		}
 	case "darwin": // macOS
-		args = append(args, "-accel", "hvf", "-cpu", "host")
+		args = append(args, "-accel", "hvf")
+		cpuArg = "host"
 	case "windows":
-		args = append(args, "-accel", "whpx", "-cpu", "host")
-	default:
-		args = append(args, "-cpu", "qemu64")
+		args = append(args, "-accel", "whpx")
+		cpuArg = "host"
 	}
 
+	// Override CPU if user requested specific count or default
+	if vcpus > 0 {
+		args = append(args, "-smp", fmt.Sprintf("%d", vcpus))
+	}
+
+	args = append(args, "-cpu", cpuArg)
 	// Direct Kernel Boot Support
 	kernelPath := filepath.Join(vmsDir, name+".kernel")
 	initrdPath := filepath.Join(vmsDir, name+".initrd")
@@ -362,6 +404,8 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 			args = append(args, "-initrd", initrdPath)
 		}
 		finalCmdline := cmdline
+		// If cmdline is explicitly updated to empty string by user, this logic effectively prevents clearing it.
+		// However, in our system, empty usually means "use default".
 		if finalCmdline == "" {
 			// Default cmdline for cloud images (vga console + serial + root)
 			// For now we use a sensible default that matches nido-init's needs.
@@ -492,7 +536,7 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 	_, statErr := os.Stat(diskPath)
 	backingPath, backingMissing := backingInfo(diskPath)
 
-	return VMDetail{
+	detail := VMDetail{
 		Name:           name,
 		State:          liveness,
 		PID:            pid,
@@ -501,12 +545,18 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 		SSHPassword:    state.SSHPassword,
 		SSHPort:        state.SSHPort,
 		VNCPort:        state.VNCPort,
+		MemoryMB:       state.MemoryMB,
+		VCPUs:          state.VCPUs,
+		Gui:            state.Gui,
+		Cmdline:        state.Cmdline,
 		Forwarding:     state.Forwarding,
 		DiskPath:       diskPath,
 		DiskMissing:    statErr != nil,
 		BackingPath:    backingPath,
 		BackingMissing: backingMissing,
-	}, nil
+	}
+
+	return detail, nil
 }
 
 // safeRemove removes a file but ignores "not found" errors.
@@ -734,9 +784,11 @@ type VMState struct {
 	SSHPassword string        `json:"ssh_password,omitempty"`
 	Forwarding  []PortForward `json:"forwarding,omitempty"`
 	Cmdline     string        `json:"cmdline,omitempty"`
+	MemoryMB    int           `json:"memory_mb,omitempty"`
+	VCPUs       int           `json:"vcpus,omitempty"`
 }
 
-func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser, sshPassword string, fw []PortForward, cmdline string) error {
+func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser, sshPassword string, fw []PortForward, cmdline string, memoryMB, vcpus int) error {
 	state := VMState{
 		Name:        name,
 		PID:         pid,
@@ -747,9 +799,55 @@ func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int,
 		SSHPassword: sshPassword,
 		Forwarding:  fw,
 		Cmdline:     cmdline,
+		MemoryMB:    memoryMB,
+		VCPUs:       vcpus,
 	}
 	data, _ := json.MarshalIndent(state, "", "  ")
 	return os.WriteFile(filepath.Join(p.RootDir, "run", name+".json"), data, 0644)
+}
+
+// UpdateConfig safely modifies the persistent VMState using a read-modify-write cycle.
+func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) error {
+	// 1. Load existing state
+	state, err := p.loadState(name)
+	if err != nil {
+		return fmt.Errorf("failed to load state for VM '%s': %w", name, err)
+	}
+
+	// 2. Apply updates
+	if updates.MemoryMB != nil {
+		if *updates.MemoryMB < 128 {
+			return fmt.Errorf("memory must be at least 128MB")
+		}
+		state.MemoryMB = *updates.MemoryMB
+	}
+	if updates.VCPUs != nil {
+		if *updates.VCPUs < 1 {
+			return fmt.Errorf("vcpus must be at least 1")
+		}
+		state.VCPUs = *updates.VCPUs
+	}
+	if updates.Gui != nil {
+		state.Gui = *updates.Gui
+	}
+	if updates.Cmdline != nil {
+		state.Cmdline = *updates.Cmdline
+	}
+	if updates.SSHPort != nil {
+		state.SSHPort = *updates.SSHPort
+	}
+	if updates.VNCPort != nil {
+		state.VNCPort = *updates.VNCPort
+	}
+	if updates.SSHUser != nil {
+		state.SSHUser = *updates.SSHUser
+	}
+	if updates.SSHPassword != nil {
+		state.SSHPassword = *updates.SSHPassword
+	}
+
+	// 3. Persist
+	return p.saveState(state.Name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs)
 }
 
 func (p *QemuProvider) loadState(name string) (VMState, error) {
@@ -795,6 +893,9 @@ func (p *QemuProvider) SSHCommand(name string) (string, error) {
 func (p *QemuProvider) ListTemplates() ([]string, error) {
 	files, err := os.ReadDir(p.Config.BackupDir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	var templates []string
@@ -1267,14 +1368,15 @@ func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, er
 		if f.GuestPort == pf.GuestPort && f.Protocol == pf.Protocol {
 			// Update existing rule
 			state.Forwarding[i] = pf
-			p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline)
+			state.Forwarding[i] = pf
+			p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs)
 			return pf, nil
 		}
 	}
 
 	// Add new rule
 	state.Forwarding = append(state.Forwarding, pf)
-	err = p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline)
+	err = p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs)
 	return pf, err
 }
 
@@ -1287,7 +1389,7 @@ func (p *QemuProvider) PortUnforward(name string, guestPort int, protocol string
 	for i, f := range state.Forwarding {
 		if f.GuestPort == guestPort && (f.Protocol == protocol || protocol == "") {
 			state.Forwarding = append(state.Forwarding[:i], state.Forwarding[i+1:]...)
-			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline)
+			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs)
 		}
 	}
 

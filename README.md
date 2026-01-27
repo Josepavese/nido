@@ -72,8 +72,8 @@ Let's hatch a **Ubuntu 24.04** bird named `agent-01`, attach a graphical interfa
 # 1. DOWNLOAD ROM (Pull Image)
 nido images pull ubuntu:24.04
 
-# 2. START GAME (Spawn VM with GUI)
-nido spawn agent-01 --image ubuntu:24.04 --gui
+# 2. START GAME (Spawn VM with GUI and custom resources)
+nido spawn agent-01 --image ubuntu:24.04 --gui --memory 4096 --cpus 4
 
 # 3. LINK CABLE (SSH Connection)
 nido ssh agent-01
@@ -114,7 +114,7 @@ Here is the full move list for the Nido console.
 
 | Command                               | Action                  | Arcade Analog               |
 | :------------------------------------ | :---------------------- | :-------------------------- |
-| `nido spawn <name> [--image <img>] [--cmdline <args>]` | Create & start a new VM | **START GAME**        |
+| `nido spawn <name> [--image <tag>] [--memory MB] [--cpus N]` | Create and hatch a new VM (Defaults: min(2048MB, 50% Host RAM), 1 vCPU) | **INSERT COIN** |
 | `nido start <name> [--gui] [--cmdline <args>]`     | Revive a stopped VM     | **CONTINUE? 10..9..** |
 | `nido stop <name>`                  | ACPI Shutdown signal    | **PAUSE**             |
 | `nido delete <name>`                | Destroy VM permanently  | **GAME OVER**         |
@@ -151,7 +151,8 @@ Here is the full move list for the Nido console.
 
 | Command            | Action                  | Arcade Analog               |
 | :----------------- | :---------------------- | :-------------------------- |
-| `nido config`    | View/Edit settings      | **OPTIONS**           |
+| `nido config <vm> [--memory MB] [--cpu N] [--gui] [--cmdline "..."]` | Modify existing VM resources | **PLAYER STATS** |
+| `nido settings`    | View/Edit global config | **OPTIONS**           |
 | `nido register`  | Setup MCP integration   | **CONTROLLER CONFIG** |
 | `nido update`    | Self-update from GitHub | **OTA PATCH**         |
 | `nido uninstall` | Nuclear cleanup         | **SELF DESTRUCT**     |

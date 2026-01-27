@@ -56,7 +56,7 @@ func NewServer(p provider.VMProvider) *Server {
 func ToolsCatalog() []map[string]interface{} {
 	return []map[string]interface{}{
 		{"name": "vm_list", "description": "List all virtual machines", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
-		{"name": "vm_create", "description": "Create a VM from image or template", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "template": map[string]interface{}{"type": "string"}, "image": map[string]interface{}{"type": "string"}, "user_data": map[string]interface{}{"type": "string"}, "gui": map[string]interface{}{"type": "boolean"}, "cmdline": map[string]interface{}{"type": "string"}, "ports": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}}}, "required": []string{"name"}}},
+		{"name": "vm_create", "description": "Create a VM from image or template", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "template": map[string]interface{}{"type": "string"}, "image": map[string]interface{}{"type": "string"}, "user_data": map[string]interface{}{"type": "string"}, "gui": map[string]interface{}{"type": "boolean"}, "cmdline": map[string]interface{}{"type": "string"}, "memory_mb": map[string]interface{}{"type": "integer"}, "vcpus": map[string]interface{}{"type": "integer"}, "ports": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}}}, "required": []string{"name"}}},
 		{"name": "vm_start", "description": "Start a VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "gui": map[string]interface{}{"type": "boolean"}, "cmdline": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
 		{"name": "vm_stop", "description": "Stop a VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
 		{"name": "vm_delete", "description": "Delete a VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
@@ -78,6 +78,21 @@ func ToolsCatalog() []map[string]interface{} {
 		{"name": "vm_port_forward", "description": "Add port forward", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "mapping": map[string]interface{}{"type": "string"}}, "required": []string{"name", "mapping"}}},
 		{"name": "vm_port_unforward", "description": "Remove port forward", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "guest_port": map[string]interface{}{"type": "number"}, "protocol": map[string]interface{}{"type": "string"}}, "required": []string{"name", "guest_port", "protocol"}}},
 		{"name": "vm_port_list", "description": "List port forwards", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
+		{"name": "vm_config_update", "description": "Update VM configuration (Next Boot)", "inputSchema": map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"name":         map[string]interface{}{"type": "string"},
+				"memory_mb":    map[string]interface{}{"type": "integer"},
+				"vcpus":        map[string]interface{}{"type": "integer"},
+				"ssh_port":     map[string]interface{}{"type": "integer"},
+				"vnc_port":     map[string]interface{}{"type": "integer"},
+				"gui":          map[string]interface{}{"type": "boolean"},
+				"ssh_user":     map[string]interface{}{"type": "string"},
+				"ssh_password": map[string]interface{}{"type": "string"},
+				"cmdline":      map[string]interface{}{"type": "string"},
+			},
+			"required": []string{"name"},
+		}},
 	}
 }
 
@@ -109,7 +124,7 @@ func (s *Server) handleRequest(req JSONRPCRequest) {
 			},
 			"serverInfo": map[string]string{
 				"name":    "nido-local-vm-manager",
-				"version": "3.0.0",
+				"version": "3.1.0",
 			},
 		})
 	case "notifications/initialized":
@@ -154,6 +169,8 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			UserData string   `json:"user_data"`
 			Gui      bool     `json:"gui"`
 			Cmdline  string   `json:"cmdline"`
+			MemoryMB int      `json:"memory_mb"`
+			VCPUs    int      `json:"vcpus"`
 			Ports    []string `json:"ports"`
 		}
 		json.Unmarshal(params.Arguments, &args)
@@ -257,6 +274,8 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		}
 		opts.Gui = args.Gui
 		opts.Cmdline = args.Cmdline
+		opts.MemoryMB = args.MemoryMB
+		opts.VCPUs = args.VCPUs
 
 		err = s.Provider.Spawn(args.Name, opts)
 		result = fmt.Sprintf("VM %s created successfully.", args.Name)
@@ -339,6 +358,37 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		cfg := s.Provider.GetConfig()
 		data, _ := json.Marshal(cfg)
 		result = string(data)
+	case "vm_config_update":
+		// Pointers used to detect presence of fields
+		var args struct {
+			Name        string  `json:"name"`
+			MemoryMB    *int    `json:"memory_mb"`
+			VCPUs       *int    `json:"vcpus"`
+			SSHPort     *int    `json:"ssh_port"`
+			VNCPort     *int    `json:"vnc_port"`
+			Gui         *bool   `json:"gui"`
+			SSHUser     *string `json:"ssh_user"`
+			SSHPassword *string `json:"ssh_password"`
+			Cmdline     *string `json:"cmdline"`
+		}
+		json.Unmarshal(params.Arguments, &args)
+
+		updates := provider.VMConfigUpdates{
+			MemoryMB:    args.MemoryMB,
+			VCPUs:       args.VCPUs,
+			SSHPort:     args.SSHPort,
+			VNCPort:     args.VNCPort,
+			Gui:         args.Gui,
+			SSHUser:     args.SSHUser,
+			SSHPassword: args.SSHPassword,
+			Cmdline:     args.Cmdline,
+		}
+
+		if e := s.Provider.UpdateConfig(args.Name, updates); e != nil {
+			err = e
+		} else {
+			result = fmt.Sprintf("VM %s configuration updated.", args.Name)
+		}
 	case "vm_prune":
 		count, e := s.Provider.Prune()
 		if e != nil {

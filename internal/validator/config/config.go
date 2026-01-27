@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	nidocfg "github.com/Josepavese/nido/internal/config"
 )
 
 // Config holds all configurable knobs for the validation suite.
@@ -36,6 +38,9 @@ type Config struct {
 	WorkflowPath     string
 	CheckForward     bool
 	CheckCloudInit   bool
+	Scenario         string
+	SSHUser          string
+	SSHPassword      string
 }
 
 // Parse builds the configuration from flags and environment variables.
@@ -48,6 +53,8 @@ func Parse(runID string) Config {
 	defaultImg := os.Getenv("NIDO_IMAGE")
 	defaultPool := os.Getenv("POOL_IMAGE")
 	defaultUserData := os.Getenv("NIDO_USER_DATA")
+	defaultSSHUser := os.Getenv("NIDO_SSH_USER")
+	defaultSSHPwd := os.Getenv("NIDO_SSH_PASSWORD")
 
 	defaultSSHBase := getenvInt("SSH_HOST_PORT_BASE", 2222)
 	defaultGUIBase := getenvInt("GUI_PORT_BASE", 5900)
@@ -57,6 +64,19 @@ func Parse(runID string) Config {
 	defaultGUI := getenvDuration("GUI_TIMEOUT", 30*time.Second)
 	defaultDownload := getenvDuration("DOWNLOAD_TIMEOUT", 10*time.Minute)
 	defaultPortWait := getenvDuration("PORT_WAIT_TIMEOUT", 30*time.Second)
+
+	// Load Nido's main config for SSOT defaults
+	home, _ := os.UserHomeDir()
+	nidoConfigPath := filepath.Join(home, ".nido", "config.env")
+	nidoCfg, _ := nidocfg.LoadConfig(nidoConfigPath)
+
+	if defaultSSHUser == "" && nidoCfg != nil {
+		defaultSSHUser = nidoCfg.SSHUser
+	}
+	// Fallback to hardcoded if still empty
+	if defaultSSHUser == "" {
+		defaultSSHUser = "vmuser"
+	}
 
 	wd, _ := os.Getwd()
 
@@ -78,11 +98,14 @@ func Parse(runID string) Config {
 	flag.BoolVar(&cfg.KeepArtifacts, "keep-artifacts", getenvBool("KEEP_ARTIFACTS", false), "Do not cleanup VMs/templates after run (KEEP_ARTIFACTS)")
 	flag.BoolVar(&cfg.CheckForward, "check-forwarding", getenvBool("CHECK_FORWARDING", false), "Start dummy server and dial forwarded port to verify connectivity (CHECK_FORWARDING)")
 	flag.BoolVar(&cfg.CheckCloudInit, "check-cloud-init", getenvBool("CHECK_CLOUD_INIT", false), "Verify cloud-init marker in guest via SSH (CHECK_CLOUD_INIT)")
+	flag.StringVar(&cfg.SSHUser, "ssh-user", defaultSSHUser, "Default SSH user for guest (NIDO_SSH_USER)")
+	flag.StringVar(&cfg.SSHPassword, "ssh-password", defaultSSHPwd, "Default SSH password for guest (NIDO_SSH_PASSWORD)")
 
 	// Logging paths
 	flag.StringVar(&cfg.LogDir, "log-dir", filepath.Join("logs"), "Directory to store validation logs")
 	flag.StringVar(&cfg.WorkingDir, "workdir", wd, "Working directory for the suite")
 	flag.StringVar(&cfg.WorkflowPath, "workflow", getenvOrDefault("NIDO_WORKFLOW", filepath.Join("internal", "validator", "workflows", "default.yaml")), "Path to workflow definition YAML (NIDO_WORKFLOW)")
+	flag.StringVar(&cfg.Scenario, "scenario", "", "Specific scenario to run (case-insensitive)")
 	flag.StringVar(&cfg.UpdateURL, "update-url", os.Getenv("NIDO_UPDATE_URL"), "Override update download URL (NIDO_UPDATE_URL)")
 	flag.StringVar(&cfg.UpdateReleaseAPI, "update-release-api", os.Getenv("NIDO_RELEASE_API"), "Override release API endpoint (NIDO_RELEASE_API)")
 

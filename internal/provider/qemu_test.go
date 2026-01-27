@@ -1,6 +1,8 @@
 package provider
 
 import (
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -11,7 +13,7 @@ import (
 // TestBuildQemuArgs_CrossPlatform tests QEMU argument generation for all platforms
 func TestBuildQemuArgs_CrossPlatform(t *testing.T) {
 	p := &QemuProvider{
-		RootDir: "/tmp/nido-test",
+		RootDir: filepath.Join(os.TempDir(), "nido-test"),
 		Config:  &config.Config{},
 	}
 
@@ -49,7 +51,7 @@ func TestBuildQemuArgs_CrossPlatform(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Note: We can't actually mock runtime.GOOS in tests,
 			// but we can verify the logic by checking the current platform
-			args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 0, nil, "/tmp/run", "")
+			args := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0)
 
 			// Verify common arguments are present
 			if !contains(args, "-name") {
@@ -114,11 +116,11 @@ func TestBuildQemuArgs_CrossPlatform(t *testing.T) {
 // TestBuildQemuArgs_CommonArguments verifies arguments common to all platforms
 func TestBuildQemuArgs_CommonArguments(t *testing.T) {
 	p := &QemuProvider{
-		RootDir: "/tmp/nido-test",
+		RootDir: filepath.Join(os.TempDir(), "nido-test"),
 		Config:  &config.Config{},
 	}
 
-	args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 0, nil, "/tmp/run", "")
+	args := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0)
 
 	requiredArgs := map[string]bool{
 		"-name":      false,
@@ -147,12 +149,12 @@ func TestBuildQemuArgs_CommonArguments(t *testing.T) {
 // TestBuildQemuArgs_DiskPath verifies disk path is correctly formatted
 func TestBuildQemuArgs_DiskPath(t *testing.T) {
 	p := &QemuProvider{
-		RootDir: "/tmp/nido-test",
+		RootDir: filepath.Join(os.TempDir(), "nido-test"),
 		Config:  &config.Config{},
 	}
 
 	diskPath := "/path/to/vm.qcow2"
-	args := p.buildQemuArgs("test-vm", diskPath, 50022, 0, nil, "/tmp/run", "")
+	args := p.buildQemuArgs("test-vm", diskPath, 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0)
 
 	found := false
 	for _, arg := range args {
@@ -170,12 +172,12 @@ func TestBuildQemuArgs_DiskPath(t *testing.T) {
 // TestBuildQemuArgs_VNC verifies VNC arguments are correctly generated
 func TestBuildQemuArgs_VNC(t *testing.T) {
 	p := &QemuProvider{
-		RootDir: "/tmp/nido-test",
+		RootDir: filepath.Join(os.TempDir(), "nido-test"),
 		Config:  &config.Config{},
 	}
 
 	// 1. Test with VNC enabled (port 5901)
-	args := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 5901, nil, "/tmp/run", "")
+	args := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 5901, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0)
 	if !contains(args, "-vnc") {
 		t.Error("Missing -vnc argument when port is provided")
 	}
@@ -185,7 +187,7 @@ func TestBuildQemuArgs_VNC(t *testing.T) {
 	}
 
 	// 2. Test with VNC disabled (port 0)
-	argsNoVNC := p.buildQemuArgs("test-vm", "/tmp/test.qcow2", 50022, 0, nil, "/tmp/run", "")
+	argsNoVNC := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0)
 	if contains(argsNoVNC, "-vnc") {
 		t.Error("-vnc argument should not be present when port is 0")
 	}

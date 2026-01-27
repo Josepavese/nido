@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -42,6 +43,7 @@ type TUIConfig struct {
 // LoadConfig reads the genetic configuration from a file.
 // If a key is missing, it falls back to historical defaults.
 func LoadConfig(path string) (*Config, error) {
+	home, _ := os.UserHomeDir()
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -49,9 +51,9 @@ func LoadConfig(path string) (*Config, error) {
 	defer file.Close()
 
 	cfg := &Config{
-		BackupDir:      "/tmp/libvirt-pool/backups",
+		BackupDir:      filepath.Join(home, ".nido", "backups"),
 		SSHUser:        "vmuser",
-		ImageDir:       "",   // Will be set to ~/.nido/images if not specified
+		ImageDir:       filepath.Join(home, ".nido", "images"),
 		LinkedClones:   true, // Default to true (space saving)
 		PortRangeStart: 30000,
 		PortRangeEnd:   32767,
@@ -76,10 +78,13 @@ func LoadConfig(path string) (*Config, error) {
 			continue
 		}
 		key := parts[0]
-		val := os.ExpandEnv(parts[1])
+		val := strings.TrimSpace(os.ExpandEnv(parts[1]))
+
+		if val == "" && key != "THEME" {
+			continue // Skip empty overrides to allow defaults to persist
+		}
 
 		switch key {
-		// Update LoadConfig loop
 		case "THEME":
 			cfg.Theme = val
 		case "BACKUP_DIR":
