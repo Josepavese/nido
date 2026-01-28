@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-01-26T08:27:03.641868296Z",
+  "updated_at": "2026-01-28T08:26:38.164378164Z",
   "images": [
     {
       "name": "ubuntu",
@@ -50,8 +50,8 @@
           "arch": "amd64",
           "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-Cloud.qcow2",
           "checksum_type": "sha256",
-          "checksum": "c369f4a67b14bf5576fcd53f17793a1e73a36c35a27a39ebb6d53e512bf8319b",
-          "size_bytes": 292499968,
+          "checksum": "0987883cb41407bf1bf77b7f4bdcc6fa805367564c80128e1d1c4fc76940c84a",
+          "size_bytes": 292516864,
           "format": "qcow2"
         }
       ]
@@ -136,7 +136,6 @@
       "description": "CirrOS - Test Image",
       "homepage": "https://download.cirros-cloud.net",
       "ssh_user": "cirros",
-      "ssh_password": "gocubsgo",
       "versions": [
         {
           "version": "0.6.3",
