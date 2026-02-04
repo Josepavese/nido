@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/Josepavese/nido/internal/lifecycle"
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -17,7 +18,8 @@ type RequestUninstallMsg struct{}
 func UninstallCmd() tea.Cmd {
 	return func() tea.Msg {
 		// Calculate paths similar to CLI
-		home, _ := os.UserHomeDir()
+		home, _ := sysutil.UserHome()
+
 		nidoDir := filepath.Join(home, ".nido")
 
 		exe, err := os.Executable()

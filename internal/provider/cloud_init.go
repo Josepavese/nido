@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 )
 
 // CloudInit handles the generation of cloud-init seed ISOs.
@@ -107,7 +109,7 @@ func (c *CloudInit) GenerateISO(outPath string) error {
 
 func GetLocalSSHKey() string {
 	// Try typical locations
-	home, _ := os.UserHomeDir()
+	home, _ := sysutil.UserHome()
 	files := []string{"id_ed25519.pub", "id_rsa.pub"}
 	for _, f := range files {
 		path := filepath.Join(home, ".ssh", f)

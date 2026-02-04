@@ -376,7 +376,7 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 	// Platform-specific acceleration
 	cpuArg := "qemu64"
 	switch runtime.GOOS {
-	case "linux":
+	case "linux", "android":
 		if _, err := os.Stat("/dev/kvm"); err == nil {
 			args = append(args, "-enable-kvm")
 			cpuArg = "host"
@@ -424,6 +424,7 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 		"-device", "virtio-net-pci,netdev=net0",
 		"-boot", "menu=off,strict=on,splash-time=0", // Fast boot: skip menu, no splash timeout
 		"-serial", "file:"+filepath.Join(runDir, name+".serial.log"),
+		"-device", "virtio-rng-pci", // Passthrough entropy from host to avoid boot hangs
 	)
 
 	// Attach Cloud-Init Seed if exists
@@ -844,6 +845,9 @@ func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) error 
 	}
 	if updates.SSHPassword != nil {
 		state.SSHPassword = *updates.SSHPassword
+	}
+	if updates.Forwarding != nil {
+		state.Forwarding = *updates.Forwarding
 	}
 
 	// 3. Persist

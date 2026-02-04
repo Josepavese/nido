@@ -8,6 +8,7 @@ import (
 	"time"
 
 	nidocfg "github.com/Josepavese/nido/internal/config"
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 )
 
 // Config holds all configurable knobs for the validation suite.
@@ -66,7 +67,7 @@ func Parse(runID string) Config {
 	defaultPortWait := getenvDuration("PORT_WAIT_TIMEOUT", 30*time.Second)
 
 	// Load Nido's main config for SSOT defaults
-	home, _ := os.UserHomeDir()
+	home, _ := sysutil.UserHome()
 	nidoConfigPath := filepath.Join(home, ".nido", "config.env")
 	nidoCfg, _ := nidocfg.LoadConfig(nidoConfigPath)
 

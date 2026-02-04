@@ -15,6 +15,7 @@ import (
 	"github.com/Josepavese/nido/internal/build"
 	"github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/image"
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"github.com/Josepavese/nido/internal/provider"
 	view "github.com/Josepavese/nido/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
@@ -187,7 +188,7 @@ func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool, 
 			cfg := prov.GetConfig()
 			imgDir := cfg.ImageDir
 			if imgDir == "" {
-				home, _ := os.UserHomeDir()
+				home, _ := sysutil.UserHome()
 				imgDir = filepath.Join(home, ".nido", "images")
 			}
 
@@ -547,7 +548,7 @@ type ConfigBatchSavedMsg struct {
 func SaveConfig(cfg *config.Config, key, value string) tea.Cmd {
 	return func() tea.Msg {
 		// Find config file path
-		home, _ := os.UserHomeDir()
+		home, _ := sysutil.UserHome()
 		path := filepath.Join(home, ".nido", "config.env")
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			cwd, _ := os.Getwd()
@@ -571,7 +572,7 @@ func SaveConfig(cfg *config.Config, key, value string) tea.Cmd {
 func SaveConfigMany(cfg *config.Config, updates map[string]string) tea.Cmd {
 	return func() tea.Msg {
 		// Find config file path
-		home, _ := os.UserHomeDir()
+		home, _ := sysutil.UserHome()
 		path := filepath.Join(home, ".nido", "config.env")
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			cwd, _ := os.Getwd()

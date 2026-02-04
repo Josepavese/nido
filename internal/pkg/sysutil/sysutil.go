@@ -62,3 +62,8 @@ func EnsureDir(path string) (string, error) {
 	}
 	return abs, nil
 }
+
+// UserHome returns the current user's home directory.
+func UserHome() (string, error) {
+	return os.UserHomeDir()
+}

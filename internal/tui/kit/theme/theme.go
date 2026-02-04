@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -183,7 +185,7 @@ func buildTheme(p Palette, isDark bool) Theme {
 
 // LoadUserThemes attempts to load themes.json from ~/.nido
 func LoadUserThemes() error {
-	home, err := os.UserHomeDir()
+	home, err := sysutil.UserHome()
 	if err != nil {
 		return err
 	}

@@ -813,49 +813,13 @@ func parseTuiPorts(val string) ([]provider.PortForward, error) {
 		if p == "" {
 			continue
 		}
-		pf, err := parsePortString(p)
+		pf, err := provider.ParsePortForward(p)
 		if err != nil {
 			return nil, err
 		}
 		results = append(results, pf)
 	}
 	return results, nil
-}
-
-func parsePortString(val string) (provider.PortForward, error) {
-	pf := provider.PortForward{Protocol: "tcp"}
-	if strings.Contains(val, ":") {
-		parts := strings.SplitN(val, ":", 2)
-		if _, err := provider.ParseInt(parts[0]); err != nil {
-			pf.Label = parts[0]
-			val = parts[1]
-		}
-	}
-	if strings.Contains(val, "/") {
-		parts := strings.SplitN(val, "/", 2)
-		pf.Protocol = strings.ToLower(parts[1])
-		val = parts[0]
-	}
-	if strings.Contains(val, ":") {
-		parts := strings.SplitN(val, ":", 2)
-		gp, err := provider.ParseInt(parts[0])
-		if err != nil {
-			return pf, err
-		}
-		hp, err := provider.ParseInt(parts[1])
-		if err != nil {
-			return pf, err
-		}
-		pf.GuestPort = gp
-		pf.HostPort = hp
-	} else {
-		gp, err := provider.ParseInt(val)
-		if err != nil {
-			return pf, err
-		}
-		pf.GuestPort = gp
-	}
-	return pf, nil
 }
 
 // End of Hatchery Viewlet

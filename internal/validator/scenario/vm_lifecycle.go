@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"github.com/Josepavese/nido/internal/validator/report"
 	"github.com/Josepavese/nido/internal/validator/runner"
 	"github.com/Josepavese/nido/internal/validator/util"
@@ -420,7 +421,7 @@ func cmdlineTest(ctx *Context) report.StepResult {
 	checkRes := runSSHCommand(ctx, sshPort, sshUser, host, "cat /proc/cmdline", 15*time.Second)
 
 	// Only assert match if we are in Direct Kernel Boot mode
-	home, _ := os.UserHomeDir()
+	home, _ := sysutil.UserHome()
 	vmsDir := filepath.Join(home, ".nido", "vms")
 	kernelPath := filepath.Join(vmsDir, vmName+".kernel")
 	if _, err := os.Stat(kernelPath); err == nil {

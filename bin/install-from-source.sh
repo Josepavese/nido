@@ -111,7 +111,8 @@ fi
 echo ""
 echo "${STEP} Building the new engine..."
 go build -o nido ./cmd/nido
-echo "  ${OK} Binary built successfully."
+go build -o nido-validator ./cmd/nido-validator
+echo "  ${OK} Binaries built successfully."
 
 # 3. Setup local environment
 echo ""
@@ -123,6 +124,7 @@ mkdir -p "${NIDO_HOME}/vms"
 mkdir -p "${NIDO_HOME}/config"
 
 mv nido "${NIDO_HOME}/bin/nido"
+mv nido-validator "${NIDO_HOME}/bin/nido-validator"
 
 # Ensure config exists
 if [[ ! -f "${NIDO_HOME}/config.env" ]]; then
@@ -132,8 +134,17 @@ if [[ ! -f "${NIDO_HOME}/config.env" ]]; then
     fi
 fi
 
-# 4. PATH check
+# 3b. Install Registry (Blueprints)
 echo ""
+echo "${STEP} Installing Blueprints Registry..."
+if [[ -d "./registry" ]]; then
+    mkdir -p "${NIDO_HOME}/registry"
+    cp -r ./registry/* "${NIDO_HOME}/registry/"
+    echo "  ${OK} Registry installed to ${NIDO_HOME}/registry"
+else
+    echo "  ${WARN} Registry directory not found in source!"
+fi
+
 echo "${STEP} Checking your flight path (PATH)..."
 SHELL_RC=""
 case "$SHELL" in

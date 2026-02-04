@@ -21,6 +21,12 @@ echo "${RESET}"
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
 
+# Detect Termux
+IS_TERMUX=0
+if [ -d "/data/data/com.termux" ]; then
+  IS_TERMUX=1
+fi
+
 case "$OS" in
   linux) OS="linux" ;;
   darwin) OS="darwin" ;;
@@ -142,7 +148,7 @@ else
     echo "${YELLOW}⚠️ Could not download icon, using generic${RESET}"
 fi
 
-if [ "$OS" = "linux" ]; then
+if [ "$OS" = "linux" ] && [ $IS_TERMUX -eq 0 ]; then
     DESKTOP_DIR="${HOME}/.local/share/applications"
     mkdir -p "$DESKTOP_DIR"
     
@@ -206,9 +212,13 @@ if [ $QEMU_INSTALLED -eq 0 ] || [ $ISO_TOOL_INSTALLED -eq 0 ]; then
     read -p "📦 Would you like to install dependencies automatically? (y/N) " -n 1 -r < /dev/tty
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if [ "$OS" = "linux" ]; then
-            PKG="qemu-system-x86 qemu-utils cloud-utils"
-            [ "$ARCH" = "arm64" ] && PKG="qemu-system-arm qemu-utils cloud-utils"
+        if [ $IS_TERMUX -eq 1 ]; then
+            PKG="qemu-system-x86-64-headless qemu-utils xorriso"
+            echo "${CYAN}🛠️  Installing ${PKG}...${RESET}"
+            pkg install -y $PKG
+        elif [ "$OS" = "linux" ]; then
+            PKG="qemu-system-x86 qemu-utils cloud-utils genisoimage"
+            [ "$ARCH" = "arm64" ] && PKG="qemu-system-arm qemu-system-gui qemu-utils cloud-utils genisoimage"
             echo "${CYAN}🛠️  Updating repositories and installing ${PKG}...${RESET}"
             sudo apt update && sudo apt install -y $PKG
         elif [ "$OS" = "darwin" ]; then
@@ -227,10 +237,11 @@ else
 fi
 
 # KVM Permissions (Linux Only)
-if [ "$OS" = "linux" ]; then
+if [ "$OS" = "linux" ] && [ $IS_TERMUX -eq 0 ]; then
     echo "${CYAN}🔍 Checking KVM accessibility...${RESET}"
     if [ -e /dev/kvm ]; then
-        if [ ! -w /dev/kvm ]; then
+        # Check if already in group or have permissions
+        if [ ! -w /dev/kvm ] && ! groups | grep -q "\bkvm\b"; then
             echo "${YELLOW}⚠️  KVM detected but you don't have permission to use it.${RESET}"
             echo -n "🔐 Would you like to grant permissions to the current user? (y/N) " > /dev/tty
             read -n 1 -r RESPONSE < /dev/tty
@@ -264,16 +275,17 @@ echo "  2. Verify install: ${CYAN}nido version${RESET}"
 echo "  3. Check system:   ${CYAN}nido doctor${RESET}"
 echo ""
 if command -v qemu-system-x86_64 >/dev/null 2>&1 || command -v qemu-system-aarch64 >/dev/null 2>&1 || command -v qemu-system >/dev/null 2>&1; then
-    if [ "$OS" = "linux" ] && [ ! -w /dev/kvm ]; then
+    if [ "$OS" = "linux" ] && [ $IS_TERMUX -eq 0 ] && [ ! -w /dev/kvm ]; then
         echo "${YELLOW}⚠️  KVM needs permission: sudo usermod -aG kvm \$USER && newgrp kvm${RESET}"
     else
         echo "${GREEN}✨ QEMU is ready for liftoff!${RESET}"
     fi
 else
-    QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils cloud-utils"
-    [ "$ARCH" = "arm64" ] && QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-utils cloud-utils"
+    QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils cloud-utils genisoimage"
+    [ "$ARCH" = "arm64" ] && QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-system-gui qemu-utils cloud-utils genisoimage"
     echo "${YELLOW}💡 Note: You still need QEMU & ISO tools to run VMs${RESET}"
     echo "   Linux: ${CYAN}${QEMU_CMD}${RESET}"
+    [ $IS_TERMUX -eq 1 ] && echo "   Termux: ${CYAN}pkg install qemu-system-x86-64-headless qemu-utils xorriso${RESET}"
     echo "   macOS: ${CYAN}brew install qemu cdrtools${RESET}"
 fi
 echo ""

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Josepavese/nido/internal/image"
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"github.com/Josepavese/nido/internal/provider"
 	view "github.com/Josepavese/nido/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
@@ -73,7 +74,7 @@ func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, for
 			cfg := prov.GetConfig()
 			catalogDir := cfg.ImageDir
 			if catalogDir == "" {
-				home, _ := os.UserHomeDir()
+				home, _ := sysutil.UserHome()
 				catalogDir = filepath.Join(home, ".nido", "images")
 			}
 
@@ -165,7 +166,7 @@ func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, for
 	}
 }
 
-// FetchRegistryImages retrieves available remote images as structured data.
+// FetchRegistryImages retrieves availableremote images as structured data.
 func FetchRegistryImages(prov provider.VMProvider, forceRemote bool) tea.Cmd {
 	return func() tea.Msg {
 		if prov == nil {
@@ -175,7 +176,7 @@ func FetchRegistryImages(prov provider.VMProvider, forceRemote bool) tea.Cmd {
 		cfg := prov.GetConfig()
 		catalogDir := cfg.ImageDir
 		if catalogDir == "" {
-			home, _ := os.UserHomeDir()
+			home, _ := sysutil.UserHome()
 			catalogDir = filepath.Join(home, ".nido", "images")
 		}
 
@@ -244,7 +245,7 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 			cfg := prov.GetConfig()
 			imgDir := cfg.ImageDir
 			if imgDir == "" {
-				home, _ := os.UserHomeDir()
+				home, _ := sysutil.UserHome()
 				imgDir = filepath.Join(home, ".nido", "images")
 			}
 
