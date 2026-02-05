@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 )
 
 // Uninstall performs the destructive removal of Nido's data and binary.
@@ -49,7 +51,7 @@ func Uninstall(dataDir, binPath string) error {
 
 // CleanShellConfig attempts to remove Nido-related entries from shell configuration files.
 func CleanShellConfig() {
-	home, err := os.UserHomeDir()
+	home, err := sysutil.UserHome()
 	if err != nil {
 		return
 	}
@@ -103,7 +105,7 @@ func removeNidoLines(path string) error {
 
 // CleanDesktopIntegration removes launcher entries and shortcuts across platforms.
 func CleanDesktopIntegration() {
-	home, err := os.UserHomeDir()
+	home, err := sysutil.UserHome()
 	if err != nil {
 		return
 	}

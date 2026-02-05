@@ -24,7 +24,7 @@ Built on QEMU and fueled by 80s nostalgia, Nido feels like a game console for De
 
 ## ⚡ Loading... (Installation)
 
-> **SYSTEM REQUIREMENTS:** Linux, macOS, or Windows (WSL2/PowerShell). QEMU must be installed.
+> **SYSTEM REQUIREMENTS:** Linux, macOS, Android (Termux), or Windows (WSL2/PowerShell). QEMU must be installed.
 
 ### 💾 Quick Install (Web)
 
@@ -44,6 +44,17 @@ nido version         # Check checksum
 ```powershell
 irm https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.ps1 | iex
 # Restart your terminal to initialize the matrix
+nido version
+```
+
+**Android (Termux) & ARM SBCs:**
+
+Run this inside **Termux** or your favorite ARM-based Linux distro (Raspberry Pi, Pine64, etc).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.sh | bash
+# Reload your config
+source ~/.bashrc
 nido version
 ```
 
@@ -89,7 +100,7 @@ Nido is designed to be driven by **Large Language Models** (Claude, GPT-4, Gemin
 
 ### 🤖 Model Context Protocol (MCP)
 
-Nido speaks native MCP. It exposes a suite of tools (`vm_spawn`, `vm_exec`, `vm_prune`, etc.) that allow your AI to manage its own infrastructure.
+Nido speaks native MCP. It exposes a suite of tools (`vm_create`, `vm_ssh`, `vm_prune`, etc.) that allow your AI to manage its own infrastructure.
 
 ```bash
 nido register  # Generates the config for your AI client
@@ -146,13 +157,14 @@ Here is the full move list for the Nido console.
 | `nido template list`               | List custom templates     | **USER SKINS**       |
 | `nido template create <vm> <name>` | Save VM state as template | **SAVE STATE**       |
 | `nido template delete <name>`      | Delete template           | **ERASE**            |
+| `nido build <blueprint>`           | Build VM image from recipe| **CRAFTING**         |
 
 ### ⚙️ System (Options Menu)
 
 | Command            | Action                  | Arcade Analog               |
 | :----------------- | :---------------------- | :-------------------------- |
-| `nido config <vm> [--memory MB] [--cpu N] [--gui] [--cmdline "..."]` | Modify existing VM resources | **PLAYER STATS** |
-| `nido settings`    | View/Edit global config | **OPTIONS**           |
+| `nido config <vm> [--memory MB] [--cpu N] [--port G:H] ...` | Modify existing VM resources | **PLAYER STATS** |
+| `nido config set <key> <val>`  | Update global Nido settings | **OPTIONS**           |
 | `nido register`  | Setup MCP integration   | **CONTROLLER CONFIG** |
 | `nido update`    | Self-update from GitHub | **OTA PATCH**         |
 | `nido uninstall` | Nuclear cleanup         | **SELF DESTRUCT**     |

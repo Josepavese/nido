@@ -18,6 +18,7 @@ import (
 	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/lifecycle"
 	"github.com/Josepavese/nido/internal/mcp"
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"github.com/Josepavese/nido/internal/provider"
 	"github.com/Josepavese/nido/internal/ui"
 )
@@ -36,7 +37,7 @@ func main() {
 	args := os.Args[2:]
 
 	// Home Dir for Nido State
-	home, _ := os.UserHomeDir()
+	home, _ := sysutil.UserHome()
 	nidoDir := filepath.Join(home, ".nido")
 
 	cwd, _ := os.Getwd()
@@ -62,6 +63,8 @@ func main() {
 		cmdGUI(prov, cfg)
 	case "update":
 		cmdUpdate(nidoDir)
+	case "build":
+		cmdBuild(nidoDir, args)
 	case "mcp-help":
 		// List MCP tools and their schemas
 		cmdMcpHelp()
@@ -266,7 +269,7 @@ func main() {
 			} else if arg == "--gui" {
 				gui = true
 			} else if (arg == "--port" || arg == "-p") && i+1 < len(rest) {
-				pf, err := parsePortFlag(rest[i+1])
+				pf, err := provider.ParsePortForward(rest[i+1])
 				if err != nil {
 					ui.Error("Invalid port mapping: %v", err)
 					os.Exit(1)
@@ -298,161 +301,179 @@ func main() {
 			// Resolve image
 			imgDir := filepath.Join(nidoDir, "images")
 
-			// For development: prefer local registry/images.json if it exists in CWD
-			var catalog *image.Catalog
-			localRegistry := filepath.Join(cwd, "registry", "images.json")
-			if _, err := os.Stat(localRegistry); err == nil {
-				catalog, err = image.LoadCatalogFromFile(localRegistry)
-				if err != nil {
-					if jsonOut {
-						resp := clijson.NewResponseError("spawn", "ERR_IO", "Registry load failed", err.Error(), "Check your local registry file and try again.", nil)
-						_ = clijson.PrintJSON(resp)
-						os.Exit(1)
-					}
-					ui.Error("Failed to load local registry: %v", err)
-					os.Exit(1)
-				}
-			} else {
-				catalog, err = image.LoadCatalog(imgDir, image.DefaultCacheTTL)
-				if err != nil {
-					if jsonOut {
-						resp := clijson.NewResponseError("spawn", "ERR_IO", "Catalog load failed", err.Error(), "Check your network connection and try again.", nil)
-						_ = clijson.PrintJSON(resp)
-						os.Exit(1)
-					}
-					ui.Error("Failed to load catalog: %v", err)
-					os.Exit(1)
-				}
+			// Check if exists locally as a "built" image (exact match or .qcow2)
+			localPath := filepath.Join(imgDir, imageTag+".qcow2")
+			localExists := false
+			if _, err := os.Stat(localPath); err == nil {
+				localExists = true
+			} else if _, err := os.Stat(filepath.Join(imgDir, imageTag)); err == nil {
+				localPath = filepath.Join(imgDir, imageTag)
+				localExists = true
 			}
 
-			pName, pVer := imageTag, ""
-			if strings.Contains(imageTag, ":") {
-				parts := strings.Split(imageTag, ":")
-				pName, pVer = parts[0], parts[1]
-			}
-
-			var img *image.Image
-			var err error
-			img, ver, err = catalog.FindImage(pName, pVer)
-			if err != nil {
-				if jsonOut {
-					resp := clijson.NewResponseError("spawn", "ERR_NOT_FOUND", "Image not found", err.Error(), "Run 'nido image list' to see available images.", nil)
-					_ = clijson.PrintJSON(resp)
-					os.Exit(1)
-				}
-				ui.Error("Image %s not found in catalog.", imageTag)
-				os.Exit(1)
-			}
-			customSshUser = img.SSHUser
-			if ver.SSHPassword != "" {
-				customSshPassword = ver.SSHPassword
-			} else if img.SSHPassword != "" {
-				customSshPassword = img.SSHPassword
-			}
-
-			imgPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
-
-			// Auto-pull if the species is not yet in our local cache
-			if _, err := os.Stat(imgPath); os.IsNotExist(err) {
+			if localExists {
 				if !jsonOut {
-					ui.Info("Image not found locally. Pulling %s:%s...", img.Name, ver.Version)
+					ui.Info("Found local image: %s", filepath.Base(localPath))
 				}
-				downloader := image.Downloader{Quiet: jsonOut}
-
-				// Check if the URL points to a compressed file
-				downloadPath := imgPath
-				isTarXz := strings.HasSuffix(ver.URL, ".tar.xz")
-				isZst := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
-				if len(ver.PartURLs) > 0 {
-					isZst = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
-				}
-
-				if isTarXz {
-					downloadPath = imgPath + ".tar.xz"
-				} else if isZst {
-					downloadPath = imgPath + ".zst"
-				}
-
-				var downloadErr error
-				if len(ver.PartURLs) > 0 {
-					downloadErr = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
+				tpl = localPath
+			} else {
+				// Fallback to catalog lookup
+				// For development: prefer local registry/images.json if it exists in CWD
+				var catalog *image.Catalog
+				localRegistry := filepath.Join(cwd, "registry", "images.json")
+				if _, err := os.Stat(localRegistry); err == nil {
+					catalog, err = image.LoadCatalogFromFile(localRegistry)
+					if err != nil {
+						if jsonOut {
+							resp := clijson.NewResponseError("spawn", "ERR_IO", "Registry load failed", err.Error(), "Check your local registry file and try again.", nil)
+							_ = clijson.PrintJSON(resp)
+							os.Exit(1)
+						}
+						ui.Error("Failed to load local registry: %v", err)
+						os.Exit(1)
+					}
 				} else {
-					downloadErr = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
+					catalog, err = image.LoadCatalog(imgDir, image.DefaultCacheTTL)
+					if err != nil {
+						if jsonOut {
+							resp := clijson.NewResponseError("spawn", "ERR_IO", "Catalog load failed", err.Error(), "Check your network connection and try again.", nil)
+							_ = clijson.PrintJSON(resp)
+							os.Exit(1)
+						}
+						ui.Error("Failed to load catalog: %v", err)
+						os.Exit(1)
+					}
 				}
 
-				if downloadErr != nil {
+				pName, pVer := imageTag, ""
+				if strings.Contains(imageTag, ":") {
+					parts := strings.Split(imageTag, ":")
+					pName, pVer = parts[0], parts[1]
+				}
+
+				var img *image.Image
+				var err error
+				img, ver, err = catalog.FindImage(pName, pVer)
+				if err != nil {
 					if jsonOut {
-						resp := clijson.NewResponseError("spawn", "ERR_IO", "Download failed", downloadErr.Error(), "Check your network connection and try again.", nil)
+						resp := clijson.NewResponseError("spawn", "ERR_NOT_FOUND", "Image not found", err.Error(), "Run 'nido image list' to see available images.", nil)
 						_ = clijson.PrintJSON(resp)
 						os.Exit(1)
 					}
-					ui.Error("Download failed: %v", downloadErr)
+					ui.Error("Image %s not found in catalog (and not found locally in %s).", imageTag, imgDir)
 					os.Exit(1)
 				}
+				customSshUser = img.SSHUser
+				if ver.SSHPassword != "" {
+					customSshPassword = ver.SSHPassword
+				} else if img.SSHPassword != "" {
+					customSshPassword = img.SSHPassword
+				}
 
-				// Decompress first if it's an archive
-				if isTarXz || isZst {
-					// We verify the archive integrity first if checksum is available
-					if ver.Checksum != "" {
-						if !jsonOut {
-							ui.Ironic("Verifying genetic integrity (archive)...")
-						}
-						if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
-							if jsonOut {
-								resp := clijson.NewResponseError("spawn", "ERR_IO", "Verification failed", err.Error(), "Retry the download or choose a different image.", nil)
-								_ = clijson.PrintJSON(resp)
-							} else {
-								ui.Error("Verification failed: %v", err)
-							}
-							os.Remove(downloadPath)
-							os.Exit(1)
-						}
-					} else if !jsonOut {
-						ui.Warn("⚠️ No checksum provided. Integrity cannot be verified.")
+				imgPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
+
+				// Auto-pull if the species is not yet in our local cache
+				if _, err := os.Stat(imgPath); os.IsNotExist(err) {
+					if !jsonOut {
+						ui.Info("Image not found locally. Pulling %s:%s...", img.Name, ver.Version)
+					}
+					downloader := image.Downloader{Quiet: jsonOut}
+
+					// Check if the URL points to a compressed file
+					downloadPath := imgPath
+					isTarXz := strings.HasSuffix(ver.URL, ".tar.xz")
+					isZst := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
+					if len(ver.PartURLs) > 0 {
+						isZst = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
 					}
 
-					if err := downloader.Decompress(downloadPath, imgPath); err != nil {
+					if isTarXz {
+						downloadPath = imgPath + ".tar.xz"
+					} else if isZst {
+						downloadPath = imgPath + ".zst"
+					}
+
+					var downloadErr error
+					if len(ver.PartURLs) > 0 {
+						downloadErr = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
+					} else {
+						downloadErr = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
+					}
+
+					if downloadErr != nil {
 						if jsonOut {
-							resp := clijson.NewResponseError("spawn", "ERR_IO", "Decompression failed", err.Error(), "Retry the download or choose a different image.", nil)
+							resp := clijson.NewResponseError("spawn", "ERR_IO", "Download failed", downloadErr.Error(), "Check your network connection and try again.", nil)
 							_ = clijson.PrintJSON(resp)
-						} else {
-							ui.Error("Decompression failed: %v", err)
+							os.Exit(1)
 						}
-						os.Remove(downloadPath)
+						ui.Error("Download failed: %v", downloadErr)
 						os.Exit(1)
 					}
-					// Cleanup the archive
-					os.Remove(downloadPath)
-					if !jsonOut {
-						ui.Success("Image extracted successfully.")
-					}
-				} else {
-					// Standard verify for direct qcow2 if checksum is available
-					if ver.Checksum != "" {
-						if !jsonOut {
-							ui.Ironic("Verifying genetic integrity...")
+
+					// Decompress first if it's an archive
+					if isTarXz || isZst {
+						// We verify the archive integrity first if checksum is available
+						if ver.Checksum != "" {
+							if !jsonOut {
+								ui.Ironic("Verifying genetic integrity (archive)...")
+							}
+							if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+								if jsonOut {
+									resp := clijson.NewResponseError("spawn", "ERR_IO", "Verification failed", err.Error(), "Retry the download or choose a different image.", nil)
+									_ = clijson.PrintJSON(resp)
+								} else {
+									ui.Error("Verification failed: %v", err)
+								}
+								os.Remove(downloadPath)
+								os.Exit(1)
+							}
+						} else if !jsonOut {
+							ui.Warn("⚠️ No checksum provided. Integrity cannot be verified.")
 						}
-						if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+
+						if err := downloader.Decompress(downloadPath, imgPath); err != nil {
 							if jsonOut {
-								resp := clijson.NewResponseError("spawn", "ERR_IO", "Verification failed", err.Error(), "Retry the download or choose a different image.", nil)
+								resp := clijson.NewResponseError("spawn", "ERR_IO", "Decompression failed", err.Error(), "Retry the download or choose a different image.", nil)
 								_ = clijson.PrintJSON(resp)
 							} else {
-								ui.Error("Verification failed: %v", err)
+								ui.Error("Decompression failed: %v", err)
 							}
 							os.Remove(downloadPath)
 							os.Exit(1)
 						}
-					} else if !jsonOut {
-						ui.Warn("⚠️ No checksum provided. Integrity cannot be verified.")
-					}
-					if !jsonOut {
-						ui.Success("Image prepared successfully.")
+						// Cleanup the archive
+						os.Remove(downloadPath)
+						if !jsonOut {
+							ui.Success("Image extracted successfully.")
+						}
+					} else {
+						// Standard verify for direct qcow2 if checksum is available
+						if ver.Checksum != "" {
+							if !jsonOut {
+								ui.Ironic("Verifying genetic integrity...")
+							}
+							if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+								if jsonOut {
+									resp := clijson.NewResponseError("spawn", "ERR_IO", "Verification failed", err.Error(), "Retry the download or choose a different image.", nil)
+									_ = clijson.PrintJSON(resp)
+								} else {
+									ui.Error("Verification failed: %v", err)
+								}
+								os.Remove(downloadPath)
+								os.Exit(1)
+							}
+						} else if !jsonOut {
+							ui.Warn("⚠️ No checksum provided. Integrity cannot be verified.")
+						}
+						if !jsonOut {
+							ui.Success("Image prepared successfully.")
+						}
 					}
 				}
-			}
 
-			// Use absolute path as template
-			tpl = imgPath
+				// Use absolute path as template
+				tpl = imgPath
+			}
 		}
 
 		if cmdline == "" && ver != nil {
@@ -743,31 +764,15 @@ func main() {
 		} else {
 			ui.Error("Unknown template action: %s", subCmd)
 		}
-	case "settings":
-		// View or modify the genetic code of your Nido environment.
-		jsonOut, rest := consumeJSONFlag(args)
-		cmdEnvConfig(cfg, cfgPath, jsonOut, rest)
 	case "config":
 		// VM reconfiguration
 		// Usage: nido config <vm_name> [flags]
-		// Legacy: nido config <key> <value> (Global env) -> Detect if arg 1 is a known VM?
-		// Better: If flags are present (--memory, --cpu), it's VM config.
-		// Or strictly: nido config <vm> is VM, nido settings is global.
-		// I'll migrate 'config' to VM config and move global to 'settings', keeping 'config' as alias for global IF arg 1 is not a VM name?
-		// Simple approach: Check if first arg is "global" or keys?
-		// Let's implement logic:
-		// If len(args) > 0 and args[0] is NOT a flag and NOT a config key -> VM config.
-		// Known config keys are in config package.
-		// Robust: Rename global config command to `settings` and use `config` for VMs.
-		// I will update help text to reflect this change.
+		// Legacy/Global: nido config (list), nido config set <key> <val>
 		jsonOut, rest := consumeJSONFlag(args)
 		if len(rest) > 0 && isVMName(prov, rest[0]) {
 			cmdVMConfig(prov, jsonOut, rest)
 		} else {
-			// Fallback to Env Config for backward compat (or just move it)
-			// Let's check if they provided known keys?
-			// Simplest: `nido config` (no args) -> Env Config list.
-			// `nido config <name>` -> VM Config if exists, else Env key lookup.
+			// Fallback to Env/Global Config
 			cmdEnvConfig(cfg, cfgPath, jsonOut, rest)
 		}
 	case "register":
@@ -935,6 +940,30 @@ func main() {
 			}
 			return
 		}
+		if sub == "list-blueprints" {
+			// Scan local and nidoDir
+			cwd, _ := os.Getwd()
+			paths := []string{
+				filepath.Join(cwd, "registry", "blueprints"),
+				filepath.Join(nidoDir, "blueprints"),
+			}
+			seen := make(map[string]bool)
+			for _, p := range paths {
+				entries, err := os.ReadDir(p)
+				if err == nil {
+					for _, e := range entries {
+						if !e.IsDir() && (strings.HasSuffix(e.Name(), ".yaml") || strings.HasSuffix(e.Name(), ".yml")) {
+							name := strings.TrimSuffix(strings.TrimSuffix(e.Name(), ".yaml"), ".yml")
+							if !seen[name] {
+								fmt.Printf("%s ", name)
+								seen[name] = true
+							}
+						}
+					}
+				}
+			}
+			return
+		}
 		if sub == "list-images" {
 			cachePath := filepath.Join(nidoDir, "images", ".catalog.json")
 			catalog, err := image.LoadCatalogFromFile(cachePath)
@@ -986,7 +1015,7 @@ func getBashCompletion() string {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="ls spawn start ssh info stop images cache template config register version delete doctor prune completion update uninstall help"
+    opts="ls spawn start ssh info stop images build cache template config register version delete doctor prune completion update uninstall help"
 
     case "${prev}" in
         spawn)
@@ -1003,7 +1032,7 @@ func getBashCompletion() string {
             return 0
             ;;
         config)
-            COMPREPLY=( $(compgen -W "set $(nido completion list-vms) --memory --cpus --ssh-port --vnc-port --gui --ssh-user --ssh-pass --cmdline --json" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "set $(nido completion list-vms) --memory --cpus --ssh-port --vnc-port --gui --ssh-user --ssh-pass --cmdline --port --json" -- ${cur}) )
             return 0
             ;;
         set)
@@ -1048,6 +1077,10 @@ func getBashCompletion() string {
             COMPREPLY=( $(compgen -W "$(nido completion list-images)" -- ${cur}) )
             return 0
             ;;
+        build)
+            COMPREPLY=( $(compgen -W "$(nido completion list-blueprints)" -- ${cur}) )
+            return 0
+            ;;
         --user-data)
             # File completion for these flags
             COMPREPLY=( $(compgen -f -- ${cur}) )
@@ -1066,7 +1099,7 @@ func getBashCompletion() string {
                     COMPREPLY=( $(compgen -W "set $(nido completion list-vms)" -- ${cur}) )
                     return 0
                 else
-                    COMPREPLY=( $(compgen -W "--memory --cpus --ssh-port --vnc-port --gui --ssh-user --ssh-pass --cmdline --json" -- ${cur}) )
+                    COMPREPLY=( $(compgen -W "--memory --cpus --ssh-port --vnc-port --gui --ssh-user --ssh-pass --cmdline --port --json" -- ${cur}) )
                     return 0
                 fi
             fi
@@ -1129,6 +1162,7 @@ func getZshCompletion() string {
     'doctor:Run a system health check'
     'completion:Generate shell completions'
     'update:Ascend to the latest evolutionary state'
+    'build:Build a VM image from a blueprint'
     'uninstall:Nuclear option: Remove Nido and all its data'
   )
 
@@ -1192,6 +1226,7 @@ func getZshCompletion() string {
                    '--cpus[Resize CPUs]:cpus' \
                    '--ssh-port[Set SSH Port]:port' \
                    '--vnc-port[Set VNC Port]:port' \
+                   '--port[Set Port Forwarding (G:H/P)]:mapping' \
                    '--gui[Enable/Disable GUI]:bool:(true false)' \
                    '--ssh-user[Set SSH User]:user' \
                    '--ssh-pass[Set SSH Password]:password' \
@@ -1324,11 +1359,13 @@ func printUsage() {
 	fmt.Printf("  %-10s %sBrowse and pull cloud images%s\n", "images", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sManage cached cloud images (ls, info, rm, prune)%s\n", "cache", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sArchive a VM into a cold, compressed template%s\n", "template", ui.Dim, ui.Reset)
+	fmt.Printf("  %-10s %sBuild a VM image from a blueprint recipe%s\n", "build", ui.Dim, ui.Reset)
 
 	fmt.Printf("\n%sSYSTEM OPS%s\n", ui.Bold, ui.Reset)
 	fmt.Printf("  %-10s %sRun a system health check%s\n", "doctor", ui.Dim, ui.Reset)
-	fmt.Printf("  %-10s %sModify a VM's resources (--memory, --cpu, --gui, --cmdline)%s\n", "config", ui.Dim, ui.Reset)
-	fmt.Printf("  %-10s %sView/Edit global Nido settings%s\n", "settings", ui.Dim, ui.Reset)
+
+	fmt.Printf("  %-10s %sModify a VM's resources (--memory, --cpu, --gui, --port, --cmdline)%s\n", "config", ui.Dim, ui.Reset)
+	fmt.Printf("             %sOR View/Edit global Nido settings (config set <key> <val>)%s\n", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sPrepare the MCP handshake for AI agents%s\n", "register", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sCheck the evolutionary state of Nido%s\n", "version", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sGenerate shell completion scripts%s\n", "completion", ui.Dim, ui.Reset)
@@ -1546,9 +1583,48 @@ func cmdVMConfig(p provider.VMProvider, jsonOut bool, args []string) {
 			updates.SSHPassword = &val
 			hasUpdates = true
 			i++
+			i++
 		} else if key == "--cmdline" && i+1 < len(args) {
 			val := args[i+1]
 			updates.Cmdline = &val
+			hasUpdates = true
+			i++
+		} else if (key == "--port" || key == "-p") && i+1 < len(args) {
+			pf, err := provider.ParsePortForward(args[i+1])
+			if err != nil {
+				ui.Error("Invalid port mapping: %v", err)
+				os.Exit(1)
+			}
+			// We need to accumulate ports if there are multiple flags, but VMConfigUpdates needs a *[]PortForward.
+			// Logic: If updates.Forwarding is nil, initialize it. But we need to know the *current* state if we want to append?
+			// Actually, typical CLI behavior for "set ports" often replaces the list or adds to it.
+			// The Skill implementation says "replace". So for this pass, we will collect all --port flags provided
+			// and REPLACE the existing list. IF the user provides NO --port flags, we don't touch it.
+
+			if updates.Forwarding == nil {
+				// Start with existing forwardings to make updates additive
+				// We try to load existing rules. If fails, we start (mostly) fresh.
+				existing, _ := p.PortList(name)
+				if existing == nil {
+					existing = []provider.PortForward{}
+				}
+				// Deep copy to update slice
+				current := make([]provider.PortForward, len(existing))
+				copy(current, existing)
+				updates.Forwarding = &current
+			}
+
+			// Add or Update: Remove any existing mapping for this GuestPort+Protocol
+			// This ensures we replace the old rule with the new one.
+			newSlice := make([]provider.PortForward, 0, len(*updates.Forwarding)+1)
+			for _, f := range *updates.Forwarding {
+				if f.GuestPort == pf.GuestPort && f.Protocol == pf.Protocol {
+					continue // Drop existing to be replaced
+				}
+				newSlice = append(newSlice, f)
+			}
+			newSlice = append(newSlice, pf)
+			updates.Forwarding = &newSlice
 			hasUpdates = true
 			i++
 		}
@@ -1747,7 +1823,7 @@ func cmdUpdate(nidoDir string) {
 
 	// Re-run completion generation to ensure latest aliases are present
 	// We'll detect the shell from env if possible, or just generate both for the config dir
-	home, _ := os.UserHomeDir()
+	home, _ := sysutil.UserHome()
 	nidoHome := filepath.Join(home, ".nido")
 
 	bashPath := filepath.Join(nidoHome, "bash_completion")
@@ -1997,50 +2073,4 @@ func cmdCache(nidoDir string, args []string, prov provider.VMProvider) {
 		ui.Error("Available: ls, info, rm, prune")
 		os.Exit(1)
 	}
-}
-
-// parsePortFlag parses strings like "web:80:32080/tcp" or "80".
-// Implements Section 5.1 of advanced-port-forwarding.md.
-func parsePortFlag(val string) (provider.PortForward, error) {
-	pf := provider.PortForward{Protocol: "tcp"}
-
-	// Split label if present
-	if strings.Contains(val, ":") {
-		parts := strings.SplitN(val, ":", 2)
-		// Check if first part is a number (GuestPort) or a Label
-		if _, err := provider.ParseInt(parts[0]); err != nil {
-			pf.Label = parts[0]
-			val = parts[1]
-		}
-	}
-
-	// Handle protocol
-	if strings.Contains(val, "/") {
-		parts := strings.SplitN(val, "/", 2)
-		pf.Protocol = strings.ToLower(parts[1])
-		val = parts[0]
-	}
-
-	// Handle Guest:Host
-	if strings.Contains(val, ":") {
-		parts := strings.SplitN(val, ":", 2)
-		gp, err := provider.ParseInt(parts[0])
-		if err != nil {
-			return pf, fmt.Errorf("invalid guest port: %v", err)
-		}
-		hp, err := provider.ParseInt(parts[1])
-		if err != nil {
-			return pf, fmt.Errorf("invalid host port: %v", err)
-		}
-		pf.GuestPort = gp
-		pf.HostPort = hp
-	} else {
-		gp, err := provider.ParseInt(val)
-		if err != nil {
-			return pf, fmt.Errorf("invalid port: %v", err)
-		}
-		pf.GuestPort = gp
-	}
-
-	return pf, nil
 }

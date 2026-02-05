@@ -1,0 +1,27 @@
+name: test-tiny
+description: "Tiny test blueprint to verify Nido Builder Engine mechanism (Alpine based)"
+version: "0.0.1"
+
+# Small Alpine ISO (~60MB)
+iso_url: https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/alpine-virt-3.19.1-x86_64.iso
+iso_checksum: "" # Skip for test
+
+# Use the same ISO as a "driver" just to test multi-drive mounting
+drivers:
+  - name: test-driver.iso
+    url: https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/alpine-virt-3.19.1-x86_64.iso
+    checksum: ""
+
+scripts:
+  test_script.sh: |
+    #!/bin/sh
+    echo "Hello from the seed ISO!"
+
+build_specs:
+  cpu: 1
+  memory: "512M"
+  disk: "2G"
+  timeout: "1m" # Short timeout for testing
+
+output_image: "test-tiny.qcow2"
+output_size: "2G"

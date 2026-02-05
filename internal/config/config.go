@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 )
 
 // Config defines the DNA of a Nido nest. It controls where life is archived,
@@ -43,7 +45,7 @@ type TUIConfig struct {
 // LoadConfig reads the genetic configuration from a file.
 // If a key is missing, it falls back to historical defaults.
 func LoadConfig(path string) (*Config, error) {
-	home, _ := os.UserHomeDir()
+	home, _ := sysutil.UserHome()
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err

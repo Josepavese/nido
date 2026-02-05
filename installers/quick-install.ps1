@@ -136,7 +136,20 @@ if (-not $qemuInstalled) {
 if (-not $isoToolInstalled) {
     Write-Host "⚠️  ISO creation tool missing (mkisofs/genisoimage)." -ForegroundColor Yellow
     Write-Host "   Cloud-init seed generation will fail without it." -ForegroundColor Yellow
-    Write-Host "   Recommended: Use 'choco install cdrtools' or install specific tools manually." -ForegroundColor Gray
+    
+    if (Get-Command "choco" -ErrorAction SilentlyContinue) {
+        $response = Read-Host "📦 Would you like to install cdrtools via Chocolatey? (y/N)"
+        if ($response -eq "y") {
+            Write-Host "🛠️  Installing cdrtools via Chocolatey..." -ForegroundColor Cyan
+            choco install cdrtools -y
+            Write-Host "✅ cdrtools installed." -ForegroundColor Green
+            $isoToolInstalled = $true
+        } else {
+             Write-Host "💡 Skipping automatic installation." -ForegroundColor Gray
+        }
+    } else {
+        Write-Host "   Recommended: Install 'cdrtools' via Chocolatey or Scoop manually." -ForegroundColor Gray
+    }
 } else {
     Write-Host "✅ ISO creation tools are present." -ForegroundColor Green
 }

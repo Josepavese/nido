@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -205,4 +206,51 @@ type VMConfigUpdates struct {
 	VNCPort     *int
 	SSHUser     *string
 	SSHPassword *string
+	Forwarding  *[]PortForward
+}
+
+// ParsePortForward parses strings like "web:80:32080/tcp" or "80".
+// Implements Section 5.1 of advanced-port-forwarding.md.
+func ParsePortForward(val string) (PortForward, error) {
+	pf := PortForward{Protocol: "tcp"}
+
+	// Split label if present
+	if strings.Contains(val, ":") {
+		parts := strings.SplitN(val, ":", 2)
+		// Check if first part is a number (GuestPort) or a Label
+		if _, err := ParseInt(parts[0]); err != nil {
+			pf.Label = parts[0]
+			val = parts[1]
+		}
+	}
+
+	// Handle protocol
+	if strings.Contains(val, "/") {
+		parts := strings.SplitN(val, "/", 2)
+		pf.Protocol = strings.ToLower(parts[1])
+		val = parts[0]
+	}
+
+	// Handle Guest:Host
+	if strings.Contains(val, ":") {
+		parts := strings.SplitN(val, ":", 2)
+		gp, err := ParseInt(parts[0])
+		if err != nil {
+			return pf, fmt.Errorf("invalid guest port: %v", err)
+		}
+		hp, err := ParseInt(parts[1])
+		if err != nil {
+			return pf, fmt.Errorf("invalid host port: %v", err)
+		}
+		pf.GuestPort = gp
+		pf.HostPort = hp
+	} else {
+		gp, err := ParseInt(val)
+		if err != nil {
+			return pf, fmt.Errorf("invalid port: %v", err)
+		}
+		pf.GuestPort = gp
+	}
+
+	return pf, nil
 }

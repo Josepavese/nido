@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Josepavese/nido/internal/builder"
 	"github.com/Josepavese/nido/internal/image"
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"github.com/Josepavese/nido/internal/provider"
 )
 
@@ -90,9 +92,11 @@ func ToolsCatalog() []map[string]interface{} {
 				"ssh_user":     map[string]interface{}{"type": "string"},
 				"ssh_password": map[string]interface{}{"type": "string"},
 				"cmdline":      map[string]interface{}{"type": "string"},
+				"ports":        map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
 			},
 			"required": []string{"name"},
 		}},
+		{"name": "nido_build_image", "description": "Build a VM image from a blueprint", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"blueprint_name": map[string]interface{}{"type": "string"}}, "required": []string{"blueprint_name"}}},
 	}
 }
 
@@ -204,7 +208,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			// Resolve and Pull logic (simplified for MCP for now, or just pass as DiskPath if Provider handles it?)
 			// Looking at provider/qemu.go:Spawn, it expects a path.
 			// So we MUST resolve/pull here in MCP layer if we want parity.
-			home, _ := os.UserHomeDir()
+			home, _ := sysutil.UserHome()
 			imgDir := filepath.Join(home, ".nido", "images")
 			catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 			if e != nil {
@@ -361,15 +365,16 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 	case "vm_config_update":
 		// Pointers used to detect presence of fields
 		var args struct {
-			Name        string  `json:"name"`
-			MemoryMB    *int    `json:"memory_mb"`
-			VCPUs       *int    `json:"vcpus"`
-			SSHPort     *int    `json:"ssh_port"`
-			VNCPort     *int    `json:"vnc_port"`
-			Gui         *bool   `json:"gui"`
-			SSHUser     *string `json:"ssh_user"`
-			SSHPassword *string `json:"ssh_password"`
-			Cmdline     *string `json:"cmdline"`
+			Name        string   `json:"name"`
+			MemoryMB    *int     `json:"memory_mb"`
+			VCPUs       *int     `json:"vcpus"`
+			SSHPort     *int     `json:"ssh_port"`
+			VNCPort     *int     `json:"vnc_port"`
+			Gui         *bool    `json:"gui"`
+			SSHUser     *string  `json:"ssh_user"`
+			SSHPassword *string  `json:"ssh_password"`
+			Cmdline     *string  `json:"cmdline"`
+			Ports       []string `json:"ports"`
 		}
 		json.Unmarshal(params.Arguments, &args)
 
@@ -382,6 +387,19 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			SSHUser:     args.SSHUser,
 			SSHPassword: args.SSHPassword,
 			Cmdline:     args.Cmdline,
+		}
+
+		if len(args.Ports) > 0 {
+			var fwd []provider.PortForward
+			for _, p := range args.Ports {
+				pf, err := provider.ParsePortForward(p)
+				if err != nil {
+					s.sendError(req.ID, -32602, fmt.Sprintf("Invalid port: %v", err))
+					return
+				}
+				fwd = append(fwd, pf)
+			}
+			updates.Forwarding = &fwd
 		}
 
 		if e := s.Provider.UpdateConfig(args.Name, updates); e != nil {
@@ -398,7 +416,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		}
 	case "vm_images_list":
 		// Load catalog from default location
-		home, _ := os.UserHomeDir()
+		home, _ := sysutil.UserHome()
 		imageDir := filepath.Join(home, ".nido", "images")
 		catalog, e := image.LoadCatalog(imageDir, image.DefaultCacheTTL)
 		if e != nil {
@@ -413,7 +431,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		}
 		json.Unmarshal(params.Arguments, &args)
 
-		home, _ := os.UserHomeDir()
+		home, _ := sysutil.UserHome()
 		imgDir := filepath.Join(home, ".nido", "images")
 		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 		if e != nil {
@@ -472,7 +490,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			}
 		}
 	case "vm_images_update":
-		home, _ := os.UserHomeDir()
+		home, _ := sysutil.UserHome()
 		imgDir := filepath.Join(home, ".nido", "images")
 		cachePath := filepath.Join(imgDir, image.CatalogCacheFile)
 		os.Remove(cachePath)
@@ -487,7 +505,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			Image string `json:"image"`
 		}
 		json.Unmarshal(params.Arguments, &args)
-		home, _ := os.UserHomeDir()
+		home, _ := sysutil.UserHome()
 		imgDir := filepath.Join(home, ".nido", "images")
 		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 		if e != nil {
@@ -516,7 +534,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			parts := strings.Split(args.Image, ":")
 			name, ver = parts[0], parts[1]
 		}
-		home, _ := os.UserHomeDir()
+		home, _ := sysutil.UserHome()
 		imgDir := filepath.Join(home, ".nido", "images")
 		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 		if e != nil {
@@ -534,7 +552,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 
 	// Cache management tools
 	case "vm_cache_list":
-		home, _ := os.UserHomeDir()
+		home, _ := sysutil.UserHome()
 		imgDir := filepath.Join(home, ".nido", "images")
 		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 		if e != nil {
@@ -549,7 +567,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			result = string(data)
 		}
 	case "vm_cache_info":
-		home, _ := os.UserHomeDir()
+		home, _ := sysutil.UserHome()
 		imgDir := filepath.Join(home, ".nido", "images")
 		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 		if e != nil {
@@ -568,7 +586,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			Image string `json:"image"`
 		}
 		json.Unmarshal(params.Arguments, &args)
-		home, _ := os.UserHomeDir()
+		home, _ := sysutil.UserHome()
 		imgDir := filepath.Join(home, ".nido", "images")
 		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 		if e != nil {
@@ -593,7 +611,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			UnusedOnly bool `json:"unused_only"`
 		}
 		json.Unmarshal(params.Arguments, &args)
-		home, _ := os.UserHomeDir()
+		home, _ := sysutil.UserHome()
 		imgDir := filepath.Join(home, ".nido", "images")
 		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 		if e != nil {
@@ -654,6 +672,54 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		} else {
 			data, _ := json.Marshal(list)
 			result = string(data)
+		}
+
+	case "nido_build_image":
+		var args struct {
+			BlueprintName string `json:"blueprint_name"`
+		}
+		json.Unmarshal(params.Arguments, &args)
+
+		// Locate Blueprint
+		home, _ := sysutil.UserHome()
+		cwd, _ := os.Getwd()
+		searchPaths := []string{
+			filepath.Join(cwd, "registry", "blueprints", args.BlueprintName+".yaml"),
+			filepath.Join(home, ".nido", "blueprints", args.BlueprintName+".yaml"),
+		}
+
+		var bpPath string
+		for _, p := range searchPaths {
+			if _, e := os.Stat(p); e == nil {
+				bpPath = p
+				break
+			}
+		}
+
+		if bpPath == "" {
+			err = fmt.Errorf("blueprint '%s' not found", args.BlueprintName)
+		} else {
+			// Load Blueprint
+			bp, e := builder.LoadBlueprint(bpPath)
+			if e != nil {
+				err = e
+			} else {
+				// Init Engine
+				nidoDir := filepath.Join(home, ".nido")
+				cacheDir := filepath.Join(nidoDir, "cache")
+				workDir := filepath.Join(nidoDir, "tmp")
+				imageDir := filepath.Join(nidoDir, "images")
+				eng := builder.NewEngine(cacheDir, workDir, imageDir)
+
+				// Run Build
+				// Note: Build is long-running. MCP normally expects synchronous response or async handling.
+				// For now, we block, but set a generous timeout in client if needed.
+				if e := eng.Build(bp); e != nil {
+					err = e
+				} else {
+					result = fmt.Sprintf("Build complete: %s created.", bp.OutputImage)
+				}
+			}
 		}
 
 	default:

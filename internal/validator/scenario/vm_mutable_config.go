@@ -52,7 +52,7 @@ func configCLI(ctx *Context) report.StepResult {
 	}
 
 	// Change RAM to 1024, CPUs to 2, Valid Ports
-	args := []string{"config", vmName, "--memory", "1024", "--cpus", "2", "--ssh-port", "60022", "--json"}
+	args := []string{"config", vmName, "--memory", "1024", "--cpus", "2", "--ssh-port", "60022", "--port", "8080:80", "--json"}
 	res := runNido(ctx, "config", args, 10*time.Second)
 	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
 
@@ -85,6 +85,23 @@ func configCLI(ctx *Context) report.StepResult {
 				// Check ssh port
 				sshPort, _ := vm["ssh_port"].(float64)
 				addAssertion(&res, "ssh_port_persisted", sshPort == 60022, fmt.Sprintf("Expected 60022, got %v", sshPort))
+
+				// Check Forwarding
+				if fw, ok := vm["forwarding"].([]interface{}); ok {
+					found := false
+					for _, f := range fw {
+						if fm, ok := f.(map[string]interface{}); ok {
+							gp, _ := fm["guest_port"].(float64)
+							if gp == 80 {
+								hp, _ := fm["host_port"].(float64)
+								if hp == 8080 {
+									found = true
+								}
+							}
+						}
+					}
+					addAssertion(&res, "port_forward_persisted", found, "Expected 8080->80 mapping")
+				}
 			}
 		}
 	}
