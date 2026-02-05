@@ -12,7 +12,13 @@
       "transport": {
         "type": "stdio",
         "command": "nido",
-        "args": ["mcp"]
+        "args": ["mcp"],
+        "platform": {
+          "windows": {
+            "command": "nido.exe",
+            "args": ["mcp"]
+          }
+        }
       },
       "fileSha256": "SHA256_PLACEHOLDER"
     }
