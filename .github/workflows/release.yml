@@ -239,6 +239,8 @@ jobs:
             dist/nido-darwin-amd64.tar.gz
             dist/nido-darwin-arm64.tar.gz
             dist/nido-windows-amd64.zip
+            dist/nido.mcpb
+            dist/server.json
           draft: false
           prerelease: false
           generate_release_notes: true
