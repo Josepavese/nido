@@ -41,7 +41,8 @@ package() {
     EXT=$4
     
     NAME="nido-${OS}-${ARCH}"
-    PKG_DIR="${OUTPUT_DIR}/${NAME}"
+    STAGING_DIR="${OUTPUT_DIR}/staging"
+    PKG_DIR="${STAGING_DIR}/${NAME}"
     mkdir -p "$PKG_DIR"
     
     # Copy binaries
@@ -53,10 +54,10 @@ package() {
     
     # Archive
     if [ "$OS" == "windows" ]; then
-        (cd "$OUTPUT_DIR" && zip -r "${NAME}.zip" "${NAME}")
+        (cd "$STAGING_DIR" && zip -r "../${NAME}.zip" "${NAME}")
         echo "  Created ${NAME}.zip"
     else
-        (cd "$OUTPUT_DIR" && tar -czf "${NAME}.tar.gz" "${NAME}")
+        (cd "$STAGING_DIR" && tar -czf "../${NAME}.tar.gz" "${NAME}")
         echo "  Created ${NAME}.tar.gz"
     fi
     
@@ -74,13 +75,15 @@ package "darwin" "arm64" "nido-darwin-arm64" ""
 # Let's just fix the packaging function to handle input name.
 
 # Manual for Windows to ensure nido.exe naming
-PKG_DIR="${OUTPUT_DIR}/nido-windows-amd64"
+STAGING_DIR="${OUTPUT_DIR}/staging"
+NAME="nido-windows-amd64"
+PKG_DIR="${STAGING_DIR}/${NAME}"
 mkdir -p "$PKG_DIR"
 cp "${OUTPUT_DIR}/nido.exe" "${PKG_DIR}/nido.exe"
 cp "${OUTPUT_DIR}/nido-validator.exe" "${PKG_DIR}/nido-validator.exe"
 cp -r registry "${PKG_DIR}/"
-(cd "$OUTPUT_DIR" && zip -r "nido-windows-amd64.zip" "nido-windows-amd64")
-echo "  Created nido-windows-amd64.zip"
+(cd "$STAGING_DIR" && zip -r "../${NAME}.zip" "${NAME}")
+echo "  Created ${NAME}.zip"
 rm -rf "$PKG_DIR"
 
 # Cleanup raw binaries
