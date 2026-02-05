@@ -181,7 +181,9 @@ jobs:
           
           #### Linux
           \`\`\`bash
-          curl -L https://github.com/Josepavese/nido/releases/download/$TAG/nido-linux-amd64 -o nido
+          curl -L https://github.com/Josepavese/nido/releases/download/$TAG/nido-linux-amd64.tar.gz -o nido.tar.gz
+          tar -xzf nido.tar.gz
+          cd nido-linux-amd64
           chmod +x nido
           sudo mv nido /usr/local/bin/
           nido version  # Should show $TAG
@@ -189,20 +191,24 @@ jobs:
           
           #### macOS (Intel)
           \`\`\`bash
-          curl -L https://github.com/Josepavese/nido/releases/download/$TAG/nido-darwin-amd64 -o nido
+          curl -L https://github.com/Josepavese/nido/releases/download/$TAG/nido-darwin-amd64.tar.gz -o nido.tar.gz
+          tar -xzf nido.tar.gz
+          cd nido-darwin-amd64
           chmod +x nido
           sudo mv nido /usr/local/bin/
           \`\`\`
           
           #### macOS (Apple Silicon)
           \`\`\`bash
-          curl -L https://github.com/Josepavese/nido/releases/download/$TAG/nido-darwin-arm64 -o nido
+          curl -L https://github.com/Josepavese/nido/releases/download/$TAG/nido-darwin-arm64.tar.gz -o nido.tar.gz
+          tar -xzf nido.tar.gz
+          cd nido-darwin-arm64
           chmod +x nido
           sudo mv nido /usr/local/bin/
           \`\`\`
           
           #### Windows
-          Download \`nido-windows-amd64.exe\` from the assets below, rename to \`nido.exe\`, and add to PATH.
+          Download \`nido-windows-amd64.zip\` from the assets below, extract, and add the folder to your PATH.
           
           ---
           
@@ -229,10 +235,10 @@ jobs:
           tag_name: ${{ env.VERSION }}
           body_path: release_notes.md
           files: |
-            dist/nido-linux-amd64
-            dist/nido-darwin-amd64
-            dist/nido-darwin-arm64
-            dist/nido-windows-amd64.exe
+            dist/nido-linux-amd64.tar.gz
+            dist/nido-darwin-amd64.tar.gz
+            dist/nido-darwin-arm64.tar.gz
+            dist/nido-windows-amd64.zip
           draft: false
           prerelease: false
           generate_release_notes: true
