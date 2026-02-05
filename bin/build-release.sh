@@ -87,7 +87,9 @@ echo "  Created ${NAME}.zip"
 rm -rf "$PKG_DIR"
 
 # Cleanup raw binaries
-rm -f $OUTPUT_DIR/nido-* $OUTPUT_DIR/nido.exe
+rm -rf "$STAGING_DIR"
+rm -f $OUTPUT_DIR/nido-linux-amd64 $OUTPUT_DIR/nido-darwin-amd64 $OUTPUT_DIR/nido-darwin-arm64
+rm -f $OUTPUT_DIR/nido-validator-* $OUTPUT_DIR/nido.exe $OUTPUT_DIR/nido-validator.exe
 
 echo ""
 echo "✅ Build & Package complete! Archives in $OUTPUT_DIR/"
