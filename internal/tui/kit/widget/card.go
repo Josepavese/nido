@@ -32,7 +32,7 @@ func (c *Card) View(width int) string {
 	if width == 0 {
 		width = c.width
 	}
-	style := theme.Current().Styles.Border.Copy().
+	style := theme.Current().Styles.Border.
 		Width(width - 2)
 		// Inherit(c.Style) // This line is commented out as Card struct does not have a Style field.
 

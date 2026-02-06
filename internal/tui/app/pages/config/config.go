@@ -168,7 +168,7 @@ func (c *Config) RefreshItems() {
 			Normal:   t.Styles.SidebarItem,
 			Selected: t.Styles.SidebarItemSelected,
 			Dim:      lipgloss.NewStyle().Foreground(t.Palette.TextDim),
-			Action:   t.Styles.SidebarItemSelected.Copy(),
+			Action:   t.Styles.SidebarItemSelected,
 		}
 		c.Sidebar = widget.NewSidebarList(sidebarItems, theme.Width.Sidebar, styles, "SETTINGS")
 		c.Pages.SwitchTo("SETTINGS")
@@ -343,28 +343,8 @@ func (c *Config) View() string {
 					// Wait, Config.View logic is: "If modal active, return modal view INSTEAD of page view".
 					// The Page.View() ALREADY returns the modal if active (lines 721-734 in config_pages.go).
 					// BUT Config.View (lines 305-337) overrides this!
-					// It says: if c.IsModalActive(), find the modal, render IT.
-					// If it fails to find the modal (which it did for ThemeModal), does it return base?
-					// No, IsModalActive() checks MasterDetail.IsModalActive().
-					// MasterDetail checks ActivePage.IsModalActive().
-					// Appearance.IsModalActive() returns true.
-					// So Config.View enters the if block (309).
-					// Then it tries to find `modal`.
-					// If it finds NIL (current state for ThemeModal), it falls through and returns `base`?
-					// No, existing code falls through to `return base` if `modal == nil`.
-					// So it renders the MasterDetail view (sidebar + page).
-					// BUT ConfigPageAppearance.View returns ONLY the modal when active.
-					// So it should work?
-					// Unless MasterDetail rendering messes it up.
-					// Wait, if Config.View() returns `base`, it returns MasterDetail.View().
-					// MasterDetail.View() calls ActivePage.View().
-					// Appearance.View() returns `lipgloss.Place(...)`.
-					// So "Black Screen" means `lipgloss.Place` is empty or messed up.
-					// OR, the `modal` variable extraction in `Config.View` is flawed but harmless if it returns nil.
-					//
-					// Let's force `Config.View` to return the `ThemeModal` view directly if detected, using `lipgloss.Place`.
 
-					return lipgloss.Place(c.Width(), c.Height(), lipgloss.Center, lipgloss.Center, pa.ThemeModal.View())
+					return pa.ThemeModal.View(c.Width(), c.Height())
 				}
 			}
 		}

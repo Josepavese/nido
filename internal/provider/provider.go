@@ -21,6 +21,7 @@ type VMStatus struct {
 	SSHPort    int
 	VNCPort    int
 	SSHUser    string
+	Cmdline    string
 	Forwarding []PortForward
 }
 
@@ -52,6 +53,11 @@ type VMOptions struct {
 	// Forwarding requested by the user during spawn/start
 	Forwarding []PortForward
 	Cmdline    string
+	// RawQemuArgs allows passing arbitrary arguments to the QEMU process.
+	// This is an advanced feature for hardware passthrough and tuning.
+	RawQemuArgs []string
+	// Accelerators defines the PCI devices (e.g., "0000:01:00.0") to auto-bind and pass through.
+	Accelerators []string
 }
 
 // VMDetail contains comprehensive data about a VM.
@@ -70,6 +76,10 @@ type VMDetail struct {
 	Cmdline     string `json:"cmdline,omitempty"`
 	// Active port forwardings
 	Forwarding []PortForward
+	// Raw arguments active
+	RawQemuArgs []string `json:"raw_qemu_args,omitempty"`
+	// Accelerators active
+	Accelerators []string `json:"accelerators,omitempty"`
 	// DiskPath is the absolute path to the VM disk image.
 	DiskPath string
 	// DiskMissing indicates the disk file is missing on disk.
@@ -138,6 +148,9 @@ type VMProvider interface {
 	// ListImages returns names/tags of all available cloud images in cache.
 	ListImages() ([]string, error)
 
+	// ListAccelerators scans the host PCI bus for potential accelerators.
+	ListAccelerators() ([]Accelerator, error)
+
 	// GetUsedBackingFiles identifies all backing files currently in use by VMs.
 	GetUsedBackingFiles() ([]string, error)
 
@@ -198,15 +211,17 @@ type VMProvider interface {
 // VMConfigUpdates holds pointer fields for partial updates to VM configuration.
 // A nil pointer means "do not update".
 type VMConfigUpdates struct {
-	MemoryMB    *int
-	VCPUs       *int
-	Gui         *bool
-	Cmdline     *string
-	SSHPort     *int
-	VNCPort     *int
-	SSHUser     *string
-	SSHPassword *string
-	Forwarding  *[]PortForward
+	MemoryMB     *int
+	VCPUs        *int
+	Gui          *bool
+	Cmdline      *string
+	SSHPort      *int
+	VNCPort      *int
+	SSHUser      *string
+	SSHPassword  *string
+	Forwarding   *[]PortForward
+	RawQemuArgs  *[]string
+	Accelerators *[]string
 }
 
 // ParsePortForward parses strings like "web:80:32080/tcp" or "80".

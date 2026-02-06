@@ -45,7 +45,7 @@ func registerStep(ctx *Context) report.StepResult {
 	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
 	if payload, err := parseJSON(res.Stdout); err == nil {
 		addAssertion(&res, "json_parse", true, "")
-		status, _ := payload["status"]
+		status := payload["status"]
 		addAssertion(&res, "status_ok", status == "ok", "")
 	} else {
 		addAssertion(&res, "json_parse", false, err.Error())

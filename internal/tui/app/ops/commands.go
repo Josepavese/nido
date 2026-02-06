@@ -131,7 +131,7 @@ func FetchVMInfo(prov provider.VMProvider, name string) tea.Cmd {
 }
 
 // SpawnVM creates a new VM options. It automatically pulls the image if missing.
-func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool, memoryMB, vcpus int, ports []provider.PortForward) tea.Cmd {
+func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool, memoryMB, vcpus int, ports []provider.PortForward, rawArgs []string, accelerators []string) tea.Cmd {
 	opName := "spawn"
 
 	return func() tea.Msg {
@@ -147,6 +147,8 @@ func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool, 
 				Gui:          gui,
 				MemoryMB:     memoryMB,
 				VCPUs:        vcpus,
+				RawQemuArgs:  rawArgs,
+				Accelerators: accelerators,
 			}
 			err := prov.Spawn(name, opts)
 			return OpResultMsg{Op: opName, Err: err}
@@ -172,6 +174,8 @@ func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool, 
 				MemoryMB:     memoryMB,
 				VCPUs:        vcpus,
 				Forwarding:   ports,
+				RawQemuArgs:  rawArgs,
+				Accelerators: accelerators,
 			}
 			err := prov.Spawn(name, opts)
 			return OpResultMsg{Op: opName, Err: err}
@@ -215,6 +219,8 @@ func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool, 
 					UserDataPath: userData,
 					Gui:          gui,
 					Forwarding:   ports,
+					RawQemuArgs:  rawArgs,
+					Accelerators: accelerators,
 				}
 				err := prov.Spawn(name, opts)
 				ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: err}}
@@ -333,6 +339,8 @@ func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool, 
 				MemoryMB:     memoryMB,
 				VCPUs:        vcpus,
 				Forwarding:   ports,
+				RawQemuArgs:  rawArgs,
+				Accelerators: accelerators,
 			}
 			err = prov.Spawn(name, opts)
 			ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: err}}
@@ -434,6 +442,14 @@ func FetchTemplatesList(prov provider.VMProvider) tea.Cmd {
 		}
 		sort.Strings(templates)
 		return TemplateListMsg{Templates: templates}
+	}
+}
+
+// UpdateVMConfig updates a VM's configuration.
+func UpdateVMConfig(prov provider.VMProvider, name string, updates provider.VMConfigUpdates) tea.Cmd {
+	return func() tea.Msg {
+		err := prov.UpdateConfig(name, updates)
+		return OpResultMsg{Op: "update-config", Err: err, Path: name}
 	}
 }
 

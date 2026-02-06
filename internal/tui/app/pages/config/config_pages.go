@@ -863,7 +863,7 @@ func (p *ConfigPageAppearance) View() string {
 		// If we return the modal string, it replaces the content.
 		// To do proper overlay (transparent background), we need complex composites.
 		// For now, replacing the view is acceptable for this TUI style (modal focus).
-		return lipgloss.Place(w, p.Height(), lipgloss.Center, lipgloss.Center, p.ThemeModal.View())
+		return p.ThemeModal.View(w, p.Height())
 	}
 
 	if p.Modal.IsActive() {

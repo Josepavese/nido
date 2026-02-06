@@ -144,26 +144,6 @@ func printStepLine(ctx *Context, scenarioName string, res report.StepResult) {
 	fmt.Printf("│%s│\n", styled)
 }
 
-func fitToWidth(s string, width int) string {
-	if width <= 0 {
-		return ""
-	}
-	if lipgloss.Width(s) <= width {
-		return s
-	}
-	if width <= 3 {
-		return s
-	}
-	var out strings.Builder
-	for _, r := range []rune(s) {
-		if lipgloss.Width(out.String()+string(r)) >= width-3 {
-			break
-		}
-		out.WriteRune(r)
-	}
-	return out.String() + "..."
-}
-
 func detectWidth() int {
 	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w >= 60 && w <= 200 {
 		return w

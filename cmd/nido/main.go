@@ -68,6 +68,9 @@ func main() {
 	case "mcp-help":
 		// List MCP tools and their schemas
 		cmdMcpHelp()
+	case "accel":
+		jsonOut, args := consumeJSONFlag(args)
+		cmdAccel(prov, args, jsonOut)
 	case "ls", "list":
 		// Scan the nest and report all detected life forms
 		jsonOut, _ := consumeJSONFlag(args)
@@ -161,18 +164,20 @@ func main() {
 		if jsonOut {
 			resp := clijson.NewResponseOK("info", map[string]interface{}{
 				"vm": map[string]interface{}{
-					"name":         info.Name,
-					"state":        info.State,
-					"ip":           info.IP,
-					"ssh_user":     info.SSHUser,
-					"ssh_password": info.SSHPassword,
-					"ssh_port":     info.SSHPort,
-					"vnc_port":     info.VNCPort,
-					"memory_mb":    info.MemoryMB,
-					"vcpus":        info.VCPUs,
-					"gui":          info.Gui,
-					"cmdline":      info.Cmdline,
-					"forwarding":   info.Forwarding,
+					"name":          info.Name,
+					"state":         info.State,
+					"ip":            info.IP,
+					"ssh_user":      info.SSHUser,
+					"ssh_password":  info.SSHPassword,
+					"ssh_port":      info.SSHPort,
+					"vnc_port":      info.VNCPort,
+					"memory_mb":     info.MemoryMB,
+					"vcpus":         info.VCPUs,
+					"gui":           info.Gui,
+					"cmdline":       info.Cmdline,
+					"forwarding":    info.Forwarding,
+					"raw_qemu_args": info.RawQemuArgs,
+					"accelerators":  info.Accelerators,
 				},
 			})
 			_ = clijson.PrintJSON(resp)
@@ -193,6 +198,12 @@ func main() {
 		ui.FancyLabel("GUI Enabled", fmt.Sprintf("%v", info.Gui))
 		if info.Cmdline != "" {
 			ui.FancyLabel("Cmdline", info.Cmdline)
+		}
+		if len(info.RawQemuArgs) > 0 {
+			ui.FancyLabel("Raw QEMU Args", fmt.Sprintf("%v", info.RawQemuArgs))
+		}
+		if len(info.Accelerators) > 0 {
+			ui.FancyLabel("Accelerators", fmt.Sprintf("%v", info.Accelerators))
 		}
 
 		// Forwarded Ports Table
@@ -218,7 +229,7 @@ func main() {
 		jsonOut, rest := consumeJSONFlag(args)
 		if len(rest) < 1 {
 			if jsonOut {
-				resp := clijson.NewResponseError("spawn", "ERR_INVALID_ARGS", "Missing VM name", "No VM name provided.", "Usage: nido spawn <name> [--image <name:tag> | <template>] [--user-data <file>] [--gui] [--json]", nil)
+				resp := clijson.NewResponseError("spawn", "ERR_INVALID_ARGS", "Missing VM name", "No VM name provided.", "Usage: nido spawn <name> [--image <name:tag> | <template>] [--user-data <file>] [--gui] [--qemu-arg <arg>] [--json]", nil)
 				_ = clijson.PrintJSON(resp)
 				os.Exit(1)
 			}
@@ -257,6 +268,8 @@ func main() {
 		var ver *image.Version
 		spawnMem := 0
 		spawnCPUs := 0
+		var rawArgs []string
+		var accelerators []string
 
 		for i := 1; i < len(rest); i++ {
 			arg := rest[i]
@@ -289,6 +302,16 @@ func main() {
 				i++
 			} else if (arg == "--cpus") && i+1 < len(rest) {
 				spawnCPUs, _ = provider.ParseInt(rest[i+1])
+				i++
+			} else if (arg == "--qemu-arg") && i+1 < len(rest) {
+				// Append to raw args list. Can represent multiple args.
+				// e.g. --qemu-arg "-device" --qemu-arg "vfio-pci,..."
+				rawArgs = append(rawArgs, rest[i+1])
+				i++
+			} else if (arg == "--accel") && i+1 < len(rest) {
+				// Zero-Config Passthrough
+				// e.g. --accel 00:0d.0
+				accelerators = append(accelerators, rest[i+1])
 				i++
 			} else if tpl == "" && !strings.HasPrefix(arg, "-") {
 				tpl = arg
@@ -484,7 +507,7 @@ func main() {
 			ui.Ironic("Initiating hypervisor handshake...")
 		}
 		// Dispatch the hatching command to the provider
-		if err := prov.Spawn(name, provider.VMOptions{
+		spawnOpts := provider.VMOptions{
 			DiskPath:     tpl,
 			UserDataPath: userDataPath,
 			Gui:          gui,
@@ -494,7 +517,11 @@ func main() {
 			Cmdline:      cmdline,
 			MemoryMB:     spawnMem,
 			VCPUs:        spawnCPUs,
-		}); err != nil {
+			RawQemuArgs:  rawArgs,
+			Accelerators: accelerators,
+		}
+
+		if err := prov.Spawn(name, spawnOpts); err != nil {
 			if jsonOut {
 				code := "ERR_INTERNAL"
 				if isAlreadyExistsErr(err) {
@@ -1018,9 +1045,9 @@ func getBashCompletion() string {
     opts="ls spawn start ssh info stop images build cache template config register version delete doctor prune completion update uninstall help"
 
     case "${prev}" in
-        spawn)
+         spawn)
             # but we suggest flags if they start typing one.
-            COMPREPLY=( $(compgen -W "--image --user-data --port --web --ftp --gui --cmdline --memory --cpus --json" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "--image --user-data --port --web --ftp --gui --cmdline --memory --cpus --qemu-arg --accel --json" -- ${cur}) )
             return 0
             ;;
         ssh|info|stop|delete|start)
@@ -1032,7 +1059,7 @@ func getBashCompletion() string {
             return 0
             ;;
         config)
-            COMPREPLY=( $(compgen -W "set $(nido completion list-vms) --memory --cpus --ssh-port --vnc-port --gui --ssh-user --ssh-pass --cmdline --port --json" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "set $(nido completion list-vms) --memory --cpus --ssh-port --vnc-port --gui --ssh-user --ssh-pass --cmdline --port --qemu-arg --accel --json" -- ${cur}) )
             return 0
             ;;
         set)
@@ -1099,7 +1126,7 @@ func getBashCompletion() string {
                     COMPREPLY=( $(compgen -W "set $(nido completion list-vms)" -- ${cur}) )
                     return 0
                 else
-                    COMPREPLY=( $(compgen -W "--memory --cpus --ssh-port --vnc-port --gui --ssh-user --ssh-pass --cmdline --port --json" -- ${cur}) )
+                    COMPREPLY=( $(compgen -W "--memory --cpus --ssh-port --vnc-port --gui --ssh-user --ssh-pass --cmdline --port --qemu-arg --accel --json" -- ${cur}) )
                     return 0
                 fi
             fi
@@ -1108,11 +1135,11 @@ func getBashCompletion() string {
             if [[ ${COMP_WORDS[1]} == "spawn" ]]; then
                 if [[ ${COMP_CWORD} -eq 2 ]]; then
                     # Position 1: VM Name (suggest flags if starting with -)
-                    COMPREPLY=( $(compgen -W "--image --user-data --port --web --ftp --gui --cmdline --memory --cpus --json" -- ${cur}) )
+                    COMPREPLY=( $(compgen -W "--image --user-data --port --web --ftp --gui --cmdline --memory --cpus --qemu-arg --accel --json" -- ${cur}) )
                     return 0
                 elif [[ ${COMP_CWORD} -eq 3 ]] && [[ ! ${prev} == -* ]]; then
                     # Position 2: Template (if previous wasn't a flag needing a value)
-                    COMPREPLY=( $(compgen -W "$(nido completion list-templates) --image --user-data --port --web --ftp --gui --cmdline --memory --cpus --json" -- ${cur}) )
+                    COMPREPLY=( $(compgen -W "$(nido completion list-templates) --image --user-data --port --web --ftp --gui --cmdline --memory --cpus --qemu-arg --accel --json" -- ${cur}) )
                     return 0
                 fi
             fi
@@ -1189,6 +1216,9 @@ func getZshCompletion() string {
             '--cmdline[Custom kernel command line parameters]:cmdline' \
             '--memory[Requested RAM (MB)]:memory' \
             '--cpus[Requested vCPUs]:cpus' \
+            '--cpus[Requested vCPUs]:cpus' \
+            '--qemu-arg[Raw QEMU argument]:arg' \
+            '--accel[Zero-Config Passthrough (PCI ID)]:id' \
             '--json[Structured JSON output]'
           ;;
         start)
@@ -1231,6 +1261,8 @@ func getZshCompletion() string {
                    '--ssh-user[Set SSH User]:user' \
                    '--ssh-pass[Set SSH Password]:password' \
                    '--cmdline[Set Kernel Args]:cmdline' \
+                   '--qemu-arg[Set Raw QEMU Args]:arg' \
+                   '--accel[Zero-Config Passthrough (PCI ID)]:id' \
                    '--json[Structured JSON output]'
              fi
           fi
@@ -1256,6 +1288,11 @@ func getZshCompletion() string {
         cache)
           if (( CURRENT == 2 )); then
             _values 'actions' 'ls' 'list' 'info' 'rm' 'remove' 'prune' '--json'
+          fi
+          ;;
+        accel)
+          if (( CURRENT == 2 )); then
+            _values 'actions' 'list' 'ls' '--json'
           fi
           ;;
       esac
@@ -1338,6 +1375,70 @@ func cmdDoctor(prov provider.VMProvider, jsonOut bool) {
 	ui.Success("Audit complete. The nest is structurally sound.")
 }
 
+func cmdAccel(prov *provider.QemuProvider, args []string, jsonOut bool) {
+	if len(args) < 1 {
+		fmt.Println("Usage: nido accel <command>")
+		fmt.Println("Commands:")
+		fmt.Println("  list   Scan and list available PCI accelerators")
+		os.Exit(1)
+	}
+
+	switch args[0] {
+	case "list", "ls":
+		devs, err := prov.ListAccelerators()
+		if err != nil {
+			if jsonOut {
+				_ = clijson.PrintJSON(clijson.NewResponseError("accel", "ERR_SCAN", "Failed to scan PCI bus", err.Error(), "", nil))
+			} else {
+				fmt.Printf("Error scanning PCI bus: %v\n", err)
+			}
+			os.Exit(1)
+		}
+
+		if jsonOut {
+			_ = clijson.PrintJSON(clijson.NewResponseOK("accel", map[string]interface{}{"devices": devs}))
+			return
+		}
+
+		fmt.Println("\n🚀 HARDWARE ACCELERATORS (Discovery Mode)")
+		fmt.Println("--------------------------------------------------------------------------------")
+		fmt.Printf("%-15s %-12s %-30s %-10s %s\n", "PCI-ID", "IOMMU", "DEVICE", "ISOLATED", "STATUS")
+		fmt.Println("--------------------------------------------------------------------------------")
+		for _, d := range devs {
+			status := ui.Green + "Safe" + ui.Reset
+			isolated := ui.Green + "Yes" + ui.Reset
+			if !d.IsIsolated {
+				isolated = ui.Red + "No" + ui.Reset
+			}
+			if !d.IsSafe {
+				status = ui.Yellow + "Warning" + ui.Reset
+				if d.Warning != "" {
+					status = ui.Red + "UNSAFE" + ui.Reset // + " (" + d.Warning + ")"
+				}
+			}
+
+			// Truncate class/name if too long
+			name := d.Class
+			if d.Vendor != "" {
+				name = fmt.Sprintf("[%s:%s] %s", d.Vendor, d.Device, d.Class)
+			}
+			if len(name) > 30 {
+				name = name[:27] + "..."
+			}
+
+			fmt.Printf("%-15s %-12s %-30s %-10s %s\n", d.ID, "Grp "+d.IOMMUGroup, name, isolated, status)
+			if d.Warning != "" {
+				fmt.Printf("  ↳ %s%s%s\n", ui.Dim, d.Warning, ui.Reset)
+			}
+		}
+		fmt.Println("--------------------------------------------------------------------------------")
+		fmt.Println("Use: nido spawn ... --accel <PCI-ID>")
+	default:
+		fmt.Printf("Unknown accel command: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
 func printUsage() {
 	ui.Header("Nido: The Universal Nest")
 	fmt.Printf("Usage: %snido %s<command>%s [args...]\n\n", ui.Bold, ui.Cyan, ui.Reset)
@@ -1345,7 +1446,7 @@ func printUsage() {
 
 	fmt.Printf("%sVM MANAGEMENT%s\n", ui.Bold, ui.Reset)
 	fmt.Printf("  %-10s %sCreate and hatch a new VM (Defaults: min(2048MB, 50%% Host RAM), 1 vCPU)%s\n", "spawn", ui.Dim, ui.Reset)
-	fmt.Printf("    %sFlags: --image <tag>, --user-data <file>, --port <mapping>, --web, --ftp, --gui, --cmdline, --memory <MB>, --cpus <N>, --json%s\n", ui.Dim, ui.Reset)
+	fmt.Printf("    %sFlags: --image <tag>, --user-data <file>, --port <mapping>, --web, --ftp, --gui, --cmdline, --memory <MB>, --cpus <N>, --qemu-arg <arg>, --accel <id|auto>, --json%s\n", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sRevive a VM from deep sleep%s\n", "start", ui.Dim, ui.Reset)
 	fmt.Printf("    %sFlags: --gui, --cmdline, --json%s\n", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sConnect to a VM via SSH bridge%s\n", "ssh", ui.Dim, ui.Reset)
@@ -1364,8 +1465,9 @@ func printUsage() {
 	fmt.Printf("\n%sSYSTEM OPS%s\n", ui.Bold, ui.Reset)
 	fmt.Printf("  %-10s %sRun a system health check%s\n", "doctor", ui.Dim, ui.Reset)
 
-	fmt.Printf("  %-10s %sModify a VM's resources (--memory, --cpu, --gui, --port, --cmdline)%s\n", "config", ui.Dim, ui.Reset)
-	fmt.Printf("             %sOR View/Edit global Nido settings (config set <key> <val>)%s\n", ui.Dim, ui.Reset)
+	fmt.Printf("  %-10s %sModify a VM's resources (--memory, --cpu, --gui, --port, --cmdline, --qemu-arg, --accel)%s\n", "config", ui.Dim, ui.Reset)
+	fmt.Println("             OR View/Edit global Nido settings (config set <key> <val>)")
+	fmt.Printf("  %-10s %sManage hardware accelerators (list)%s\n", "accel", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sPrepare the MCP handshake for AI agents%s\n", "register", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sCheck the evolutionary state of Nido%s\n", "version", ui.Dim, ui.Reset)
 	fmt.Printf("  %-10s %sGenerate shell completion scripts%s\n", "completion", ui.Dim, ui.Reset)
@@ -1469,15 +1571,6 @@ func cmdRegister(jsonOut bool) {
   }
 }`, ui.Reset)
 	fmt.Println("")
-}
-
-func cmdMcpJsonList(prov provider.VMProvider) {
-	vms, _ := prov.List()
-	if vms == nil {
-		vms = []provider.VMStatus{}
-	}
-	data, _ := json.Marshal(vms)
-	fmt.Println(string(data))
 }
 
 func cmdVersion(jsonOut bool) {
@@ -1625,6 +1718,22 @@ func cmdVMConfig(p provider.VMProvider, jsonOut bool, args []string) {
 			}
 			newSlice = append(newSlice, pf)
 			updates.Forwarding = &newSlice
+			hasUpdates = true
+			i++
+		} else if key == "--qemu-arg" && i+1 < len(args) {
+			if updates.RawQemuArgs == nil {
+				s := []string{}
+				updates.RawQemuArgs = &s
+			}
+			*updates.RawQemuArgs = append(*updates.RawQemuArgs, args[i+1])
+			hasUpdates = true
+			i++
+		} else if key == "--accel" && i+1 < len(args) {
+			if updates.Accelerators == nil {
+				s := []string{}
+				updates.Accelerators = &s
+			}
+			*updates.Accelerators = append(*updates.Accelerators, args[i+1])
 			hasUpdates = true
 			i++
 		}

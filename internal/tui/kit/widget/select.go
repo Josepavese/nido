@@ -70,7 +70,7 @@ func (s *Select) HandleMouse(x int, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
 	// For now, assume if the mouse click reached this element (via Form delegation),
 	// it is within bounds.
 	// We check for Left Click.
-	if msg.Type == tea.MouseLeft {
+	if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
 		s.focused = true
 		if s.OnActivate != nil {
 			return s.OnActivate(), true

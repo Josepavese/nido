@@ -92,7 +92,7 @@ func NewRegistry(prov provider.VMProvider) *Registry {
 		Normal:   t.Styles.SidebarItem,
 		Selected: t.Styles.SidebarItemSelected,
 		Dim:      lipgloss.NewStyle().Foreground(t.Palette.TextDim),
-		Action:   t.Styles.SidebarItemSelected.Copy().Foreground(t.Palette.Accent).Bold(true),
+		Action:   t.Styles.SidebarItemSelected.Foreground(t.Palette.Accent).Bold(true),
 	}
 	r.Sidebar = widget.NewSidebarList([]widget.SidebarItem{
 		SectionHeader{TitleStr: "Loading..."},
