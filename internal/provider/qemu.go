@@ -51,6 +51,15 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 		}
 	}
 
+	// 0.5 Auto-Discovery for Accelerators (Feature Propagation: Engine Level)
+	// 0.5 Auto-Discovery for Accelerators (Feature Propagation: Engine Level)
+	resolvedAccels, err := p.resolveAutoAccelerators(opts.Accelerators)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Auto-discovery warning: %v\n", err)
+	} else {
+		opts.Accelerators = resolvedAccels
+	}
+
 	// 1. Template/Image Resolution
 	// 1. Template/Image Resolution
 	tpl := opts.DiskPath
@@ -64,8 +73,15 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 		} else {
 			// Try resolving as Image Tag (e.g., "ubuntu:24.04") or Flavour
 			imgDir := p.Config.ImageDir
+			// SSOT Fix: Trust LoadConfig to set defaults, or fallback relative to Home if absolutely needed,
+			// but never hardcode "images" if Config has it.
 			if imgDir == "" {
-				imgDir = filepath.Join(p.RootDir, "images")
+				// Fallback to sysutil default or similar.
+				// Based on config.go, ImageDir IS defaulted. So we should just trust it.
+				// If strictly empty, we might error or fallback.
+				// Let's assume LoadConfig did its job, but strictly maintain the fallback logic as "default value" logic if missing.
+				home, _ := sysutil.UserHome()
+				imgDir = filepath.Join(home, ".nido", "images")
 			}
 
 			// Load catalog to find the image
@@ -97,8 +113,8 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	}
 
 	// 2. Create Disk
-	// Default to 20G, but expand if template is larger
-	diskSize := "20G"
+	// Default to sysutil default (20G), but expand if template is larger
+	diskSize := sysutil.DefaultDiskSize
 	if tpl != "" {
 		out, err := exec.Command("qemu-img", "info", "--output=json", tpl).Output()
 		if err == nil {
@@ -110,9 +126,9 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 				// qemu-img create handles bytes if we provide a number without suffix
 				diskSize = fmt.Sprintf("%d", info.VirtualSize)
 
-				// Ensure at least 20G
-				if info.VirtualSize < 20*1024*1024*1024 {
-					diskSize = "20G"
+				// Ensure at least sysutil default
+				if info.VirtualSize < sysutil.DefaultDiskBytes {
+					diskSize = sysutil.DefaultDiskSize
 				}
 			}
 		}
@@ -125,8 +141,12 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	// 3. Prepare Paths
 	runDir := filepath.Join(p.RootDir, "run")
 	vmsDir := filepath.Join(p.RootDir, "vms")
-	os.MkdirAll(runDir, 0755)
-	os.MkdirAll(vmsDir, 0755)
+	if _, err := sysutil.EnsureDir(runDir); err != nil {
+		return err
+	}
+	if _, err := sysutil.EnsureDir(vmsDir); err != nil {
+		return err
+	}
 
 	// 4. Generate Cloud-Init Seed ISO
 	seedPath := filepath.Join(vmsDir, name+"-seed.iso")
@@ -157,7 +177,11 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	}
 
 	// Create seed ISO (warn on failure but don't block spawn)
-	if err := ci.GenerateISO(seedPath); err != nil {
+	// Create seed ISO (warn on failure but don't block spawn)
+	// Atomic Provisioning via sysutil
+	if err := sysutil.ProvisionFile(seedPath, func() error {
+		return ci.GenerateISO(seedPath)
+	}); err != nil {
 		fmt.Printf("⚠️  Warning: Failed to generate cloud-init seed: %v\n", err)
 	}
 
@@ -219,7 +243,7 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 		cpu = sysutil.DefaultVCPUs()
 	}
 
-	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser, opts.SSHPassword, opts.Forwarding, opts.Cmdline, mem, cpu); err != nil {
+	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser, opts.SSHPassword, opts.Forwarding, opts.Cmdline, mem, cpu, opts.RawQemuArgs, opts.Accelerators); err != nil {
 		return fmt.Errorf("failed to save initial state: %w", err)
 	}
 
@@ -232,10 +256,12 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 			initrdSrc := base + ".initrd"
 
 			if _, err := os.Stat(kernelSrc); err == nil {
-				sysutil.CopyFile(kernelSrc, filepath.Join(vmsDir, name+".kernel"))
+				dst := filepath.Join(vmsDir, name+".kernel")
+				sysutil.CopyFile(kernelSrc, dst)
 			}
 			if _, err := os.Stat(initrdSrc); err == nil {
-				sysutil.CopyFile(initrdSrc, filepath.Join(vmsDir, name+".initrd"))
+				dst := filepath.Join(vmsDir, name+".initrd")
+				sysutil.CopyFile(initrdSrc, dst)
 			}
 		}
 	}
@@ -307,6 +333,16 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 		updated = true
 	}
 
+	if len(opts.RawQemuArgs) > 0 {
+		state.RawQemuArgs = opts.RawQemuArgs
+		updated = true
+	}
+
+	if len(opts.Accelerators) > 0 {
+		state.Accelerators = opts.Accelerators
+		updated = true
+	}
+
 	// Ensure defaults for legacy states (Dynamic resolution for retro-compatibility via sysutil SSOT)
 	if state.MemoryMB == 0 {
 		state.MemoryMB = sysutil.DefaultMemory()
@@ -316,11 +352,20 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	}
 
 	if updated {
-		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs)
+		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+	}
+
+	// 2.5 Prepare Accelerators (Zero-Config)
+	// This requires root privileges. If not root, we might fail or prompt.
+	// We do this BEFORE building args.
+	for _, pciID := range state.Accelerators {
+		if err := p.preparePassthrough(pciID); err != nil {
+			return fmt.Errorf("failed to prepare accelerator %s: %w", pciID, err)
+		}
 	}
 
 	// 3. Build Arguments (cross-platform)
-	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, state.Forwarding, runDir, state.Cmdline, state.MemoryMB, state.VCPUs)
+	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, state.Forwarding, runDir, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 
 	cmd := exec.Command("qemu-system-x86_64", args...)
 
@@ -348,13 +393,13 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	}
 
 	// 6. Update State with PID (0 if unknown)
-	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs)
+	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 
 	return nil
 }
 
 // buildQemuArgs constructs the heavy-duty command line arguments for QEMU.
-func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort int, fw []PortForward, runDir string, cmdline string, memoryMB, vcpus int) []string {
+func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort int, fw []PortForward, runDir string, cmdline string, memoryMB, vcpus int, rawArgs []string, accelerators []string) []string {
 	vmsDir := filepath.Join(p.RootDir, "vms")
 
 	// Safe minimums if 0 (for robustness, should be handled by Spawn)
@@ -372,6 +417,12 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 		"-m", fmt.Sprintf("%d", memoryMB),
 		"-machine", "pc",
 	}
+
+	// Inject Raw Args early (so they can override defaults if needed, though QEMU parsing order varies)
+	// We append them at the end usually, but let's put them before device definitions to be safe?
+	// Actually, usually users want to append devices. So let's append them at the very end.
+
+	// ... (rest of standard args)
 
 	// Platform-specific acceleration
 	cpuArg := "qemu64"
@@ -449,6 +500,38 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 		args = append(args, "-vnc", fmt.Sprintf("127.0.0.1:%d", display))
 	} else {
 		args = append(args, "-display", "none")
+	}
+
+	// Inject Accelerators (VFIO or Virtual)
+	// Linux Only for VFIO, Cross-Platform for Virtual
+	for _, acc := range accelerators {
+		if acc == "virtual:gpu" {
+			// Best virtual GPU for the platform
+			switch runtime.GOOS {
+			case "darwin":
+				// macOS often benefits from virtio-gpu-pci
+				args = append(args, "-device", "virtio-gpu-pci")
+			case "windows":
+				// Windows QEMU (WHPX) works well with virtio-vga or virtio-gpu
+				args = append(args, "-device", "virtio-vga")
+			default: // Linux
+				args = append(args, "-device", "virtio-gpu-pci")
+			}
+			continue
+		}
+
+		if runtime.GOOS == "linux" {
+			// Physical Passthrough (VFIO)
+			// Expected format: 0000:00:00.0
+			args = append(args, "-device", fmt.Sprintf("vfio-pci,host=%s", acc))
+		} else {
+			fmt.Printf("⚠️  Warning: Hardware passthrough (%s) is ignored on %s (Linux only)\n", acc, runtime.GOOS)
+		}
+	}
+
+	// Inject Raw Arguments at the very end to allow overriding or adding devices
+	if len(rawArgs) > 0 {
+		args = append(args, rawArgs...)
 	}
 
 	return args
@@ -551,6 +634,8 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 		Gui:            state.Gui,
 		Cmdline:        state.Cmdline,
 		Forwarding:     state.Forwarding,
+		RawQemuArgs:    state.RawQemuArgs,
+		Accelerators:   state.Accelerators,
 		DiskPath:       diskPath,
 		DiskMissing:    statErr != nil,
 		BackingPath:    backingPath,
@@ -610,8 +695,23 @@ func (p *QemuProvider) Stop(name string, graceful bool) error {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
+
 	os.Remove(pidFile)
 	os.Remove(filepath.Join(runDir, name+".qmp"))
+
+	// RESTORE ACCELERATORS (Start of Double Fix)
+	// We must release any VFIO devices back to the host
+	if state, err := p.loadState(name); err == nil {
+		for _, acc := range state.Accelerators {
+			if !strings.Contains(acc, ":") || strings.Contains(acc, "virtual") {
+				continue
+			}
+			// It's a PCI ID (e.g. 0000:01:00.0)
+			if err := p.restorePassthrough(acc); err != nil {
+				fmt.Printf("⚠️  Warning: Failed to restore accelerator %s: %v\n", acc, err)
+			}
+		}
+	}
 	return nil
 }
 
@@ -690,15 +790,17 @@ func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
 	// 1. Full Copy Mode (No Cache)
 	// If LinkedClones is disabled and we have a template, create a standalone copy.
 	if !p.Config.LinkedClones && tpl != "" {
-		// Convert (Full Copy)
-		if out, err := exec.Command("qemu-img", "convert", "-O", "qcow2", tpl, target).CombinedOutput(); err != nil {
-			return fmt.Errorf("create(convert) failed: %v (%s)", err, string(out))
-		}
-		// Resize to target size
-		if out, err := exec.Command("qemu-img", "resize", target, size).CombinedOutput(); err != nil {
-			return fmt.Errorf("create(resize) failed: %v (%s)", err, string(out))
-		}
-		return nil
+		return sysutil.ProvisionFile(target, func() error {
+			// Convert (Full Copy)
+			if out, err := exec.Command("qemu-img", "convert", "-O", "qcow2", tpl, target).CombinedOutput(); err != nil {
+				return fmt.Errorf("create(convert) failed: %v (%s)", err, string(out))
+			}
+			// Resize to target size
+			if out, err := exec.Command("qemu-img", "resize", target, size).CombinedOutput(); err != nil {
+				return fmt.Errorf("create(resize) failed: %v (%s)", err, string(out))
+			}
+			return nil
+		})
 	}
 
 	// 2. Linked Clone Mode (Default)
@@ -720,10 +822,12 @@ func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
 	args = append(args, target, size)
 
 	cmd := exec.Command("qemu-img", args...)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("qemu-img create failed: %v (%s)", err, string(out))
-	}
-	return nil
+	return sysutil.ProvisionFile(target, func() error {
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("qemu-img create failed: %v (%s)", err, string(out))
+		}
+		return nil
+	})
 }
 
 // Helpers
@@ -776,35 +880,40 @@ func (p *QemuProvider) findAvailablePort(start int, reserved map[int]bool) int {
 }
 
 type VMState struct {
-	Name        string        `json:"name"`
-	PID         int           `json:"pid"`
-	SSHPort     int           `json:"ssh_port"`
-	VNCPort     int           `json:"vnc_port,omitempty"`
-	Gui         bool          `json:"gui,omitempty"`
-	SSHUser     string        `json:"ssh_user,omitempty"`
-	SSHPassword string        `json:"ssh_password,omitempty"`
-	Forwarding  []PortForward `json:"forwarding,omitempty"`
-	Cmdline     string        `json:"cmdline,omitempty"`
-	MemoryMB    int           `json:"memory_mb,omitempty"`
-	VCPUs       int           `json:"vcpus,omitempty"`
+	Name         string        `json:"name"`
+	PID          int           `json:"pid"`
+	SSHPort      int           `json:"ssh_port"`
+	VNCPort      int           `json:"vnc_port,omitempty"`
+	Gui          bool          `json:"gui,omitempty"`
+	SSHUser      string        `json:"ssh_user,omitempty"`
+	SSHPassword  string        `json:"ssh_password,omitempty"`
+	Forwarding   []PortForward `json:"forwarding,omitempty"`
+	Cmdline      string        `json:"cmdline,omitempty"`
+	MemoryMB     int           `json:"memory_mb,omitempty"`
+	VCPUs        int           `json:"vcpus,omitempty"`
+	RawQemuArgs  []string      `json:"raw_qemu_args,omitempty"`
+	Accelerators []string      `json:"accelerators,omitempty"`
 }
 
-func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser, sshPassword string, fw []PortForward, cmdline string, memoryMB, vcpus int) error {
+func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser, sshPassword string, fw []PortForward, cmdline string, memoryMB, vcpus int, rawArgs []string, accelerators []string) error {
 	state := VMState{
-		Name:        name,
-		PID:         pid,
-		SSHPort:     sshPort,
-		VNCPort:     vncPort,
-		Gui:         gui,
-		SSHUser:     sshUser,
-		SSHPassword: sshPassword,
-		Forwarding:  fw,
-		Cmdline:     cmdline,
-		MemoryMB:    memoryMB,
-		VCPUs:       vcpus,
+		Name:         name,
+		PID:          pid,
+		SSHPort:      sshPort,
+		VNCPort:      vncPort,
+		Gui:          gui,
+		SSHUser:      sshUser,
+		SSHPassword:  sshPassword,
+		Forwarding:   fw,
+		Cmdline:      cmdline,
+		MemoryMB:     memoryMB,
+		VCPUs:        vcpus,
+		RawQemuArgs:  rawArgs,
+		Accelerators: accelerators,
 	}
 	data, _ := json.MarshalIndent(state, "", "  ")
-	return os.WriteFile(filepath.Join(p.RootDir, "run", name+".json"), data, 0644)
+	path := filepath.Join(p.RootDir, "run", name+".json")
+	return sysutil.WriteFile(path, data, 0644)
 }
 
 // UpdateConfig safely modifies the persistent VMState using a read-modify-write cycle.
@@ -849,9 +958,12 @@ func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) error 
 	if updates.Forwarding != nil {
 		state.Forwarding = *updates.Forwarding
 	}
+	if updates.Accelerators != nil {
+		state.Accelerators = *updates.Accelerators
+	}
 
 	// 3. Persist
-	return p.saveState(state.Name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs)
+	return p.saveState(state.Name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 }
 
 func (p *QemuProvider) loadState(name string) (VMState, error) {
@@ -1372,15 +1484,14 @@ func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, er
 		if f.GuestPort == pf.GuestPort && f.Protocol == pf.Protocol {
 			// Update existing rule
 			state.Forwarding[i] = pf
-			state.Forwarding[i] = pf
-			p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs)
+			p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 			return pf, nil
 		}
 	}
 
 	// Add new rule
 	state.Forwarding = append(state.Forwarding, pf)
-	err = p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs)
+	err = p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 	return pf, err
 }
 
@@ -1393,7 +1504,7 @@ func (p *QemuProvider) PortUnforward(name string, guestPort int, protocol string
 	for i, f := range state.Forwarding {
 		if f.GuestPort == guestPort && (f.Protocol == protocol || protocol == "") {
 			state.Forwarding = append(state.Forwarding[:i], state.Forwarding[i+1:]...)
-			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs)
+			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 		}
 	}
 
@@ -1419,4 +1530,100 @@ func formatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// preparePassthrough handles the "Zero-Config" magic.
+// It checks IOMMU, unbinds the device from host, and binds to vfio-pci.
+// Requires root privileges (uses sudo if needed).
+
+// preparePassthrough prepares a PCI device for VFIO passthrough.
+// It delegates to the platform-specific sysutil implementation.
+func (p *QemuProvider) preparePassthrough(id string) error {
+	// 0. Skip virtual accelerators
+	if strings.Contains(id, "virtual") {
+		return nil
+	}
+
+	// 1. Check IOMMU (Warn only)
+	if runtime.GOOS == "linux" {
+		if _, err := os.Stat("/sys/kernel/iommu_groups"); os.IsNotExist(err) {
+			fmt.Println("⚠️  Warning: IOMMU does not appear to be enabled (/sys/kernel/iommu_groups missing). Passthrough will likely fail.")
+		}
+	}
+
+	// 2. Delegate to sysutil
+	if err := sysutil.PreparePassthrough(id, filepath.Join(p.RootDir, "run")); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// restorePassthrough reverses the preparePassthrough operation.
+// It delegates to the platform-specific sysutil implementation.
+func (p *QemuProvider) restorePassthrough(pciID string) error {
+	if strings.Contains(pciID, "virtual") {
+		return nil
+	}
+	// Logic moved to sysutil (Platform Abstraction Layer)
+	return sysutil.RestorePassthrough(pciID, filepath.Join(p.RootDir, "run"))
+}
+
+// resolveAutoAccelerators handles the "auto" keyword in the accelerator list.
+// It performs hardware discovery to find the best candidate (Primary vs Safe).
+func (p *QemuProvider) resolveAutoAccelerators(input []string) ([]string, error) {
+	autoRequested := false
+	finalList := make([]string, 0, len(input))
+
+	for _, acc := range input {
+		if acc == "auto" {
+			autoRequested = true
+		} else {
+			finalList = append(finalList, acc)
+		}
+	}
+
+	if !autoRequested {
+		return input, nil
+	}
+
+	candidates, err := p.ListAccelerators()
+	if err != nil {
+		return finalList, err
+	}
+
+	var bestCandidate *Accelerator
+	// Strategy matches CLI logic:
+	// 1. Look for Display Controllers (03xx)
+	// 2. Pick the first one (usually 00:02.0 or 01:00.0)
+	// 3. Prefer SAFE if available, but take Unsafe/Primary if it's the only option.
+
+	for i := range candidates {
+		c := candidates[i]
+		if c.Class == DescDisplay {
+			// Found a GPU!
+			if c.IsSafe {
+				bestCandidate = &c
+				break // Found a safe GPU, winner!
+			}
+			// STRICT SAFETY: We DO NOT fallback to unsafe GPUs automatically anymore.
+			// Using the primary GPU crashes the session (Confirmed by test 2026-02-06).
+		}
+	}
+
+	if bestCandidate != nil {
+		// Log discovery to Stderr
+		status := "SAFE"
+		if !bestCandidate.IsSafe {
+			status = "UNSAFE (" + bestCandidate.Warning + ")"
+		}
+		fmt.Fprintf(os.Stderr, "🤖 Auto-detected GPU: [%s] %s (%s)\n", bestCandidate.ID, bestCandidate.Device, status)
+		finalList = append(finalList, bestCandidate.ID)
+	} else {
+		// FALLBACK: If no safe physical GPU found (or not Linux), use Virtual GPU
+		fmt.Fprintf(os.Stderr, "🤖 Auto-discovery: No safe physical GPU found. Enabling High-Performance Virtual GPU.\n")
+		finalList = append(finalList, "virtual:gpu")
+	}
+
+	return finalList, nil
 }
