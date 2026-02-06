@@ -140,7 +140,7 @@ func (i *Input) View(width int) string {
 
 	// Apply Theme Styles to internal model
 	i.InputModel.PlaceholderStyle = t.Styles.TextMuted
-	i.InputModel.TextStyle = t.Styles.Value.Copy() // Value defaults to TextDim, good
+	i.InputModel.TextStyle = t.Styles.Value // Value defaults to TextDim, good
 	i.InputModel.Cursor.Style = t.Styles.Accent
 	i.InputModel.Cursor.TextStyle = t.Styles.Accent // Character under block cursor
 
@@ -150,11 +150,11 @@ func (i *Input) View(width int) string {
 			labelWidth = 8
 		}
 
-		labelStyle := t.Styles.Label.Copy().
+		labelStyle := t.Styles.Label.
 			Width(labelWidth).
 			PaddingRight(1)
 
-		valueStyle := t.Styles.Value.Copy()
+		valueStyle := t.Styles.Value
 		if i.Error != "" {
 			valueStyle = valueStyle.Foreground(t.Palette.Error)
 		}
@@ -627,7 +627,7 @@ func RenderBoxedField(label, content, errorMsg string, focused bool, width int, 
 	}
 
 	// 2. Define Styles
-	labelStyle := t.Styles.Label.Copy().
+	labelStyle := t.Styles.Label.
 		Width(labelWidth).
 		MaxWidth(labelWidth).
 		Align(lipgloss.Left)
@@ -674,20 +674,17 @@ func RenderBoxedField(label, content, errorMsg string, focused bool, width int, 
 	}
 
 	// 4. Content Block (Strict single-line or multi-line)
-	contentStyle := t.Styles.Value.Copy()
+	contentStyle := t.Styles.Value
 	if focused {
 		contentStyle = contentStyle.Foreground(t.Palette.Accent).Bold(true)
 	}
 
-	displayContent := content
 	if !multiline {
 		// MATHEMATICAL FIX: Use MaxHeight(1) to strictly prevent overflow/wrapping
 		// and MaxWidth to ensure it fits in the available space.
-		displayContent = lipgloss.NewStyle().
-			MaxWidth(contentAvail).
-			MaxHeight(1).
-			Render(content)
+		contentStyle = contentStyle.MaxWidth(contentAvail).MaxHeight(1)
 	}
+	displayContent := contentStyle.Render(content)
 
 	middleBlock := lipgloss.PlaceHorizontal(contentAvail, align, displayContent)
 

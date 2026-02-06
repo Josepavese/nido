@@ -51,14 +51,14 @@ func configCLI(ctx *Context) report.StepResult {
 		return skipResult(ctx.Config.NidoBin, []string{"config"}, "vm_config not set")
 	}
 
-	// Change RAM to 1024, CPUs to 2, Valid Ports
-	args := []string{"config", vmName, "--memory", "1024", "--cpus", "2", "--ssh-port", "60022", "--port", "8080:80", "--json"}
+	// Change RAM to 1024, CPUs to 2, Valid Ports, and Accelerator
+	args := []string{"config", vmName, "--memory", "1024", "--cpus", "2", "--ssh-port", "60022", "--port", "80:8080", "--accel", "0000:00:00.0", "--json"}
 	res := runNido(ctx, "config", args, 10*time.Second)
 	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
 
 	// Verify Output
 	if payload, err := parseJSON(res.Stdout); err == nil {
-		status, _ := payload["status"]
+		status := payload["status"]
 		addAssertion(&res, "status_ok", status == "ok", "Response status not OK")
 		if data, ok := payload["data"].(map[string]interface{}); ok {
 			addAssertion(&res, "result_updated", data["result"] == "updated", fmt.Sprintf("Result: %v", data["result"]))
@@ -101,6 +101,19 @@ func configCLI(ctx *Context) report.StepResult {
 						}
 					}
 					addAssertion(&res, "port_forward_persisted", found, "Expected 8080->80 mapping")
+				}
+
+				// Check Accelerators
+				if acc, ok := vm["accelerators"].([]interface{}); ok {
+					found := false
+					for _, a := range acc {
+						if id, ok := a.(string); ok && id == "0000:00:00.0" {
+							found = true
+						}
+					}
+					addAssertion(&res, "accel_persisted", found, "Expected 0000:00:00.0 accelerator")
+				} else {
+					addAssertion(&res, "accel_field_present", false, "accelerators field missing or empty")
 				}
 			}
 		}
@@ -179,7 +192,7 @@ func configMCP(ctx *Context) report.StepResult {
 				addAssertion(&res, "mcp_mem_persisted", mem == 512, fmt.Sprintf("Expected 512, got %v", mem))
 				// Check gui (should be true)
 				gui, _ := vm["gui"].(bool)
-				addAssertion(&res, "mcp_gui_persisted", gui == true, fmt.Sprintf("Expected true, got %v", gui))
+				addAssertion(&res, "mcp_gui_persisted", gui, fmt.Sprintf("Expected true, got %v", gui))
 			}
 		}
 	}

@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Josepavese/nido/internal/validator/config"
@@ -41,6 +43,23 @@ func main() {
 		Start:    time.Now(),
 	}
 
+	// SIGNAL HANDLING /////////////////////////////////////////////////////////
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		fmt.Println()
+		fmt.Fprintf(os.Stderr, "%s\n", colorWarn(">> [INTERRUPT] Caught signal! Initiating emergency sweep..."))
+
+		// Run global sweep to cleanup any left-over VMs
+		scenario.Sweep(ctx)
+
+		fmt.Fprintf(os.Stderr, "%s\n", colorWarn(">> [INTERRUPT] Sweep complete. Exiting."))
+		time.Sleep(500 * time.Millisecond)
+		os.Exit(130) // Standard SIGINT exit code
+	}()
+	///////////////////////////////////////////////////////////////////////////
+
 	scenarios := []scenario.Scenario{
 		scenario.PreClean(),
 		scenario.PreFlight(),
@@ -61,7 +80,7 @@ func main() {
 				filtered = append(filtered, sc)
 			}
 		}
-		if len(filtered) > 1 { // Only cleanup plus one scenario
+		if len(filtered) > 0 { // Allow single scenario + cleanup
 			scenarios = filtered
 		} else {
 			fmt.Printf(">> [WARN] Scenario '%s' not found. Running all.\n", cfg.Scenario)

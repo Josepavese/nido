@@ -10,6 +10,7 @@ import (
 	"github.com/Josepavese/nido/internal/tui/kit/theme"
 	fv "github.com/Josepavese/nido/internal/tui/kit/view"
 	widget "github.com/Josepavese/nido/internal/tui/kit/widget"
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -33,6 +34,27 @@ func (i SourceItem) Icon() string {
 }
 func (i SourceItem) IsAction() bool { return false }
 
+// AccelItem adapts provider.Accelerator to the List interface.
+type AccelItem struct {
+	Acc provider.Accelerator
+}
+
+func (i AccelItem) Title() string {
+	// [ID] Class (Vendor:Device)
+	return fmt.Sprintf("[%s] %s", i.Acc.ID, i.Acc.Class)
+}
+func (i AccelItem) Description() string {
+	status := "Safe"
+	if !i.Acc.IsSafe {
+		status = "UNSAFE: " + i.Acc.Warning
+	}
+	return fmt.Sprintf("%s | Grp: %s", status, i.Acc.IOMMUGroup)
+}
+func (i AccelItem) FilterValue() string { return i.Acc.ID + " " + i.Acc.Class }
+func (i AccelItem) String() string      { return i.Title() }
+func (i AccelItem) Icon() string        { return theme.IconHatchery } // Generic chip icon?
+func (i AccelItem) IsAction() bool      { return false }
+
 // --- Viewlets ---
 
 // Incubator is the configuration form for the new VM.
@@ -44,15 +66,18 @@ type Incubator struct {
 	SelectedSource *SourceItem
 	Form           *widget.Form
 	PendingPorts   []provider.PortForward
+	PendingAccel   string // ID of selected accelerator
 
 	// Accessors for dynamic updates
-	header     *widget.Card
-	input      *widget.Input
-	memInput   *widget.Input
-	cpuInput   *widget.Input
-	addPortBtn *widget.Button
-	toggle     *widget.Toggle
-	spawnBtn   *widget.Button
+	header       *widget.Card
+	input        *widget.Input
+	memInput     *widget.Input
+	cpuInput     *widget.Input
+	rawArgsInput *widget.Input
+	accelSelect  *widget.Select // New widget
+	addPortBtn   *widget.Button
+	toggle       *widget.Toggle
+	spawnBtn     *widget.Button
 
 	// Styles
 	LabelStyle  lipgloss.Style
@@ -96,6 +121,15 @@ func NewIncubator(parent *Hatchery) *Incubator {
 	inc.cpuInput = widget.NewInput("vCPUs", "2", nil)
 	inc.cpuInput.Filter = widget.FilterNumber
 
+	// 3b. Raw QEMU Args (Advanced)
+	// 3b. Raw QEMU Args (Advanced)
+	inc.rawArgsInput = widget.NewInput("QEMU args", "-device usb-host,...", nil)
+
+	// 3c. Accelerator Select
+	inc.accelSelect = widget.NewSelect("Accelerator", "None", func() tea.Cmd {
+		return parent.OpenAcceleratorModal()
+	})
+
 	// 4. Ports List (Read Only) - INTEGRATED INTO FORM
 	// ... (no changes to addPortBtn)
 	inc.addPortBtn = widget.NewButton("Ports", "Add Forwarding", func() tea.Cmd {
@@ -125,6 +159,12 @@ func (i *Incubator) rebuildForm() {
 
 	// 2. Resources (Memory & CPUs) - 50/50 split
 	elements = append(elements, widget.NewRow(i.memInput, i.cpuInput))
+
+	// 2c. Accelerator (Full Width)
+	elements = append(elements, i.accelSelect)
+
+	// 2b. Raw Args (Full Width)
+	elements = append(elements, i.rawArgsInput)
 
 	// 3. GUI Toggle + Add Port Btn (Weighted 1:1 for equal 50/50 split)
 	elements = append(elements, widget.NewRowWithWeights([]widget.Element{i.toggle, i.addPortBtn}, []int{1, 1}))
@@ -196,15 +236,19 @@ func (i *Incubator) submitSpawn() tea.Cmd {
 	mem, _ := provider.ParseInt(i.memInput.Value())
 	cpus, _ := provider.ParseInt(i.cpuInput.Value())
 
+	// Split raw args by space (naive but sufficient for TUI)
+	rawArgs := strings.Fields(i.rawArgsInput.Value())
+
 	// Construct Msg
 	req := ops.RequestSpawnMsg{
-		Name:     i.input.Value(),
-		Source:   i.SelectedSource.Title(),
-		GUI:      i.toggle.Checked,
-		MemoryMB: mem,
-		VCPUs:    cpus,
-		UserData: "",
-		Ports:    i.PendingPorts,
+		Name:        i.input.Value(),
+		Source:      i.SelectedSource.Title(),
+		GUI:         i.toggle.Checked,
+		MemoryMB:    mem,
+		VCPUs:       cpus,
+		UserData:    "",
+		Ports:       i.PendingPorts,
+		RawQemuArgs: rawArgs,
 	}
 
 	// Reset
@@ -295,6 +339,7 @@ func (i *Incubator) SetSource(item *SourceItem) {
 
 	i.input.SetValue("")
 	i.PendingPorts = nil
+	i.rawArgsInput.SetValue("")
 	i.rebuildForm()
 }
 
@@ -330,6 +375,7 @@ type Hatchery struct {
 	Pages         *widget.PageManager
 	ConfirmDelete *widget.Modal
 	ModalAddPort  *widget.FormModal // New Form Modal
+	ModalAccel    *widget.ListModal // Accelerator Selection
 
 	prov                     provider.VMProvider
 	pendingDeleteForce       bool
@@ -352,7 +398,7 @@ func NewHatchery(prov provider.VMProvider) *Hatchery {
 		Normal:   t.Styles.SidebarItem,
 		Selected: t.Styles.SidebarItemSelected,
 		Dim:      lipgloss.NewStyle().Foreground(t.Palette.TextDim),
-		Action:   t.Styles.SidebarItemSelected.Copy(),
+		Action:   t.Styles.SidebarItemSelected,
 	}
 	h.Sidebar = widget.NewSidebarList([]widget.SidebarItem{
 		SourceItem{Raw: "LOADING", Type: "INFO", Label: "Loading..."},
@@ -490,7 +536,42 @@ func NewHatchery(prov provider.VMProvider) *Hatchery {
 		},
 	)
 
+	// Accelerator Modal
+	h.ModalAccel = widget.NewListModal("Select Accelerator", nil, 60, 20, func(item list.Item) tea.Cmd {
+		if ai, ok := item.(AccelItem); ok {
+			// Update Incubator
+			h.Incubator.PendingAccel = ai.Acc.ID
+			h.Incubator.accelSelect.Value = fmt.Sprintf("%s (%s)", ai.Acc.ID, ai.Acc.Class)
+			h.Incubator.rebuildForm()
+		} else {
+			// Handle "None"
+			h.Incubator.PendingAccel = ""
+			h.Incubator.accelSelect.Value = "None"
+			h.Incubator.rebuildForm()
+		}
+		return nil
+	}, nil)
+
 	return h
+}
+
+func (h *Hatchery) OpenAcceleratorModal() tea.Cmd {
+	return func() tea.Msg {
+		// Fetch accelerators dynamically
+		devs, err := h.prov.ListAccelerators()
+		if err != nil {
+			return ops.AcceleratorListMsg{Err: err}
+		}
+
+		var items []list.Item
+		// Add "None" option (implicitly handled by clearing if selected, or explicit item?)
+		// For now simple list.
+
+		for _, d := range devs {
+			items = append(items, AccelItem{Acc: d})
+		}
+		return ops.AcceleratorListMsg{Items: items}
+	}
 }
 
 func (h *Hatchery) OpenDeletePortModal(index int) tea.Cmd {
@@ -511,6 +592,7 @@ func (h *Hatchery) OpenDeletePortModal(index int) tea.Cmd {
 func (i *Incubator) Reset() {
 	i.input.SetValue("")
 	i.PendingPorts = nil
+	i.rawArgsInput.SetValue("")
 	i.toggle.Checked = true // Default to GUI on
 	i.rebuildForm()
 }
@@ -553,6 +635,11 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 		return h, cmd
 	}
 
+	if h.ModalAccel.IsActive() {
+		_, cmd := h.ModalAccel.Update(msg)
+		return h, cmd
+	}
+
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -564,6 +651,17 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 				h.ExistingVMs[item.Name] = true
 			}
 		}
+
+	case ops.AcceleratorListMsg:
+		if msg.Err != nil {
+			// TODO: Error modal?
+			return h, nil
+		}
+		fItems := make([]list.Item, len(msg.Items))
+		copy(fItems, msg.Items)
+		h.ModalAccel.List.SetItems(fItems)
+		h.ModalAccel.Show()
+		return h, nil
 
 	case ops.TemplateUsageMsg:
 		if msg.Err != nil {
@@ -709,6 +807,9 @@ func (h *Hatchery) View() string {
 		// If FormModal uses PlaceOverlay, it pads with whitespace.
 		// TODO: Advanced Overlay support in Kit.
 	}
+	if h.ModalAccel.IsActive() {
+		return h.ModalAccel.View(h.Width(), h.Height())
+	}
 	return h.MasterDetail.View()
 }
 
@@ -722,6 +823,9 @@ func (h *Hatchery) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, tea.Cmd,
 		return h, nil, true
 	}
 	if h.ModalAddPort.IsActive() {
+		return h, nil, true
+	}
+	if h.ModalAccel.IsActive() {
 		return h, nil, true
 	}
 	return h.MasterDetail.HandleMouse(x, y, msg)
@@ -742,6 +846,13 @@ func (h *Hatchery) Shortcuts() []fv.Shortcut {
 		return []fv.Shortcut{
 			{Key: "tab", Label: "next"},
 			{Key: "enter", Label: "add"},
+			{Key: "esc", Label: "cancel"},
+		}
+	}
+	if h.ModalAccel.IsActive() {
+		return []fv.Shortcut{
+			{Key: "↑/↓", Label: "select"},
+			{Key: "enter", Label: "confirm"},
 			{Key: "esc", Label: "cancel"},
 		}
 	}
@@ -769,7 +880,8 @@ func (h *Hatchery) Shortcuts() []fv.Shortcut {
 func (h *Hatchery) IsModalActive() bool {
 	return (h.ConfirmDelete != nil && h.ConfirmDelete.IsActive()) ||
 		(h.ConfirmDeletePort != nil && h.ConfirmDeletePort.IsActive()) ||
-		(h.ModalAddPort != nil && h.ModalAddPort.IsActive())
+		(h.ModalAddPort != nil && h.ModalAddPort.IsActive()) ||
+		(h.ModalAccel != nil && h.ModalAccel.IsActive())
 }
 
 func (h *Hatchery) HasActiveTextInput() bool {
@@ -802,24 +914,5 @@ func (h *Hatchery) HasActiveFocus() bool {
 
 // parseTuiPorts handles a comma-separated list of port mappings.
 // Implements Section 5.1 of advanced-port-forwarding.md for TUI.
-func parseTuiPorts(val string) ([]provider.PortForward, error) {
-	if val == "" {
-		return nil, nil
-	}
-	parts := strings.Split(val, ",")
-	results := make([]provider.PortForward, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		pf, err := provider.ParsePortForward(p)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, pf)
-	}
-	return results, nil
-}
 
 // End of Hatchery Viewlet

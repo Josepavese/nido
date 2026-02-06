@@ -135,7 +135,7 @@ func (d SidebarDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 		if item.IsAction() {
 			// Full width background for Action items (High Contrast)
 			// Apply width to ensure background fills the line
-			style := d.Styles.Action.Copy().Width(m.Width())
+			style := d.Styles.Action.Width(m.Width())
 			fmt.Fprint(w, style.Render(str))
 		} else {
 			// Special handling: formatting title before concatenation avoids
@@ -163,7 +163,7 @@ func (d SidebarDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 		if item.IsAction() {
 			// User wants background even when unselected to signify it's a button.
 			// We'll use a subtle dimmed background.
-			style := d.Styles.Normal.Copy().
+			style := d.Styles.Normal.
 				Width(m.Width()).
 				Background(d.Styles.Dim.GetForeground()).   // Use Dim color for subtle background
 				Foreground(d.Styles.Action.GetBackground()) // Contrast text (Background color of selected action)
@@ -317,11 +317,11 @@ func (s *SidebarList) UpdateStyles() {
 		Normal:   t.Styles.SidebarItem,
 		Selected: t.Styles.SidebarItemSelected,
 		Dim:      lipgloss.NewStyle().Foreground(t.Palette.TextDim),
-		Action:   t.Styles.SidebarItemSelected.Copy(),
+		Action:   t.Styles.SidebarItemSelected,
 	}
 	d := NewSidebarDelegate(newStyles, s.noIconPadding)
 	s.Model.SetDelegate(d)
-	s.Model.Styles.NoItems = t.Styles.SidebarItem.Copy().Padding(1, 2) // Maintain padding but use theme color
+	s.Model.Styles.NoItems = t.Styles.SidebarItem.Padding(1, 2) // Maintain padding but use theme color
 }
 
 func (s *SidebarList) Init() tea.Cmd            { return nil }

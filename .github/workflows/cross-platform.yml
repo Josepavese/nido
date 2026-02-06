@@ -59,9 +59,11 @@ jobs:
           fi
         shell: bash
 
-      # Build Nido
-      - name: Build Nido
-        run: go build -o nido${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/nido
+      # Build Nido and Validator (verifies compilation on all OSes)
+      - name: Build Nido & Validator
+        run: |
+          go build -o nido${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/nido
+          go build -o nido-validator${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/nido-validator
 
       # Add bin to PATH
       - name: Add bin to PATH
@@ -90,13 +92,21 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           # Create a minimal test template
-          mkdir -p ~/.nido/vms
-          mkdir -p ~/.nido/backups
-          qemu-img create -f qcow2 ~/.nido/backups/template-test.compact.qcow2 1G
+          # 1. Validator is already built in previous step
           
-          # Test VM operations
-          ./nido ls
-          echo "VM lifecycle tests would go here (requires proper template)"
+          # 2. Run Validator (Scenario: VMSpawnResources includes accel test)
+          # We run specific scenario first to fail fast, or all.
+          # For CI, let's run all scenarios to be safe.
+          # We need to make sure we have a base image.
+          # The qemu install step above gives us qemu-system-x86_64 but maybe not a cloud image.
+          # The validator usually needs a --image argument or relies on default.
+          # We'll use a tiny test image if possible, or skip image tests if no image.
+          # Note: The placeholder created a 1G fake qcow2.
+          
+          # Creating a dummy "ubuntu" image to fool the validator logic if needed
+          # But better: Use the standard validator execution
+          
+          ./nido-validator --nido ./nido --log-level debug
 
       # macOS/Windows: Limited testing (no nested virtualization)
       - name: Limited tests (macOS/Windows)

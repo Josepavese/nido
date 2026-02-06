@@ -63,7 +63,7 @@ func (s *SplitView) View() string {
 		Width(s.resolvedSidebarWidth).
 		Render(sidebarView)
 
-	sepStyle := theme.Current().Styles.Border.Copy().
+	sepStyle := theme.Current().Styles.Border.
 		Border(lipgloss.NormalBorder(), false, false, false, true). // Left only
 		Height(s.height)
 

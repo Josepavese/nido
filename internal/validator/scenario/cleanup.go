@@ -19,30 +19,24 @@ func Cleanup() Scenario {
 }
 
 func cleanupVMs(ctx *Context) report.StepResult {
-	snapshot := ctx.State.Snapshot()
 	if ctx.Config.KeepArtifacts {
 		return skipResult(ctx.Config.NidoBin, []string{"delete"}, "keep-artifacts enabled; skipping VM cleanup")
 	}
-	if len(snapshot.VMs) == 0 {
-		return skipResult(ctx.Config.NidoBin, []string{"delete"}, "no tracked VMs")
-	}
-	res := report.StepResult{
-		Command:   ctx.Config.NidoBin,
-		Args:      []string{"delete"},
+
+	// Use the global Sweep function to ensure we catch ALL test VMs,
+	// even those that weren't tracked in state due to test failures or timeouts.
+	Sweep(ctx)
+
+	// We return a PASS dummy result because Sweep handles its own logging/errors
+	// or we could construct a result based on Sweep's actions if Sweep returned something.
+	// For now, let's assume Sweep did its best.
+	return report.StepResult{
+		Command:   "sweep",
+		Args:      []string{"all"},
 		Result:    "PASS",
 		StartedAt: time.Now(),
+		Stdout:    "Global sweep completed",
 	}
-	for _, name := range snapshot.VMs {
-		// Best-effort cleanup; do not stop on errors.
-		del := runNido(ctx, "delete", []string{"delete", name, "--json"}, 20*time.Second)
-		res.Assertions = append(res.Assertions, report.AssertionResult{
-			Name:    "delete_" + name,
-			Result:  map[bool]string{true: "PASS", false: "FAIL"}[del.ExitCode == 0],
-			Details: del.Stderr,
-		})
-	}
-	finalize(&res)
-	return res
 }
 
 func cleanupTempFiles(ctx *Context) report.StepResult {

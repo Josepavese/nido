@@ -1228,26 +1228,6 @@ func (p *QemuProvider) skipBootloader(name string) {
 	}
 }
 
-func (p *QemuProvider) execQMP(qmpPath string, command map[string]interface{}) error {
-	// Keep existing execQMP for general use if needed, but skipBootloader uses its own persistent conn
-	conn, err := net.DialTimeout("unix", qmpPath, 100*time.Millisecond)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
-
-	decoder := json.NewDecoder(conn)
-	var greeting map[string]interface{}
-	decoder.Decode(&greeting)
-	fmt.Fprintf(conn, `{"execute":"qmp_capabilities"}`+"\n")
-	decoder.Decode(&greeting)
-
-	data, _ := json.Marshal(command)
-	fmt.Fprintf(conn, "%s\n", data)
-	return decoder.Decode(&greeting)
-}
-
 // ListImages scans the image directory for cached images.
 func (p *QemuProvider) ListImages() ([]string, error) {
 	imagesDir := p.Config.ImageDir

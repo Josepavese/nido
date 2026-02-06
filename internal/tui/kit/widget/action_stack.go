@@ -36,7 +36,7 @@ func NewActionStack() *ActionStack {
 
 // Init initializes the component
 func (s *ActionStack) Init() tea.Cmd {
-	return spinner.Tick
+	return nil
 }
 
 // Add starts a new action and returns its ID
@@ -63,7 +63,7 @@ func (s *ActionStack) Add(id, message string) tea.Cmd {
 		t.Palette.Success.Dark,
 	))
 	pg.ShowPercentage = true
-	pg.PercentageStyle = t.Styles.Accent.Copy() // Use Accent color for percentage to match theme
+	pg.PercentageStyle = t.Styles.Accent // Use Accent color for percentage to match theme
 
 	s.Items = append(s.Items, Action{
 		ID:        id,
@@ -129,7 +129,7 @@ func (s *ActionStack) View(width int) string {
 	t := theme.Current()
 
 	// Card Style (Compact: 1 line of content)
-	cardStyle := t.Styles.Border.Copy().
+	cardStyle := t.Styles.Border.
 		Width(width-2).
 		Padding(0, 1)
 
@@ -159,7 +159,7 @@ func (s *ActionStack) View(width int) string {
 
 			// Bird-nerdy warning per tone_of_voice.md
 			warningText := "Steady now... keep the nest open."
-			warningPart := t.Styles.TextMuted.Copy().Italic(true).Render(warningText)
+			warningPart := t.Styles.TextMuted.Italic(true).Render(warningText)
 
 			// We need to calculate how much space the title CAN take vs how much generic gap we have.
 			// Ideally we just flex space between them.

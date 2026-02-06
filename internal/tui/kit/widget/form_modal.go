@@ -228,7 +228,7 @@ func (m *FormModal) View(parentWidth, parentHeight int) string {
 	var content []string
 
 	// Title
-	titleStyle := t.Styles.Title.Copy().Foreground(t.Palette.Accent)
+	titleStyle := t.Styles.Title.Foreground(t.Palette.Accent)
 	content = append(content, titleStyle.Render(m.Title), "")
 
 	// Description
@@ -244,7 +244,7 @@ func (m *FormModal) View(parentWidth, parentHeight int) string {
 	// Frame
 	inner := lipgloss.JoinVertical(lipgloss.Center, content...)
 
-	dialogStyle := t.Styles.Border.Copy().
+	dialogStyle := t.Styles.Border.
 		BorderForeground(t.Palette.Accent).
 		Padding(1, 2).
 		Width(m.width).

@@ -76,12 +76,12 @@ func (s *Shell) UpdateStyles() {
 	t := theme.Current()
 	s.Styles = ShellStyles{
 		Header:           lipgloss.NewStyle().Background(t.Palette.Surface).Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(t.Palette.SurfaceSubtle),
-		SubHeaderContext: t.Styles.Label.Copy().Bold(true),
-		SubHeaderNav:     t.Styles.Label.Copy(),
+		SubHeaderContext: t.Styles.Label.Bold(true),
+		SubHeaderNav:     t.Styles.Label,
 		StatusBar: widget.StatusBarStyles{
-			Key:    t.Styles.Label.Copy().Bold(true),
-			Label:  t.Styles.Label.Copy(),
-			Status: t.Styles.Label.Copy(),
+			Key:    t.Styles.Label.Bold(true),
+			Label:  t.Styles.Label,
+			Status: t.Styles.Label,
 		},
 		BorderColor: t.Palette.SurfaceHighlight,
 	}
@@ -431,18 +431,6 @@ func (s *Shell) renderHeader() string {
 	return container.Render(content)
 }
 
-func (s *Shell) renderSubHeader() string {
-	if s.activeRoute.Key == "" {
-		return ""
-	}
-
-	style := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1)
-	context := s.Styles.SubHeaderContext.Render(s.activeRoute.Title)
-	nav := s.Styles.SubHeaderNav.Render(s.activeRoute.Hint)
-
-	return style.Render(fmt.Sprintf("%s  %s", context, nav))
-}
-
 func (s *Shell) renderFooter() string {
 	if s.FooterContent != "" {
 		return s.FooterContent
@@ -523,7 +511,7 @@ func (s *Shell) HandleMouse(msg tea.MouseMsg) (MouseZone, int, int, tea.Cmd, boo
 		ly := msg.Y - s.grid.Header.Y
 
 		// Tab Click Detection (Left Aligned)
-		if msg.Type == tea.MouseLeft {
+		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
 			cursorX := 0
 			for _, r := range s.routes {
 				// Match style logic from renderHeader

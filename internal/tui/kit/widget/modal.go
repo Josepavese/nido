@@ -23,7 +23,7 @@ type Modal struct {
 	// Layout state for hit detection
 	lastW, lastH    int
 	yesX, noX, btnY int
-	okX, okY        int
+	okX             int
 
 	// Configuration
 	SingleButton bool // If true, shows only one button (OK/Close)
@@ -178,7 +178,7 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 		contentWidth = 1
 	}
 
-	dialogStyle := t.Styles.Border.Copy().
+	dialogStyle := t.Styles.Border.
 		BorderForeground(borderColor).
 		Padding(1, 2).
 		Width(effectiveWidth - horizontalBorder).
@@ -230,7 +230,7 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 	}
 
 	// 3. Layout
-	titleStyle := t.Styles.Title.Copy()
+	titleStyle := t.Styles.Title
 	if m.Level == ModalLevelDanger || (m.SingleButton && m.Level == ModalLevelNormal) {
 		titleStyle = titleStyle.Foreground(t.Palette.Error)
 	} else if m.Level == ModalLevelSuccess {
@@ -254,7 +254,7 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 }
 
 func (m *Modal) HandleMouse(x, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
-	if !m.active || msg.Type != tea.MouseLeft {
+	if !m.active || (msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress) {
 		return nil, false
 	}
 
