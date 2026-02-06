@@ -106,7 +106,7 @@ jobs:
           # Creating a dummy "ubuntu" image to fool the validator logic if needed
           # But better: Use the standard validator execution
           
-          ./nido-validator --nido ./nido --log-level debug
+          ./nido-validator --nido-bin ./nido
 
       # macOS/Windows: Limited testing (no nested virtualization)
       - name: Limited tests (macOS/Windows)
