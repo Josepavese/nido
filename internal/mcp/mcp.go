@@ -58,7 +58,7 @@ func NewServer(p provider.VMProvider) *Server {
 func ToolsCatalog() []map[string]interface{} {
 	return []map[string]interface{}{
 		{"name": "vm_list", "description": "List all virtual machines", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
-		{"name": "vm_create", "description": "Create a VM from image or template", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "template": map[string]interface{}{"type": "string"}, "image": map[string]interface{}{"type": "string"}, "user_data": map[string]interface{}{"type": "string"}, "gui": map[string]interface{}{"type": "boolean"}, "cmdline": map[string]interface{}{"type": "string"}, "memory_mb": map[string]interface{}{"type": "integer"}, "vcpus": map[string]interface{}{"type": "integer"}, "ports": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}}}, "required": []string{"name"}}},
+		{"name": "vm_create", "description": "Create a VM from image or template", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "template": map[string]interface{}{"type": "string"}, "image": map[string]interface{}{"type": "string"}, "user_data": map[string]interface{}{"type": "string"}, "gui": map[string]interface{}{"type": "boolean"}, "cmdline": map[string]interface{}{"type": "string"}, "memory_mb": map[string]interface{}{"type": "integer"}, "vcpus": map[string]interface{}{"type": "integer"}, "ports": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}}, "raw_qemu_args": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Advanced: Raw arguments passed directly to the QEMU command line."}, "accelerators": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Zero-Config Passthrough: List of PCI IDs (e.g. 0000:01:00.0) or 'auto' to automatically detect GPU."}}, "required": []string{"name"}}},
 		{"name": "vm_start", "description": "Start a VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "gui": map[string]interface{}{"type": "boolean"}, "cmdline": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
 		{"name": "vm_stop", "description": "Stop a VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
 		{"name": "vm_delete", "description": "Delete a VM", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
@@ -83,16 +83,18 @@ func ToolsCatalog() []map[string]interface{} {
 		{"name": "vm_config_update", "description": "Update VM configuration (Next Boot)", "inputSchema": map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
-				"name":         map[string]interface{}{"type": "string"},
-				"memory_mb":    map[string]interface{}{"type": "integer"},
-				"vcpus":        map[string]interface{}{"type": "integer"},
-				"ssh_port":     map[string]interface{}{"type": "integer"},
-				"vnc_port":     map[string]interface{}{"type": "integer"},
-				"gui":          map[string]interface{}{"type": "boolean"},
-				"ssh_user":     map[string]interface{}{"type": "string"},
-				"ssh_password": map[string]interface{}{"type": "string"},
-				"cmdline":      map[string]interface{}{"type": "string"},
-				"ports":        map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+				"name":          map[string]interface{}{"type": "string"},
+				"memory_mb":     map[string]interface{}{"type": "integer"},
+				"vcpus":         map[string]interface{}{"type": "integer"},
+				"ssh_port":      map[string]interface{}{"type": "integer"},
+				"vnc_port":      map[string]interface{}{"type": "integer"},
+				"gui":           map[string]interface{}{"type": "boolean"},
+				"ssh_user":      map[string]interface{}{"type": "string"},
+				"ssh_password":  map[string]interface{}{"type": "string"},
+				"cmdline":       map[string]interface{}{"type": "string"},
+				"ports":         map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+				"raw_qemu_args": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Advanced: Update raw QEMU arguments. Replaces the existing list."},
+				"accelerators":  map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Zero-Config Passthrough: List of PCI IDs or 'auto' to pass through. Replaces the existing list."},
 			},
 			"required": []string{"name"},
 		}},
@@ -167,15 +169,17 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		result = string(data)
 	case "vm_create":
 		var args struct {
-			Name     string   `json:"name"`
-			Template string   `json:"template"`
-			Image    string   `json:"image"`
-			UserData string   `json:"user_data"`
-			Gui      bool     `json:"gui"`
-			Cmdline  string   `json:"cmdline"`
-			MemoryMB int      `json:"memory_mb"`
-			VCPUs    int      `json:"vcpus"`
-			Ports    []string `json:"ports"`
+			Name         string   `json:"name"`
+			Template     string   `json:"template"`
+			Image        string   `json:"image"`
+			UserData     string   `json:"user_data"`
+			Gui          bool     `json:"gui"`
+			Cmdline      string   `json:"cmdline"`
+			MemoryMB     int      `json:"memory_mb"`
+			VCPUs        int      `json:"vcpus"`
+			Ports        []string `json:"ports"`
+			RawQemuArgs  []string `json:"raw_qemu_args"`
+			Accelerators []string `json:"accelerators"`
 		}
 		json.Unmarshal(params.Arguments, &args)
 
@@ -280,6 +284,8 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		opts.Cmdline = args.Cmdline
 		opts.MemoryMB = args.MemoryMB
 		opts.VCPUs = args.VCPUs
+		opts.RawQemuArgs = args.RawQemuArgs
+		opts.Accelerators = args.Accelerators
 
 		err = s.Provider.Spawn(args.Name, opts)
 		result = fmt.Sprintf("VM %s created successfully.", args.Name)
@@ -365,28 +371,32 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 	case "vm_config_update":
 		// Pointers used to detect presence of fields
 		var args struct {
-			Name        string   `json:"name"`
-			MemoryMB    *int     `json:"memory_mb"`
-			VCPUs       *int     `json:"vcpus"`
-			SSHPort     *int     `json:"ssh_port"`
-			VNCPort     *int     `json:"vnc_port"`
-			Gui         *bool    `json:"gui"`
-			SSHUser     *string  `json:"ssh_user"`
-			SSHPassword *string  `json:"ssh_password"`
-			Cmdline     *string  `json:"cmdline"`
-			Ports       []string `json:"ports"`
+			Name         string    `json:"name"`
+			MemoryMB     *int      `json:"memory_mb"`
+			VCPUs        *int      `json:"vcpus"`
+			SSHPort      *int      `json:"ssh_port"`
+			VNCPort      *int      `json:"vnc_port"`
+			Gui          *bool     `json:"gui"`
+			SSHUser      *string   `json:"ssh_user"`
+			SSHPassword  *string   `json:"ssh_password"`
+			Cmdline      *string   `json:"cmdline"`
+			Ports        []string  `json:"ports"`
+			RawQemuArgs  *[]string `json:"raw_qemu_args"`
+			Accelerators *[]string `json:"accelerators"`
 		}
 		json.Unmarshal(params.Arguments, &args)
 
 		updates := provider.VMConfigUpdates{
-			MemoryMB:    args.MemoryMB,
-			VCPUs:       args.VCPUs,
-			SSHPort:     args.SSHPort,
-			VNCPort:     args.VNCPort,
-			Gui:         args.Gui,
-			SSHUser:     args.SSHUser,
-			SSHPassword: args.SSHPassword,
-			Cmdline:     args.Cmdline,
+			MemoryMB:     args.MemoryMB,
+			VCPUs:        args.VCPUs,
+			SSHPort:      args.SSHPort,
+			VNCPort:      args.VNCPort,
+			Gui:          args.Gui,
+			SSHUser:      args.SSHUser,
+			SSHPassword:  args.SSHPassword,
+			Cmdline:      args.Cmdline,
+			RawQemuArgs:  args.RawQemuArgs,
+			Accelerators: args.Accelerators,
 		}
 
 		if len(args.Ports) > 0 {

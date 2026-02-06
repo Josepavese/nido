@@ -125,7 +125,7 @@ Here is the full move list for the Nido console.
 
 | Command                               | Action                  | Arcade Analog               |
 | :------------------------------------ | :---------------------- | :-------------------------- |
-| `nido spawn <name> [--image <tag>] [--memory MB] [--cpus N]` | Create and hatch a new VM (Defaults: min(2048MB, 50% Host RAM), 1 vCPU) | **INSERT COIN** |
+| `nido spawn <name> [--image <tag>] [--accel <id>\|auto] ...` | Create and hatch a new VM (Defaults: min(2048MB, 50% Host RAM), 1 vCPU) | **INSERT COIN** |
 | `nido start <name> [--gui] [--cmdline <args>]`     | Revive a stopped VM     | **CONTINUE? 10..9..** |
 | `nido stop <name>`                  | ACPI Shutdown signal    | **PAUSE**             |
 | `nido delete <name>`                | Destroy VM permanently  | **GAME OVER**         |
@@ -163,7 +163,7 @@ Here is the full move list for the Nido console.
 
 | Command            | Action                  | Arcade Analog               |
 | :----------------- | :---------------------- | :-------------------------- |
-| `nido config <vm> [--memory MB] [--cpu N] [--port G:H] ...` | Modify existing VM resources | **PLAYER STATS** |
+| `nido config <vm> [--memory MB] [--cpu N] [--accel <id>] [--qemu-arg "-flag"] ...` | Modify existing VM resources | **PLAYER STATS** |
 | `nido config set <key> <val>`  | Update global Nido settings | **OPTIONS**           |
 | `nido register`  | Setup MCP integration   | **CONTROLLER CONFIG** |
 | `nido update`    | Self-update from GitHub | **OTA PATCH**         |

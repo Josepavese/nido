@@ -29,7 +29,7 @@ func NewListModal(title string, items []list.Item, width, height int, onSelect f
 		Normal:   t.Styles.SidebarItem,
 		Selected: t.Styles.SidebarItemSelected,
 		Dim:      lipgloss.NewStyle().Foreground(t.Palette.TextDim),
-		Action:   t.Styles.SidebarItemSelected.Copy(),
+		Action:   t.Styles.SidebarItemSelected,
 	}
 
 	// Use SidebarDelegate for consistent rendering
@@ -114,7 +114,7 @@ func (m *ListModal) HandleMouse(x, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
 
 // View replicates the BoxedSidebar layout: Header Card + Styled List Box
 // View renders the modal with a standard single frame.
-func (m *ListModal) View() string {
+func (m *ListModal) View(parentWidth, parentHeight int) string {
 	if !m.Active {
 		return ""
 	}
@@ -124,13 +124,13 @@ func (m *ListModal) View() string {
 	// 1. Refresh Styles (Dynamic Theme)
 	// We must recreate the delegate styles because the theme might have changed.
 	sidebarStyles := SidebarStyles{
-		Normal: t.Styles.SidebarItem.Copy().UnsetBackground().Foreground(t.Palette.Text), // Ensure no background for normal items and force text color
-		Selected: t.Styles.SidebarItemSelected.Copy().
+		Normal: t.Styles.SidebarItem.UnsetBackground().Foreground(t.Palette.Text), // Ensure no background for normal items and force text color
+		Selected: t.Styles.SidebarItemSelected.
 			UnsetBackground().            // Remove background
 			Foreground(t.Palette.Accent). // Use Active/Accent color for text
 			Bold(true),
 		Dim:    lipgloss.NewStyle().Foreground(t.Palette.TextDim),
-		Action: t.Styles.SidebarItemSelected.Copy(),
+		Action: t.Styles.SidebarItemSelected,
 	}
 
 	// Update the delegate
@@ -161,12 +161,12 @@ func (m *ListModal) View() string {
 		styleWidth = 1
 	}
 
-	borderStyle := t.Styles.Border.Copy().
+	borderStyle := t.Styles.Border.
 		BorderForeground(borderColor).
 		Width(styleWidth).
 		// Height(styleHeight). // Removed to let border wrap content naturally (prevents bottom clipping)
 		Padding(1, 2).
-		Align(lipgloss.Left) // Left align content (User request)
+		Align(lipgloss.Center) // Center align content (User request)
 
 	// 3. Inner Content Layout
 	const titleH = 1
@@ -184,19 +184,21 @@ func (m *ListModal) View() string {
 
 	// 5. Render Components
 	// Title needs to be cleanly rendered without background
-	titleStyle := t.Styles.Title.Copy().
+	titleStyle := t.Styles.Title.
 		Padding(0, 1) // Keep padding but remove background
 
 	// Center title within the box width manually since we are Left aligning the container
 	title := layout.Center(listW, titleStyle.Render(m.Title))
 
-	content := lipgloss.JoinVertical(lipgloss.Left,
+	content := lipgloss.JoinVertical(lipgloss.Center,
 		title,
 		"", // Spacer
 		m.List.View(),
 	)
 
-	return borderStyle.Render(content)
+	dialog := borderStyle.Render(content)
+
+	return layout.PlaceOverlay(parentWidth, parentHeight, dialog)
 }
 
 func (m *ListModal) Resize(w, h int) {

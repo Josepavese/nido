@@ -49,16 +49,6 @@ type Styles struct {
 }
 
 // themeMode represents the user's theme preference
-type themeMode int
-
-const (
-	themeModeAuto themeMode = iota
-	themeModeDark
-	themeModeLight
-	themeModePink
-	themeModeHighContrast
-	themeModeMatrix
-)
 
 // Current returns the active theme based on:
 // 1. NIDO_THEME environment variable (light|dark|auto)
@@ -216,22 +206,6 @@ type Layout struct {
 }
 
 // parseThemeMode interprets the NIDO_THEME environment variable.
-func parseThemeMode(env string) themeMode {
-	switch strings.ToLower(strings.TrimSpace(env)) {
-	case "light":
-		return themeModeLight
-	case "dark":
-		return themeModeDark
-	case "pink":
-		return themeModePink
-	case "high-contrast":
-		return themeModeHighContrast
-	case "matrix":
-		return themeModeMatrix
-	default:
-		return themeModeAuto
-	}
-}
 
 // shouldUse256Colors checks if we should use 256-color fallback.
 // This happens when COLORTERM is not set to truecolor/24bit.

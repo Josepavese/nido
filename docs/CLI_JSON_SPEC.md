@@ -98,7 +98,7 @@ The following commands support `--json`:
 
 ### `info`
 
-`data.vm`: name, state, ip, ssh_user, ssh_port, vnc_port
+`data.vm`: name, state, ip, ssh_user, ssh_port, vnc_port, raw_qemu_args
 
 ### `spawn|start|stop|delete|prune`
 

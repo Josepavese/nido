@@ -1,5 +1,5 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Josepavese/nido",
   "title": "Nido — Arcade Console for AI Agents (MCP Server)",
   "description": "Fast, local VM orchestration (QEMU/KVM) with native MCP support for autonomous agents.",
@@ -12,7 +12,13 @@
       "transport": {
         "type": "stdio",
         "command": "nido",
-        "args": ["mcp"]
+        "args": ["mcp"],
+        "platform": {
+          "windows": {
+            "command": "nido.exe",
+            "args": ["mcp"]
+          }
+        }
       },
       "fileSha256": "SHA256_PLACEHOLDER"
     }

@@ -50,7 +50,7 @@ func CalculateGrid(width, height int, actionStackHeight int) Grid {
 	hRect := NewRect(0, 0, width, 0)
 	asRect := NewRect(0, 0, width, 0)
 	shRect := NewRect(0, 0, width, 0)
-	bRect := NewRect(0, 0, width, 0)
+	var bRect Rect
 	fRect := NewRect(0, 0, width, 0)
 
 	// Available vertical space

@@ -81,7 +81,7 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		n.Shell.SwitchTo("fleet")
 		id, cmd := n.Shell.StartAction(fmt.Sprintf("Spawning %s", msg.Name))
 		n.activeActions[opName] = id
-		return n, tea.Batch(cmd, ops.SpawnVM(n.prov, msg.Name, msg.Source, msg.UserData, msg.GUI, msg.MemoryMB, msg.VCPUs, msg.Ports))
+		return n, tea.Batch(cmd, ops.SpawnVM(n.prov, msg.Name, msg.Source, msg.UserData, msg.GUI, msg.MemoryMB, msg.VCPUs, msg.Ports, msg.RawQemuArgs, msg.Accelerators))
 
 	case ops.RequestCreateTemplateMsg:
 		opName := "create-template"
@@ -323,13 +323,13 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) erro
 	kitApp.Shell.Styles = shell.ShellStyles{
 		// Header: Deep background, subtle bottom border in the same grey palette
 		Header:           lipgloss.NewStyle().Background(t.Palette.Surface).Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(t.Palette.SurfaceSubtle),
-		SubHeaderContext: t.Styles.Label.Copy().Bold(true),
+		SubHeaderContext: t.Styles.Label.Bold(true),
 		// SubHeaderNav: subtle grey
-		SubHeaderNav: t.Styles.Label.Copy(),
+		SubHeaderNav: t.Styles.Label,
 		StatusBar: widget.StatusBarStyles{
-			Key:    t.Styles.Label.Copy().Bold(true),
-			Label:  t.Styles.Label.Copy(),
-			Status: t.Styles.Label.Copy(),
+			Key:    t.Styles.Label.Bold(true),
+			Label:  t.Styles.Label,
+			Status: t.Styles.Label,
 		},
 		BorderColor: t.Palette.SurfaceHighlight,
 	}

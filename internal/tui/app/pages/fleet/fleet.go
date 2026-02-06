@@ -15,6 +15,15 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	// Import Hatchery for AccelItem reuse? Or ideally move AccelItem to shared?
+	// Moving AccelItem to shared widget or ops is cleaner.
+	// BUT I can't move it easily without refactoring Hatchery imports.
+	// For now, I will DUPLICATE AccelItem adapter in fleet.go to avoid import cycle if hatchery imports fleet (unlikely but possible).
+	// Actually, hatchery imports widget, theme, ops.
+	// Fleet imports widget, theme, ops.
+	// I'll define AccelItem in fleet.go locally.
+	"github.com/charmbracelet/bubbles/list"
 )
 
 // FleetItem adapter for standard SidebarList
@@ -56,6 +65,7 @@ type FleetDetail struct {
 	BackingPath    string
 	BackingMissing bool
 	Forwarding     []provider.PortForward
+	Accelerators   []string // New: Accelerators for PASSTHROUGH
 }
 
 // Fleet implements the Viewlet interface using MasterDetail
@@ -81,6 +91,8 @@ type Fleet struct {
 	TemplateModal     *CreateTemplateModal
 	ConfirmDelete     *widget.Modal
 	ErrorModal        *widget.Modal
+	ModalAccel        *widget.ListModal // Accelerator Selection
+	pendingAccelVM    string            // Track which VM we are editing
 }
 
 // NewFleet creates the viewlet
@@ -123,12 +135,42 @@ func NewFleet(prov provider.VMProvider) *Fleet {
 		nil, // Dismiss just closes
 	)
 
+	// Accelerator Modal
+	f.ModalAccel = widget.NewListModal("Select Accelerator", nil, 60, 20, func(item list.Item) tea.Cmd {
+		// Callback handled in Update via active check?
+		// No, NewListModal takes onSelect.
+		if f.pendingAccelVM == "" {
+			return nil
+		}
+
+		var selectedID string
+		if ai, ok := item.(AccelItem); ok {
+			selectedID = ai.Acc.ID
+		} else {
+			// None?
+			selectedID = "" // Clear
+		}
+
+		// Update Config
+		// We use REPLACEMENT logic for single-device mode
+		newAccelList := []string{}
+		if selectedID != "" {
+			newAccelList = []string{selectedID}
+		}
+
+		updates := provider.VMConfigUpdates{
+			Accelerators: &newAccelList,
+		}
+
+		return ops.UpdateVMConfig(f.provider, f.pendingAccelVM, updates)
+	}, nil)
+
 	// 1. Sidebar (Empty initially)
 	styles := widget.SidebarStyles{
 		Normal:   t.Styles.SidebarItem,
 		Selected: t.Styles.SidebarItemSelected,
 		Dim:      lipgloss.NewStyle().Foreground(t.Palette.TextDim),
-		Action:   t.Styles.SidebarItemSelected.Copy(),
+		Action:   t.Styles.SidebarItemSelected,
 	}
 	f.Sidebar = widget.NewSidebarList(nil, theme.Width.Sidebar, styles, theme.RenderIcon(theme.IconFleet))
 
@@ -161,6 +203,33 @@ func (f *Fleet) Init() tea.Cmd {
 	return f.MasterDetail.Init()
 }
 
+func (f *Fleet) OpenAcceleratorModal(vmName string) tea.Cmd {
+	return func() tea.Msg {
+		// Set context
+		f.pendingAccelVM = vmName
+
+		// Fetch accelerators dynamically
+		devs, err := f.provider.ListAccelerators()
+		if err != nil {
+			// Show error modal?
+			return ops.AcceleratorListMsg{Err: err}
+		}
+
+		var items []list.Item
+		// Add "None" option?
+		// items = append(items, AccelItem{Acc: provider.Accelerator{ID: "", Class: "None"}})
+		// Actually treating empty selection or explicit "None" item is design choice.
+		// For now simple list of available devices.
+
+		for _, d := range devs {
+			items = append(items, AccelItem{Acc: d})
+		}
+
+		f.ModalAccel.List.SetItems(items)
+		f.ModalAccel.Show()
+		return nil
+	}
+}
 func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 	var cmds []tea.Cmd
 
@@ -177,6 +246,10 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 	}
 	if f.TemplateModal.IsActive() {
 		return f, f.TemplateModal.Update(msg)
+	}
+	if f.ModalAccel.IsActive() {
+		_, cmd := f.ModalAccel.Update(msg)
+		return f, cmd
 	}
 
 	switch msg := msg.(type) {
@@ -259,6 +332,7 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 				BackingPath:    msg.Detail.BackingPath,
 				BackingMissing: msg.Detail.BackingMissing,
 				Forwarding:     msg.Detail.Forwarding,
+				Accelerators:   msg.Detail.Accelerators,
 			}
 			f.DetailView.UpdateDetail(f.detail)
 
@@ -428,6 +502,9 @@ func (f *Fleet) View() string {
 	if f.TemplateModal.IsActive() {
 		return f.TemplateModal.View(f.Width(), f.Height())
 	}
+	if f.ModalAccel.IsActive() {
+		return f.ModalAccel.View(f.Width(), f.Height())
+	}
 	return f.MasterDetail.View()
 }
 
@@ -489,7 +566,7 @@ func (f *Fleet) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, tea.Cmd, 
 
 // IsModalActive allows the App to block global navigation (tabs) when the modal is open.
 func (f *Fleet) IsModalActive() bool {
-	return f.ConfirmDelete.IsActive() || f.ErrorModal.IsActive() || f.TemplateModal.IsActive()
+	return f.ConfirmDelete.IsActive() || f.ErrorModal.IsActive() || f.TemplateModal.IsActive() || f.ModalAccel.IsActive()
 }
 
 // --- Detail Component ---
@@ -617,6 +694,29 @@ func (c *ComponentsDetail) rebuildForm() {
 		elements = append(elements, noPorts)
 	}
 
+	// 6. Accelerators
+	accelerators := c.Parent.detail.Accelerators
+
+	// Create a button to Manage Accelerators
+	accLabel := "None"
+	if len(accelerators) > 0 {
+		accLabel = strings.Join(accelerators, ", ")
+	}
+
+	// If stopped, allow editing
+	if c.Parent.detail.State == "stopped" || c.Parent.detail.State == "shutoff" {
+		btnAccel := widget.NewButton("Accelerators", accLabel+" (Edit)", func() tea.Cmd {
+			return c.Parent.OpenAcceleratorModal(c.Parent.detail.Name)
+		})
+		btnAccel.Centered = true // Make it look like an active element
+		elements = append(elements, btnAccel)
+	} else {
+		// Read only input if running
+		accInput := widget.NewInput("Accelerators", accLabel, nil)
+		accInput.Disabled = true
+		elements = append(elements, accInput)
+	}
+
 	c.Form = widget.NewForm(elements...)
 	c.Form.Spacing = 0
 }
@@ -712,22 +812,6 @@ func (c *ComponentsDetail) openVNC() tea.Cmd {
 	// Use SSOT VNC opener from sysutil
 	vncBin, vncArgs := sysutil.VNCCommand(vncAddr)
 	return tea.ExecProcess(exec.Command(vncBin, vncArgs...), nil)
-}
-
-func (c *ComponentsDetail) togglePower() tea.Cmd {
-	d := c.Parent.detail
-	if d.Name == "" {
-		return nil
-	}
-
-	if d.State == "running" {
-		return func() tea.Msg {
-			return ops.RequestOpMsg{Op: ops.OpStop, Name: d.Name}
-		}
-	}
-	return func() tea.Msg {
-		return ops.RequestOpMsg{Op: ops.OpStart, Name: d.Name}
-	}
 }
 
 func (c *ComponentsDetail) Init() tea.Cmd { return nil }

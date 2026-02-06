@@ -2,18 +2,21 @@ package ops
 
 import (
 	"github.com/Josepavese/nido/internal/provider"
+	"github.com/charmbracelet/bubbles/list"
 )
 
 // RequestSpawnMsg requests a VM spawn.
 type RequestSpawnMsg struct {
-	Name     string
-	Source   string
-	IsFile   bool
-	UserData string
-	GUI      bool
-	MemoryMB int
-	VCPUs    int
-	Ports    []provider.PortForward
+	Name         string
+	Source       string
+	IsFile       bool
+	UserData     string
+	GUI          bool
+	MemoryMB     int
+	VCPUs        int
+	Ports        []provider.PortForward
+	RawQemuArgs  []string
+	Accelerators []string
 }
 
 // RequestCreateTemplateMsg requests a template creation.
@@ -81,4 +84,11 @@ type RequestUpdateMsg struct {
 type RequestCacheMsg struct{}
 
 // RequestApplyUpdateMsg requests an actual binary update.
+// RequestApplyUpdateMsg requests an actual binary update.
 type RequestApplyUpdateMsg struct{}
+
+// AcceleratorListMsg contains the list of accelerators for the UI.
+type AcceleratorListMsg struct {
+	Items []list.Item
+	Err   error
+}

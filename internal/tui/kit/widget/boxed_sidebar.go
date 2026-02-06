@@ -51,7 +51,7 @@ func (s *BoxedSidebar) Resize(r layout.Rect) {
 func (s *BoxedSidebar) View() string {
 	t := theme.Current()
 	// Match Card style: Rounded Border, SurfaceHighlight color, Padding(0,1)
-	style := t.Styles.Border.Copy().
+	style := t.Styles.Border.
 		Padding(0, 1).
 		Width(s.Width() - 2)
 
