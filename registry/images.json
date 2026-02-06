@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-01-26T08:27:03.641868296Z",
+  "updated_at": "2026-02-06T08:36:17.054064167Z",
   "images": [
     {
       "name": "ubuntu",
@@ -50,8 +50,8 @@
           "arch": "amd64",
           "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-Cloud.qcow2",
           "checksum_type": "sha256",
-          "checksum": "c369f4a67b14bf5576fcd53f17793a1e73a36c35a27a39ebb6d53e512bf8319b",
-          "size_bytes": 292499968,
+          "checksum": "87a2655f1bed4dabe4e1672f18eeed001ef78a3c82f71882de11b231e7124475",
+          "size_bytes": 296480256,
           "format": "qcow2"
         }
       ]
@@ -90,8 +90,8 @@
           "arch": "amd64",
           "url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
           "checksum_type": "sha512",
-          "checksum": "4b3f51ea8febb8d8eac4532604383b85c8d70eb79e7732de822bf3da81ddcde1885e87227ea0ef76c2e184045963990224ccd855ceba13a226c32fad44ed193a",
-          "size_bytes": 346161152,
+          "checksum": "29aa800305f572dad30ce03071a9323230f14cfbdbde3cfc38aac3c77378a26e697d0845d8859357e7e4dab42b453cd299286023d9716833fc087008a2350d95",
+          "size_bytes": 346292224,
           "format": "qcow2"
         }
       ]
@@ -109,10 +109,10 @@
             "latest"
           ],
           "arch": "amd64",
-          "url": "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/cloud/nocloud_alpine-3.20.8-x86_64-bios-cloudinit-r0.qcow2",
+          "url": "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/cloud/nocloud_alpine-3.20.9-x86_64-bios-cloudinit-r0.qcow2",
           "checksum_type": "sha512",
-          "checksum": "563ab052b758022e537e718bc29863c1ae7ca2790f276f556f1d4fee5d69b06deb027025f34af8114805d9998b46e1cbc50d8e402e50fb2f46b23dec31b89adb",
-          "size_bytes": 177733632,
+          "checksum": "1aa57dc508820f2fbafcd7ef735fa33cb7e5445ad6b21185d015373ab1fa11815b5d5cd8c967585f4355ca5acca487103f18f591fcf10cef19e89060151f78af",
+          "size_bytes": 171900928,
           "format": "qcow2"
         },
         {
@@ -122,10 +122,10 @@
             "latest"
           ],
           "arch": "amd64",
-          "url": "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/cloud/nocloud_alpine-3.21.5-x86_64-bios-cloudinit-r0.qcow2",
+          "url": "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/cloud/nocloud_alpine-3.21.6-x86_64-bios-cloudinit-r0.qcow2",
           "checksum_type": "sha512",
-          "checksum": "d8583f69bcda16e47ae748c8b945f60d765a6a9d6a281685040c4ccd7092f0b80432b80ee076b83ee2620cf5ba868ea520d7ffc37266b9eb6c6c3726ff4440fc",
-          "size_bytes": 177078272,
+          "checksum": "7efc1a1095a8f0cc8cd4a790c0b7b90e8c76212a363c446b59b76c202359e3730b99401e9de39dcc64f5202fd6fd5e8ac7d20c0268561f485c43cfea4568593d",
+          "size_bytes": 171835392,
           "format": "qcow2"
         }
       ]
@@ -136,7 +136,6 @@
       "description": "CirrOS - Test Image",
       "homepage": "https://download.cirros-cloud.net",
       "ssh_user": "cirros",
-      "ssh_password": "gocubsgo",
       "versions": [
         {
           "version": "0.6.3",
