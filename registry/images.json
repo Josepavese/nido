@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-02-06T08:36:17.054064167Z",
+  "updated_at": "2026-02-13T08:37:38.356684479Z",
   "images": [
     {
       "name": "ubuntu",
@@ -18,8 +18,8 @@
           "arch": "amd64",
           "url": "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img",
           "checksum_type": "sha256",
-          "checksum": "2b5f90ffe8180def601c021c874e55d8303e8bcbfc66fee2b94414f43ac5eb1f",
-          "size_bytes": 626655744,
+          "checksum": "3c5d83863fd3d624c8c628ed69520ccee62c1aba8101d0a3f9b16dbc80766943",
+          "size_bytes": 627402752,
           "format": "qcow2"
         },
         {
@@ -50,8 +50,8 @@
           "arch": "amd64",
           "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-Cloud.qcow2",
           "checksum_type": "sha256",
-          "checksum": "87a2655f1bed4dabe4e1672f18eeed001ef78a3c82f71882de11b231e7124475",
-          "size_bytes": 296480256,
+          "checksum": "0f92373444de5c4e06245dcf831beef0038c1309f65a6dff0daa69081fdb636c",
+          "size_bytes": 296557056,
           "format": "qcow2"
         }
       ]
@@ -90,8 +90,8 @@
           "arch": "amd64",
           "url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
           "checksum_type": "sha512",
-          "checksum": "29aa800305f572dad30ce03071a9323230f14cfbdbde3cfc38aac3c77378a26e697d0845d8859357e7e4dab42b453cd299286023d9716833fc087008a2350d95",
-          "size_bytes": 346292224,
+          "checksum": "e5d776b9de352c89fbad4baec8bfd38a35c5905114a5f3b108946348cb44d869396d22e4a837a43afee4b11363d4759c358fb3e8a7cd07fa743ed6b663784fed",
+          "size_bytes": 345178112,
           "format": "qcow2"
         }
       ]
