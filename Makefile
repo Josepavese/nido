@@ -49,17 +49,3 @@ deps:
 # Full CI check: format, lint, test, build
 ci: fmt lint test build
 	@echo "✅ All checks passed"
-
-# Sync .secret to GitHub Secrets (SSOT)
-# Requires .secret file: KEY=VALUE
-sync-secrets:
-	@echo "🔮 Syncing secrets to the Matrix..."
-	@if [ -f .secret ]; then \
-		grep -v '^#' .secret | grep '=' | while IFS='=' read -r key val; do \
-			echo "$$val" | gh secret set "$$key"; \
-			echo "✅ $$key synced"; \
-		done; \
-	else \
-		echo "❌ .secret file not found"; \
-		exit 1; \
-	fi
