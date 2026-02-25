@@ -31,6 +31,8 @@ func Fetch(src Source, strat Strategy) ([]image.Version, error) {
 		return fetchDebian(src, strat)
 	case "alpine-cdn":
 		return fetchAlpine(src, strat)
+	case "opensuse-tumbleweed":
+		return fetchOpenSUSE(src, strat)
 	case "github-release":
 		return fetchGithubRelease(src, strat)
 	default:
@@ -87,34 +89,54 @@ func fetchUbuntu(src Source, strat Strategy) ([]image.Version, error) {
 	var results []image.Version
 
 	for _, ver := range strat.Versions {
-		// Ubuntu structure: {base}/{ver}/release/SHA256SUMS
-		sumsURL := fmt.Sprintf("%s/%s/release/SHA256SUMS", strat.BaseURL, ver)
-
-		// Ubuntu images usually match *server-cloudimg-amd64.img
-		// We fetch the SUMS file first to get the exact filename and hash
-		content, err := fetchString(sumsURL)
+		// 1. Fetch directory listing to find latest release folder
+		baseURL := fmt.Sprintf("%s/%s", strat.BaseURL, ver)
+		content, err := fetchString(baseURL + "/")
 		if err != nil {
-			fmt.Printf("⚠️ [%s] Failed to fetch SUMS for %s\n", src.Name, ver)
+			fmt.Printf("⚠️ [%s] Failed to list dir for %s: %v\n", src.Name, ver, err)
 			continue
 		}
 
-		// Parse SUMS
-		// Format: <hash> *<filename>
+		// Find latest release folder: href="release-YYYYMMDD/"
+		re := regexp.MustCompile(`href="(release-\d{8}/)"`)
+		matches := re.FindAllStringSubmatch(content, -1)
+		if len(matches) == 0 {
+			fmt.Printf("⚠️ [%s] No release folder found for %s\n", src.Name, ver)
+			continue
+		}
+
+		// Extract folder names and sort alphabetically (YYYYMMDD sorts correctly)
+		var folders []string
+		for _, m := range matches {
+			folders = append(folders, m[1])
+		}
+		sort.Strings(folders)
+		latestReleaseFolder := strings.TrimSuffix(folders[len(folders)-1], "/")
+
+		// 2. Fetch SUMS from the specific immutable folder
+		sumsURL := fmt.Sprintf("%s/%s/%s/SHA256SUMS", strat.BaseURL, ver, latestReleaseFolder)
+		sumsContent, err := fetchString(sumsURL)
+		if err != nil {
+			fmt.Printf("⚠️ [%s] Failed to fetch SUMS for %s %s\n", src.Name, ver, latestReleaseFolder)
+			continue
+		}
+
+		// Parse SUMS. Format: <hash> *<filename>
 		lineRegex := regexp.MustCompile(`([a-f0-9]{64}) \*(.+server-cloudimg-amd64\.img)`)
-		match := lineRegex.FindStringSubmatch(content)
-		if match == nil {
-			fmt.Printf("⚠️ [%s] No matching image found in SUMS for %s\n", src.Name, ver)
+		sumsMatch := lineRegex.FindStringSubmatch(sumsContent)
+		if sumsMatch == nil {
+			fmt.Printf("⚠️ [%s] No matching image found in SUMS for %s %s\n", src.Name, ver, latestReleaseFolder)
 			continue
 		}
 
-		hash := match[1]
-		filename := match[2]
-		imgURL := fmt.Sprintf("%s/%s/release/%s", strat.BaseURL, ver, filename)
+		hash := sumsMatch[1]
+		filename := sumsMatch[2]
+		imgURL := fmt.Sprintf("%s/%s/%s/%s", strat.BaseURL, ver, latestReleaseFolder, filename)
 
-		// Get Size
+		// 3. Get Size
 		size, _ := getRemoteSize(imgURL)
 
-		// Aliases (hardcoded logic for common ubuntu versions)
+		// 4. Aliases
 		aliases := []string{}
 		if ver == "24.04" {
 			aliases = []string{"noble", "lts", "latest"}
@@ -141,36 +163,61 @@ func fetchDebian(src Source, strat Strategy) ([]image.Version, error) {
 	var results []image.Version
 
 	for _, ver := range strat.Versions {
-		// Debian: {base}/bookworm/latest/SHA512SUMS (we need codename mapping or config)
 		codename := "bookworm" // default
 		if ver == "11" {
 			codename = "bullseye"
 		}
 
-		baseURL := fmt.Sprintf("%s/%s/latest", strat.BaseURL, codename)
-		sumsURL := baseURL + "/SHA512SUMS"
-
-		content, err := fetchString(sumsURL)
+		// 1. Fetch directory listing to find latest release folder
+		baseURL := fmt.Sprintf("%s/%s", strat.BaseURL, codename)
+		content, err := fetchString(baseURL + "/")
 		if err != nil {
+			fmt.Printf("⚠️ [%s] Failed to list dir for %s: %v\n", src.Name, ver, err)
 			continue
 		}
 
-		// debian-12-genericcloud-amd64.qcow2
-		// Match hash, then spaces, then optional *, then filename
-		lineRegex := regexp.MustCompile(`([a-f0-9]{128})\s+\*?((debian-\d+-genericcloud-amd64\.qcow2))`)
-		match := lineRegex.FindStringSubmatch(content)
-		if match == nil {
+		// Find latest release folder: href="20260225-2399/"
+		re := regexp.MustCompile(`href="(\d{8}-\d{4}/)"`)
+		matches := re.FindAllStringSubmatch(content, -1)
+		if len(matches) == 0 {
+			fmt.Printf("⚠️ [%s] No release folder found for %s\n", src.Name, ver)
 			continue
 		}
 
-		hash := match[1]
-		filename := match[2] // Group 2 is filename
+		// Extract folder names and sort
+		var folders []string
+		for _, m := range matches {
+			folders = append(folders, m[1])
+		}
+		sort.Strings(folders)
+		latestReleaseFolder := strings.TrimSuffix(folders[len(folders)-1], "/")
+
+		// 2. Fetch SUMS from the specific immutable folder
+		specificBaseURL := fmt.Sprintf("%s/%s/%s", strat.BaseURL, codename, latestReleaseFolder)
+		sumsURL := specificBaseURL + "/SHA512SUMS"
+
+		sumsContent, err := fetchString(sumsURL)
+		if err != nil {
+			fmt.Printf("⚠️ [%s] Failed to fetch SUMS for %s %s\n", src.Name, ver, latestReleaseFolder)
+			continue
+		}
+
+		// debian-12-genericcloud-amd64-20260225-2399.qcow2
+		lineRegex := regexp.MustCompile(`([a-f0-9]{128})\s+\*?((debian-\d+-genericcloud-amd64.*\.qcow2))`)
+		sumsMatch := lineRegex.FindStringSubmatch(sumsContent)
+		if sumsMatch == nil {
+			fmt.Printf("⚠️ [%s] No matching image found in SUMS for %s %s\n", src.Name, ver, latestReleaseFolder)
+			continue
+		}
+
+		hash := sumsMatch[1]
+		filename := sumsMatch[2]
 
 		if filename == "" {
 			continue
 		}
 
-		imgURL := baseURL + "/" + filename
+		imgURL := specificBaseURL + "/" + filename
 		size, _ := getRemoteSize(imgURL)
 
 		results = append(results, image.Version{
@@ -234,6 +281,63 @@ func fetchAlpine(src Source, strat Strategy) ([]image.Version, error) {
 			Arch:         "amd64",
 			URL:          imgURL,
 			ChecksumType: "sha512",
+			Checksum:     hash,
+			SizeBytes:    size,
+			Format:       "qcow2",
+		})
+	}
+	return results, nil
+}
+
+func fetchOpenSUSE(src Source, strat Strategy) ([]image.Version, error) {
+	var results []image.Version
+
+	for _, ver := range strat.Versions { // ver can be just "Latest" mapped to the latest snapshot
+		// 1. Fetch directory listing
+		content, err := fetchString(strat.BaseURL + "/")
+		if err != nil {
+			fmt.Printf("⚠️ [%s] Failed to list dir for %s: %v\n", src.Name, ver, err)
+			continue
+		}
+
+		// Find snapshot file: openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260224.qcow2
+		// Or similar. Let's use a safe regex that captures the snapshot timestamp
+		re := regexp.MustCompile(`(openSUSE-Tumbleweed-Minimal-VM\.x86_64(?:-\d+\.\d+\.\d+)?-Cloud-Snapshot(\d{8})\.qcow2)`)
+		matches := re.FindAllStringSubmatch(content, -1)
+
+		if len(matches) == 0 {
+			fmt.Printf("⚠️ [%s] No snapshot file found for %s\n", src.Name, ver)
+			continue
+		}
+
+		// Sort to find the latest snapshot
+		sort.Slice(matches, func(i, j int) bool {
+			return matches[i][2] < matches[j][2]
+		})
+
+		latestMatch := matches[len(matches)-1]
+		filename := latestMatch[1]
+		snapshotDate := latestMatch[2] // e.g. 20260224
+
+		imgURL := strat.BaseURL + "/" + filename
+		checksumURL := imgURL + ".sha256"
+
+		// 2. Fetch Checksum
+		hash, err := findChecksum(checksumURL, "", "sha256")
+		if err != nil {
+			fmt.Printf("⚠️ [%s] Checksum failed for %s: %v\n", src.Name, ver, err)
+			continue
+		}
+
+		// 3. Get Size
+		size, _ := getRemoteSize(imgURL)
+
+		results = append(results, image.Version{
+			Version:      "Snapshot" + snapshotDate,
+			Aliases:      []string{ver}, // maps "Latest" to this version
+			Arch:         "amd64",
+			URL:          imgURL,
+			ChecksumType: "sha256",
 			Checksum:     hash,
 			SizeBytes:    size,
 			Format:       "qcow2",

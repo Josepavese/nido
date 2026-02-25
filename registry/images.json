@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-02-25T08:41:52.237830627Z",
+  "updated_at": "2026-02-25T23:19:34.03239775Z",
   "images": [
     {
       "name": "ubuntu",
@@ -16,10 +16,10 @@
             "latest"
           ],
           "arch": "amd64",
-          "url": "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img",
+          "url": "https://cloud-images.ubuntu.com/releases/24.04/release-20260225/ubuntu-24.04-server-cloudimg-amd64.img",
           "checksum_type": "sha256",
-          "checksum": "2f9acc20a381cde6fa678672e20a1408d2b3f346531b9026df2a935c37d2de20",
-          "size_bytes": 628322816,
+          "checksum": "7aa6d9f5e8a3a55c7445b138d31a73d1187871211b2b7da9da2e1a6cbf169b21",
+          "size_bytes": 629048832,
           "format": "qcow2"
         },
         {
@@ -28,7 +28,7 @@
             "jammy"
           ],
           "arch": "amd64",
-          "url": "https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img",
+          "url": "https://cloud-images.ubuntu.com/releases/22.04/release-20260218/ubuntu-22.04-server-cloudimg-amd64.img",
           "checksum_type": "sha256",
           "checksum": "853c8aa56210dae1d9caaf6d75f3126c82e8e62de496a16b5a699e51be30cdd7",
           "size_bytes": 689906176,
@@ -43,15 +43,15 @@
       "homepage": "https://get.opensuse.org/tumbleweed/",
       "versions": [
         {
-          "version": "Latest",
+          "version": "Snapshot20260224",
           "aliases": [
             "Latest"
           ],
           "arch": "amd64",
-          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-Cloud.qcow2",
+          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260224.qcow2",
           "checksum_type": "sha256",
-          "checksum": "cbb85208fccc1f88b16865d17af8bc4622ebc317705b58d0bd65cb577fa33a73",
-          "size_bytes": 298900992,
+          "checksum": "6b1fad06f7e845a23b1cb5eb8e9fef1400d3cf33a7802a0331a5473e0b1be764",
+          "size_bytes": 298795520,
           "format": "qcow2"
         }
       ]
@@ -68,7 +68,7 @@
             "2025.4"
           ],
           "arch": "amd64",
-          "url": "https://kali.download/cloud-images/current/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz",
+          "url": "https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz",
           "checksum_type": "sha256",
           "checksum": "649f20a4703f2324c0a5fa286a9260a5eb98d7f5d554d9aa179f284e8338fe8f",
           "size_bytes": 203023936,
@@ -88,10 +88,10 @@
             "bookworm"
           ],
           "arch": "amd64",
-          "url": "https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2",
+          "url": "https://cloud.debian.org/images/cloud/bookworm/20260225-2399/debian-12-genericcloud-amd64-20260225-2399.qcow2",
           "checksum_type": "sha512",
-          "checksum": "e5d776b9de352c89fbad4baec8bfd38a35c5905114a5f3b108946348cb44d869396d22e4a837a43afee4b11363d4759c358fb3e8a7cd07fa743ed6b663784fed",
-          "size_bytes": 345178112,
+          "checksum": "9484213faab270ee150c337ab0e3e08ec70118b353c0c02c365c1e06e4d5cc18473c59b1e187d5edd0805548d4b1570ac07750076b8f55c6e20efb8871f50bfc",
+          "size_bytes": 349634560,
           "format": "qcow2"
         }
       ]
