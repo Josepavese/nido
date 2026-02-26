@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Josepavese/nido",
   "title": "Nido — Fast, Simple VM Sandboxes for AI Agents (Temporary & Persistent)",
-  "description": "Instantly download, spawn, and manage temporary or persistent Linux VMs (QEMU/KVM). Designed for AI agents to safely deploy, test, and automate in isolated environments.",
+  "description": "Manage temporary or persistent Linux VMs (QEMU/KVM). Designed for AI agents and automation.",
   "version": "0.0.0-dev",
   "packages": [
     {
