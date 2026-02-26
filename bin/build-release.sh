@@ -115,10 +115,12 @@ if command -v jq &> /dev/null && command -v sha256sum &> /dev/null; then
     MCPB_PATH="${OUTPUT_DIR}/nido.mcpb"
     SHA=$(sha256sum "$MCPB_PATH" | awk '{print $1}')
     REPO=${GITHUB_REPOSITORY:-"Josepavese/nido"}
+    # MCP Registry often requires strict semver without the 'v' prefix
+    STRICT_VERSION=${VERSION#v}
     URL="https://github.com/${REPO}/releases/download/${VERSION}/nido.mcpb"
     
-    echo "  Injecting version and SHA into server.json..."
-    jq --arg v "${VERSION}" --arg s "$SHA" --arg u "$URL" \
+    echo "  Injecting version ($STRICT_VERSION) and SHA into server.json..."
+    jq --arg v "${STRICT_VERSION}" --arg s "$SHA" --arg u "$URL" \
       '.version = $v | .packages[0].version = $v | .packages[0].fileSha256 = $s | .packages[0].identifier = $u' \
       server.json > "${OUTPUT_DIR}/server.json"
       
