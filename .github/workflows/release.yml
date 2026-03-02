@@ -41,6 +41,12 @@ jobs:
         with:
           go-version: '1.21'
 
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils
+          qemu-system-x86_64 --version
+
       - name: Build release binaries
         run: |
           bash bin/build-release.sh ${{ env.VERSION }}
@@ -229,6 +235,16 @@ jobs:
 
       - name: Verify dist contents
         run: ls -R dist/
+
+      - name: Run Blackbox Validation
+        env:
+          NIDO_BIN: bin/nido
+          SKIP_GUI: true
+          SKIP_UPDATE: true
+        run: |
+          go build -o bin/nido ./cmd/nido
+          go build -o bin/nido-validator ./cmd/nido-validator
+          bin/nido-validator
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
