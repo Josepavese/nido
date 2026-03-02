@@ -54,10 +54,12 @@ func TestLoadConfig_Values(t *testing.T) {
 
 func TestLoadConfig_MissingFile(t *testing.T) {
 	cfg, err := LoadConfig(filepath.Join(os.TempDir(), "non-existent-nido-config.env"))
-	if err == nil {
-		t.Error("Expected error for missing file, got nil")
+	if err != nil {
+		t.Errorf("Expected no error for missing file (should return defaults), got %v", err)
 	}
-	if cfg != nil {
-		t.Error("Expected nil config for missing file")
+	if cfg == nil {
+		t.Error("Expected default config for missing file, got nil")
+	} else if cfg.SSHUser != "vmuser" {
+		t.Errorf("Expected default SSHUser 'vmuser', got '%s'", cfg.SSHUser)
 	}
 }
