@@ -67,19 +67,27 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	// If it's not an absolute path and doesn't contain a slash, it's either a Template or an Image Tag
 	if !filepath.IsAbs(tpl) && !strings.Contains(tpl, "/") {
 		// Try Template first
-		templatePath := filepath.Join(p.Config.BackupDir, tpl+".compact.qcow2")
+		// Safety: Default directories if Config is nil (e.g. during minimal init)
+		backupsDir := ""
+		imgDir := ""
+		if p.Config != nil {
+			backupsDir = p.Config.BackupDir
+			imgDir = p.Config.ImageDir
+		} else {
+			home, _ := sysutil.UserHome()
+			backupsDir = filepath.Join(home, ".nido", "backups")
+			imgDir = filepath.Join(home, ".nido", "images")
+		}
+
+		templatePath := filepath.Join(backupsDir, tpl+".compact.qcow2")
 		if _, err := os.Stat(templatePath); err == nil {
 			tpl = templatePath
 		} else {
 			// Try resolving as Image Tag (e.g., "ubuntu:24.04") or Flavour
-			imgDir := p.Config.ImageDir
+
 			// SSOT Fix: Trust LoadConfig to set defaults, or fallback relative to Home if absolutely needed,
 			// but never hardcode "images" if Config has it.
 			if imgDir == "" {
-				// Fallback to sysutil default or similar.
-				// Based on config.go, ImageDir IS defaulted. So we should just trust it.
-				// If strictly empty, we might error or fallback.
-				// Let's assume LoadConfig did its job, but strictly maintain the fallback logic as "default value" logic if missing.
 				home, _ := sysutil.UserHome()
 				imgDir = filepath.Join(home, ".nido", "images")
 			}

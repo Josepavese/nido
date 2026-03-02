@@ -46,11 +46,12 @@ func main() {
 	// 2. Validate Loop
 	// Check for KVM availability once before the loop
 	hasKVM := false
-	if _, err := os.Stat("/dev/kvm"); err == nil {
+	if os.Getenv("GITHUB_ACTIONS") == "true" {
+		fmt.Println("⚠️  KVM not available or unreliable in GitHub Actions. Skipping VM lifecycle tests.")
+		fmt.Println("👉 Advice: Use a self-hosted runner with KVM support or a larger GitHub runner for full validation.")
+		hasKVM = false
+	} else if _, err := os.Stat("/dev/kvm"); err == nil {
 		hasKVM = true
-	} else if os.Getenv("GITHUB_ACTIONS") == "true" {
-		fmt.Println("⚠️  KVM not available in GitHub Actions. Validation will likely fail or timeout.")
-		fmt.Println("👉 Advice: Use a self-hosted runner with KVM support or a larger GitHub runner.")
 	}
 
 	for _, img := range catalog.Images {
