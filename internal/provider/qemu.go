@@ -789,7 +789,13 @@ func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
 
 	// 1. Full Copy Mode (No Cache)
 	// If LinkedClones is disabled and we have a template, create a standalone copy.
-	if !p.Config.LinkedClones && tpl != "" {
+	// Safety check: if Config is nil, default to Linked Clones behavior (safer)
+	useLinked := true
+	if p.Config != nil {
+		useLinked = p.Config.LinkedClones
+	}
+
+	if !useLinked && tpl != "" {
 		return sysutil.ProvisionFile(target, func() error {
 			// Convert (Full Copy)
 			if out, err := exec.Command("qemu-img", "convert", "-O", "qcow2", tpl, target).CombinedOutput(); err != nil {
