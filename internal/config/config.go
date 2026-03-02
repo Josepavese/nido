@@ -46,12 +46,8 @@ type TUIConfig struct {
 // If a key is missing, it falls back to historical defaults.
 func LoadConfig(path string) (*Config, error) {
 	home, _ := sysutil.UserHome()
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
 
+	// Initialize with defaults
 	cfg := &Config{
 		BackupDir:      filepath.Join(home, ".nido", "backups"),
 		SSHUser:        "vmuser",
@@ -68,6 +64,15 @@ func LoadConfig(path string) (*Config, error) {
 			GapScale:         1,
 		},
 	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return cfg, nil // Return defaults if file doesn't exist
+		}
+		return nil, err
+	}
+	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
