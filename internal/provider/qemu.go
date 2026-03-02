@@ -40,19 +40,21 @@ func NewQemuProvider(rootDir string, cfg *config.Config) *QemuProvider {
 // Spawn brings a new VM to life. It handles template resolution, disk creation,
 // and saves the initial state before handing over to Start.
 func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
-	// 0. Name Validation
-	// Only allow alphanumeric, hyphens, underscores, and dots. Rejects spaces.
+	// 0. Validate input
 	if name == "" {
 		return fmt.Errorf("name cannot be empty")
 	}
-	for _, r := range name {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.') {
-			return fmt.Errorf("invalid name: only alphanumeric, hyphens, underscores, and dots allowed (no spaces)")
+	// Only allow alphanumeric, hyphens, underscores, and dots. Rejects spaces.
+	// (Unless it's an absolute path, which we handle separately)
+	if !filepath.IsAbs(name) {
+		for _, r := range name {
+			if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.') {
+				return fmt.Errorf("invalid name: only alphanumeric, hyphens, underscores, and dots allowed (no spaces)")
+			}
 		}
 	}
 
-	// 0.5 Auto-Discovery for Accelerators (Feature Propagation: Engine Level)
-	// 0.5 Auto-Discovery for Accelerators (Feature Propagation: Engine Level)
+	// 0.5 Auto-Discovery for Accelerators
 	resolvedAccels, err := p.resolveAutoAccelerators(opts.Accelerators)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "⚠️  Auto-discovery warning: %v\n", err)
@@ -61,15 +63,12 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	}
 
 	// 1. Template/Image Resolution
-	// 1. Template/Image Resolution
 	tpl := opts.DiskPath
 
 	// If it's not an absolute path and doesn't contain a slash, it's either a Template or an Image Tag
-	if !filepath.IsAbs(tpl) && !strings.Contains(tpl, "/") {
-		// Try Template first
-		// Safety: Default directories if Config is nil (e.g. during minimal init)
-		backupsDir := ""
-		imgDir := ""
+	if !filepath.IsAbs(tpl) && !strings.Contains(tpl, "/") && tpl != "" {
+		// Defaults fallback if Config is missing (safeguard)
+		var backupsDir, imgDir string
 		if p.Config != nil {
 			backupsDir = p.Config.BackupDir
 			imgDir = p.Config.ImageDir
@@ -83,16 +82,7 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 		if _, err := os.Stat(templatePath); err == nil {
 			tpl = templatePath
 		} else {
-			// Try resolving as Image Tag (e.g., "ubuntu:24.04") or Flavour
-
-			// SSOT Fix: Trust LoadConfig to set defaults, or fallback relative to Home if absolutely needed,
-			// but never hardcode "images" if Config has it.
-			if imgDir == "" {
-				home, _ := sysutil.UserHome()
-				imgDir = filepath.Join(home, ".nido", "images")
-			}
-
-			// Load catalog to find the image
+			// Resolve as Image Tag (e.g., "ubuntu:24.04")
 			catalog, err := image.LoadCatalogFromFile(filepath.Join(imgDir, image.CatalogCacheFile))
 			if err == nil {
 				pName, pVer := tpl, ""
@@ -100,41 +90,33 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 					parts := strings.Split(tpl, ":")
 					pName, pVer = parts[0], parts[1]
 				}
-				sshPassword := ""
 				img, ver, err := catalog.FindImage(pName, pVer)
 				if err == nil {
-					// Found! Update tpl to the cached image path
 					tpl = filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
-					// Also update SSH user/password if not explicitly provided
 					if opts.SSHUser == "" && img.SSHUser != "" {
 						opts.SSHUser = img.SSHUser
 					}
-					if ver.SSHPassword != "" {
-						sshPassword = ver.SSHPassword
-					} else if img.SSHPassword != "" {
-						sshPassword = img.SSHPassword
+					if opts.SSHPassword == "" {
+						if ver.SSHPassword != "" {
+							opts.SSHPassword = ver.SSHPassword
+						} else if img.SSHPassword != "" {
+							opts.SSHPassword = img.SSHPassword
+						}
 					}
-					opts.SSHPassword = sshPassword
 				}
 			}
 		}
 	}
 
 	// 2. Create Disk
-	// Default to sysutil default (20G), but expand if template is larger
 	diskSize := sysutil.DefaultDiskSize
 	if tpl != "" {
-		out, err := exec.Command("qemu-img", "info", "--output=json", tpl).Output()
-		if err == nil {
+		if out, err := exec.Command("qemu-img", "info", "--output=json", tpl).Output(); err == nil {
 			var info struct {
 				VirtualSize int64 `json:"virtual-size"`
 			}
 			if json.Unmarshal(out, &info) == nil && info.VirtualSize > 0 {
-				// Convert virtual size to GB and add 1G buffer (or just use virtual size)
-				// qemu-img create handles bytes if we provide a number without suffix
 				diskSize = fmt.Sprintf("%d", info.VirtualSize)
-
-				// Ensure at least sysutil default
 				if info.VirtualSize < sysutil.DefaultDiskBytes {
 					diskSize = sysutil.DefaultDiskSize
 				}
