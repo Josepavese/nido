@@ -78,6 +78,8 @@ func fetchGeneric(src Source, strat Strategy) ([]image.Version, error) {
 			URL:          imgURL,
 			ChecksumType: strat.ChecksumType,
 			Checksum:     chk,
+			ChecksumURL:  checksumURL,
+			ChecksumRegex: regex,
 			SizeBytes:    size,
 			Format:       format,
 		})
@@ -152,6 +154,8 @@ func fetchUbuntu(src Source, strat Strategy) ([]image.Version, error) {
 			URL:          imgURL,
 			ChecksumType: "sha256",
 			Checksum:     hash,
+			ChecksumURL:  fmt.Sprintf("%s/%s/release/SHA256SUMS", strat.BaseURL, ver),
+			ChecksumRegex: regexp.QuoteMeta(filename),
 			SizeBytes:    size,
 			Format:       "qcow2",
 		})
@@ -227,6 +231,8 @@ func fetchDebian(src Source, strat Strategy) ([]image.Version, error) {
 			URL:          imgURL,
 			ChecksumType: "sha512",
 			Checksum:     hash,
+			ChecksumURL:  fmt.Sprintf("%s/%s/current/SHA512SUMS", strat.BaseURL, codename),
+			ChecksumRegex: regexp.QuoteMeta(filename),
 			SizeBytes:    size,
 			Format:       "qcow2",
 		})
@@ -282,6 +288,8 @@ func fetchAlpine(src Source, strat Strategy) ([]image.Version, error) {
 			URL:          imgURL,
 			ChecksumType: "sha512",
 			Checksum:     hash,
+			ChecksumURL:  checksumURL,
+			ChecksumRegex: "^" + regexp.QuoteMeta(hash) + "$",
 			SizeBytes:    size,
 			Format:       "qcow2",
 		})
@@ -339,6 +347,8 @@ func fetchOpenSUSE(src Source, strat Strategy) ([]image.Version, error) {
 			URL:          imgURL,
 			ChecksumType: "sha256",
 			Checksum:     hash,
+			ChecksumURL:  checksumURL,
+			ChecksumRegex: "^" + regexp.QuoteMeta(hash) + "$",
 			SizeBytes:    size,
 			Format:       "qcow2",
 		})

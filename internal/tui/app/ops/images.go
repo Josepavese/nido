@@ -313,8 +313,25 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 				}
 
 				// Verify Checksum (on the downloaded file)
-				if ver.Checksum != "" {
-					if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+				expected := ver.Checksum
+				if ver.ChecksumURL != "" {
+					ch <- ProgressMsg{
+						OpName: opName,
+						Status: view.StatusMsg{
+							Loading:   true,
+							Operation: "Fetching remote checksum...",
+							Progress:  1.0,
+						},
+					}
+					fresh, err := image.FetchChecksum(ver.ChecksumURL, ver.ChecksumRegex, ver.ChecksumType)
+					if err == nil {
+						expected = fresh
+					}
+					// If fetching fails, we continue with the hardcoded 'ver.Checksum' if it exists.
+				}
+
+				if expected != "" {
+					if err := image.VerifyChecksum(downloadPath, expected, ver.ChecksumType); err != nil {
 						os.Remove(downloadPath)
 						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("disk verification failed: %w", err)}}
 						return
