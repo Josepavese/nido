@@ -34,6 +34,8 @@ type Version struct {
 	SizeBytes      int64    `json:"size_bytes"`
 	SizeHuman      string   `json:"size,omitempty"` // e.g., "1.2 GB"
 	Format         string   `json:"format"`         // "qcow2"
+	ChecksumURL    string   `json:"checksum_url,omitempty"`
+	ChecksumRegex  string   `json:"checksum_regex,omitempty"`
 	SSHUser        string   `json:"ssh_user,omitempty"`
 	SSHPassword    string   `json:"ssh_password,omitempty"`
 	PartURLs       []string `json:"part_urls,omitempty"`
