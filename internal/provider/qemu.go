@@ -56,9 +56,7 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 
 	// 0.5 Auto-Discovery for Accelerators
 	resolvedAccels, err := p.resolveAutoAccelerators(opts.Accelerators)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "⚠️  Auto-discovery warning: %v\n", err)
-	} else {
+	if err == nil {
 		opts.Accelerators = resolvedAccels
 	}
 
@@ -154,8 +152,6 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 			customUserData = string(data)
 			// Handle placeholder if present
 			customUserData = strings.ReplaceAll(customUserData, "${SSH_KEY}", sshKey)
-		} else {
-			fmt.Printf("⚠️  Warning: Failed to read custom user-data file: %v\n", err)
 		}
 	}
 
@@ -172,7 +168,7 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	if err := sysutil.ProvisionFile(seedPath, func() error {
 		return ci.GenerateISO(seedPath)
 	}); err != nil {
-		fmt.Printf("⚠️  Warning: Failed to generate cloud-init seed: %v\n", err)
+		// Seed ISO is best-effort and must not block VM creation.
 	}
 
 	// 5. Port Assignment (at spawn time, not start time)
@@ -233,7 +229,7 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 		cpu = sysutil.DefaultVCPUs()
 	}
 
-	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser, opts.SSHPassword, opts.Forwarding, opts.Cmdline, mem, cpu, opts.RawQemuArgs, opts.Accelerators); err != nil {
+	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser, opts.Forwarding, opts.Cmdline, mem, cpu, opts.RawQemuArgs, opts.Accelerators); err != nil {
 		return fmt.Errorf("failed to save initial state: %w", err)
 	}
 
@@ -342,7 +338,7 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	}
 
 	if updated {
-		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 	}
 
 	// 2.5 Prepare Accelerators (Zero-Config)
@@ -383,7 +379,7 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	}
 
 	// 6. Update State with PID (0 if unknown)
-	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 
 	return nil
 }
@@ -394,11 +390,9 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 
 	// Safe minimums if 0 (for robustness, should be handled by Spawn)
 	if memoryMB == 0 {
-		fmt.Printf("⚠️  Warning: VM %s has 0MB RAM in state, using 128MB safe minimum\n", name)
 		memoryMB = 128
 	}
 	if vcpus == 0 {
-		fmt.Printf("⚠️  Warning: VM %s has 0 vCPUs in state, using 1 safe minimum\n", name)
 		vcpus = 1
 	}
 
@@ -515,7 +509,7 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 			// Expected format: 0000:00:00.0
 			args = append(args, "-device", fmt.Sprintf("vfio-pci,host=%s", acc))
 		} else {
-			fmt.Printf("⚠️  Warning: Hardware passthrough (%s) is ignored on %s (Linux only)\n", acc, runtime.GOOS)
+			continue
 		}
 	}
 
@@ -616,7 +610,6 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 		PID:            pid,
 		IP:             "127.0.0.1",
 		SSHUser:        state.SSHUser,
-		SSHPassword:    state.SSHPassword,
 		SSHPort:        state.SSHPort,
 		VNCPort:        state.VNCPort,
 		MemoryMB:       state.MemoryMB,
@@ -697,9 +690,7 @@ func (p *QemuProvider) Stop(name string, graceful bool) error {
 				continue
 			}
 			// It's a PCI ID (e.g. 0000:01:00.0)
-			if err := p.restorePassthrough(acc); err != nil {
-				fmt.Printf("⚠️  Warning: Failed to restore accelerator %s: %v\n", acc, err)
-			}
+			_ = p.restorePassthrough(acc)
 		}
 	}
 	return nil
@@ -882,7 +873,6 @@ type VMState struct {
 	VNCPort      int           `json:"vnc_port,omitempty"`
 	Gui          bool          `json:"gui,omitempty"`
 	SSHUser      string        `json:"ssh_user,omitempty"`
-	SSHPassword  string        `json:"ssh_password,omitempty"`
 	Forwarding   []PortForward `json:"forwarding,omitempty"`
 	Cmdline      string        `json:"cmdline,omitempty"`
 	MemoryMB     int           `json:"memory_mb,omitempty"`
@@ -891,7 +881,7 @@ type VMState struct {
 	Accelerators []string      `json:"accelerators,omitempty"`
 }
 
-func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser, sshPassword string, fw []PortForward, cmdline string, memoryMB, vcpus int, rawArgs []string, accelerators []string) error {
+func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser string, fw []PortForward, cmdline string, memoryMB, vcpus int, rawArgs []string, accelerators []string) error {
 	state := VMState{
 		Name:         name,
 		PID:          pid,
@@ -899,7 +889,6 @@ func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int,
 		VNCPort:      vncPort,
 		Gui:          gui,
 		SSHUser:      sshUser,
-		SSHPassword:  sshPassword,
 		Forwarding:   fw,
 		Cmdline:      cmdline,
 		MemoryMB:     memoryMB,
@@ -909,7 +898,7 @@ func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int,
 	}
 	data, _ := json.MarshalIndent(state, "", "  ")
 	path := filepath.Join(p.RootDir, "run", name+".json")
-	return sysutil.WriteFile(path, data, 0644)
+	return sysutil.WriteFile(path, data, 0600)
 }
 
 // UpdateConfig safely modifies the persistent VMState using a read-modify-write cycle.
@@ -948,9 +937,6 @@ func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) error 
 	if updates.SSHUser != nil {
 		state.SSHUser = *updates.SSHUser
 	}
-	if updates.SSHPassword != nil {
-		state.SSHPassword = *updates.SSHPassword
-	}
 	if updates.Forwarding != nil {
 		state.Forwarding = *updates.Forwarding
 	}
@@ -959,7 +945,7 @@ func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) error 
 	}
 
 	// 3. Persist
-	return p.saveState(state.Name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+	return p.saveState(state.Name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 }
 
 func (p *QemuProvider) loadState(name string) (VMState, error) {
@@ -1460,14 +1446,14 @@ func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, er
 		if f.GuestPort == pf.GuestPort && f.Protocol == pf.Protocol {
 			// Update existing rule
 			state.Forwarding[i] = pf
-			p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+			p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 			return pf, nil
 		}
 	}
 
 	// Add new rule
 	state.Forwarding = append(state.Forwarding, pf)
-	err = p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+	err = p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 	return pf, err
 }
 
@@ -1480,7 +1466,7 @@ func (p *QemuProvider) PortUnforward(name string, guestPort int, protocol string
 	for i, f := range state.Forwarding {
 		if f.GuestPort == guestPort && (f.Protocol == protocol || protocol == "") {
 			state.Forwarding = append(state.Forwarding[:i], state.Forwarding[i+1:]...)
-			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.SSHPassword, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 		}
 	}
 
@@ -1523,7 +1509,7 @@ func (p *QemuProvider) preparePassthrough(id string) error {
 	// 1. Check IOMMU (Warn only)
 	if runtime.GOOS == "linux" {
 		if _, err := os.Stat("/sys/kernel/iommu_groups"); os.IsNotExist(err) {
-			fmt.Println("⚠️  Warning: IOMMU does not appear to be enabled (/sys/kernel/iommu_groups missing). Passthrough will likely fail.")
+			// Best-effort preflight only; let actual preparation fail if needed.
 		}
 	}
 
@@ -1588,16 +1574,8 @@ func (p *QemuProvider) resolveAutoAccelerators(input []string) ([]string, error)
 	}
 
 	if bestCandidate != nil {
-		// Log discovery to Stderr
-		status := "SAFE"
-		if !bestCandidate.IsSafe {
-			status = "UNSAFE (" + bestCandidate.Warning + ")"
-		}
-		fmt.Fprintf(os.Stderr, "🤖 Auto-detected GPU: [%s] %s (%s)\n", bestCandidate.ID, bestCandidate.Device, status)
 		finalList = append(finalList, bestCandidate.ID)
 	} else {
-		// FALLBACK: If no safe physical GPU found (or not Linux), use Virtual GPU
-		fmt.Fprintf(os.Stderr, "🤖 Auto-discovery: No safe physical GPU found. Enabling High-Performance Virtual GPU.\n")
 		finalList = append(finalList, "virtual:gpu")
 	}
 

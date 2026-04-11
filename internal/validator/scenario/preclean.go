@@ -115,10 +115,9 @@ func precleanTemplates(ctx *Context) report.StepResult {
 	if data, ok := payload["data"].(map[string]interface{}); ok {
 		if arr, ok := data["templates"].([]interface{}); ok {
 			for _, t := range arr {
-				if m, ok := t.(map[string]interface{}); ok {
-					if name, ok := m["name"].(string); ok && strings.HasPrefix(name, "tpl_primary") {
-						toDelete = append(toDelete, name)
-					}
+				name := templateName(t)
+				if strings.HasPrefix(name, "tpl_primary") {
+					toDelete = append(toDelete, name)
 				}
 			}
 		}

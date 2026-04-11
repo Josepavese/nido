@@ -92,6 +92,12 @@
       "name": "vm_config_update"
     },
     {
+      "name": "vm_config_get"
+    },
+    {
+      "name": "vm_doctor"
+    },
+    {
       "name": "nido_build_image"
     }
   ]

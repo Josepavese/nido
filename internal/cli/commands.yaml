@@ -1,0 +1,468 @@
+app:
+  use: nido
+  short: "Fast, simple VM sandboxes for AI agents"
+  long: "Nido manages local virtual machines, images, templates, cache operations, and agent-facing automation flows."
+
+groups:
+  - id: vm
+    title: "VM Management"
+  - id: storage
+    title: "Storage & Genetics"
+  - id: system
+    title: "System Ops"
+
+flags:
+  json:
+    type: bool
+    long: json
+    usage: "Structured JSON output"
+  image:
+    type: string
+    long: image
+    short: i
+    usage: "Cloud image to use"
+    completion: images
+  user_data:
+    type: string
+    long: user-data
+    usage: "Custom cloud-init user-data file"
+    completion: files
+  gui:
+    type: bool
+    long: gui
+    usage: "Enable GUI/VNC"
+  cmdline:
+    type: string
+    long: cmdline
+    usage: "Kernel command line override"
+  memory:
+    type: int
+    long: memory
+    usage: "Memory in MB"
+  cpus:
+    type: int
+    long: cpus
+    usage: "Number of vCPUs"
+  qemu_arg:
+    type: stringArray
+    long: qemu-arg
+    usage: "Additional raw QEMU argument"
+  accel:
+    type: stringArray
+    long: accel
+    usage: "Accelerator / PCI passthrough ID"
+  port:
+    type: stringArray
+    long: port
+    short: p
+    usage: "Port forward mapping"
+  web:
+    type: bool
+    long: web
+    usage: "Expose HTTP and HTTPS defaults"
+  ftp:
+    type: bool
+    long: ftp
+    usage: "Expose FTP default port"
+  ssh_user:
+    type: string
+    long: ssh-user
+    usage: "SSH username"
+  ssh_port:
+    type: int
+    long: ssh-port
+    usage: "SSH host port override"
+  vnc_port:
+    type: int
+    long: vnc-port
+    usage: "VNC host port override"
+  force:
+    type: bool
+    long: force
+    usage: "Force the operation"
+
+commands:
+  - id: vm.list
+    use: ls
+    aliases: ["list"]
+    group: vm
+    short: "List all VMs"
+    long: "List all VMs currently known by the nest."
+    examples:
+      - "nido ls"
+      - "nido ls --json"
+    flags:
+      - name: json
+    action: vm.list
+
+  - id: vm.info
+    use: info <name>
+    group: vm
+    short: "Show VM details"
+    long: "Inspect a VM and display runtime, network, and disk metadata."
+    examples:
+      - "nido info agent-01"
+    flags:
+      - name: json
+    args:
+      min: 1
+      max: 1
+    positional_completions: ["vms"]
+    action: vm.info
+
+  - id: vm.spawn
+    use: spawn <name> [template]
+    group: vm
+    short: "Create and start a VM"
+    long: "Create a VM from template or image and immediately start it."
+    examples:
+      - "nido spawn agent-01 --image ubuntu:24.04 --gui"
+      - "nido spawn agent-01 base-template"
+    flags:
+      - name: json
+      - name: image
+      - name: user_data
+      - name: gui
+      - name: cmdline
+      - name: memory
+      - name: cpus
+      - name: qemu_arg
+      - name: accel
+      - name: port
+      - name: web
+      - name: ftp
+    args:
+      min: 1
+      max: 2
+    custom_completion: spawn
+    action: vm.spawn
+
+  - id: vm.start
+    use: start <name>
+    group: vm
+    short: "Start a VM"
+    long: "Start an existing stopped VM."
+    flags:
+      - name: json
+      - name: gui
+      - name: cmdline
+    args:
+      min: 1
+      max: 1
+    positional_completions: ["vms"]
+    action: vm.start
+
+  - id: vm.stop
+    use: stop <name>
+    group: vm
+    short: "Stop a VM"
+    long: "Gracefully stop a running VM."
+    flags:
+      - name: json
+    args:
+      min: 1
+      max: 1
+    positional_completions: ["vms"]
+    action: vm.stop
+
+  - id: vm.ssh
+    use: ssh <name> [ssh-args...]
+    group: vm
+    short: "SSH into a VM"
+    long: "Open an SSH session to a running VM and forward additional SSH arguments."
+    examples:
+      - "nido ssh agent-01"
+      - "nido ssh agent-01 -L 8080:localhost:80"
+    args:
+      min: 1
+      max: -1
+    custom_completion: ssh
+    action: vm.ssh
+
+  - id: vm.delete
+    use: delete <name>
+    aliases: ["destroy"]
+    group: vm
+    short: "Delete a VM"
+    long: "Delete a VM and all of its local runtime artifacts."
+    flags:
+      - name: json
+    args:
+      min: 1
+      max: 1
+    positional_completions: ["vms"]
+    action: vm.delete
+
+  - id: vm.prune
+    use: prune
+    group: vm
+    short: "Delete all stopped VMs"
+    long: "Delete all stopped VMs from the nest."
+    flags:
+      - name: json
+    action: vm.prune
+
+  - id: ui.gui
+    use: gui
+    group: vm
+    short: "Launch the TUI"
+    long: "Open the interactive Nido terminal UI."
+    action: ui.gui
+
+  - id: template
+    use: template
+    group: storage
+    short: "Manage templates"
+    long: "Create, list, and delete VM templates."
+    commands:
+      - id: template.list
+        use: list
+        aliases: ["ls"]
+        short: "List templates"
+        flags:
+          - name: json
+        action: template.list
+      - id: template.create
+        use: create <vm> <template>
+        short: "Create a template from a VM"
+        flags:
+          - name: json
+        args:
+          min: 2
+          max: 2
+        positional_completions: ["vms", ""]
+        action: template.create
+      - id: template.delete
+        use: delete <template>
+        short: "Delete a template"
+        flags:
+          - name: json
+          - name: force
+        args:
+          min: 1
+          max: 1
+        positional_completions: ["templates"]
+        action: template.delete
+
+  - id: cache
+    use: cache
+    group: storage
+    short: "Manage image cache"
+    long: "Inspect and prune the local cached cloud images."
+    commands:
+      - id: cache.list
+        use: list
+        aliases: ["ls"]
+        short: "List cached images"
+        flags:
+          - name: json
+        action: cache.list
+      - id: cache.info
+        use: info
+        short: "Show cache statistics"
+        flags:
+          - name: json
+        action: cache.info
+      - id: cache.remove
+        use: remove <image:version>
+        aliases: ["rm"]
+        short: "Remove a cached image"
+        flags:
+          - name: json
+        args:
+          min: 1
+          max: 1
+        positional_completions: ["images"]
+        action: cache.remove
+      - id: cache.prune
+        use: prune
+        short: "Prune unused cached images"
+        flags:
+          - name: json
+        action: cache.prune
+
+  - id: images
+    use: images
+    aliases: ["image"]
+    group: storage
+    short: "Manage image catalog"
+    long: "List, pull, inspect, and refresh available cloud images."
+    commands:
+      - id: images.list
+        use: list
+        aliases: ["ls"]
+        short: "List available images"
+        flags:
+          - name: json
+        action: images.list
+      - id: images.pull
+        use: pull <image>
+        short: "Download an image"
+        flags:
+          - name: json
+        args:
+          min: 1
+          max: 1
+        positional_completions: ["images"]
+        action: images.pull
+      - id: images.info
+        use: info <image>
+        short: "Show image metadata"
+        flags:
+          - name: json
+        args:
+          min: 1
+          max: 1
+        positional_completions: ["images"]
+        action: images.info
+      - id: images.remove
+        use: remove <image>
+        aliases: ["rm"]
+        short: "Remove an image from cache"
+        flags:
+          - name: json
+        args:
+          min: 1
+          max: 1
+        positional_completions: ["images"]
+        action: images.remove
+      - id: images.update
+        use: update
+        short: "Refresh the image catalog"
+        flags:
+          - name: json
+        action: images.update
+
+  - id: build
+    use: build <blueprint>
+    group: storage
+    short: "Build an image from blueprint"
+    long: "Build a VM image from a blueprint recipe."
+    flags:
+      - name: json
+    args:
+      min: 1
+      max: 1
+    positional_completions: ["blueprints"]
+    action: build
+
+  - id: system.doctor
+    use: doctor
+    group: system
+    short: "Run system diagnostics"
+    flags:
+      - name: json
+    action: system.doctor
+
+  - id: system.accel
+    use: accel
+    group: system
+    short: "Manage accelerators"
+    commands:
+      - id: system.accel.list
+        use: list
+        aliases: ["ls"]
+        short: "List PCI accelerators"
+        flags:
+          - name: json
+        action: system.accel.list
+
+  - id: system.config
+    use: config [vm]
+    group: system
+    short: "Show global config or update a VM config"
+    long: "Without args, show global configuration. With a VM name, update that VM's persistent settings."
+    flags:
+      - name: json
+      - name: memory
+      - name: cpus
+      - name: ssh_port
+      - name: vnc_port
+      - name: gui
+      - name: ssh_user
+      - name: cmdline
+      - name: port
+      - name: qemu_arg
+      - name: accel
+    args:
+      min: 0
+      max: 1
+    custom_completion: config
+    action: system.config
+    commands:
+      - id: system.config.set
+        use: set <key> <value>
+        short: "Update a global config value"
+        flags:
+          - name: json
+        args:
+          min: 2
+          max: 2
+        custom_completion: config_set
+        action: system.config.set
+
+  - id: system.register
+    use: register
+    group: system
+    short: "Print MCP registration block"
+    flags:
+      - name: json
+    action: system.register
+
+  - id: system.version
+    use: version
+    group: system
+    short: "Show version information"
+    flags:
+      - name: json
+    action: system.version
+
+  - id: system.update
+    use: update
+    group: system
+    short: "Self-update Nido"
+    action: system.update
+
+  - id: system.uninstall
+    use: uninstall
+    group: system
+    short: "Uninstall Nido and its data"
+    flags:
+      - name: json
+      - name: force
+    action: system.uninstall
+
+  - id: system.completion
+    use: completion
+    group: system
+    short: "Generate shell completion scripts"
+    commands:
+      - id: system.completion.bash
+        use: bash
+        short: "Generate Bash completion"
+        action: system.completion.bash
+      - id: system.completion.zsh
+        use: zsh
+        short: "Generate Zsh completion"
+        action: system.completion.zsh
+      - id: system.completion.fish
+        use: fish
+        short: "Generate Fish completion"
+        action: system.completion.fish
+      - id: system.completion.powershell
+        use: powershell
+        aliases: ["ps"]
+        short: "Generate PowerShell completion"
+        action: system.completion.powershell
+
+  - id: system.mcp_help
+    use: mcp-help
+    hidden: true
+    short: "Emit MCP tool catalog"
+    action: system.mcp_help
+
+  - id: system.mcp
+    use: mcp
+    hidden: true
+    short: "Run MCP server"
+    action: system.mcp

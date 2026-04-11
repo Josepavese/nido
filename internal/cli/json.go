@@ -60,7 +60,6 @@ func NewResponseError(command, code, title, detail, hint string, details interfa
 func PrintJSON(resp Response) error {
 	payload, err := json.Marshal(resp)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to encode JSON response: %v\n", err)
 		return err
 	}
 	_, err = fmt.Fprintln(os.Stdout, string(payload))

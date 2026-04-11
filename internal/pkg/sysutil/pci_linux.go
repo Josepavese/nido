@@ -34,11 +34,7 @@ func PreparePassthrough(pciID string, stateDir string) error {
 
 		// Save original driver for restoration
 		driverFile := filepath.Join(stateDir, fmt.Sprintf("pci-%s.driver", id))
-		if err := WriteFile(driverFile, []byte(driverName), 0644); err != nil {
-			fmt.Printf("⚠️  Warning: Failed to save original driver info: %v\n", err)
-		}
-
-		fmt.Printf("⚡ [Zero-Config] Unbinding %s from %s...\n", id, driverName)
+		_ = WriteFile(driverFile, []byte(driverName), 0644)
 		unbindCmd := fmt.Sprintf("echo '%s' > /sys/bus/pci/devices/%s/driver/unbind", id, id)
 		if err := ExecPrivileged(unbindCmd); err != nil {
 			return fmt.Errorf("failed to unbind device: %w", err)
@@ -46,7 +42,6 @@ func PreparePassthrough(pciID string, stateDir string) error {
 	}
 
 	// 2. Bind to vfio-pci
-	fmt.Printf("⚡ [Zero-Config] Binding %s to vfio-pci...\n", id)
 	if err := ExecPrivileged("modprobe vfio-pci"); err != nil {
 		return fmt.Errorf("failed to load vfio-pci module: %w", err)
 	}
@@ -83,9 +78,7 @@ func PreparePassthrough(pciID string, stateDir string) error {
 	// 3. Memory Limits
 	pid := os.Getpid()
 	limitCmd := fmt.Sprintf("prlimit --pid %d --memlock=unlimited:unlimited", pid)
-	if err := ExecPrivileged(limitCmd); err != nil {
-		fmt.Printf("⚠️  Warning: Failed to boost memory limits. (%v)\n", err)
-	}
+	_ = ExecPrivileged(limitCmd)
 
 	return nil
 }
@@ -104,8 +97,6 @@ func RestorePassthrough(pciID string, stateDir string) error {
 	if _, err := os.Stat(driverPath); err == nil {
 		driverLink, _ := os.Readlink(driverPath)
 		if filepath.Base(driverLink) == "vfio-pci" {
-			fmt.Printf("⚡ [Zero-Config] Releasing %s from vfio-pci...\n", id)
-
 			unbindCmd := fmt.Sprintf("echo '%s' > /sys/bus/pci/drivers/vfio-pci/unbind", id)
 			if err := ExecPrivileged(unbindCmd); err != nil {
 				return fmt.Errorf("failed to unbind from vfio-pci: %w", err)
@@ -115,21 +106,17 @@ func RestorePassthrough(pciID string, stateDir string) error {
 			driverFile := filepath.Join(stateDir, fmt.Sprintf("pci-%s.driver", id))
 			if data, err := os.ReadFile(driverFile); err == nil {
 				originalDriver := strings.TrimSpace(string(data))
-				fmt.Printf("⚡ [Zero-Config] Rebinding %s to original driver '%s'...\n", id, originalDriver)
-
 				bindCmd := fmt.Sprintf("echo '%s' > /sys/bus/pci/drivers/%s/bind", id, originalDriver)
 				if err := ExecPrivileged(bindCmd); err == nil {
 					os.Remove(driverFile)
 					return nil
 				}
-				fmt.Printf("⚠️  Warning: Rebind failed %v, falling back to rescan.\n", err)
 			}
 
 			// Fallback: Rescan
-			fmt.Printf("⚡ [Zero-Config] Restoring host driver for %s (Rescan)...\n", id)
-			ExecPrivileged(fmt.Sprintf("echo 1 > /sys/bus/pci/devices/%s/remove", id))
+			_ = ExecPrivileged(fmt.Sprintf("echo 1 > /sys/bus/pci/devices/%s/remove", id))
 			time.Sleep(100 * time.Millisecond)
-			ExecPrivileged("echo 1 > /sys/bus/pci/rescan")
+			_ = ExecPrivileged("echo 1 > /sys/bus/pci/rescan")
 		}
 	}
 	return nil

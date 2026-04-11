@@ -12,15 +12,14 @@ import (
 	"github.com/Josepavese/nido/internal/ui"
 )
 
-func cmdBuild(nidoDir string, args []string) {
-	jsonOut, rest := consumeJSONFlag(args)
-	if len(rest) < 1 {
+func cmdBuild(nidoDir, imageDir string, args []string, jsonOut bool) {
+	if len(args) < 1 {
 		ui.Error("Usage: nido build <blueprint>")
 		ui.Info("Example: nido build windows-11-eval")
 		os.Exit(1)
 	}
 
-	blueprintName := rest[0]
+	blueprintName := args[0]
 	// Auto-append .yaml if missing
 	if !strings.HasSuffix(blueprintName, ".yaml") && !strings.HasSuffix(blueprintName, ".yml") {
 		blueprintName += ".yaml"
@@ -59,7 +58,8 @@ func cmdBuild(nidoDir string, args []string) {
 	}
 
 	if !jsonOut {
-		ui.Header(fmt.Sprintf("Building Blueprint: %s", bp.Name))
+		ui.Header("Blueprint Build")
+		ui.FancyLabel("Name", bp.Name)
 		ui.Info("%s", bp.Description)
 		fmt.Println("")
 	}
@@ -67,12 +67,15 @@ func cmdBuild(nidoDir string, args []string) {
 	// Setup Engine
 	// Cache: ~/.nido/cache
 	// Work: ~/.nido/tmp
-	// Image: ~/.nido/images (final output)
+	// Image: configured image cache/output directory
 	cacheDir := filepath.Join(nidoDir, "cache")
 	workDir := filepath.Join(nidoDir, "tmp")
-	imageDir := filepath.Join(nidoDir, "images")
 
-	eng := builder.NewEngine(cacheDir, workDir, imageDir)
+	opts := []builder.EngineOption{}
+	if !jsonOut {
+		opts = append(opts, builder.WithReporter(cliBuildReporter{}))
+	}
+	eng := builder.NewEngine(cacheDir, workDir, imageDir, opts...)
 
 	if err := eng.Build(bp); err != nil {
 		if jsonOut {
@@ -98,7 +101,7 @@ func cmdBuild(nidoDir string, args []string) {
 
 	// Special handling for Windows images which require a "second stage" installation on first boot
 	if strings.Contains(strings.ToLower(bp.OutputImage), "windows") || strings.Contains(strings.ToLower(bp.Name), "windows") {
-		ui.Warn("⚠️  IMPORTANT: Windows installation is NOT finished yet!")
+		ui.Warn("Windows installation is not finished yet.")
 		ui.Info("The image is ready, but the actual setup (OOBE/Getting Ready) happens on the first boot.")
 		ui.Info("To monitor the progress, you MUST spawn with GUI enabled:")
 		fmt.Println("")
@@ -109,4 +112,13 @@ func cmdBuild(nidoDir string, args []string) {
 	} else {
 		ui.Info("You can now spawn a VM using: nido spawn my-vm --image %s", imageTag)
 	}
+}
+
+type cliBuildReporter struct{}
+
+func (cliBuildReporter) Header(title string)          { ui.Header(title) }
+func (cliBuildReporter) Info(msg string, args ...any) { ui.Info(msg, args...) }
+func (cliBuildReporter) Warn(msg string, args ...any) { ui.Warn(msg, args...) }
+func (cliBuildReporter) Success(msg string, args ...any) {
+	ui.Success(msg, args...)
 }

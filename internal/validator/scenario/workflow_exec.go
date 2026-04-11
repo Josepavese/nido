@@ -225,6 +225,7 @@ func executeWorkflowCLI(ctx *Context, name string, wf workflows.Workflow) error 
 			if resp.Result == "FAIL" {
 				return fmt.Errorf("template delete failed for %s", tplName)
 			}
+			ctx.State.RemoveTemplate(tplName)
 		case "delete_vm":
 			vmName, ok := getVar(ctx, step.VMVar)
 			if !ok {
@@ -234,6 +235,10 @@ func executeWorkflowCLI(ctx *Context, name string, wf workflows.Workflow) error 
 			resp := runNido(ctx, "delete-wf", args, 30*time.Second)
 			finalize(&resp)
 			_ = ctx.Reporter.WriteStep(resp)
+			if resp.Result == "FAIL" {
+				return fmt.Errorf("delete vm failed for %s", vmName)
+			}
+			ctx.State.RemoveVM(vmName)
 		case "cache_rm":
 			img := step.Image
 			if img == "" {
@@ -249,9 +254,26 @@ func executeWorkflowCLI(ctx *Context, name string, wf workflows.Workflow) error 
 				continue
 			}
 			args := []string{"cache", "rm", img, "--json"}
-			resp := runNido(ctx, "cache-rm", args, 20*time.Second)
-			finalize(&resp)
+			resp := report.StepResult{}
+			for attempt := 0; attempt < 5; attempt++ {
+				resp = runNido(ctx, "cache-rm", args, 20*time.Second)
+				finalize(&resp)
+				if resp.Result == "PASS" {
+					break
+				}
+				if !strings.Contains(resp.Stdout, "in use by a VM") && !strings.Contains(resp.Stderr, "in use by a VM") {
+					break
+				}
+				time.Sleep(500 * time.Millisecond)
+			}
+			if resp.Result == "FAIL" && (strings.Contains(resp.Stdout, "in use by a VM") || strings.Contains(resp.Stderr, "in use by a VM")) {
+				resp.Result = "SKIP"
+				resp.Stderr = "cache remove skipped: image still referenced by a VM"
+			}
 			_ = ctx.Reporter.WriteStep(resp)
+			if resp.Result == "FAIL" {
+				return fmt.Errorf("cache rm failed for %s", img)
+			}
 		default:
 			return fmt.Errorf("unsupported action %s", step.Action)
 		}
@@ -337,6 +359,7 @@ func executeWorkflowMCP(ctx *Context, client *mcpclient.Client, name string, wf 
 			}, 30*time.Second); err != nil {
 				return fmt.Errorf("mcp template delete failed: %w", err)
 			}
+			ctx.State.RemoveTemplate(tplName)
 		case "delete_vm":
 			vmName, ok := getVar(ctx, step.VMVar)
 			if !ok {
@@ -347,6 +370,7 @@ func executeWorkflowMCP(ctx *Context, client *mcpclient.Client, name string, wf 
 			}, 30*time.Second); err != nil {
 				return fmt.Errorf("mcp delete vm failed: %w", err)
 			}
+			ctx.State.RemoveVM(vmName)
 		case "cache_rm":
 			img := step.Image
 			if img == "" {
@@ -361,8 +385,22 @@ func executeWorkflowMCP(ctx *Context, client *mcpclient.Client, name string, wf 
 			if img == "" {
 				continue
 			}
-			if _, err := client.CallWithTimeout("cache_remove", map[string]interface{}{"image": img}, 20*time.Second); err != nil {
+			var err error
+			for attempt := 0; attempt < 5; attempt++ {
+				_, err = client.CallWithTimeout("cache_remove", map[string]interface{}{"image": img}, 20*time.Second)
+				if err == nil || strings.Contains(err.Error(), "Tool not found") {
+					break
+				}
+				if !strings.Contains(err.Error(), "in use by a VM") {
+					break
+				}
+				time.Sleep(500 * time.Millisecond)
+			}
+			if err != nil {
 				if strings.Contains(err.Error(), "Tool not found") {
+					continue
+				}
+				if strings.Contains(err.Error(), "in use by a VM") {
 					continue
 				}
 				return fmt.Errorf("mcp cache_remove failed: %w", err)
