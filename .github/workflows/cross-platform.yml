@@ -91,22 +91,43 @@ jobs:
       - name: Full VM lifecycle test (Linux only)
         if: runner.os == 'Linux'
         run: |
-          # Create a minimal test template
-          # 1. Validator is already built in previous step
-          
-          # 2. Run Validator (Scenario: VMSpawnResources includes accel test)
-          # We run specific scenario first to fail fast, or all.
-          # For CI, let's run all scenarios to be safe.
-          # We need to make sure we have a base image.
-          # The qemu install step above gives us qemu-system-x86_64 but maybe not a cloud image.
-          # The validator usually needs a --image argument or relies on default.
-          # We'll use a tiny test image if possible, or skip image tests if no image.
-          # Note: The placeholder created a 1G fake qcow2.
-          
-          # Creating a dummy "ubuntu" image to fool the validator logic if needed
-          # But better: Use the standard validator execution
-          
+          cleanup() {
+            ./nido-validator --nido-bin ./nido --scenario cleanup || true
+          }
+          trap cleanup EXIT
           ./nido-validator --nido-bin ./nido
+
+      - name: Validator artifact cleanup (Linux only)
+        if: always() && runner.os == 'Linux'
+        run: ./nido-validator --nido-bin ./nido --scenario cleanup || true
+
+      - name: Assert no residual validator VMs (Linux only)
+        if: always() && runner.os == 'Linux'
+        run: |
+          python3 - <<'PY'
+          import json, subprocess, sys
+          proc = subprocess.run(["./nido", "ls", "--json"], check=True, capture_output=True, text=True)
+          payload = json.loads(proc.stdout)
+          names = [vm.get("name", "") for vm in payload.get("data", {}).get("vms", [])]
+          leaked = [name for name in names if name.startswith(("val-", "cli-val-", "vm_template_src", "vm_from_template"))]
+          if leaked:
+            print("Residual validator VMs found:", ", ".join(leaked), file=sys.stderr)
+            sys.exit(1)
+          PY
+
+      - name: Assert no residual validator templates (Linux only)
+        if: always() && runner.os == 'Linux'
+        run: |
+          python3 - <<'PY'
+          import json, subprocess, sys
+          proc = subprocess.run(["./nido", "template", "list", "--json"], check=True, capture_output=True, text=True)
+          payload = json.loads(proc.stdout)
+          names = payload.get("data", {}).get("templates", [])
+          leaked = [name for name in names if isinstance(name, str) and name.startswith("tpl_primary")]
+          if leaked:
+            print("Residual validator templates found:", ", ".join(leaked), file=sys.stderr)
+            sys.exit(1)
+          PY
 
       # macOS/Windows: Limited testing (no nested virtualization)
       - name: Limited tests (macOS/Windows)

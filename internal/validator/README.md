@@ -45,6 +45,7 @@ Outputs
 Behavior and defaults
 - Auto image/template selection chooses the smallest advertised size when none are provided, and records them for both CLI and MCP workflows.
 - Image pulls and cache removals are mirrored between CLI and MCP; templates created during workflows are deleted at the end.
+- Even if the validator stops early, panics, or receives `SIGINT`/`SIGTERM`, it performs a best-effort sweep of test VMs and templates unless `--keep-artifacts` is set.
 - MCP client tolerates stdout noise by line-buffered JSON parsing; MCP server uses quiet downloads to keep JSON clean.
 - Fail-fast stops early on failure (except cleanup), but defaults are tuned for full coverage.
 
