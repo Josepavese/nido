@@ -8,7 +8,7 @@ import (
 
 // Version is the current evolutionary state of Nido.
 // This is normally injected at build time, but we provide a default.
-var Version = "v4.5.18"
+var Version = "v4.5.19"
 
 // GetLatestVersion fetches the latest release tag from the GitHub mother nest.
 func GetLatestVersion() (string, error) {
@@ -18,12 +18,18 @@ func GetLatestVersion() (string, error) {
 		return "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", &http.ProtocolError{ErrorString: "unexpected HTTP status from GitHub"}
+	}
 
 	var release struct {
 		TagName string `json:"tag_name"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
 		return "", err
+	}
+	if release.TagName == "" {
+		return "", &http.ProtocolError{ErrorString: "missing tag_name in GitHub response"}
 	}
 	return release.TagName, nil
 }

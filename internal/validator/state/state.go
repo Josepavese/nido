@@ -44,6 +44,19 @@ func (s *State) AddTemplate(name string) {
 	s.Templates = append(s.Templates, name)
 }
 
+// RemoveTemplate removes a template from the tracking list.
+func (s *State) RemoveTemplate(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, v := range s.Templates {
+		if v == name {
+			s.Templates[i] = s.Templates[len(s.Templates)-1]
+			s.Templates = s.Templates[:len(s.Templates)-1]
+			break
+		}
+	}
+}
+
 // AddTempFile records a temporary file path.
 func (s *State) AddTempFile(path string) {
 	s.mu.Lock()

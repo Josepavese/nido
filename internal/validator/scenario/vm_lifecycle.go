@@ -366,6 +366,9 @@ func deleteVM(ctx *Context) report.StepResult {
 	args := []string{"delete", vmName, "--json"}
 	res := runNido(ctx, "delete", args, 30*time.Second)
 	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
+	if res.ExitCode == 0 {
+		ctx.State.RemoveVM(vmName)
+	}
 	finalize(&res)
 	return res
 }

@@ -62,18 +62,17 @@ type VMOptions struct {
 
 // VMDetail contains comprehensive data about a VM.
 type VMDetail struct {
-	Name        string
-	State       string
-	PID         int
-	IP          string
-	SSHUser     string
-	SSHPassword string
-	SSHPort     int
-	VNCPort     int
-	MemoryMB    int    `json:"memory_mb,omitempty"`
-	VCPUs       int    `json:"vcpus,omitempty"`
-	Gui         bool   `json:"gui,omitempty"`
-	Cmdline     string `json:"cmdline,omitempty"`
+	Name     string
+	State    string
+	PID      int
+	IP       string
+	SSHUser  string
+	SSHPort  int
+	VNCPort  int
+	MemoryMB int    `json:"memory_mb,omitempty"`
+	VCPUs    int    `json:"vcpus,omitempty"`
+	Gui      bool   `json:"gui,omitempty"`
+	Cmdline  string `json:"cmdline,omitempty"`
 	// Active port forwardings
 	Forwarding []PortForward
 	// Raw arguments active
@@ -218,7 +217,6 @@ type VMConfigUpdates struct {
 	SSHPort      *int
 	VNCPort      *int
 	SSHUser      *string
-	SSHPassword  *string
 	Forwarding   *[]PortForward
 	RawQemuArgs  *[]string
 	Accelerators *[]string

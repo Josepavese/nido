@@ -144,7 +144,7 @@ func selectTemplateFallback(ctx *Context, list []interface{}) {
 	if ctx.Config.BaseTemplate != "" {
 		found := false
 		for _, t := range list {
-			if name, ok := t.(map[string]interface{})["name"]; ok && name == ctx.Config.BaseTemplate {
+			if templateName(t) == ctx.Config.BaseTemplate {
 				found = true
 				break
 			}
@@ -162,24 +162,44 @@ func selectTemplateFallback(ctx *Context, list []interface{}) {
 	var chosenName string
 	var chosenSize float64 = -1
 	for _, t := range list {
-		if m, ok := t.(map[string]interface{}); ok {
-			name, _ := m["name"].(string)
-			size, _ := m["size_bytes"].(float64)
-			if chosenName == "" || (size > 0 && (chosenSize < 0 || size < chosenSize)) {
-				chosenName = name
-				chosenSize = size
-			}
+		name := templateName(t)
+		if name == "" {
+			continue
+		}
+		size := templateSize(t)
+		if chosenName == "" || (size > 0 && (chosenSize < 0 || size < chosenSize)) {
+			chosenName = name
+			chosenSize = size
 		}
 	}
 	if chosenName == "" {
-		if name, ok := list[0].(map[string]interface{})["name"].(string); ok {
-			chosenName = name
-		}
+		chosenName = templateName(list[0])
 	}
 	if chosenName != "" {
 		setVar(ctx, "template_auto", chosenName)
 		ctx.State.AddTemplate(chosenName)
 	}
+}
+
+func templateName(entry interface{}) string {
+	switch v := entry.(type) {
+	case string:
+		return v
+	case map[string]interface{}:
+		name, _ := v["name"].(string)
+		return name
+	default:
+		return ""
+	}
+}
+
+func templateSize(entry interface{}) float64 {
+	m, ok := entry.(map[string]interface{})
+	if !ok {
+		return -1
+	}
+	size, _ := m["size_bytes"].(float64)
+	return size
 }
 
 func selectImageFallback(ctx *Context, images []interface{}) {

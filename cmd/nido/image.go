@@ -9,43 +9,13 @@ import (
 
 	clijson "github.com/Josepavese/nido/internal/cli"
 	"github.com/Josepavese/nido/internal/image"
+	"github.com/Josepavese/nido/internal/provider"
 	"github.com/Josepavese/nido/internal/ui"
 )
 
-// cmdImage is the primary dispatcher for all image-related subcommands.
-// It bridges the gap between the image registry and local cache.
-func cmdImage(nidoDir string, args []string) {
-	jsonOut, rest := consumeJSONFlag(args)
-	if len(rest) == 0 {
-		ui.Error("Usage: nido image <list|pull|info|remove|update>")
-		os.Exit(1)
-	}
-
-	subcommand := rest[0]
-
-	switch subcommand {
-	case "list", "ls":
-		cmdImageList(nidoDir, rest[1:], jsonOut)
-	case "pull":
-		cmdImagePull(nidoDir, rest[1:], jsonOut)
-	case "info":
-		cmdImageInfo(nidoDir, rest[1:], jsonOut)
-	case "remove":
-		cmdImageRemove(nidoDir, rest[1:], jsonOut)
-	case "update":
-		cmdImageUpdate(nidoDir, rest[1:], jsonOut)
-	default:
-		ui.Error("Unknown image subcommand: %s", subcommand)
-		os.Exit(1)
-	}
-}
-
 // cmdImageList identifies all species currently documented in the catalog
 // and identifies which ones have already been pulle to our local nest.
-func cmdImageList(nidoDir string, args []string, jsonOut bool) {
-	// Determine image directory
-	imageDir := filepath.Join(nidoDir, "images")
-
+func cmdImageList(imageDir string, args []string, jsonOut bool) {
 	// Load catalog
 	var catalog *image.Catalog
 	var err error
@@ -104,7 +74,7 @@ func cmdImageList(nidoDir string, args []string, jsonOut bool) {
 	}
 
 	// Display header
-	ui.Header("Available Images")
+	ui.Header("Image Catalog")
 	fmt.Println("")
 
 	// Group images by registry
@@ -121,7 +91,7 @@ func cmdImageList(nidoDir string, args []string, jsonOut bool) {
 
 	// Display official images
 	if len(official) > 0 {
-		fmt.Printf("%sOFFICIAL (Upstream Proxy):%s\n", ui.Bold+ui.Cyan, ui.Reset)
+		fmt.Printf("%sOfficial%s\n", ui.Bold+ui.Cyan, ui.Reset)
 		for _, img := range official {
 			for _, v := range img.Versions {
 				aliases := ""
@@ -145,7 +115,7 @@ func cmdImageList(nidoDir string, args []string, jsonOut bool) {
 
 	// Display nido-optimized flavours
 	if len(nidoImages) > 0 {
-		fmt.Printf("%sNIDO FLAVOURS (Compressed & Optimized):%s\n", ui.Bold+ui.Magenta, ui.Reset)
+		fmt.Printf("%sNido Images%s\n", ui.Bold+ui.Magenta, ui.Reset)
 		for _, img := range nidoImages {
 			for _, v := range img.Versions {
 				downloaded := ""
@@ -201,7 +171,7 @@ func formatDuration(d time.Duration) string {
 // Stubs for other commands (Phase 2+)
 // cmdImagePull initiates the retrieval of a specific image species.
 // It handles resume logic, multi-part downloads, and verification.
-func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
+func cmdImagePull(imageDir string, args []string, jsonOut bool) {
 	if len(args) < 1 {
 		ui.Error("Usage: nido image pull <name>[:version]")
 		os.Exit(1)
@@ -217,8 +187,6 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 		name = parts[0]
 		version = parts[1]
 	}
-
-	imageDir := filepath.Join(nidoDir, "images")
 
 	// Load catalog
 	var catalog *image.Catalog
@@ -270,7 +238,8 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 	if !diskExists {
 		// Announce download
 		if !jsonOut {
-			ui.Header(fmt.Sprintf("Pulling %s:%s", img.Name, ver.Version))
+			ui.Header("Image Download")
+			ui.FancyLabel("Image", fmt.Sprintf("%s:%s", img.Name, ver.Version))
 			ui.Info("Source: %s", ver.URL)
 			ui.Info("Size:   %s", ui.HumanSize(ver.SizeBytes))
 		}
@@ -308,7 +277,7 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 		// Verify Checksum (on the downloaded file)
 		if ver.Checksum != "" {
 			if !jsonOut {
-				ui.Ironic("Verifying disk genetic integrity...")
+				ui.Step("Verifying image checksum...")
 			}
 			if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
 				if jsonOut {
@@ -325,7 +294,7 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 		// Decompress if needed
 		if isCompressed {
 			if !jsonOut {
-				ui.Ironic("Decompressing compressed flavour...")
+				ui.Step("Decompressing image...")
 			}
 			if err := downloader.Decompress(downloadPath, destPath); err != nil {
 				if jsonOut {
@@ -341,7 +310,7 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 			os.Remove(downloadPath)
 		}
 	} else if !jsonOut {
-		ui.Success("Image disk %s:%s is already downloaded.", img.Name, ver.Version)
+		ui.Info("Image %s:%s is already present in cache.", img.Name, ver.Version)
 	}
 
 	// --- 2. Download Kernel (if defined) ---
@@ -398,34 +367,172 @@ func cmdImagePull(nidoDir string, args []string, jsonOut bool) {
 		return
 	}
 
-	ui.Success("Image downloaded and verified successfully! 🐣")
+	ui.Success("Image downloaded and verified.")
 	ui.Info("You can now spawn a VM using: nido spawn my-vm --image %s:%s", img.Name, ver.Version)
 }
 
 // cmdImageInfo probes an image for metadata. Currently a fledgling command.
-func cmdImageInfo(nidoDir string, args []string, jsonOut bool) {
+func cmdImageInfo(imageDir string, args []string, jsonOut bool) {
+	if len(args) < 1 {
+		if jsonOut {
+			_ = clijson.PrintJSON(clijson.NewResponseError("image info", "ERR_INVALID_ARGS", "Missing image reference", "Usage: nido images info <image>[:version]", "", nil))
+			os.Exit(1)
+		}
+		ui.Error("Usage: nido images info <image>[:version]")
+		os.Exit(1)
+	}
+
+	name, version := parseImageRef(args[0])
+	catalog, err := loadImageCatalog(imageDir)
+	if err != nil {
+		if jsonOut {
+			_ = clijson.PrintJSON(clijson.NewResponseError("image info", "ERR_IO", "Catalog load failed", err.Error(), "Check your network connection and try again.", nil))
+			os.Exit(1)
+		}
+		ui.Error("Failed to load catalog: %v", err)
+		os.Exit(1)
+	}
+
+	img, ver, err := catalog.FindImage(name, version)
+	if err != nil {
+		if jsonOut {
+			_ = clijson.PrintJSON(clijson.NewResponseError("image info", "ERR_NOT_FOUND", "Image not found", err.Error(), "Run 'nido images list' to see available images.", nil))
+			os.Exit(1)
+		}
+		ui.Error("Image not found: %s", args[0])
+		os.Exit(1)
+	}
+
+	diskPath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
+	kernelPath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.kernel", img.Name, ver.Version))
+	initrdPath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.initrd", img.Name, ver.Version))
+	downloaded := fileExists(diskPath)
+
+	resolvedSSHUser := img.SSHUser
+	if ver.SSHUser != "" {
+		resolvedSSHUser = ver.SSHUser
+	}
+	hasInitialPassword := ver.SSHPassword != "" || img.SSHPassword != ""
+	sizeHuman := ver.SizeHuman
+	if sizeHuman == "" {
+		sizeHuman = image.FormatBytes(ver.SizeBytes)
+	}
+
 	if jsonOut {
-		resp := clijson.NewResponseError("image info", "ERR_NOT_IMPLEMENTED", "Not implemented", "Image info is not available yet.", "Use 'nido image list' to see available images.", nil)
-		_ = clijson.PrintJSON(resp)
+		_ = clijson.PrintJSON(clijson.NewResponseOK("image info", map[string]interface{}{
+			"image": map[string]interface{}{
+				"name":                 img.Name,
+				"registry":             img.Registry,
+				"description":          img.Description,
+				"homepage":             img.Homepage,
+				"ssh_user":             resolvedSSHUser,
+				"has_initial_password": hasInitialPassword,
+				"downloaded":           downloaded,
+				"paths": map[string]interface{}{
+					"disk":   diskPath,
+					"kernel": kernelPath,
+					"initrd": initrdPath,
+				},
+				"version": map[string]interface{}{
+					"version":        ver.Version,
+					"aliases":        ver.Aliases,
+					"arch":           ver.Arch,
+					"url":            ver.URL,
+					"size_bytes":     ver.SizeBytes,
+					"size":           sizeHuman,
+					"format":         ver.Format,
+					"checksum_type":  ver.ChecksumType,
+					"kernel_url":     ver.KernelURL,
+					"initrd_url":     ver.InitrdURL,
+					"cmdline":        ver.Cmdline,
+					"kernel_present": fileExists(kernelPath),
+					"initrd_present": fileExists(initrdPath),
+				},
+			},
+		}))
 		return
 	}
-	ui.Info("Coming soon! Use 'nido image list' to see available images.")
+
+	ui.Header("Image Details")
+	ui.FancyLabel("Name", fmt.Sprintf("%s:%s", img.Name, ver.Version))
+	ui.FancyLabel("Registry", img.Registry)
+	ui.FancyLabel("Description", img.Description)
+	if img.Homepage != "" {
+		ui.FancyLabel("Homepage", img.Homepage)
+	}
+	if resolvedSSHUser != "" {
+		ui.FancyLabel("SSH User", resolvedSSHUser)
+	}
+	ui.FancyLabel("Initial Password", ternaryString(hasInitialPassword, "Provided by image metadata", "Not specified"))
+	ui.FancyLabel("Arch", ver.Arch)
+	ui.FancyLabel("Format", ver.Format)
+	ui.FancyLabel("Size", sizeHuman)
+	ui.FancyLabel("Downloaded", ternaryString(downloaded, "Yes", "No"))
+	if len(ver.Aliases) > 0 {
+		ui.FancyLabel("Aliases", strings.Join(ver.Aliases, ", "))
+	}
+	if ver.Cmdline != "" {
+		ui.FancyLabel("Default Cmdline", ver.Cmdline)
+	}
+	if ver.URL != "" {
+		ui.FancyLabel("Source", ver.URL)
+	}
+	if ver.KernelURL != "" {
+		ui.FancyLabel("Kernel", ternaryString(fileExists(kernelPath), "Downloaded", "Available separately"))
+	}
+	if ver.InitrdURL != "" {
+		ui.FancyLabel("Initrd", ternaryString(fileExists(initrdPath), "Downloaded", "Available separately"))
+	}
 }
 
-func cmdImageRemove(nidoDir string, args []string, jsonOut bool) {
+func cmdImageRemove(imageDir string, prov provider.VMProvider, args []string, jsonOut bool) {
+	if len(args) < 1 {
+		if jsonOut {
+			_ = clijson.PrintJSON(clijson.NewResponseError("image remove", "ERR_INVALID_ARGS", "Missing image reference", "Usage: nido images remove <image>[:version]", "", nil))
+			os.Exit(1)
+		}
+		ui.Error("Usage: nido images remove <image>[:version]")
+		os.Exit(1)
+	}
+
+	name, version := parseImageRef(args[0])
+	if err := prov.CacheRemove(name, version); err != nil {
+		if isNotFoundErr(err) {
+			if jsonOut {
+				_ = clijson.PrintJSON(clijson.NewResponseOK("image remove", map[string]interface{}{
+					"action": map[string]interface{}{"name": name, "version": version, "result": "not_found"},
+				}))
+				return
+			}
+			ui.Info("Image %s is already gone from cache.", args[0])
+			return
+		}
+		if jsonOut {
+			_ = clijson.PrintJSON(clijson.NewResponseError("image remove", "ERR_IO", "Image remove failed", err.Error(), "Check whether the image is still in use by a VM.", nil))
+			os.Exit(1)
+		}
+		ui.Error("Failed to remove image: %v", err)
+		os.Exit(1)
+	}
+
+	if version != "" {
+		_ = os.Remove(filepath.Join(imageDir, fmt.Sprintf("%s-%s.kernel", name, version)))
+		_ = os.Remove(filepath.Join(imageDir, fmt.Sprintf("%s-%s.initrd", name, version)))
+	}
+
 	if jsonOut {
-		resp := clijson.NewResponseError("image remove", "ERR_NOT_IMPLEMENTED", "Not implemented", "Image remove is not available yet.", "Use 'nido cache rm' for cached images.", nil)
-		_ = clijson.PrintJSON(resp)
+		_ = clijson.PrintJSON(clijson.NewResponseOK("image remove", map[string]interface{}{
+			"action": map[string]interface{}{"name": name, "version": version, "result": "removed"},
+		}))
 		return
 	}
-	ui.Info("Coming soon! This will remove downloaded images.")
+	ui.Success("Image %s removed from cache.", args[0])
 }
 
-func cmdImageUpdate(nidoDir string, args []string, jsonOut bool) {
+func cmdImageUpdate(imageDir string, args []string, jsonOut bool) {
 	if !jsonOut {
-		ui.Ironic("Refreshing the catalog...")
+		ui.Step("Refreshing catalog...")
 	}
-	imageDir := filepath.Join(nidoDir, "images")
 	cachePath := filepath.Join(imageDir, image.CatalogCacheFile)
 
 	// Remove cache to force refresh
@@ -461,5 +568,37 @@ func cmdImageUpdate(nidoDir string, args []string, jsonOut bool) {
 		return
 	}
 
-	ui.Success("Catalog updated successfully! 🐣")
+	ui.Success("Catalog updated.")
+}
+
+func loadImageCatalog(imageDir string) (*image.Catalog, error) {
+	cwd, _ := os.Getwd()
+	localRegistry := filepath.Join(cwd, "registry", "images.json")
+	if _, statErr := os.Stat(localRegistry); statErr == nil {
+		return image.LoadCatalogFromFile(localRegistry)
+	}
+	return image.LoadCatalog(imageDir, image.DefaultCacheTTL)
+}
+
+func parseImageRef(target string) (string, string) {
+	name := target
+	version := ""
+	if strings.Contains(target, ":") {
+		parts := strings.SplitN(target, ":", 2)
+		name = parts[0]
+		version = parts[1]
+	}
+	return name, version
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func ternaryString(cond bool, a, b string) string {
+	if cond {
+		return a
+	}
+	return b
 }

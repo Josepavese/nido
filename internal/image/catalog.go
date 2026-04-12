@@ -10,8 +10,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/Josepavese/nido/internal/cli"
 )
 
 const (
@@ -59,13 +57,8 @@ func LoadCatalog(cacheDir string, ttl time.Duration) (*Catalog, error) {
 		return nil, fmt.Errorf("failed to load catalog: %w", err)
 	}
 
-	// Save to cache for future use
-	if err := saveToFile(catalog, cachePath); err != nil {
-		// Non-fatal: we have the catalog, just couldn't cache it
-		if !cli.IsJSONMode() {
-			fmt.Fprintf(os.Stderr, "Warning: failed to cache catalog: %v\n", err)
-		}
-	}
+	// Save to cache for future use. Non-fatal if caching fails.
+	_ = saveToFile(catalog, cachePath)
 
 	return catalog, nil
 }
@@ -263,10 +256,6 @@ func (c *Catalog) PruneCache(cacheDir string, unusedOnly bool, activeVMs []strin
 
 		// Remove the image
 		if err := os.Remove(img.Path); err != nil {
-			// Log error but continue with other images
-			if !cli.IsJSONMode() {
-				fmt.Fprintf(os.Stderr, "Warning: failed to remove %s: %v\n", img.Path, err)
-			}
 			continue
 		}
 		removed++

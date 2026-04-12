@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Josepavese/nido/internal/build"
 	"github.com/Josepavese/nido/internal/builder"
 	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/pkg/sysutil"
@@ -76,7 +77,7 @@ func ToolsCatalog() []map[string]interface{} {
 		{"name": "vm_cache_list", "description": "List cached images", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
 		{"name": "vm_cache_info", "description": "Cache stats", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
 		{"name": "vm_cache_remove", "description": "Remove cached image", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"image": map[string]interface{}{"type": "string"}}, "required": []string{"image"}}},
-		{"name": "vm_cache_prune", "description": "Prune cached images", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+		{"name": "vm_cache_prune", "description": "Prune cached images", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"unused_only": map[string]interface{}{"type": "boolean"}}}},
 		{"name": "vm_port_forward", "description": "Add port forward", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "mapping": map[string]interface{}{"type": "string"}}, "required": []string{"name", "mapping"}}},
 		{"name": "vm_port_unforward", "description": "Remove port forward", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}, "guest_port": map[string]interface{}{"type": "number"}, "protocol": map[string]interface{}{"type": "string"}}, "required": []string{"name", "guest_port", "protocol"}}},
 		{"name": "vm_port_list", "description": "List port forwards", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
@@ -90,7 +91,6 @@ func ToolsCatalog() []map[string]interface{} {
 				"vnc_port":      map[string]interface{}{"type": "integer"},
 				"gui":           map[string]interface{}{"type": "boolean"},
 				"ssh_user":      map[string]interface{}{"type": "string"},
-				"ssh_password":  map[string]interface{}{"type": "string"},
 				"cmdline":       map[string]interface{}{"type": "string"},
 				"ports":         map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
 				"raw_qemu_args": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Advanced: Update raw QEMU arguments. Replaces the existing list."},
@@ -98,6 +98,8 @@ func ToolsCatalog() []map[string]interface{} {
 			},
 			"required": []string{"name"},
 		}},
+		{"name": "vm_config_get", "description": "Get current provider configuration", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
+		{"name": "vm_doctor", "description": "Run provider health checks", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{}}},
 		{"name": "nido_build_image", "description": "Build a VM image from a blueprint", "inputSchema": map[string]interface{}{"type": "object", "properties": map[string]interface{}{"blueprint_name": map[string]interface{}{"type": "string"}}, "required": []string{"blueprint_name"}}},
 	}
 }
@@ -120,7 +122,6 @@ func (s *Server) Serve() {
 }
 
 func (s *Server) handleRequest(req JSONRPCRequest) {
-	fmt.Fprintf(os.Stderr, "[MCP] Handling method: %s\n", req.Method)
 	switch req.Method {
 	case "initialize":
 		s.sendResponse(req.ID, map[string]interface{}{
@@ -130,7 +131,7 @@ func (s *Server) handleRequest(req JSONRPCRequest) {
 			},
 			"serverInfo": map[string]string{
 				"name":    "nido-local-vm-manager",
-				"version": "3.1.0",
+				"version": build.Version,
 			},
 		})
 	case "notifications/initialized":
@@ -156,8 +157,6 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		s.sendError(req.ID, -32602, "Invalid params")
 		return
 	}
-
-	fmt.Fprintf(os.Stderr, "[MCP] Calling tool: %s\n", params.Name)
 
 	var result string
 	var err error
@@ -212,8 +211,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			// Resolve and Pull logic (simplified for MCP for now, or just pass as DiskPath if Provider handles it?)
 			// Looking at provider/qemu.go:Spawn, it expects a path.
 			// So we MUST resolve/pull here in MCP layer if we want parity.
-			home, _ := sysutil.UserHome()
-			imgDir := filepath.Join(home, ".nido", "images")
+			imgDir := s.imageDir()
 			catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 			if e != nil {
 				err = e
@@ -378,7 +376,6 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			VNCPort      *int      `json:"vnc_port"`
 			Gui          *bool     `json:"gui"`
 			SSHUser      *string   `json:"ssh_user"`
-			SSHPassword  *string   `json:"ssh_password"`
 			Cmdline      *string   `json:"cmdline"`
 			Ports        []string  `json:"ports"`
 			RawQemuArgs  *[]string `json:"raw_qemu_args"`
@@ -393,7 +390,6 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			VNCPort:      args.VNCPort,
 			Gui:          args.Gui,
 			SSHUser:      args.SSHUser,
-			SSHPassword:  args.SSHPassword,
 			Cmdline:      args.Cmdline,
 			RawQemuArgs:  args.RawQemuArgs,
 			Accelerators: args.Accelerators,
@@ -426,8 +422,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		}
 	case "vm_images_list":
 		// Load catalog from default location
-		home, _ := sysutil.UserHome()
-		imageDir := filepath.Join(home, ".nido", "images")
+		imageDir := s.imageDir()
 		catalog, e := image.LoadCatalog(imageDir, image.DefaultCacheTTL)
 		if e != nil {
 			err = e
@@ -441,8 +436,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		}
 		json.Unmarshal(params.Arguments, &args)
 
-		home, _ := sysutil.UserHome()
-		imgDir := filepath.Join(home, ".nido", "images")
+		imgDir := s.imageDir()
 		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 		if e != nil {
 			err = e
@@ -500,8 +494,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			}
 		}
 	case "vm_images_update":
-		home, _ := sysutil.UserHome()
-		imgDir := filepath.Join(home, ".nido", "images")
+		imgDir := s.imageDir()
 		cachePath := filepath.Join(imgDir, image.CatalogCacheFile)
 		os.Remove(cachePath)
 		catalog, e := image.LoadCatalog(imgDir, 0) // Force refresh
@@ -515,8 +508,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			Image string `json:"image"`
 		}
 		json.Unmarshal(params.Arguments, &args)
-		home, _ := sysutil.UserHome()
-		imgDir := filepath.Join(home, ".nido", "images")
+		imgDir := s.imageDir()
 		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 		if e != nil {
 			err = e
@@ -544,8 +536,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			parts := strings.Split(args.Image, ":")
 			name, ver = parts[0], parts[1]
 		}
-		home, _ := sysutil.UserHome()
-		imgDir := filepath.Join(home, ".nido", "images")
+		imgDir := s.imageDir()
 		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 		if e != nil {
 			err = e
@@ -562,8 +553,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 
 	// Cache management tools
 	case "vm_cache_list":
-		home, _ := sysutil.UserHome()
-		imgDir := filepath.Join(home, ".nido", "images")
+		imgDir := s.imageDir()
 		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 		if e != nil {
 			err = e
@@ -577,8 +567,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			result = string(data)
 		}
 	case "vm_cache_info":
-		home, _ := sysutil.UserHome()
-		imgDir := filepath.Join(home, ".nido", "images")
+		imgDir := s.imageDir()
 		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 		if e != nil {
 			err = e
@@ -596,8 +585,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			Image string `json:"image"`
 		}
 		json.Unmarshal(params.Arguments, &args)
-		home, _ := sysutil.UserHome()
-		imgDir := filepath.Join(home, ".nido", "images")
+		imgDir := s.imageDir()
 		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
 		if e != nil {
 			err = e
@@ -621,22 +609,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 			UnusedOnly bool `json:"unused_only"`
 		}
 		json.Unmarshal(params.Arguments, &args)
-		home, _ := sysutil.UserHome()
-		imgDir := filepath.Join(home, ".nido", "images")
-		catalog, e := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
-		if e != nil {
-			err = e
-			break
-		}
-		// Get list of active VMs if needed
-		var activeVMs []string
-		if args.UnusedOnly {
-			vms, _ := s.Provider.List()
-			for _, vm := range vms {
-				activeVMs = append(activeVMs, vm.Name)
-			}
-		}
-		removed, e := catalog.PruneCache(imgDir, args.UnusedOnly, activeVMs)
+		removed, _, e := s.Provider.CachePrune(args.UnusedOnly)
 		if e != nil {
 			err = e
 		} else {
@@ -756,7 +729,6 @@ func (s *Server) sendResponse(id interface{}, result interface{}) {
 		Result:  result,
 	}
 	data, _ := json.Marshal(resp)
-	fmt.Fprintf(os.Stderr, "[MCP] Sending response: %s\n", string(data))
 	os.Stdout.Write(data)
 	os.Stdout.Write([]byte("\n"))
 }
@@ -771,7 +743,6 @@ func (s *Server) sendError(id interface{}, code int, message string) {
 		},
 	}
 	data, _ := json.Marshal(resp)
-	fmt.Fprintf(os.Stderr, "[MCP] Sending error: %s\n", string(data))
 	os.Stdout.Write(data)
 	os.Stdout.Write([]byte("\n"))
 }
@@ -819,4 +790,13 @@ func parsePortString(val string) (provider.PortForward, error) {
 	}
 
 	return pf, nil
+}
+
+func (s *Server) imageDir() string {
+	cfg := s.Provider.GetConfig()
+	if cfg.ImageDir != "" {
+		return cfg.ImageDir
+	}
+	home, _ := sysutil.UserHome()
+	return filepath.Join(home, ".nido", "images")
 }

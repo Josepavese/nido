@@ -131,19 +131,13 @@ func (d *Downloader) DownloadMultiPart(urls []string, dest string, expectedTotal
 	var parts []string
 	for i, url := range urls {
 		partDest := filepath.Join(tmpDir, fmt.Sprintf("part.%03d", i+1))
-		quiet := d.Quiet || cli.IsJSONMode()
-		if !quiet {
-			fmt.Printf("🌐 Downloading part %d/%d...\n", i+1, len(urls))
+		if d.OnProgress != nil {
+			d.OnProgress(int64(i), int64(len(urls)))
 		}
 		if err := d.Download(url, partDest, 0); err != nil {
 			return fmt.Errorf("failed to download part %d: %w", i+1, err)
 		}
 		parts = append(parts, partDest)
-	}
-
-	quiet := d.Quiet || cli.IsJSONMode()
-	if !quiet {
-		fmt.Printf("🧩 Reassembling image...\n")
 	}
 
 	out, err := os.Create(dest)
@@ -177,11 +171,6 @@ func (d *Downloader) DownloadMultiPart(urls []string, dest string, expectedTotal
 // Decompress extracts an archive to a destination.
 // Currently supported: .tar.xz (standard for Kali cloud images)
 func (d *Downloader) Decompress(src, dest string) error {
-	quiet := d.Quiet || cli.IsJSONMode()
-	if !quiet {
-		fmt.Printf("📦 Decompressing %s...\n", filepath.Base(src))
-	}
-
 	if strings.HasSuffix(src, ".zst") || strings.HasSuffix(src, ".zstandard") {
 		// zstd -d src -o dest
 		cmd := exec.Command("zstd", "-d", src, "-o", dest)
@@ -257,28 +246,10 @@ func (wc *writeCounter) Print() {
 	}
 	wc.lastUpd = time.Now()
 
-	// Clear line
-	fmt.Print("\r")
-
-	if wc.total == 0 {
-		// Unknown size
-		fmt.Printf("📦 Downloading... %d MB", wc.current/1024/1024)
-		return
-	}
-
-	percent := float64(wc.current) / float64(wc.total) * 100
-	width := 40
-	completed := int(percent / 100 * float64(width))
-
-	bar := strings.Repeat("█", completed) + strings.Repeat("░", width-completed)
-	fmt.Printf("📦 %s %.1f%% (%d/%d MB)", bar, percent, wc.current/1024/1024, wc.total/1024/1024)
 }
 
 func (wc *writeCounter) Finish() {
 	if wc.onProgress != nil {
 		wc.onProgress(int64(wc.current), int64(wc.total))
-	}
-	if !wc.quiet {
-		fmt.Println()
 	}
 }

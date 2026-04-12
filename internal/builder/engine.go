@@ -2,30 +2,39 @@ package builder
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
 
 	"github.com/Josepavese/nido/internal/image"
-	"github.com/Josepavese/nido/internal/ui"
 	"gopkg.in/yaml.v3"
 )
 
 // Engine orchestrates the image building process.
 type Engine struct {
-	CacheDir string // Where ISOs and Drivers are cached
-	WorkDir  string // Where temporary build files go
-	ImageDir string // Where the final output qcow2 goes
+	CacheDir      string // Where ISOs and Drivers are cached
+	WorkDir       string // Where temporary build files go
+	ImageDir      string // Where the final output qcow2 goes
+	Reporter      Reporter
+	CommandOutput io.Writer
 }
 
 // NewEngine creates a new builder engine.
-func NewEngine(cacheDir, workDir, imageDir string) *Engine {
-	return &Engine{
+func NewEngine(cacheDir, workDir, imageDir string, opts ...EngineOption) *Engine {
+	e := &Engine{
 		CacheDir: cacheDir,
 		WorkDir:  workDir,
 		ImageDir: imageDir,
+		Reporter: NopReporter{},
 	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(e)
+		}
+	}
+	return e
 }
 
 // LoadBlueprint reads a blueprint from a YAML file.
@@ -113,7 +122,7 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 	}
 
 	// 4. Create Target Disk
-	ui.Info("Creating empty disk %s (%s)...", bp.OutputImage, bp.OutputSize)
+	e.Reporter.Info("Creating disk %s (%s)...", bp.OutputImage, bp.OutputSize)
 	// qemu-img create -f qcow2 path size
 	cmd = exec.Command("qemu-img", "create", "-f", "qcow2", outputPath, bp.OutputSize)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -121,8 +130,8 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 	}
 
 	// 5. Run QEMU Installer
-	ui.Header("Starting Unattended Installation")
-	ui.Info("This process will take a while (%s timeout). Please do not close this window.", bp.BuildSpecs.Timeout)
+	e.Reporter.Header("Starting Unattended Installation")
+	e.Reporter.Info("This process may take a while (%s timeout).", bp.BuildSpecs.Timeout)
 
 	qemuArgs := []string{
 		"-m", bp.BuildSpecs.Memory,
@@ -147,20 +156,19 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 	if _, err := os.Stat("/dev/kvm"); err == nil {
 		qemuArgs = append(qemuArgs, "-enable-kvm", "-cpu", "host")
 	} else {
-		ui.Warn("KVM not available! Building will be extremely slow.")
+		e.Reporter.Warn("KVM not available. Build will be slower.")
 	}
 
 	// Add VNC for debugging visibility
 	qemuArgs = append(qemuArgs, "-vnc", ":99") // Port 5999
-	ui.Info("VNC server running on :99 (Port 5999) for observation.")
+	e.Reporter.Info("VNC available on :99 (port 5999).")
 
-	ui.Info("Running QEMU...")
+	e.Reporter.Info("Starting QEMU...")
 	qemuCmd := exec.Command("qemu-system-x86_64", qemuArgs...)
-
-	// We want to capture output or show it?
-	// QEMU usually prints to stderr.
-	qemuCmd.Stdout = os.Stdout
-	qemuCmd.Stderr = os.Stderr
+	if e.CommandOutput != nil {
+		qemuCmd.Stdout = e.CommandOutput
+		qemuCmd.Stderr = e.CommandOutput
+	}
 
 	start := time.Now()
 	if err := qemuCmd.Start(); err != nil {
@@ -191,7 +199,7 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 		}
 	}
 
-	ui.Success("Build complete in %s! 🐣", time.Since(start))
+	e.Reporter.Success("Build completed in %s.", time.Since(start))
 
 	// Validate Output
 	if info, err := os.Stat(outputPath); err != nil || info.Size() < 100*1024*1024 { // < 100MB is suspicious
@@ -208,12 +216,12 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 func (e *Engine) ensureAsset(url, dest, checksum string) error {
 	if _, err := os.Stat(dest); err == nil {
 		// Exists, assume okay for now (TODO: Verify checksum if provided)
-		ui.Info("Using cached asset: %s", filepath.Base(dest))
+		e.Reporter.Info("Using cached asset: %s", filepath.Base(dest))
 		return nil
 	}
 
-	ui.Info("Downloading asset: %s", filepath.Base(dest))
-	downloader := image.Downloader{Quiet: false}
+	e.Reporter.Info("Downloading asset: %s", filepath.Base(dest))
+	downloader := image.Downloader{Quiet: true}
 	if err := downloader.Download(url, dest, 0); err != nil {
 		return err
 	}

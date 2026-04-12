@@ -2,7 +2,11 @@ package ui
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
+
+	clijson "github.com/Josepavese/nido/internal/cli"
 )
 
 const (
@@ -19,57 +23,95 @@ const (
 )
 
 const (
-	IconBird    = "🐣"
-	IconEgg     = "🥚"
-	IconRocket  = "🚀"
-	IconStop    = "⏹️"
-	IconTrash   = "🗑️"
-	IconInfo    = "📋"
-	IconConfig  = "⚙️"
-	IconSuccess = "✅"
-	IconWarning = "⚠️"
-	IconError   = "❌"
-	IconPulse   = "⚡"
+	IconBird    = "N"
+	IconEgg     = "o"
+	IconRocket  = ">"
+	IconStop    = "x"
+	IconTrash   = "-"
+	IconInfo    = "i"
+	IconConfig  = "="
+	IconSuccess = "+"
+	IconWarning = "!"
+	IconError   = "x"
+	IconPulse   = ">"
 )
 
 func Header(title string) {
-	fmt.Printf("\n%s%s%s %s%s%s\n", Bold, Blue, IconBird, strings.ToUpper(title), Reset, Reset)
-	fmt.Printf("%s%s%s\n\n", Dim, strings.Repeat("-", 40), Reset)
+	if silent() {
+		return
+	}
+	writef(os.Stdout, "\n%sNIDO%s  %s%s%s\n", Bold+Blue, Reset, Bold, strings.ToUpper(title), Reset)
+	writef(os.Stdout, "%s%s%s\n\n", Dim, strings.Repeat("─", 56), Reset)
 }
 
 func Info(msg string, args ...interface{}) {
-	fmt.Printf("%s%s%s %s\n", Cyan, IconInfo, Reset, fmt.Sprintf(msg, args...))
+	line("info", Cyan, msg, args...)
 }
 
 func Success(msg string, args ...interface{}) {
-	fmt.Printf("%s%s%s %s\n", Green, IconSuccess, Reset, fmt.Sprintf(msg, args...))
+	line("done", Green, msg, args...)
 }
 
 func Warn(msg string, args ...interface{}) {
-	fmt.Printf("%s%s%s %s\n", Yellow, IconWarning, Reset, fmt.Sprintf(msg, args...))
+	line("warn", Yellow, msg, args...)
 }
 
 func Error(msg string, args ...interface{}) {
-	fmt.Printf("%s%s%s %s%s%s\n", Red, IconError, Bold, fmt.Sprintf(msg, args...), Reset, Reset)
+	line("fail", Red, msg, args...)
 }
 
 func FancyLabel(label string, value interface{}) {
-	fmt.Printf("  %s%-15s%s %v\n", Cyan, label, Reset, value)
+	if silent() {
+		return
+	}
+	writef(os.Stdout, "  %s%-16s%s %v\n", Cyan, label, Reset, value)
 }
 
 func Ironic(msg string) {
-	fmt.Printf("%s%s %s%s\n", Dim, IconPulse, msg, Reset)
+	Step("%s", msg)
+}
+
+func Step(msg string, args ...interface{}) {
+	line("step", Dim, msg, args...)
+}
+
+func Section(title string) {
+	if silent() {
+		return
+	}
+	writef(os.Stdout, "%s%s%s\n", Bold, title, Reset)
+}
+
+func TableHeader(columns ...string) {
+	if silent() {
+		return
+	}
+	writef(os.Stdout, "\n %s%s%s\n", Bold, strings.Join(columns, "  "), Reset)
+}
+
+func Rule(width int) {
+	if silent() {
+		return
+	}
+	if width <= 0 {
+		width = 56
+	}
+	writef(os.Stdout, " %s%s%s\n", Dim, strings.Repeat("─", width), Reset)
 }
 
 func DoctorCheck(label string, passed bool, details string) {
+	if silent() {
+		return
+	}
 	status := Green + " [PASS] " + Reset
 	icon := IconSuccess
 	if !passed {
 		status = Red + Bold + " [FAIL] " + Reset
 		icon = IconError
 	}
-	fmt.Printf("  %s %-20s %s %s%s%s\n", icon, label, status, Dim, details, Reset)
+	writef(os.Stdout, "  %s %-20s %s %s%s%s\n", icon, label, status, Dim, details, Reset)
 }
+
 func HumanSize(bytes int64) string {
 	const unit = 1024
 	if bytes < unit {
@@ -81,4 +123,19 @@ func HumanSize(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func line(label, color, msg string, args ...interface{}) {
+	if silent() {
+		return
+	}
+	writef(os.Stdout, "%s%-4s%s %s\n", color, label, Reset, fmt.Sprintf(msg, args...))
+}
+
+func silent() bool {
+	return clijson.IsJSONMode()
+}
+
+func writef(w io.Writer, format string, args ...interface{}) {
+	_, _ = fmt.Fprintf(w, format, args...)
 }
