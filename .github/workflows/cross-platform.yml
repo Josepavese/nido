@@ -101,13 +101,33 @@ jobs:
         if: always() && runner.os == 'Linux'
         run: ./nido-validator --nido-bin ./nido --scenario cleanup || true
 
+      - name: Capture validator fleet state (Linux only)
+        if: always() && runner.os == 'Linux'
+        run: |
+          if ! ./nido ls --json > /tmp/nido_ls.json; then
+            echo "nido ls --json failed"
+            ./nido ls --json || true
+            exit 1
+          fi
+          if ! ./nido template list --json > /tmp/nido_templates.json; then
+            echo "nido template list --json failed"
+            ./nido template list --json || true
+            exit 1
+          fi
+          cat /tmp/nido_ls.json
+          cat /tmp/nido_templates.json
+
       - name: Assert no residual validator VMs (Linux only)
         if: always() && runner.os == 'Linux'
         run: |
           python3 - <<'PY'
-          import json, subprocess, sys
-          proc = subprocess.run(["./nido", "ls", "--json"], check=True, capture_output=True, text=True)
-          payload = json.loads(proc.stdout)
+          import json, sys
+          data = open("/tmp/nido_ls.json", "r", encoding="utf-8").read()
+          try:
+            payload = json.loads(data)
+          except json.JSONDecodeError:
+            print("Invalid JSON from nido ls --json:", data, file=sys.stderr)
+            raise
           names = [vm.get("name", "") for vm in payload.get("data", {}).get("vms", [])]
           leaked = [name for name in names if name.startswith(("val-", "cli-val-", "vm_template_src", "vm_from_template"))]
           if leaked:
@@ -119,9 +139,13 @@ jobs:
         if: always() && runner.os == 'Linux'
         run: |
           python3 - <<'PY'
-          import json, subprocess, sys
-          proc = subprocess.run(["./nido", "template", "list", "--json"], check=True, capture_output=True, text=True)
-          payload = json.loads(proc.stdout)
+          import json, sys
+          data = open("/tmp/nido_templates.json", "r", encoding="utf-8").read()
+          try:
+            payload = json.loads(data)
+          except json.JSONDecodeError:
+            print("Invalid JSON from nido template list --json:", data, file=sys.stderr)
+            raise
           names = payload.get("data", {}).get("templates", [])
           leaked = [name for name in names if isinstance(name, str) and name.startswith("tpl_primary")]
           if leaked:
