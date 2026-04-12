@@ -458,11 +458,18 @@ commands:
   - id: system.mcp_help
     use: mcp-help
     hidden: true
-    short: "Emit MCP tool catalog"
+    short: "Emit the machine-readable MCP usage guide"
+    long: "Print a structured JSON guide for MCP clients, including tools, actions, resources, prompts, examples, and usage rules."
+    examples:
+      - "nido mcp-help"
     action: system.mcp_help
 
   - id: system.mcp
     use: mcp
-    hidden: true
-    short: "Run MCP server"
+    short: "Run the MCP server"
+    long: "Run Nido as an MCP stdio server for AI agents. Use `nido mcp --help` for the human-readable protocol guide and `nido mcp-help` for the machine-readable JSON guide. Agents should prefer resources for inspection and use the compact tools with an `action` field for mutations."
+    examples:
+      - "nido mcp"
+      - "nido mcp --help"
+      - "nido mcp-help"
     action: system.mcp

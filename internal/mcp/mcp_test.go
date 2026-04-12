@@ -56,30 +56,53 @@ func (m *mockProvider) CachePrune(unusedOnly bool) (int, int64, error) {
 
 func TestToolsCatalogIncludesExpectedToolsAndOmitsPassword(t *testing.T) {
 	tools := ToolsCatalog()
-	var foundConfigGet bool
-	var foundDoctor bool
+	expected := map[string]bool{
+		"nido_vm":       false,
+		"nido_template": false,
+		"nido_image":    false,
+		"nido_system":   false,
+	}
 
 	for _, tool := range tools {
 		name, _ := tool["name"].(string)
+		if _, ok := expected[name]; ok {
+			expected[name] = true
+		}
 		switch name {
-		case "vm_config_get":
-			foundConfigGet = true
-		case "vm_doctor":
-			foundDoctor = true
-		case "vm_config_update":
+		case "nido_vm":
 			schema, _ := tool["inputSchema"].(map[string]interface{})
 			props, _ := schema["properties"].(map[string]interface{})
 			if _, ok := props["ssh_password"]; ok {
-				t.Fatal("vm_config_update must not expose ssh_password")
+				t.Fatal("nido_vm must not expose ssh_password")
 			}
 		}
 	}
 
-	if !foundConfigGet {
-		t.Fatal("vm_config_get not present in tool catalog")
+	for name, found := range expected {
+		if !found {
+			t.Fatalf("%s not present in tool catalog", name)
+		}
 	}
-	if !foundDoctor {
-		t.Fatal("vm_doctor not present in tool catalog")
+}
+
+func TestResourceAndPromptCatalogsExposeCompactSurface(t *testing.T) {
+	if len(ResourcesCatalog()) != 6 {
+		t.Fatalf("ResourcesCatalog() count = %d, want 6", len(ResourcesCatalog()))
+	}
+	if len(ResourceTemplatesCatalog()) != 2 {
+		t.Fatalf("ResourceTemplatesCatalog() count = %d, want 2", len(ResourceTemplatesCatalog()))
+	}
+	if len(PromptsCatalog()) != 1 {
+		t.Fatalf("PromptsCatalog() count = %d, want 1", len(PromptsCatalog()))
+	}
+}
+
+func TestHelpPayloadIncludesGuideSections(t *testing.T) {
+	payload := HelpPayload()
+	for _, key := range []string{"summary", "transport", "discovery", "usage_rules", "examples", "tools", "resources", "resource_templates", "prompts"} {
+		if _, ok := payload[key]; !ok {
+			t.Fatalf("HelpPayload missing key %q", key)
+		}
 	}
 }
 
@@ -107,9 +130,9 @@ func TestHandleToolsCallCachePruneDelegatesToProvider(t *testing.T) {
 	}
 
 	params := CallParams{
-		Name: "vm_cache_prune",
+		Name: "nido_image",
 	}
-	args, err := json.Marshal(map[string]bool{"unused_only": true})
+	args, err := json.Marshal(map[string]interface{}{"action": "cache_prune", "unused_only": true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +166,7 @@ func TestHandleToolsCallCachePruneDelegatesToProvider(t *testing.T) {
 	if !p.cachePruneUnusedOnly {
 		t.Fatal("CachePrune should receive unused_only=true")
 	}
-	if !strings.Contains(string(out), "Pruned 7 cached image(s)") {
+	if !strings.Contains(string(out), "\\\"removed_count\\\":7") {
 		t.Fatalf("unexpected MCP response: %s", string(out))
 	}
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/Josepavese/nido/internal/validator/util"
 )
 
-// VMMutableConfig covers the 'nido config' command and 'vm_config_update' MCP tool.
+// VMMutableConfig covers the 'nido config' command and the MCP VM action surface.
 func VMMutableConfig() Scenario {
 	return Scenario{
 		Name: "vm-mutable-config",
@@ -134,8 +134,9 @@ func configMCP(ctx *Context) report.StepResult {
 		"jsonrpc": "2.0",
 		"method":  "tools/call",
 		"params": map[string]interface{}{
-			"name": "vm_config_update",
+			"name": "nido_vm",
 			"arguments": map[string]interface{}{
+				"action":    "config_update",
 				"name":      vmName,
 				"memory_mb": 512,
 				"gui":       true,
@@ -157,7 +158,7 @@ func configMCP(ctx *Context) report.StepResult {
 	out := ctx.Runner.Exec(inv)
 
 	res := report.StepResult{
-		Command:    "mcp-tool:vm_config_update",
+		Command:    "mcp-tool:nido_vm",
 		Args:       nil,
 		StartedAt:  start,
 		Result:     "PASS", // Optimistic
@@ -175,10 +176,10 @@ func configMCP(ctx *Context) report.StepResult {
 
 	// Check response
 	// Expect: {"jsonrpc":"2.0","id":1,"result":{...}}
-	if strings.Contains(out.Stdout, "updated") {
+	if strings.Contains(out.Stdout, "config_update") {
 		addAssertion(&res, "mcp_response_ok", true, "")
 	} else {
-		addAssertion(&res, "mcp_response_ok", false, "Response did not contain success message")
+		addAssertion(&res, "mcp_response_ok", false, "Response did not contain config_update action")
 	}
 
 	// Verify State Persistence again via 'info'

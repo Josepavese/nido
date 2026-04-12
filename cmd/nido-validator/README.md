@@ -23,7 +23,7 @@ Workflows (single source of truth)
 - Default YAML `internal/validator/workflows/default.yaml` contains:
   - Template flow: spawn → template create → spawn from template (cache-hit expectation) → delete spawned VMs → delete template.
   - Image pool flow: pull a configured image, verify cache entry, spawn from image, delete VM, prune cache entry.
-- CLI executor runs these steps via CLI; MCP executor starts `nido mcp` and replays with MCP tools (`vm_create`, `vm_template_create/delete`, `vm_delete`, `vm_info`, `vm_template_list`).
+- CLI executor runs these steps via CLI; MCP executor starts `nido mcp` and replays with the compact MCP surface (`nido_vm`, `nido_template`, `nido_image`, `nido_system`) plus resources for inspection.
 - Cache-hit expectation uses backing state and tolerant timing; logs allow further inspection if needed.
 
 What it validates (high level)

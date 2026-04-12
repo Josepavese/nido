@@ -75,8 +75,9 @@ func spawnResourcesMCP(ctx *Context) report.StepResult {
 		"jsonrpc": "2.0",
 		"method":  "tools/call",
 		"params": map[string]interface{}{
-			"name": "vm_create",
+			"name": "nido_vm",
 			"arguments": map[string]interface{}{
+				"action":    "create",
 				"name":      vmName,
 				"image":     ctx.Config.BaseImage,
 				"memory_mb": 512,
@@ -97,7 +98,7 @@ func spawnResourcesMCP(ctx *Context) report.StepResult {
 	out := ctx.Runner.Exec(inv)
 
 	res := report.StepResult{
-		Command:    "mcp-tool:vm_create",
+		Command:    "mcp-tool:nido_vm",
 		Args:       nil,
 		StartedAt:  start,
 		Result:     "PASS",
@@ -112,10 +113,10 @@ func spawnResourcesMCP(ctx *Context) report.StepResult {
 		addAssertion(&res, "mcp_exit_zero", false, out.Stderr)
 	} else {
 		// Verify MCP Response Content
-		if strings.Contains(out.Stdout, "created successfully") {
+		if strings.Contains(out.Stdout, "create") {
 			addAssertion(&res, "mcp_response_ok", true, "")
 		} else {
-			addAssertion(&res, "mcp_response_ok", false, "Response missing success message")
+			addAssertion(&res, "mcp_response_ok", false, "Response missing create action")
 		}
 
 		ctx.State.AddVM(vmName)

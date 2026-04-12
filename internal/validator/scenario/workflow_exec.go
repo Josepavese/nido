@@ -295,7 +295,7 @@ func executeWorkflowMCP(ctx *Context, client *mcpclient.Client, name string, wf 
 			if img == "" {
 				return fmt.Errorf("no pool image configured")
 			}
-			if _, err := client.CallWithTimeout("vm_images_pull", map[string]interface{}{"image": img}, ctx.Config.DownloadTimeout); err != nil {
+			if _, err := client.CallWithTimeout("nido_image", map[string]interface{}{"action": "pull", "image": img}, ctx.Config.DownloadTimeout); err != nil {
 				return fmt.Errorf("mcp image pull failed: %w", err)
 			}
 			setVar(ctx, "last_pulled_image", img)
@@ -331,7 +331,8 @@ func executeWorkflowMCP(ctx *Context, client *mcpclient.Client, name string, wf 
 					return fmt.Errorf("no image available for spawn")
 				}
 			}
-			if _, err := client.CallWithTimeout("vm_create", args, ctx.Config.BootTimeout); err != nil {
+			args["action"] = "create"
+			if _, err := client.CallWithTimeout("nido_vm", args, ctx.Config.BootTimeout); err != nil {
 				return fmt.Errorf("mcp spawn failed for %s: %w", vmName, err)
 			}
 			ctx.State.AddVM(vmName)
@@ -342,7 +343,8 @@ func executeWorkflowMCP(ctx *Context, client *mcpclient.Client, name string, wf 
 			}
 			tplName := util.RandomName(step.TemplateVar)
 			setVar(ctx, step.TemplateVar, tplName)
-			if _, err := client.CallWithTimeout("vm_template_create", map[string]interface{}{
+			if _, err := client.CallWithTimeout("nido_template", map[string]interface{}{
+				"action":        "create",
 				"vm_name":       vmName,
 				"template_name": tplName,
 			}, ctx.Config.DownloadTimeout); err != nil {
@@ -354,8 +356,9 @@ func executeWorkflowMCP(ctx *Context, client *mcpclient.Client, name string, wf 
 			if !ok {
 				return fmt.Errorf("template var %s not set", step.TemplateVar)
 			}
-			if _, err := client.CallWithTimeout("vm_template_delete", map[string]interface{}{
-				"name": tplName,
+			if _, err := client.CallWithTimeout("nido_template", map[string]interface{}{
+				"action": "delete",
+				"name":   tplName,
 			}, 30*time.Second); err != nil {
 				return fmt.Errorf("mcp template delete failed: %w", err)
 			}
@@ -365,8 +368,9 @@ func executeWorkflowMCP(ctx *Context, client *mcpclient.Client, name string, wf 
 			if !ok {
 				continue
 			}
-			if _, err := client.CallWithTimeout("vm_delete", map[string]interface{}{
-				"name": vmName,
+			if _, err := client.CallWithTimeout("nido_vm", map[string]interface{}{
+				"action": "delete",
+				"name":   vmName,
 			}, 30*time.Second); err != nil {
 				return fmt.Errorf("mcp delete vm failed: %w", err)
 			}
@@ -387,7 +391,7 @@ func executeWorkflowMCP(ctx *Context, client *mcpclient.Client, name string, wf 
 			}
 			var err error
 			for attempt := 0; attempt < 5; attempt++ {
-				_, err = client.CallWithTimeout("cache_remove", map[string]interface{}{"image": img}, 20*time.Second)
+				_, err = client.CallWithTimeout("nido_image", map[string]interface{}{"action": "cache_remove", "image": img}, 20*time.Second)
 				if err == nil || strings.Contains(err.Error(), "Tool not found") {
 					break
 				}

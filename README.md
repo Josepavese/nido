@@ -100,10 +100,12 @@ Nido is designed to be driven by **Large Language Models** (Claude, GPT-4, Gemin
 
 ### 🤖 Model Context Protocol (MCP)
 
-Nido speaks native MCP. It exposes a suite of tools (`vm_create`, `vm_ssh`, `vm_prune`, etc.) that allow your AI to manage its own infrastructure.
+Nido speaks native MCP. The server now exposes a compact agent-facing surface: a few high-power tools (`nido_vm`, `nido_template`, `nido_image`, `nido_system`) plus read-only resources like `nido://fleet/vms` and `nido://system/config`. This reduces tool-selection ambiguity, lowers token overhead, and makes agent planning simpler than a flood of one-action tools.
 
 ```bash
 nido register  # Generates the config for your AI client
+nido mcp --help  # Human-readable MCP guide
+nido mcp-help    # Machine-readable MCP guide for agents
 ```
 
 ### 🧠 JSON Mode

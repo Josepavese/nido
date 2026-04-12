@@ -402,9 +402,7 @@ func actionShellCompletion(shell string) func(cmd *cobra.Command, args []string)
 
 func actionMCPHelp(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		_ = clijson.PrintJSON(clijson.NewResponseOK("mcp-help", map[string]interface{}{
-			"tools": mcp.ToolsCatalog(),
-		}))
+		_ = clijson.PrintJSON(clijson.NewResponseOK("mcp-help", mcp.HelpPayload()))
 	}
 }
 

@@ -32,8 +32,8 @@ What gets tested (scenarios)
 - Pre-flight: `version --json` and `doctor --json` schema/values.
 - Images/cache/templates: list + base/pool image pull, cache info/list, template list with auto selection.
 - VM lifecycle: spawn (with optional ports/user-data), info/list consistency, SSH echo, start/stop/delete, prune, optional forwarding + cloud-init checks.
-- Workflows (from YAML): template flow (spawn → template create → spawn from template → delete VMs → delete template); image-pool flow (pull → spawn from image → delete VM → cache rm). Executed via CLI and again via MCP tools for parity.
-- MCP protocol: initialize, tools/list expected set, positive and negative tool calls.
+- Workflows (from YAML): template flow (spawn → template create → spawn from template → delete VMs → delete template); image-pool flow (pull → spawn from image → delete VM → cache rm). Executed via CLI and again via the compact MCP tool surface for parity.
+- MCP protocol: initialize, tools/list expected set, resources/list, prompts/list, positive and negative tool calls.
 - Auxiliary: help, completion, register, mcp-help; GUI/update are opt-in skips by default.
 - Cleanup: tracked VMs/templates and temp files removed unless `--keep-artifacts`.
 
