@@ -32,8 +32,8 @@ What gets tested (scenarios)
 - Pre-flight: `version --json` and `doctor --json` schema/values.
 - Images/cache/templates: list + base/pool image pull, cache info/list, template list with auto selection.
 - VM lifecycle: spawn (with optional ports/user-data), info/list consistency, SSH echo, start/stop/delete, prune, optional forwarding + cloud-init checks.
-- Workflows (from YAML): template flow (spawn → template create → spawn from template → delete VMs → delete template); image-pool flow (pull → spawn from image → delete VM → cache rm). Executed via CLI and again via MCP tools for parity.
-- MCP protocol: initialize, tools/list expected set, positive and negative tool calls.
+- Workflows (from YAML): template flow (spawn → template create → spawn from template → delete VMs → delete template); image-pool flow (pull → spawn from image → delete VM → cache rm). Executed via CLI and again via the compact MCP tool surface for parity.
+- MCP protocol: initialize, tools/list expected set, resources/list, prompts/list, positive and negative tool calls.
 - Auxiliary: help, completion, register, mcp-help; GUI/update are opt-in skips by default.
 - Cleanup: tracked VMs/templates and temp files removed unless `--keep-artifacts`.
 
@@ -45,6 +45,7 @@ Outputs
 Behavior and defaults
 - Auto image/template selection chooses the smallest advertised size when none are provided, and records them for both CLI and MCP workflows.
 - Image pulls and cache removals are mirrored between CLI and MCP; templates created during workflows are deleted at the end.
+- Even if the validator stops early, panics, or receives `SIGINT`/`SIGTERM`, it performs a best-effort sweep of test VMs and templates unless `--keep-artifacts` is set.
 - MCP client tolerates stdout noise by line-buffered JSON parsing; MCP server uses quiet downloads to keep JSON clean.
 - Fail-fast stops early on failure (except cleanup), but defaults are tuned for full coverage.
 

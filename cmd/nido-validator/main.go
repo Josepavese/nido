@@ -43,6 +43,23 @@ func main() {
 		Start:    time.Now(),
 	}
 
+	defer func() {
+		if cfg.KeepArtifacts {
+			return
+		}
+		scenario.Sweep(ctx)
+	}()
+
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", colorWarn(">> [PANIC] Validator crashed. Initiating emergency sweep..."))
+			if !cfg.KeepArtifacts {
+				scenario.Sweep(ctx)
+			}
+			panic(recovered)
+		}
+	}()
+
 	// SIGNAL HANDLING /////////////////////////////////////////////////////////
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -52,7 +69,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%s\n", colorWarn(">> [INTERRUPT] Caught signal! Initiating emergency sweep..."))
 
 		// Run global sweep to cleanup any left-over VMs
-		scenario.Sweep(ctx)
+		if !cfg.KeepArtifacts {
+			scenario.Sweep(ctx)
+		}
 
 		fmt.Fprintf(os.Stderr, "%s\n", colorWarn(">> [INTERRUPT] Sweep complete. Exiting."))
 		time.Sleep(500 * time.Millisecond)

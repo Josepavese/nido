@@ -5,6 +5,7 @@ Overview
 - `nido-validator` exercises Nido CLI and MCP flows end-to-end: version/doctor, images/cache/templates, VM lifecycle (spawn/info/list/ssh/start/stop/delete/prune), template workflows (create/delete, cache-hit expectation), auxiliary commands (help/completion/register/mcp-help), and cleanup. GUI/update remain opt-in.
 - Shared workflows are defined once in YAML (`internal/validator/workflows/default.yaml`) and executed via both CLI and MCP tools to keep a single source of truth.
 - Auto-picks the smallest image/template when none are provided, and cleans up VMs/templates/cache entries after runs.
+- Cleanup is best-effort even on fail-fast, panic, or interrupt: validator test VMs/templates are swept on normal exit and on signal handling unless `--keep-artifacts` is enabled.
 - Outputs: NDJSON log at `logs/cli-validate-<ts>.ndjson` plus human summary `.summary.txt`. Each step records command, args, exit code, duration, stdout/stderr, assertions, and result (PASS/FAIL/SKIP).
 
 Running
@@ -23,7 +24,7 @@ Workflows (single source of truth)
 - Default YAML `internal/validator/workflows/default.yaml` contains:
   - Template flow: spawn → template create → spawn from template (cache-hit expectation) → delete spawned VMs → delete template.
   - Image pool flow: pull a configured image, verify cache entry, spawn from image, delete VM, prune cache entry.
-- CLI executor runs these steps via CLI; MCP executor starts `nido mcp` and replays with MCP tools (`vm_create`, `vm_template_create/delete`, `vm_delete`, `vm_info`, `vm_template_list`).
+- CLI executor runs these steps via CLI; MCP executor starts `nido mcp` and replays with the compact MCP surface (`nido_vm`, `nido_template`, `nido_image`, `nido_system`) plus resources for inspection.
 - Cache-hit expectation uses backing state and tolerant timing; logs allow further inspection if needed.
 
 What it validates (high level)

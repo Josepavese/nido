@@ -29,76 +29,16 @@
   ],
   "tools": [
     {
-      "name": "vm_create"
+      "name": "nido_vm"
     },
     {
-      "name": "vm_start"
+      "name": "nido_template"
     },
     {
-      "name": "vm_stop"
+      "name": "nido_image"
     },
     {
-      "name": "vm_delete"
-    },
-    {
-      "name": "vm_info"
-    },
-    {
-      "name": "vm_list"
-    },
-    {
-      "name": "vm_ssh"
-    },
-    {
-      "name": "vm_prune"
-    },
-    {
-      "name": "vm_images_list"
-    },
-    {
-      "name": "vm_images_pull"
-    },
-    {
-      "name": "vm_images_info"
-    },
-    {
-      "name": "vm_images_remove"
-    },
-    {
-      "name": "vm_images_update"
-    },
-    {
-      "name": "vm_cache_list"
-    },
-    {
-      "name": "vm_cache_info"
-    },
-    {
-      "name": "vm_cache_remove"
-    },
-    {
-      "name": "vm_cache_prune"
-    },
-    {
-      "name": "vm_port_forward"
-    },
-    {
-      "name": "vm_port_unforward"
-    },
-    {
-      "name": "vm_port_list"
-    },
-    {
-      "name": "vm_config_update"
-    },
-    {
-      "name": "vm_config_get"
-    },
-    {
-      "name": "vm_doctor"
-    },
-    {
-      "name": "nido_build_image"
+      "name": "nido_system"
     }
   ]
 }

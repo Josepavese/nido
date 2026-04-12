@@ -21,26 +21,29 @@ func PreClean() Scenario {
 // Sweep performs a best-effort global cleanup of all test artifacts.
 // It is designed to be safe to run from signal handlers or cleanup hooks.
 func Sweep(ctx *Context) {
+	snapshot := ctx.State.Snapshot()
+
 	// 1. List all VMs
 	args := []string{"list", "--json"}
 	// Use a short timeout for listing
 	res := runNido(ctx, "sweep-list", args, 5*time.Second)
-	if res.ExitCode != 0 {
-		return // Cannot list, cannot clean
+	vmSet := map[string]bool{}
+	for _, name := range snapshot.VMs {
+		if name != "" {
+			vmSet[name] = true
+		}
 	}
-
-	payload, err := parseJSON(res.Stdout)
-	if err != nil {
-		return
-	}
-
-	vms := []string{}
-	if data, ok := payload["data"].(map[string]interface{}); ok {
-		if arr, ok := data["vms"].([]interface{}); ok {
-			for _, v := range arr {
-				if m, ok := v.(map[string]interface{}); ok {
-					if name, ok := m["name"].(string); ok && isPrefixedTestVM(name) {
-						vms = append(vms, name)
+	if res.ExitCode == 0 {
+		payload, err := parseJSON(res.Stdout)
+		if err == nil {
+			if data, ok := payload["data"].(map[string]interface{}); ok {
+				if arr, ok := data["vms"].([]interface{}); ok {
+					for _, v := range arr {
+						if m, ok := v.(map[string]interface{}); ok {
+							if name, ok := m["name"].(string); ok && isPrefixedTestVM(name) {
+								vmSet[name] = true
+							}
+						}
 					}
 				}
 			}
@@ -48,9 +51,37 @@ func Sweep(ctx *Context) {
 	}
 
 	// 2. Destroy them all
-	for _, name := range vms {
+	for name := range vmSet {
 		// Fire and forget delete
-		runNido(ctx, "sweep-delete", []string{"delete", name, "--force"}, 10*time.Second)
+		runNido(ctx, "sweep-delete", []string{"delete", name}, 10*time.Second)
+	}
+
+	templateSet := map[string]bool{}
+	for _, name := range snapshot.Templates {
+		if name != "" {
+			templateSet[name] = true
+		}
+	}
+
+	tplRes := runNido(ctx, "sweep-template-list", []string{"template", "list", "--json"}, 5*time.Second)
+	if tplRes.ExitCode == 0 {
+		payload, err := parseJSON(tplRes.Stdout)
+		if err == nil {
+			if data, ok := payload["data"].(map[string]interface{}); ok {
+				if arr, ok := data["templates"].([]interface{}); ok {
+					for _, t := range arr {
+						name := templateName(t)
+						if strings.HasPrefix(name, "tpl_primary") {
+							templateSet[name] = true
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for name := range templateSet {
+		runNido(ctx, "sweep-template-delete", []string{"template", "delete", name, "--force"}, 10*time.Second)
 	}
 }
 

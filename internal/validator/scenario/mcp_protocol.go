@@ -39,29 +39,10 @@ func mcpProtocolStep(ctx *Context) report.StepResult {
 	toolsResp, err := client.CallMethod("tools/list", nil, 10*time.Second)
 	addAssertion(&res, "tools_list", err == nil, errDetails(err))
 	expected := map[string]bool{
-		"vm_list":            true,
-		"vm_create":          true,
-		"vm_start":           true,
-		"vm_stop":            true,
-		"vm_delete":          true,
-		"vm_info":            true,
-		"vm_ssh":             true,
-		"vm_prune":           true,
-		"vm_template_list":   true,
-		"vm_template_create": true,
-		"vm_template_delete": true,
-		"vm_images_list":     true,
-		"vm_images_info":     true,
-		"vm_images_pull":     true,
-		"vm_images_remove":   true,
-		"vm_images_update":   true,
-		"vm_cache_list":      true,
-		"vm_cache_info":      true,
-		"vm_cache_remove":    true,
-		"vm_cache_prune":     true,
-		"vm_port_forward":    true,
-		"vm_port_unforward":  true,
-		"vm_port_list":       true,
+		"nido_vm":       true,
+		"nido_template": true,
+		"nido_image":    true,
+		"nido_system":   true,
 	}
 	if err == nil {
 		if tools, ok := toolsResp["result"].(map[string]interface{})["tools"].([]interface{}); ok {
@@ -85,11 +66,33 @@ func mcpProtocolStep(ctx *Context) report.StepResult {
 		}
 	}
 
-	// positive tool call vm_list
-	if _, err := client.CallWithTimeout("vm_list", map[string]interface{}{}, 10*time.Second); err != nil {
-		addAssertion(&res, "vm_list_call", false, err.Error())
+	// resources/list
+	resourcesResp, err := client.CallMethod("resources/list", nil, 10*time.Second)
+	addAssertion(&res, "resources_list", err == nil, errDetails(err))
+	if err == nil {
+		if resources, ok := resourcesResp["result"].(map[string]interface{})["resources"].([]interface{}); ok {
+			addAssertion(&res, "resources_nonempty", len(resources) >= 6, "")
+		} else {
+			addAssertion(&res, "resources_parse", false, "resources array missing")
+		}
+	}
+
+	// prompts/list
+	promptsResp, err := client.CallMethod("prompts/list", nil, 10*time.Second)
+	addAssertion(&res, "prompts_list", err == nil, errDetails(err))
+	if err == nil {
+		if prompts, ok := promptsResp["result"].(map[string]interface{})["prompts"].([]interface{}); ok {
+			addAssertion(&res, "prompts_nonempty", len(prompts) >= 1, "")
+		} else {
+			addAssertion(&res, "prompts_parse", false, "prompts array missing")
+		}
+	}
+
+	// positive tool call nido_vm list
+	if _, err := client.CallWithTimeout("nido_vm", map[string]interface{}{"action": "list"}, 10*time.Second); err != nil {
+		addAssertion(&res, "nido_vm_list_call", false, err.Error())
 	} else {
-		addAssertion(&res, "vm_list_call", true, "")
+		addAssertion(&res, "nido_vm_list_call", true, "")
 	}
 
 	// negative tool call

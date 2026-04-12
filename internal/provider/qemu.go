@@ -526,6 +526,9 @@ func (p *QemuProvider) List() ([]VMStatus, error) {
 	vmsDir := filepath.Join(p.RootDir, "vms")
 	files, err := os.ReadDir(vmsDir)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return []VMStatus{}, nil
+		}
 		return nil, err
 	}
 
