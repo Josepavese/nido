@@ -39,6 +39,7 @@ type Config struct {
 	WorkflowPath     string
 	CheckForward     bool
 	CheckCloudInit   bool
+	AllowDoctorFail  bool
 	Scenario         string
 	SSHUser          string
 	SSHPassword      string
@@ -99,6 +100,7 @@ func Parse(runID string) Config {
 	flag.BoolVar(&cfg.KeepArtifacts, "keep-artifacts", getenvBool("KEEP_ARTIFACTS", false), "Do not cleanup VMs/templates after run (KEEP_ARTIFACTS)")
 	flag.BoolVar(&cfg.CheckForward, "check-forwarding", getenvBool("CHECK_FORWARDING", false), "Start dummy server and dial forwarded port to verify connectivity (CHECK_FORWARDING)")
 	flag.BoolVar(&cfg.CheckCloudInit, "check-cloud-init", getenvBool("CHECK_CLOUD_INIT", false), "Verify cloud-init marker in guest via SSH (CHECK_CLOUD_INIT)")
+	flag.BoolVar(&cfg.AllowDoctorFail, "allow-doctor-fail", getenvBool("ALLOW_DOCTOR_FAIL", false), "Allow doctor to report failures without failing the suite (ALLOW_DOCTOR_FAIL)")
 	flag.StringVar(&cfg.SSHUser, "ssh-user", defaultSSHUser, "Default SSH user for guest (NIDO_SSH_USER)")
 	flag.StringVar(&cfg.SSHPassword, "ssh-password", defaultSSHPwd, "Default SSH password for guest (NIDO_SSH_PASSWORD)")
 

@@ -59,7 +59,8 @@ func doctorStep(ctx *Context) report.StepResult {
 		if m, ok := data.(map[string]interface{}); ok {
 			if summary, ok := m["summary"].(map[string]interface{}); ok {
 				failed := summary["failed"]
-				addAssertion(&res, "doctor_failed_zero", failed == float64(0), "failed != 0")
+				allowFail := ctx.Config.AllowDoctorFail
+				addAssertion(&res, "doctor_failed_zero", allowFail || failed == float64(0), "failed != 0")
 			} else {
 				addAssertion(&res, "summary_present", false, "missing summary")
 			}

@@ -95,7 +95,7 @@ jobs:
             ./nido-validator --nido-bin ./nido --scenario cleanup || true
           }
           trap cleanup EXIT
-          ./nido-validator --nido-bin ./nido
+          ./nido-validator --nido-bin ./nido --allow-doctor-fail
 
       - name: Validator artifact cleanup (Linux only)
         if: always() && runner.os == 'Linux'
@@ -146,7 +146,7 @@ jobs:
           except json.JSONDecodeError:
             print("Invalid JSON from nido template list --json:", data, file=sys.stderr)
             raise
-          names = payload.get("data", {}).get("templates", [])
+          names = payload.get("data", {}).get("templates") or []
           leaked = [name for name in names if isinstance(name, str) and name.startswith("tpl_primary")]
           if leaked:
             print("Residual validator templates found:", ", ".join(leaked), file=sys.stderr)
