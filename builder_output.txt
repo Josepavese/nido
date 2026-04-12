@@ -2,7 +2,7 @@
 Processing ubuntu...
   ✅ Added 2 versions via ubuntu-cloud
 Processing opensuse...
-  ✨ NEW VERSION FOUND: opensuse:Snapshot20260409
+  ✨ NEW VERSION FOUND: opensuse:Snapshot20260410
   ✅ Added 1 versions via opensuse-tumbleweed
 Processing kali...
   ✅ Added 1 versions via generic
@@ -26,4 +26,4 @@ Processing ubuntu-24.04-comfyui...
 ✨ Registry sync complete at registry/images.json (11 images)
 
 📋 Targeted validation required for new images:
-VALIDATE: opensuse:Snapshot20260409
+VALIDATE: opensuse:Snapshot20260410
