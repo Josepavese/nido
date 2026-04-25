@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-04-24T09:27:17.123088202Z",
+  "updated_at": "2026-04-25T08:45:17.242137239Z",
   "images": [
     {
       "name": "ubuntu",
@@ -141,29 +141,6 @@
           "format": "qcow2",
           "checksum_url": "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/cloud/nocloud_alpine-3.21.7-x86_64-bios-cloudinit-r0.qcow2.sha512",
           "checksum_regex": "^5b22a46e9aa6bbacf585c055e87362c8be1993e53c121bdaf74203ac3490c70bdbbf714df4276eef36184ea8c11fd7cd3b28c9ccc74f6a9a82c430d441fa2f95$"
-        }
-      ]
-    },
-    {
-      "name": "cirros",
-      "registry": "official",
-      "description": "CirrOS - Test Image",
-      "homepage": "https://download.cirros-cloud.net",
-      "ssh_user": "cirros",
-      "versions": [
-        {
-          "version": "0.6.3",
-          "aliases": [
-            "0.6.3"
-          ],
-          "arch": "amd64",
-          "url": "https://download.cirros-cloud.net/0.6.3/cirros-0.6.3-x86_64-disk.img",
-          "checksum_type": "sha256",
-          "checksum": "7d6355852aeb6dbcd191bcda7cd74f1536cfe5cbf8a10495a7283a8396e4b75b",
-          "size_bytes": 21692416,
-          "format": "qcow2",
-          "checksum_url": "https://download.cirros-cloud.net/0.6.3/SHA256SUMS",
-          "checksum_regex": "cirros-0.6.3-x86_64-disk.img"
         }
       ]
     },
