@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-05-02T09:01:07.643874606Z",
+  "updated_at": "2026-05-03T09:18:51.733730022Z",
   "images": [
     {
       "name": "ubuntu",
@@ -47,18 +47,18 @@
       "homepage": "https://get.opensuse.org/tumbleweed/",
       "versions": [
         {
-          "version": "Snapshot20260429",
+          "version": "Snapshot20260430",
           "aliases": [
             "Latest"
           ],
           "arch": "amd64",
-          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260429.qcow2",
+          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260430.qcow2",
           "checksum_type": "sha256",
-          "checksum": "306f358aad20d66bd95e331f523b73135db70389adaf1693fbab9e2266fc3e47",
-          "size_bytes": 302792704,
+          "checksum": "7fc9f56d884342c2363f5bf4cf4d8105b554b6fa3b12588a96828a54d634d707",
+          "size_bytes": 304043008,
           "format": "qcow2",
-          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260429.qcow2.sha256",
-          "checksum_regex": "^306f358aad20d66bd95e331f523b73135db70389adaf1693fbab9e2266fc3e47$"
+          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260430.qcow2.sha256",
+          "checksum_regex": "^7fc9f56d884342c2363f5bf4cf4d8105b554b6fa3b12588a96828a54d634d707$"
         }
       ]
     },
@@ -81,6 +81,28 @@
           "format": "raw",
           "checksum_url": "https://kali.download/cloud-images/kali-2025.4/SHA256SUMS",
           "checksum_regex": "kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
+        }
+      ]
+    },
+    {
+      "name": "debian",
+      "registry": "official",
+      "description": "Debian GNU/Linux",
+      "homepage": "https://www.debian.org/",
+      "versions": [
+        {
+          "version": "12",
+          "aliases": [
+            "bookworm"
+          ],
+          "arch": "amd64",
+          "url": "https://cloud.debian.org/images/cloud/bookworm/20260502-2466/debian-12-genericcloud-amd64-20260502-2466.qcow2",
+          "checksum_type": "sha512",
+          "checksum": "70ca7caa3711e7ad373a3e936149655901cbeefc56cb8ff5afb1c29d06a9d072dfc37afc842fd3249342b84e2a413993130cc22f800dedcf600218f4c7687c61",
+          "size_bytes": 345964544,
+          "format": "qcow2",
+          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/current/SHA512SUMS",
+          "checksum_regex": "debian-12-genericcloud-amd64-20260502-2466\\.qcow2"
         }
       ]
     },
@@ -119,6 +141,29 @@
           "format": "qcow2",
           "checksum_url": "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/cloud/nocloud_alpine-3.21.7-x86_64-bios-cloudinit-r0.qcow2.sha512",
           "checksum_regex": "^5b22a46e9aa6bbacf585c055e87362c8be1993e53c121bdaf74203ac3490c70bdbbf714df4276eef36184ea8c11fd7cd3b28c9ccc74f6a9a82c430d441fa2f95$"
+        }
+      ]
+    },
+    {
+      "name": "cirros",
+      "registry": "official",
+      "description": "CirrOS - Test Image",
+      "homepage": "https://download.cirros-cloud.net",
+      "ssh_user": "cirros",
+      "versions": [
+        {
+          "version": "0.6.3",
+          "aliases": [
+            "0.6.3"
+          ],
+          "arch": "amd64",
+          "url": "https://download.cirros-cloud.net/0.6.3/cirros-0.6.3-x86_64-disk.img",
+          "checksum_type": "sha256",
+          "checksum": "7d6355852aeb6dbcd191bcda7cd74f1536cfe5cbf8a10495a7283a8396e4b75b",
+          "size_bytes": 21692416,
+          "format": "qcow2",
+          "checksum_url": "https://download.cirros-cloud.net/0.6.3/SHA256SUMS",
+          "checksum_regex": "cirros-0.6.3-x86_64-disk.img"
         }
       ]
     },
