@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -11,6 +12,57 @@ import (
 // ParseInt is a helper to parse integers from strings, trimming whitespace.
 func ParseInt(val string) (int, error) {
 	return strconv.Atoi(strings.TrimSpace(val))
+}
+
+var pciIDPattern = regexp.MustCompile(`^(?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]$`)
+
+// ValidateAcceleratorID validates the public accelerator tokens accepted by
+// CLI/MCP before any privileged sysfs operation is attempted.
+func ValidateAcceleratorID(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "auto" || id == "virtual:gpu" {
+		return nil
+	}
+	if !pciIDPattern.MatchString(id) {
+		return fmt.Errorf("invalid accelerator %q: use PCI id like 0000:01:00.0, auto, or virtual:gpu", id)
+	}
+	return nil
+}
+
+func ValidateAccelerators(ids []string) error {
+	for _, id := range ids {
+		if err := ValidateAcceleratorID(id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validatePort(port int, allowZero bool, label string) error {
+	if allowZero && port == 0 {
+		return nil
+	}
+	if port < 1 || port > 65535 {
+		return fmt.Errorf("%s must be between 1 and 65535", label)
+	}
+	return nil
+}
+
+func ValidatePortForward(pf PortForward) error {
+	if err := validatePort(pf.GuestPort, false, "guest port"); err != nil {
+		return err
+	}
+	if err := validatePort(pf.HostPort, true, "host port"); err != nil {
+		return err
+	}
+	proto := strings.ToLower(strings.TrimSpace(pf.Protocol))
+	if proto == "" {
+		return nil
+	}
+	if proto != "tcp" && proto != "udp" {
+		return fmt.Errorf("protocol must be tcp or udp")
+	}
+	return nil
 }
 
 // VMStatus represents basic information about a VM.
@@ -265,5 +317,8 @@ func ParsePortForward(val string) (PortForward, error) {
 		pf.GuestPort = gp
 	}
 
+	if err := ValidatePortForward(pf); err != nil {
+		return pf, err
+	}
 	return pf, nil
 }
