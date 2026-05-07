@@ -15,7 +15,7 @@ RESET="$(tput sgr0 2>/dev/null || echo '')"
 
 # --- Configuration ---
 FLAVOURS_DIR="dist/flavours"
-DEFAULT_TAG=$(grep -oE 'Version = "v[0-9.]+"' cmd/nido/main.go | cut -d'"' -f2 || echo "latest")
+DEFAULT_TAG=$(grep -oE 'Version = "v[0-9.]+"' internal/build/version.go | cut -d'"' -f2 || echo "latest")
 
 usage() {
     echo "Usage: $0 [release_tag] [--dry-run]"

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # 🪺 Nido Source Installer - Lightweight Build from Source
-# Downloads only essential source files and builds locally.
-# Perfect for users who want the latest code without cloning the entire repo.
+# Downloads the release source archive and builds locally. No git clone required.
 set -euo pipefail
 
 # --- Colors & Icons ---
@@ -28,64 +27,38 @@ echo "${GREEN}✅ Go found: $(go version)${RESET}"
 
 # Determine latest release
 echo "${CYAN}🔍 Fetching latest release...${RESET}"
-LATEST_RELEASE=$(curl -sL https://api.github.com/repos/Josepavese/nido/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+LATEST_RELEASE="${NIDO_VERSION:-}"
+if [ -z "$LATEST_RELEASE" ]; then
+  LATEST_RELEASE=$(curl -sL https://api.github.com/repos/Josepavese/nido/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+fi
 
 if [ -z "$LATEST_RELEASE" ]; then
   echo "${YELLOW}⚠️  Could not fetch latest release, using 'main' branch${RESET}"
-  BRANCH="main"
+  REF_KIND="heads"
+  REF_NAME="main"
 else
   echo "${GREEN}✅ Latest version: ${LATEST_RELEASE}${RESET}"
-  BRANCH="$LATEST_RELEASE"
+  REF_KIND="tags"
+  REF_NAME="$LATEST_RELEASE"
 fi
 
 # Create temporary build directory
 BUILD_DIR="$(mktemp -d -t nido-build.XXXXXX)"
+trap 'rm -rf "$BUILD_DIR"' EXIT
 cd "$BUILD_DIR"
 
-echo "${CYAN}📥 Downloading source files...${RESET}"
-
-# Base URL for raw files
-BASE_URL="https://raw.githubusercontent.com/Josepavese/nido/${BRANCH}"
-
-# Download essential files
-curl -fsSL "${BASE_URL}/go.mod" -o go.mod
-curl -fsSL "${BASE_URL}/go.sum" -o go.sum
-
-# Download cmd/ directory structure
-echo "${CYAN}📦 Downloading cmd/...${RESET}"
-mkdir -p cmd/nido
-curl -fsSL "${BASE_URL}/cmd/nido/main.go" -o cmd/nido/main.go
-
-# Download internal/ directory (this is the tricky part - we need to get the file list)
-echo "${CYAN}📦 Downloading internal/...${RESET}"
-
-# Essential internal packages
-PACKAGES=(
-  "config"
-  "image"
-  "mcp"
-  "provider"
-  "registry/builder"
-  "ui"
-)
-
-for pkg in "${PACKAGES[@]}"; do
-  mkdir -p "internal/$pkg"
-  # Fetch directory listing from GitHub API
-  FILES=$(curl -sL "https://api.github.com/repos/Josepavese/nido/contents/internal/$pkg?ref=${BRANCH}" | grep '"name"' | grep '\.go"' | sed -E 's/.*"([^"]+\.go)".*/\1/')
-  
-  for file in $FILES; do
-    echo "  → internal/$pkg/$file"
-    curl -fsSL "${BASE_URL}/internal/$pkg/$file" -o "internal/$pkg/$file"
-  done
-done
+echo "${CYAN}📥 Downloading source archive...${RESET}"
+SOURCE_URL="https://github.com/Josepavese/nido/archive/refs/${REF_KIND}/${REF_NAME}.tar.gz"
+curl -fsSL "$SOURCE_URL" -o source.tar.gz
+tar -xzf source.tar.gz --strip-components=1
 
 # Build
 echo ""
 echo "${CYAN}🔨 Building Nido...${RESET}"
 go build -o nido ./cmd/nido
+go build -o nido-validator ./cmd/nido-validator
 
-if [ ! -f "nido" ]; then
+if [ ! -f "nido" ] || [ ! -f "nido-validator" ]; then
   echo "${RED}❌ Build failed${RESET}"
   exit 1
 fi
@@ -99,9 +72,15 @@ mkdir -p "${NIDO_HOME}/vms"
 mkdir -p "${NIDO_HOME}/run"
 mkdir -p "${NIDO_HOME}/images"
 mkdir -p "${NIDO_HOME}/backups"
+mkdir -p "${NIDO_HOME}/registry"
 
-# Move binary
-mv nido "${NIDO_HOME}/bin/nido"
+install -m 0755 nido "${NIDO_HOME}/bin/nido"
+install -m 0755 nido-validator "${NIDO_HOME}/bin/nido-validator"
+
+if [ -d registry ]; then
+  cp -R registry/. "${NIDO_HOME}/registry/"
+  echo "${GREEN}✅ Registry installed to ${NIDO_HOME}/registry${RESET}"
+fi
 
 # Create default config if missing
 if [ ! -f "${NIDO_HOME}/config.env" ]; then
@@ -129,10 +108,6 @@ if [ -n "$SHELL_RC" ] && [ -f "$SHELL_RC" ]; then
     echo "${GREEN}✅ Added to PATH in ${SHELL_RC}${RESET}"
   fi
 fi
-
-# Cleanup
-cd /
-rm -rf "$BUILD_DIR"
 
 echo ""
 echo "${BOLD}${GREEN}🎉 Installation complete!${RESET}"

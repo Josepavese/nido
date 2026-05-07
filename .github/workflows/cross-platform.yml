@@ -6,90 +6,176 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: cross-platform-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: '1.26.2'
+
 jobs:
   test:
-    name: Test on ${{ matrix.os }}
+    name: Build and unit test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: ['1.26.2']
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
-          go-version: ${{ matrix.go-version }}
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
-      # Install QEMU on Linux
-      - name: Install QEMU (Linux)
+      - name: Build Nido & Validator
+        shell: bash
+        run: |
+          suffix=""
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            suffix=".exe"
+          fi
+          go build -o "nido${suffix}" ./cmd/nido
+          go build -o "nido-validator${suffix}" ./cmd/nido-validator
+
+      - name: Check Go formatting
+        shell: bash
+        run: |
+          files="$(gofmt -l .)"
+          if [ -n "$files" ]; then
+            echo "Go files require gofmt:"
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Run unit tests
+        run: go test -v -count=1 ./...
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run staticcheck
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          "$(go env GOPATH)/bin/staticcheck" ./...
 
-      # Install QEMU on macOS
-      - name: Install QEMU (macOS)
-        if: runner.os == 'macOS'
+      - name: Run govulncheck
+        if: runner.os == 'Linux'
         run: |
-          brew install qemu
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" ./...
 
-      # Install QEMU (Windows)
-      - name: Install QEMU (Windows)
-        if: runner.os == 'Windows'
+      - name: Check obvious secret patterns
+        if: runner.os == 'Linux'
         run: |
-          choco install qemu -y --no-progress
-          $qemuPath = "C:\Program Files\qemu"
-          echo "$qemuPath" >> $env:GITHUB_PATH
-        shell: pwsh
-
-      # Verify QEMU installation
-      - name: Verify QEMU
-        run: |
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            qemu-system-x86_64 --version
-            qemu-img --version
-          else
-            qemu-system-x86_64 --version
-            qemu-img --version
+          if rg -n "(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9_]{36,}|github_pat_|BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY|PRIVATE KEY|api[_-]?key|secret[[:space:]]*=|token[[:space:]]*=)" \
+            --glob '!.secret' \
+            --glob '!go.sum' \
+            --glob '!dist/**' \
+            --glob '!resources/**' \
+            --glob '!*.png'; then
+            echo "Potential secret material found."
+            exit 1
           fi
-        shell: bash
 
-      # Build Nido and Validator (verifies compilation on all OSes)
+      - name: Validate shell scripts
+        if: runner.os == 'Linux'
+        run: |
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y shellcheck; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
+          shellcheck -S error bin/*.sh bin/housekeeping/*.sh installers/*.sh manual_verify_gpu.sh restore_gpu.sh run_test.sh tools/nido-init/nido-init.sh
+
+      - name: Validate PowerShell installer syntax
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          [scriptblock]::Create((Get-Content -Raw installers/quick-install.ps1)) | Out-Null
+
+      - name: Capture doctor diagnostics
+        shell: bash
+        run: |
+          suffix=""
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            suffix=".exe"
+          fi
+          "./nido${suffix}" doctor --json
+
+      - name: Exercise non-VM CLI commands
+        shell: bash
+        run: |
+          suffix=""
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            suffix=".exe"
+          fi
+          "./nido${suffix}" version
+          "./nido${suffix}" config || true
+          "./nido${suffix}" template list || true
+
+  vm-smoke-linux:
+    name: Linux VM smoke test
+    runs-on: ubuntu-latest
+    needs: test
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install QEMU and ISO tools
+        run: |
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils cloud-utils genisoimage; then
+              exit 0
+            fi
+            echo "APT install attempt ${attempt} failed; retrying..."
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Verify runtime dependencies
+        run: |
+          qemu-system-x86_64 --version
+          qemu-img --version
+          if command -v cloud-localds >/dev/null 2>&1; then
+            cloud-localds --version || true
+          elif command -v genisoimage >/dev/null 2>&1; then
+            genisoimage --version
+          else
+            echo "Missing cloud-init ISO creation tool"
+            exit 1
+          fi
+
       - name: Build Nido & Validator
         run: |
-          go build -o nido${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/nido
-          go build -o nido-validator${{ runner.os == 'Windows' && '.exe' || '' }} ./cmd/nido-validator
+          go build -o nido ./cmd/nido
+          go build -o nido-validator ./cmd/nido-validator
 
-      # Add bin to PATH
-      - name: Add bin to PATH
-        run: |
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            echo "$(pwd -W)/bin" >> $GITHUB_PATH
-          else
-            echo "$(pwd)/bin" >> $GITHUB_PATH
-          fi
-        shell: bash
+      - name: Run doctor
+        run: ./nido doctor --json
 
-      # Run unit tests
-      - name: Run unit tests
-        run: go test -v ./...
-
-      # Run doctor command (all platforms)
-      - name: Test nido doctor
-        run: ./nido${{ runner.os == 'Windows' && '.exe' || '' }} doctor
-
-      # Run config command (all platforms)
-      - name: Test nido config
-        run: ./nido${{ runner.os == 'Windows' && '.exe' || '' }} config || true
-
-      # Linux-specific: Full VM lifecycle test
       - name: Full VM lifecycle test (Linux only)
-        if: runner.os == 'Linux'
         run: |
           cleanup() {
             ./nido-validator --nido-bin ./nido --scenario cleanup || true
@@ -98,11 +184,11 @@ jobs:
           ./nido-validator --nido-bin ./nido --allow-doctor-fail
 
       - name: Validator artifact cleanup (Linux only)
-        if: always() && runner.os == 'Linux'
+        if: always()
         run: ./nido-validator --nido-bin ./nido --scenario cleanup || true
 
       - name: Capture validator fleet state (Linux only)
-        if: always() && runner.os == 'Linux'
+        if: always()
         run: |
           if ! ./nido ls --json > /tmp/nido_ls.json; then
             echo "nido ls --json failed"
@@ -118,7 +204,7 @@ jobs:
           cat /tmp/nido_templates.json
 
       - name: Assert no residual validator VMs (Linux only)
-        if: always() && runner.os == 'Linux'
+        if: always()
         run: |
           python3 - <<'PY'
           import json, sys
@@ -136,7 +222,7 @@ jobs:
           PY
 
       - name: Assert no residual validator templates (Linux only)
-        if: always() && runner.os == 'Linux'
+        if: always()
         run: |
           python3 - <<'PY'
           import json, sys
@@ -153,43 +239,41 @@ jobs:
             sys.exit(1)
           PY
 
-      # macOS/Windows: Limited testing (no nested virtualization)
-      - name: Limited tests (macOS/Windows)
-        if: runner.os != 'Linux'
-        run: |
-          ./nido${{ runner.os == 'Windows' && '.exe' || '' }} version
-          ./nido${{ runner.os == 'Windows' && '.exe' || '' }} template list || true
-
   build-binaries:
     name: Build release binaries
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, vm-smoke-linux]
+    timeout-minutes: 20
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
-      - name: Build for all platforms
+      - name: Install release packaging tools
         run: |
-          # Linux
-          GOOS=linux GOARCH=amd64 go build -o dist/nido-linux-amd64 ./cmd/nido
-          
-          # macOS (Intel)
-          GOOS=darwin GOARCH=amd64 go build -o dist/nido-darwin-amd64 ./cmd/nido
-          
-          # macOS (Apple Silicon)
-          GOOS=darwin GOARCH=arm64 go build -o dist/nido-darwin-arm64 ./cmd/nido
-          
-          # Windows
-          GOOS=windows GOARCH=amd64 go build -o dist/nido-windows-amd64.exe ./cmd/nido
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y jq zip; then
+              exit 0
+            fi
+            echo "APT install attempt ${attempt} failed; retrying..."
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: Build release archives
+        run: bash bin/build-release.sh ci-snapshot
+
+      - name: Validate release archives
+        run: bash bin/verify-release.sh --local dist
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nido-binaries
-          path: dist/
+          path: dist/*

@@ -9,28 +9,49 @@ Write-Host "  Lightning-fast VM management" -ForegroundColor Cyan
 Write-Host ""
 
 # Detect architecture
-$arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
-
-# Fetch latest release
-Write-Host "🔍 Fetching latest release..." -ForegroundColor Cyan
-try {
-    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/Josepavese/nido/releases/latest"
-    $version = $release.tag_name
-    Write-Host "✅ Latest version: $version" -ForegroundColor Green
-} catch {
-    Write-Host "❌ Failed to fetch latest release" -ForegroundColor Red
+$processorArch = $env:PROCESSOR_ARCHITECTURE
+if ($env:PROCESSOR_ARCHITEW6432) {
+    $processorArch = $env:PROCESSOR_ARCHITEW6432
+}
+$arch = switch -Regex ($processorArch) {
+    "^(AMD64|x86_64)$" { "amd64"; break }
+    "^ARM64$" { "arm64"; break }
+    default { "386" }
+}
+if ($arch -ne "amd64") {
+    Write-Host "❌ No pre-built release artifact for Windows/$arch." -ForegroundColor Red
+    Write-Host "   Use the source installer from installers/build-from-source.sh on a supported shell." -ForegroundColor Gray
     exit 1
 }
 
-# Build download URL
-$binaryName = "nido-windows-$arch.exe"
-$downloadUrl = "https://github.com/Josepavese/nido/releases/download/$version/$binaryName"
+# Fetch latest release
+Write-Host "🔍 Fetching latest release..." -ForegroundColor Cyan
+$version = $env:NIDO_VERSION
+if (-not $version) {
+    try {
+        $release = Invoke-RestMethod -Uri "https://api.github.com/repos/Josepavese/nido/releases/latest"
+        $version = $release.tag_name
+        Write-Host "✅ Latest version: $version" -ForegroundColor Green
+    } catch {
+        Write-Host "❌ Failed to fetch latest release" -ForegroundColor Red
+        exit 1
+    }
+} else {
+    Write-Host "✅ Requested version: $version" -ForegroundColor Green
+}
 
-Write-Host "📥 Downloading $binaryName..." -ForegroundColor Cyan
+# Build download URL
+$archiveName = "nido-windows-$arch.zip"
+$downloadUrl = "https://github.com/Josepavese/nido/releases/download/$version/$archiveName"
+$checksumUrl = "https://github.com/Josepavese/nido/releases/download/$version/SHA256SUMS"
+
+Write-Host "📥 Downloading $archiveName..." -ForegroundColor Cyan
 
 $nidoHome = "$env:USERPROFILE\.nido"
 $binDir = "$nidoHome\bin"
 $targetPath = "$binDir\nido.exe"
+$validatorPath = "$binDir\nido-validator.exe"
+$registryDir = "$nidoHome\registry"
 
 # Create directories
 New-Item -ItemType Directory -Force -Path $binDir | Out-Null
@@ -38,14 +59,66 @@ New-Item -ItemType Directory -Force -Path "$nidoHome\vms" | Out-Null
 New-Item -ItemType Directory -Force -Path "$nidoHome\run" | Out-Null
 New-Item -ItemType Directory -Force -Path "$nidoHome\images" | Out-Null
 New-Item -ItemType Directory -Force -Path "$nidoHome\backups" | Out-Null
+New-Item -ItemType Directory -Force -Path $registryDir | Out-Null
 
-# Download binary
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("nido-install-" + [System.Guid]::NewGuid().ToString("N"))
+$archivePath = Join-Path $tempRoot $archiveName
+$checksumPath = Join-Path $tempRoot "SHA256SUMS"
+$extractDir = Join-Path $tempRoot "extract"
+New-Item -ItemType Directory -Force -Path $tempRoot, $extractDir | Out-Null
+
+function Verify-ReleaseChecksum {
+    param(
+        [string]$ChecksumUrl,
+        [string]$ChecksumPath,
+        [string]$ArchivePath,
+        [string]$ArchiveName
+    )
+    try {
+        Invoke-WebRequest -Uri $ChecksumUrl -OutFile $ChecksumPath
+    } catch {
+        Write-Host "⚠️ SHA256SUMS not available for $version; skipping archive checksum verification." -ForegroundColor Yellow
+        return
+    }
+
+    $line = Get-Content -LiteralPath $ChecksumPath | Where-Object { $_ -match "\s\*?$([Regex]::Escape($ArchiveName))$" } | Select-Object -First 1
+    if (-not $line) {
+        Write-Host "⚠️ $ArchiveName not listed in SHA256SUMS; skipping archive checksum verification." -ForegroundColor Yellow
+        return
+    }
+    $expected = ($line -split '\s+')[0].ToLowerInvariant()
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $ArchivePath).Hash.ToLowerInvariant()
+    if ($actual -ne $expected) {
+        throw "Archive checksum mismatch for $ArchiveName"
+    }
+    Write-Host "✅ Archive checksum verified" -ForegroundColor Green
+}
+
+# Download and extract release archive
 try {
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $targetPath
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $archivePath
+    Verify-ReleaseChecksum -ChecksumUrl $checksumUrl -ChecksumPath $checksumPath -ArchivePath $archivePath -ArchiveName $archiveName
+    Expand-Archive -LiteralPath $archivePath -DestinationPath $extractDir -Force
+    $packageDir = Join-Path $extractDir "nido-windows-$arch"
+    $packageBinary = Join-Path $packageDir "nido.exe"
+    if (-not (Test-Path $packageBinary)) {
+        throw "Release archive does not contain nido.exe"
+    }
+    Copy-Item -LiteralPath $packageBinary -Destination $targetPath -Force
+    $packageValidator = Join-Path $packageDir "nido-validator.exe"
+    if (Test-Path $packageValidator) {
+        Copy-Item -LiteralPath $packageValidator -Destination $validatorPath -Force
+    }
+    $packageRegistry = Join-Path $packageDir "registry"
+    if (Test-Path $packageRegistry) {
+        Copy-Item -Path (Join-Path $packageRegistry "*") -Destination $registryDir -Recurse -Force
+    }
     Write-Host "✅ Binary installed to $targetPath" -ForegroundColor Green
 } catch {
     Write-Host "❌ Download failed" -ForegroundColor Red
     exit 1
+} finally {
+    Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 # Download themes
@@ -77,6 +150,7 @@ if ($currentPath -notlike "*$binDir*") {
     [Environment]::SetEnvironmentVariable("Path", "$currentPath;$binDir", "User")
     Write-Host "✅ Added to PATH (restart terminal to apply)" -ForegroundColor Green
 }
+$env:Path = "$env:Path;$binDir"
 
 # Desktop Integration
 Write-Host "🎨 Setting up Desktop Integration..." -ForegroundColor Cyan
@@ -123,11 +197,12 @@ if (-not $qemuInstalled) {
     $response = Read-Host "📦 Would you like to install QEMU dependencies automatically via winget? (y/N)"
     if ($response -eq "y") {
         Write-Host "🛠️  Installing QEMU via winget..." -ForegroundColor Cyan
-        winget install --id=SoftwareFreedomConservancy.QEMU -e --accept-package-agreements --accept-source-agreements
+        winget install --id SoftwareFreedomConservancy.QEMU -e --scope machine --accept-package-agreements --accept-source-agreements
         Write-Host "💡 Note: You might need to restart your terminal for QEMU to be in your PATH." -ForegroundColor Yellow
         $qemuInstalled = $true
     } else {
         Write-Host "💡 Skipping automatic installation. You'll need to install it manually." -ForegroundColor Gray
+        Write-Host "   QEMU Windows options: https://www.qemu.org/download/#windows" -ForegroundColor Gray
     }
 } else {
     Write-Host "✅ QEMU is already present." -ForegroundColor Green

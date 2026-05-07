@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -268,10 +270,13 @@ func actionUpdate(app *appContext) func(cmd *cobra.Command, args []string) {
 		}
 
 		downloadURL := ""
+		checksumURL := ""
 		for _, asset := range release.Assets {
 			if asset.Name == assetName {
 				downloadURL = asset.BrowserDownloadURL
-				break
+			}
+			if asset.Name == "SHA256SUMS" {
+				checksumURL = asset.BrowserDownloadURL
 			}
 		}
 		if downloadURL == "" {
@@ -306,6 +311,14 @@ func actionUpdate(app *appContext) func(cmd *cobra.Command, args []string) {
 		if err := downloadFile(client, downloadURL, archivePath); err != nil {
 			ui.Error("Download failed: %v", err)
 			os.Exit(1)
+		}
+		if checksumURL != "" {
+			if err := verifyReleaseAssetChecksum(client, checksumURL, assetName, archivePath); err != nil {
+				ui.Error("Checksum verification failed: %v", err)
+				os.Exit(1)
+			}
+		} else {
+			ui.Warn("SHA256SUMS not found in latest release; skipping archive checksum verification.")
 		}
 
 		tmpPath := filepath.Join(tmpDir, internalBinaryName)
@@ -652,4 +665,40 @@ func downloadFile(client *http.Client, url, destPath string) error {
 
 	_, err = io.Copy(out, resp.Body)
 	return err
+}
+
+func verifyReleaseAssetChecksum(client *http.Client, checksumURL, assetName, archivePath string) error {
+	resp, err := client.Get(checksumURL)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected checksum HTTP status %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	expected := ""
+	for _, line := range strings.Split(string(body), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && strings.TrimPrefix(fields[1], "*") == assetName {
+			expected = strings.ToLower(fields[0])
+			break
+		}
+	}
+	if expected == "" {
+		return fmt.Errorf("%s not listed in SHA256SUMS", assetName)
+	}
+	data, err := os.ReadFile(archivePath)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(data)
+	actual := hex.EncodeToString(sum[:])
+	if actual != expected {
+		return fmt.Errorf("%s checksum mismatch", assetName)
+	}
+	return nil
 }

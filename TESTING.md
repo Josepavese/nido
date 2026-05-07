@@ -37,8 +37,11 @@ nido doctor
 ### Windows
 
 ```powershell
-# Install QEMU via Chocolatey
-choco install qemu
+# Install QEMU via Windows Package Manager
+winget install --id SoftwareFreedomConservancy.QEMU -e --scope machine --accept-package-agreements --accept-source-agreements
+
+# If WinGet is not available, use the Windows options linked by QEMU:
+# https://www.qemu.org/download/#windows
 
 # Download Nido binary (replace with actual release URL)
 # Download from GitHub releases page

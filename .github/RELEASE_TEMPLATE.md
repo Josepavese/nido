@@ -53,10 +53,22 @@ Example:
 
 ### 📦 Installation
 
+#### Quick install
+
+\`\`\`bash
+curl -fsSL <https://github.com/Josepavese/nido/releases/download/vX.Y.Z/install.sh> | bash
+\`\`\`
+
+\`\`\`powershell
+irm <https://github.com/Josepavese/nido/releases/download/vX.Y.Z/install.ps1> | iex
+\`\`\`
+
 #### Linux
 
 \`\`\`bash
-curl -L <https://github.com/Josepavese/nido/releases/download/vX.Y.Z/nido-linux-amd64> -o nido
+curl -L <https://github.com/Josepavese/nido/releases/download/vX.Y.Z/nido-linux-amd64.tar.gz> -o nido.tar.gz
+tar -xzf nido.tar.gz
+cd nido-linux-amd64
 chmod +x nido
 sudo mv nido /usr/local/bin/
 \`\`\`
@@ -64,14 +76,30 @@ sudo mv nido /usr/local/bin/
 #### macOS
 
 \`\`\`bash
-curl -L <https://github.com/Josepavese/nido/releases/download/vX.Y.Z/nido-darwin-amd64> -o nido
+curl -L <https://github.com/Josepavese/nido/releases/download/vX.Y.Z/nido-darwin-amd64.tar.gz> -o nido.tar.gz
+tar -xzf nido.tar.gz
+cd nido-darwin-amd64
+chmod +x nido
+sudo mv nido /usr/local/bin/
+\`\`\`
+
+#### Linux ARM64
+
+\`\`\`bash
+curl -L <https://github.com/Josepavese/nido/releases/download/vX.Y.Z/nido-linux-arm64.tar.gz> -o nido.tar.gz
+tar -xzf nido.tar.gz
+cd nido-linux-arm64
 chmod +x nido
 sudo mv nido /usr/local/bin/
 \`\`\`
 
 #### Windows
 
-Download `nido-windows-amd64.exe` from the assets below and add to PATH.
+Download `nido-windows-amd64.zip` from the assets below, extract it, and add the extracted folder to PATH.
+
+#### Integrity
+
+All release assets, including `install.sh` and `install.ps1`, are listed in `SHA256SUMS`. Installers verify this file automatically when it is available.
 
 ---
 

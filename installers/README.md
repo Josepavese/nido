@@ -9,20 +9,20 @@ Download and install the pre-compiled binary. **No Git or build tools required.*
 ### Linux & macOS
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.sh | bash
+{ curl -fsSL https://github.com/Josepavese/nido/releases/latest/download/install.sh || curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.sh; } | bash
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.ps1 | iex
+try { irm https://github.com/Josepavese/nido/releases/latest/download/install.ps1 | iex } catch { irm https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.ps1 | iex }
 ```
 
 ## Build from Source (Lightweight)
 
-Want the latest code without cloning the whole nest? This script downloads only the essential source files and builds locally.
+Want the latest code without cloning the whole nest? This script downloads the GitHub source archive and builds locally.
 
-**Prerequisites:** Go 1.21+
+**Prerequisites:** Go 1.26.2+
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/build-from-source.sh | bash
@@ -37,7 +37,7 @@ For contributors who want to build from source:
 ```bash
 git clone https://github.com/Josepavese/nido
 cd nido
-bash bin/install.sh
+bash bin/install-from-source.sh
 ```
 
 ---
@@ -48,8 +48,8 @@ bash bin/install.sh
 |--------|---------|---------------|--------------|
 | `quick-install.sh` | Downloads pre-compiled binary from GitHub Releases | `curl` | End users (Linux/macOS) |
 | `quick-install.ps1` | Downloads pre-compiled binary from GitHub Releases | PowerShell 5.1+ | End users (Windows) |
-| `build-from-source.sh` | Downloads only source files and builds locally | Go 1.21+, `curl` | Tinkerers & power users |
-| `../bin/install-from-source.sh` | Full repository clone and build | Go 1.21+, Git | Contributors & developers |
+| `build-from-source.sh` | Downloads only source files and builds locally | Go 1.26.2+, `curl` | Tinkerers & power users |
+| `../bin/install-from-source.sh` | Full repository clone and build | Go 1.26.2+, Git | Contributors & developers |
 
 ---
 
@@ -72,8 +72,10 @@ sudo apt install qemu-system-x86 qemu-utils
 brew install qemu
 
 # Windows
-choco install qemu
+winget install --id SoftwareFreedomConservancy.QEMU -e --scope machine --accept-package-agreements --accept-source-agreements
 ```
+
+QEMU's official download page also links Windows alternatives, including Stefan Weil's installers and MSYS2 packages: <https://www.qemu.org/download/#windows>.
 
 ---
 
