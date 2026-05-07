@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -19,7 +20,7 @@ func GetLatestVersion() (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", &http.ProtocolError{ErrorString: "unexpected HTTP status from GitHub"}
+		return "", fmt.Errorf("unexpected HTTP status from GitHub: %d", resp.StatusCode)
 	}
 
 	var release struct {
@@ -29,7 +30,7 @@ func GetLatestVersion() (string, error) {
 		return "", err
 	}
 	if release.TagName == "" {
-		return "", &http.ProtocolError{ErrorString: "missing tag_name in GitHub response"}
+		return "", fmt.Errorf("missing tag_name in GitHub response")
 	}
 	return release.TagName, nil
 }

@@ -244,70 +244,14 @@ func cmdImagePull(imageDir string, args []string, jsonOut bool) {
 			ui.Info("Size:   %s", ui.HumanSize(ver.SizeBytes))
 		}
 
-		// Determine if compression is needed based on URL extension
-		isCompressed := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
-		if len(ver.PartURLs) > 0 {
-			isCompressed = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
-		}
-
-		downloadPath := destPath
-		if isCompressed {
-			downloadPath = destPath + ".zst"
-		}
-
-		// Download
-		var downloadErr error
-		if len(ver.PartURLs) > 0 {
-			downloadErr = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
-		} else {
-			downloadErr = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
-		}
-
-		if downloadErr != nil {
+		if err := image.PrepareLocalImage(*ver, destPath, downloader); err != nil {
 			if jsonOut {
-				resp := clijson.NewResponseError("image pull", "ERR_IO", "Disk download failed", downloadErr.Error(), "Check your connection and try again.", nil)
+				resp := clijson.NewResponseError("image pull", "ERR_IO", "Image preparation failed", err.Error(), "Check your connection and registry checksum metadata.", nil)
 				_ = clijson.PrintJSON(resp)
 				os.Exit(1)
 			}
-			ui.Error("Disk download failed: %v", downloadErr)
-			os.Remove(downloadPath) // Cleanup
+			ui.Error("Image preparation failed: %v", err)
 			os.Exit(1)
-		}
-
-		// Verify Checksum (on the downloaded file)
-		if ver.Checksum != "" {
-			if !jsonOut {
-				ui.Step("Verifying image checksum...")
-			}
-			if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
-				if jsonOut {
-					resp := clijson.NewResponseError("image pull", "ERR_IO", "Disk checksum verification failed", err.Error(), "Retry the download or choose a different image.", nil)
-					_ = clijson.PrintJSON(resp)
-				} else {
-					ui.Error("Disk checksum verification failed: %v", err)
-				}
-				os.Remove(downloadPath)
-				os.Exit(1)
-			}
-		}
-
-		// Decompress if needed
-		if isCompressed {
-			if !jsonOut {
-				ui.Step("Decompressing image...")
-			}
-			if err := downloader.Decompress(downloadPath, destPath); err != nil {
-				if jsonOut {
-					resp := clijson.NewResponseError("image pull", "ERR_IO", "Decompression failed", err.Error(), "Ensure zstd is installed on your system.", nil)
-					_ = clijson.PrintJSON(resp)
-				} else {
-					ui.Error("Decompression failed: %v", err)
-				}
-				os.Remove(downloadPath)
-				os.Exit(1)
-			}
-			// Final cleanup of the compressed part
-			os.Remove(downloadPath)
 		}
 	} else if !jsonOut {
 		ui.Info("Image %s:%s is already present in cache.", img.Name, ver.Version)

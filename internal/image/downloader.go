@@ -168,6 +168,52 @@ func (d *Downloader) DownloadMultiPart(urls []string, dest string, expectedTotal
 	return nil
 }
 
+// PrepareLocalImage downloads, verifies, and decompresses a catalog version into dest.
+// Missing checksums are allowed for legacy/local flavour entries, but any provided
+// checksum is enforced before the image is made available.
+func PrepareLocalImage(ver Version, dest string, downloader Downloader) error {
+	downloadPath := dest
+	isTarXz := strings.HasSuffix(ver.URL, ".tar.xz")
+	isZst := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
+	if len(ver.PartURLs) > 0 {
+		first := ver.PartURLs[0]
+		isTarXz = strings.HasSuffix(first, ".tar.xz")
+		isZst = strings.Contains(first, ".zst") || strings.Contains(first, ".zstandard")
+	}
+	if isTarXz {
+		downloadPath = dest + ".tar.xz"
+	} else if isZst {
+		downloadPath = dest + ".zst"
+	}
+
+	var err error
+	if len(ver.PartURLs) > 0 {
+		err = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
+	} else {
+		err = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
+	}
+	if err != nil {
+		return err
+	}
+
+	if ver.Checksum != "" {
+		if err := VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
+			_ = os.Remove(downloadPath)
+			return err
+		}
+	}
+
+	if isTarXz || isZst {
+		if err := downloader.Decompress(downloadPath, dest); err != nil {
+			_ = os.Remove(downloadPath)
+			return err
+		}
+		_ = os.Remove(downloadPath)
+	}
+
+	return nil
+}
+
 // Decompress extracts an archive to a destination.
 // Currently supported: .tar.xz (standard for Kali cloud images)
 func (d *Downloader) Decompress(src, dest string) error {
