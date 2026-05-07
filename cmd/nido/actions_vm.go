@@ -252,84 +252,19 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 						ui.Info("Image not found locally. Pulling %s:%s...", img.Name, ver.Version)
 					}
 					downloader := image.Downloader{Quiet: jsonOut}
-
-					downloadPath := imgPath
-					isTarXz := strings.HasSuffix(ver.URL, ".tar.xz")
-					isZst := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
-					if len(ver.PartURLs) > 0 {
-						isZst = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
-					}
-					if isTarXz {
-						downloadPath = imgPath + ".tar.xz"
-					} else if isZst {
-						downloadPath = imgPath + ".zst"
-					}
-
-					var downloadErr error
-					if len(ver.PartURLs) > 0 {
-						downloadErr = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
-					} else {
-						downloadErr = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
-					}
-					if downloadErr != nil {
+					if err := image.PrepareLocalImage(*ver, imgPath, downloader); err != nil {
 						if jsonOut {
-							_ = clijson.PrintJSON(clijson.NewResponseError("spawn", "ERR_IO", "Download failed", downloadErr.Error(), "Check your network connection and try again.", nil))
+							_ = clijson.PrintJSON(clijson.NewResponseError("spawn", "ERR_IO", "Image preparation failed", err.Error(), "Check your network connection and registry checksum metadata.", nil))
 						} else {
-							ui.Error("Download failed: %v", downloadErr)
+							ui.Error("Image preparation failed: %v", err)
 						}
 						os.Exit(1)
 					}
-
-					if isTarXz || isZst {
-						if ver.Checksum != "" {
-							if !jsonOut {
-								ui.Ironic("Verifying genetic integrity (archive)...")
-							}
-							if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
-								if jsonOut {
-									_ = clijson.PrintJSON(clijson.NewResponseError("spawn", "ERR_IO", "Verification failed", err.Error(), "Retry the download or choose a different image.", nil))
-								} else {
-									ui.Error("Verification failed: %v", err)
-								}
-								_ = os.Remove(downloadPath)
-								os.Exit(1)
-							}
-						} else if !jsonOut {
-							ui.Warn("⚠️ No checksum provided. Integrity cannot be verified.")
-						}
-						if err := downloader.Decompress(downloadPath, imgPath); err != nil {
-							if jsonOut {
-								_ = clijson.PrintJSON(clijson.NewResponseError("spawn", "ERR_IO", "Decompression failed", err.Error(), "Retry the download or choose a different image.", nil))
-							} else {
-								ui.Error("Decompression failed: %v", err)
-							}
-							_ = os.Remove(downloadPath)
-							os.Exit(1)
-						}
-						_ = os.Remove(downloadPath)
-						if !jsonOut {
-							ui.Success("Image extracted successfully.")
-						}
-					} else {
-						if ver.Checksum != "" {
-							if !jsonOut {
-								ui.Ironic("Verifying genetic integrity...")
-							}
-							if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
-								if jsonOut {
-									_ = clijson.PrintJSON(clijson.NewResponseError("spawn", "ERR_IO", "Verification failed", err.Error(), "Retry the download or choose a different image.", nil))
-								} else {
-									ui.Error("Verification failed: %v", err)
-								}
-								_ = os.Remove(downloadPath)
-								os.Exit(1)
-							}
-						} else if !jsonOut {
-							ui.Warn("⚠️ No checksum provided. Integrity cannot be verified.")
-						}
-						if !jsonOut {
-							ui.Success("Image prepared successfully.")
-						}
+					if ver.Checksum == "" && !jsonOut {
+						ui.Warn("No checksum provided. Integrity cannot be verified.")
+					}
+					if !jsonOut {
+						ui.Success("Image prepared successfully.")
 					}
 				}
 

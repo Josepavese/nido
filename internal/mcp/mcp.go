@@ -881,37 +881,8 @@ func (s *Server) resolveImagePath(tag string) (string, error) {
 	}
 
 	downloader := image.Downloader{Quiet: true}
-	downloadPath := imgPath
-	isCompressed := strings.HasSuffix(version.URL, ".tar.xz")
-	if isCompressed {
-		downloadPath = imgPath + ".tar.xz"
-	}
-
-	if len(version.PartURLs) > 0 {
-		err = downloader.DownloadMultiPart(version.PartURLs, downloadPath, version.SizeBytes)
-	} else {
-		err = downloader.Download(version.URL, downloadPath, version.SizeBytes)
-	}
-	if err != nil {
+	if err := image.PrepareLocalImage(*version, imgPath, downloader); err != nil {
 		return "", err
-	}
-
-	if isCompressed {
-		if err := image.VerifyChecksum(downloadPath, version.Checksum, version.ChecksumType); err != nil {
-			_ = os.Remove(downloadPath)
-			return "", fmt.Errorf("archive verification failed: %w", err)
-		}
-		if err := downloader.Decompress(downloadPath, imgPath); err != nil {
-			_ = os.Remove(downloadPath)
-			return "", fmt.Errorf("decompression failed: %w", err)
-		}
-		_ = os.Remove(downloadPath)
-		return imgPath, nil
-	}
-
-	if err := image.VerifyChecksum(imgPath, version.Checksum, version.ChecksumType); err != nil {
-		_ = os.Remove(imgPath)
-		return "", fmt.Errorf("image verification failed: %w", err)
 	}
 	return imgPath, nil
 }
@@ -978,43 +949,7 @@ func slicePtrIfPresent(v []string, raw json.RawMessage, field string) *[]string 
 
 // parsePortString is a helper for MCP to reuse parsing logic.
 func parsePortString(val string) (provider.PortForward, error) {
-	pf := provider.PortForward{Protocol: "tcp"}
-
-	if strings.Contains(val, ":") {
-		parts := strings.SplitN(val, ":", 2)
-		if _, err := provider.ParseInt(parts[0]); err != nil {
-			pf.Label = parts[0]
-			val = parts[1]
-		}
-	}
-
-	if strings.Contains(val, "/") {
-		parts := strings.SplitN(val, "/", 2)
-		pf.Protocol = strings.ToLower(parts[1])
-		val = parts[0]
-	}
-
-	if strings.Contains(val, ":") {
-		parts := strings.SplitN(val, ":", 2)
-		gp, err := provider.ParseInt(parts[0])
-		if err != nil {
-			return pf, fmt.Errorf("invalid guest port: %v", err)
-		}
-		hp, err := provider.ParseInt(parts[1])
-		if err != nil {
-			return pf, fmt.Errorf("invalid host port: %v", err)
-		}
-		pf.GuestPort = gp
-		pf.HostPort = hp
-	} else {
-		gp, err := provider.ParseInt(val)
-		if err != nil {
-			return pf, fmt.Errorf("invalid port: %v", err)
-		}
-		pf.GuestPort = gp
-	}
-
-	return pf, nil
+	return provider.ParsePortForward(val)
 }
 
 func (s *Server) imageDir() string {

@@ -446,7 +446,7 @@ func ensureUserData(ctx *Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	content := "#cloud-config\nwrite_files:\n  - path: /tmp/nido-cli-validate-marker\n    content: \"ok\"\n"
+	content := "#!/bin/sh\nprintf 'ok\\n' > /tmp/nido-cli-validate-marker\n"
 	if _, err := f.WriteString(content); err != nil {
 		f.Close()
 		return "", err

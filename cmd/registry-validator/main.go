@@ -41,6 +41,8 @@ func main() {
 
 	successCount := 0
 	failCount := 0
+	skipCount := 0
+	missingChecksumCount := 0
 	failures := []string{}
 
 	// 2. Validate Loop
@@ -63,6 +65,10 @@ func main() {
 		for _, ver := range img.Versions {
 			imageTag := fmt.Sprintf("%s:%s", img.Name, ver.Version)
 			vmName := fmt.Sprintf("%s-%s-%s", TestVMParams, img.Name, strings.ReplaceAll(ver.Version, ".", "-"))
+			if ver.Checksum == "" || ver.ChecksumType == "" {
+				missingChecksumCount++
+				fmt.Printf("⚠️  Integrity metadata missing for %s. Download will be allowed but cannot be cryptographically verified.\n", imageTag)
+			}
 
 			fmt.Printf("\n------------------------------------------------\n")
 			fmt.Printf("🧪 Testing Image: %s\n", imageTag)
@@ -70,7 +76,7 @@ func main() {
 
 			if !hasKVM {
 				fmt.Printf("⏭️  SKIPPING: No KVM acceleration available.\n")
-				successCount++
+				skipCount++
 				continue
 			}
 
@@ -94,6 +100,8 @@ func main() {
 	fmt.Printf("SUMMARY\n")
 	fmt.Printf("Passed: %d\n", successCount)
 	fmt.Printf("Failed: %d\n", failCount)
+	fmt.Printf("Skipped: %d\n", skipCount)
+	fmt.Printf("Missing checksums: %d\n", missingChecksumCount)
 	if len(failures) > 0 {
 		fmt.Printf("\nFailures:\n")
 		for _, f := range failures {

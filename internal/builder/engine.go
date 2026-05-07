@@ -3,9 +3,11 @@ package builder
 import (
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Josepavese/nido/internal/image"
@@ -54,7 +56,10 @@ func LoadBlueprint(path string) (*image.Blueprint, error) {
 	for name, content := range bp.Scripts {
 		if len(content) > 0 && content[0] == '@' {
 			relPath := content[1:]
-			scriptPath := filepath.Join(baseDir, relPath)
+			scriptPath, err := safeJoin(baseDir, relPath)
+			if err != nil {
+				return nil, fmt.Errorf("invalid external script path '%s': %w", relPath, err)
+			}
 			scriptData, err := os.ReadFile(scriptPath)
 			if err != nil {
 				return nil, fmt.Errorf("failed to load script '%s' from '%s': %w", name, scriptPath, err)
@@ -79,7 +84,10 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 		return fmt.Errorf("failed to create image dir: %w", err)
 	}
 
-	outputPath := filepath.Join(e.ImageDir, bp.OutputImage)
+	outputPath, err := safeJoin(e.ImageDir, bp.OutputImage)
+	if err != nil {
+		return fmt.Errorf("invalid output image path: %w", err)
+	}
 	if _, err := os.Stat(outputPath); err == nil {
 		return fmt.Errorf("output image already exists: %s", outputPath)
 	}
@@ -93,7 +101,10 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 
 	driverPaths := []string{}
 	for _, drv := range bp.Drivers {
-		drvPath := filepath.Join(e.CacheDir, drv.Name)
+		drvPath, err := safeJoin(e.CacheDir, drv.Name)
+		if err != nil {
+			return fmt.Errorf("invalid driver path %q: %w", drv.Name, err)
+		}
 		if err := e.ensureAsset(drv.URL, drvPath, drv.Checksum); err != nil {
 			return err
 		}
@@ -101,19 +112,32 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 	}
 
 	// 3. Create Seed Media (Autounattend)
-	seedDir := filepath.Join(e.WorkDir, bp.Name+"-seed")
+	seedDir, err := safeJoin(e.WorkDir, bp.Name+"-seed")
+	if err != nil {
+		return fmt.Errorf("invalid blueprint name: %w", err)
+	}
 	os.RemoveAll(seedDir) // Clean start
 	if err := os.MkdirAll(seedDir, 0755); err != nil {
 		return err
 	}
 
 	for name, content := range bp.Scripts {
-		if err := os.WriteFile(filepath.Join(seedDir, name), []byte(content), 0644); err != nil {
+		scriptPath, err := safeJoin(seedDir, name)
+		if err != nil {
+			return fmt.Errorf("invalid script path %q: %w", name, err)
+		}
+		if err := os.MkdirAll(filepath.Dir(scriptPath), 0755); err != nil {
+			return fmt.Errorf("failed to create script dir %s: %w", filepath.Dir(scriptPath), err)
+		}
+		if err := os.WriteFile(scriptPath, []byte(content), 0644); err != nil {
 			return fmt.Errorf("failed to write script %s: %w", name, err)
 		}
 	}
 
-	seedISO := filepath.Join(e.WorkDir, bp.Name+"-seed.iso")
+	seedISO, err := safeJoin(e.WorkDir, bp.Name+"-seed.iso")
+	if err != nil {
+		return fmt.Errorf("invalid seed iso path: %w", err)
+	}
 	// Use mkisofs/genisoimage to create the seed ISO
 	// -J (Joliet) -R (Rock Ridge) -V (Label)
 	cmd := exec.Command("mkisofs", "-J", "-R", "-V", "OEMDRV", "-o", seedISO, seedDir)
@@ -159,9 +183,9 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 		e.Reporter.Warn("KVM not available. Build will be slower.")
 	}
 
-	// Add VNC for debugging visibility
-	qemuArgs = append(qemuArgs, "-vnc", ":99") // Port 5999
-	e.Reporter.Info("VNC available on :99 (port 5999).")
+	// Add loopback-only VNC for debugging visibility.
+	qemuArgs = append(qemuArgs, "-vnc", "127.0.0.1:99") // Port 5999
+	e.Reporter.Info("VNC available on 127.0.0.1:99 (port 5999).")
 
 	e.Reporter.Info("Starting QEMU...")
 	qemuCmd := exec.Command("qemu-system-x86_64", qemuArgs...)
@@ -214,8 +238,13 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 }
 
 func (e *Engine) ensureAsset(url, dest, checksum string) error {
+	if err := validateDownloadURL(url); err != nil {
+		return err
+	}
 	if _, err := os.Stat(dest); err == nil {
-		// Exists, assume okay for now (TODO: Verify checksum if provided)
+		if err := verifyOptionalChecksum(dest, checksum); err != nil {
+			return fmt.Errorf("cached asset checksum failed for %s: %w", filepath.Base(dest), err)
+		}
 		e.Reporter.Info("Using cached asset: %s", filepath.Base(dest))
 		return nil
 	}
@@ -225,5 +254,70 @@ func (e *Engine) ensureAsset(url, dest, checksum string) error {
 	if err := downloader.Download(url, dest, 0); err != nil {
 		return err
 	}
+	if err := verifyOptionalChecksum(dest, checksum); err != nil {
+		_ = os.Remove(dest)
+		return fmt.Errorf("downloaded asset checksum failed for %s: %w", filepath.Base(dest), err)
+	}
 	return nil
+}
+
+func safeJoin(root, rel string) (string, error) {
+	if strings.TrimSpace(rel) == "" {
+		return "", fmt.Errorf("path cannot be empty")
+	}
+	if filepath.IsAbs(rel) {
+		return "", fmt.Errorf("absolute paths are not allowed")
+	}
+	clean := filepath.Clean(rel)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path escapes target directory")
+	}
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return "", err
+	}
+	target := filepath.Join(rootAbs, clean)
+	targetAbs, err := filepath.Abs(target)
+	if err != nil {
+		return "", err
+	}
+	if targetAbs != rootAbs && !strings.HasPrefix(targetAbs, rootAbs+string(filepath.Separator)) {
+		return "", fmt.Errorf("path escapes target directory")
+	}
+	return targetAbs, nil
+}
+
+func validateDownloadURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid URL %q: %w", raw, err)
+	}
+	if u.Scheme != "https" && u.Scheme != "http" {
+		return fmt.Errorf("unsupported URL scheme %q", u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("URL host cannot be empty")
+	}
+	if u.Scheme == "http" {
+		host := strings.ToLower(u.Hostname())
+		if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+			return fmt.Errorf("plain HTTP is allowed only for loopback hosts")
+		}
+	}
+	return nil
+}
+
+func verifyOptionalChecksum(path, checksum string) error {
+	checksum = strings.TrimSpace(checksum)
+	if checksum == "" {
+		return nil
+	}
+	switch len(checksum) {
+	case 64:
+		return image.VerifyChecksum(path, checksum, "sha256")
+	case 128:
+		return image.VerifyChecksum(path, checksum, "sha512")
+	default:
+		return fmt.Errorf("unsupported checksum length %d", len(checksum))
+	}
 }

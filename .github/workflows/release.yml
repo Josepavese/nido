@@ -14,32 +14,55 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
       id-token: write
+    env:
+      GO_VERSION: '1.26.2'
+      MCP_PUBLISHER_VERSION: 'v1.7.8'
+      MCP_PUBLISHER_SHA256: '48230dbec85bd88a0d42977ef533cddda23235f0db4331b9263ce53b432cb75c'
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0  # Full history for changelog
 
       - name: Determine Version
         id: versioning
+        env:
+          DISPATCH_VERSION: ${{ github.event.inputs.version }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            VERSION_INPUT="$DISPATCH_VERSION"
           else
-            TAG=${GITHUB_REF#refs/tags/}
-            echo "VERSION=$TAG" >> $GITHUB_ENV
-            echo "version=$TAG" >> $GITHUB_OUTPUT
+            VERSION_INPUT="${GITHUB_REF#refs/tags/}"
           fi
+          if [[ ! "$VERSION_INPUT" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release version: $VERSION_INPUT"
+            echo "Expected format: vX.Y.Z"
+            exit 1
+          fi
+          echo "VERSION=$VERSION_INPUT" >> "$GITHUB_ENV"
+          echo "version=$VERSION_INPUT" >> "$GITHUB_OUTPUT"
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install release packaging tools
+        run: |
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y jq zip; then
+              exit 0
+            fi
+            echo "APT install attempt ${attempt} failed; retrying..."
+            sleep $((attempt * 10))
+          done
+          exit 1
 
       - name: Build release binaries
         run: |
@@ -50,9 +73,13 @@ jobs:
         run: |
           # Use version from environment
           TAG=${{ env.VERSION }}
+          REV="$TAG"
+          if ! git rev-parse --verify "$TAG^{commit}" >/dev/null 2>&1; then
+            REV="HEAD"
+          fi
           
           # Get previous tag
-          PREV_TAG=$(git describe --tags --abbrev=0 $TAG^ 2>/dev/null || echo "")
+          PREV_TAG=$(git describe --tags --abbrev=0 "$REV^" 2>/dev/null || echo "")
           
           # Determine if this is a major/minor/patch release
           if [[ $TAG =~ v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
@@ -72,9 +99,11 @@ jobs:
           
           # Generate changelog with categorization
           if [ -z "$PREV_TAG" ]; then
-            COMMITS=$(git log --pretty=format:"%s|||%h" $TAG)
+            COMMITS=$(git log --pretty=format:"%s|||%h" "$REV")
+            CHANGELOG_URL="https://github.com/Josepavese/nido/commits/$TAG"
           else
-            COMMITS=$(git log --pretty=format:"%s|||%h" $PREV_TAG..$TAG)
+            COMMITS=$(git log --pretty=format:"%s|||%h" "$PREV_TAG..$REV")
+            CHANGELOG_URL="https://github.com/Josepavese/nido/compare/$PREV_TAG...$TAG"
           fi
           
           # Categorize commits
@@ -179,6 +208,15 @@ jobs:
           ### 📦 Installation
           
           Pick your platform and get hatching:
+
+          #### Quick install
+          \`\`\`bash
+          curl -fsSL https://github.com/Josepavese/nido/releases/download/$TAG/install.sh | bash
+          \`\`\`
+
+          \`\`\`powershell
+          irm https://github.com/Josepavese/nido/releases/download/$TAG/install.ps1 | iex
+          \`\`\`
           
           #### Linux
           \`\`\`bash
@@ -188,6 +226,15 @@ jobs:
           chmod +x nido
           sudo mv nido /usr/local/bin/
           nido version  # Should show $TAG
+          \`\`\`
+
+          #### Linux (ARM64)
+          \`\`\`bash
+          curl -L https://github.com/Josepavese/nido/releases/download/$TAG/nido-linux-arm64.tar.gz -o nido.tar.gz
+          tar -xzf nido.tar.gz
+          cd nido-linux-arm64
+          chmod +x nido
+          sudo mv nido /usr/local/bin/
           \`\`\`
           
           #### macOS (Intel)
@@ -215,7 +262,7 @@ jobs:
           
           ### 🔗 Links
           
-          * **Full Changelog:** https://github.com/Josepavese/nido/compare/$PREV_TAG...$TAG
+          * **Full Changelog:** $CHANGELOG_URL
           * **Documentation:** https://github.com/Josepavese/nido#readme
           * **Issues:** https://github.com/Josepavese/nido/issues
           
@@ -228,20 +275,26 @@ jobs:
           EOF
 
       - name: Verify dist contents
-        run: ls -R dist/
+        run: |
+          ls -R dist/
+          bash bin/verify-release.sh --local dist
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.VERSION }}
           body_path: release_notes.md
           files: |
             dist/nido-linux-amd64.tar.gz
+            dist/nido-linux-arm64.tar.gz
             dist/nido-darwin-amd64.tar.gz
             dist/nido-darwin-arm64.tar.gz
             dist/nido-windows-amd64.zip
             dist/nido.mcpb
             dist/server.json
+            dist/install.sh
+            dist/install.ps1
+            dist/SHA256SUMS
           draft: false
           prerelease: false
           generate_release_notes: true
@@ -253,8 +306,12 @@ jobs:
         run: |
           # Get current tag
           TAG=${{ env.VERSION }}
+          REV="$TAG"
+          if ! git rev-parse --verify "$TAG^{commit}" >/dev/null 2>&1; then
+            REV="HEAD"
+          fi
           # Get previous tag
-          PREV_TAG=$(git describe --tags --abbrev=0 $TAG^ 2>/dev/null || echo "")
+          PREV_TAG=$(git describe --tags --abbrev=0 "$REV^" 2>/dev/null || echo "")
           
           if [ -n "$PREV_TAG" ]; then
             echo "🛸 Promoting flavour assets from $PREV_TAG to $TAG..."
@@ -268,7 +325,8 @@ jobs:
       - name: Install mcp-publisher
         run: |
           echo "📥 Installing mcp-publisher..."
-          curl -L -o mcp-publisher.tar.gz https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz
+          curl -fsSL --retry 3 --retry-delay 5 -o mcp-publisher.tar.gz "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
           tar -xzf mcp-publisher.tar.gz
           chmod +x mcp-publisher
           sudo mv mcp-publisher /usr/local/bin/

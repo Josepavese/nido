@@ -88,7 +88,7 @@ func TestBuildQemuArgs_CrossPlatform(t *testing.T) {
 			// Verify network forwarding
 			hasNetdev := false
 			for _, arg := range args {
-				if strings.Contains(arg, "hostfwd=tcp::50022-:22") {
+				if strings.Contains(arg, "hostfwd=tcp:127.0.0.1:50022-:22") {
 					hasNetdev = true
 					break
 				}
@@ -219,16 +219,121 @@ func TestBuildNetDevArgs(t *testing.T) {
 
 	expectedParts := []string{
 		"user,id=net0",
-		"hostfwd=tcp::50022-:22",
-		"hostfwd=tcp::32080-:80",
-		"hostfwd=tcp::32808-:8080",
-		"hostfwd=udp::32053-:53",
+		"hostfwd=tcp:127.0.0.1:50022-:22",
+		"hostfwd=tcp:127.0.0.1:32080-:80",
+		"hostfwd=tcp:127.0.0.1:32808-:8080",
+		"hostfwd=udp:127.0.0.1:32053-:53",
 	}
 
 	for _, part := range expectedParts {
 		if !strings.Contains(got, part) {
 			t.Errorf("Expected BuildNetDevArgs result to contain %q, got: %q", part, got)
 		}
+	}
+}
+
+func TestParsePortForwardValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{name: "valid auto tcp", input: "web:80/tcp"},
+		{name: "valid explicit udp", input: "dns:53:32053/udp"},
+		{name: "reject invalid protocol", input: "web:80/sctp", wantErr: true},
+		{name: "reject guest zero", input: "0", wantErr: true},
+		{name: "reject host out of range", input: "80:70000", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParsePortForward(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ParsePortForward(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateAcceleratorID(t *testing.T) {
+	tests := []struct {
+		id      string
+		wantErr bool
+	}{
+		{id: "auto"},
+		{id: "virtual:gpu"},
+		{id: "01:00.0"},
+		{id: "0000:01:00.0"},
+		{id: "01:00.8", wantErr: true},
+		{id: "01:00.0;touch /tmp/x", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.id, func(t *testing.T) {
+			err := ValidateAcceleratorID(tt.id)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ValidateAcceleratorID(%q) error = %v, wantErr %v", tt.id, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestCloudInitKeepsAdminAndDisablesPasswordWhenKeyPresent(t *testing.T) {
+	ci := CloudInit{User: "vmuser", SSHKey: "ssh-ed25519 AAAATEST nido-test"}
+	userData := ci.buildUserData()
+
+	if !strings.Contains(userData, "sudo: ['ALL=(ALL) NOPASSWD:ALL']") {
+		t.Fatal("cloud-init must keep passwordless sudo for Nido admin operations")
+	}
+	if !strings.Contains(userData, "ssh_pwauth: false") {
+		t.Fatal("cloud-init should disable SSH password auth when a key is present")
+	}
+	if strings.Contains(userData, "vmuser:nido") {
+		t.Fatal("cloud-init should not inject the static fallback password when a key is present")
+	}
+}
+
+func TestCloudInitMergesCustomUserDataWithAdminAccess(t *testing.T) {
+	ci := CloudInit{
+		User:           "vmuser",
+		SSHKey:         "ssh-ed25519 AAAATEST nido-test",
+		CustomUserData: "#!/bin/sh\necho ok > /tmp/nido-cli-validate-marker\n",
+	}
+	userData := ci.buildUserData()
+
+	for _, want := range []string{
+		"Content-Type: multipart/mixed",
+		"sudo: ['ALL=(ALL) NOPASSWD:ALL']",
+		"ssh-ed25519 AAAATEST nido-test",
+		"Content-Type: text/x-shellscript",
+		"nido-cli-validate-marker",
+	} {
+		if !strings.Contains(userData, want) {
+			t.Fatalf("merged user-data missing %q:\n%s", want, userData)
+		}
+	}
+}
+
+func TestCirrOSCloudInitMergesSSHKeyAndCustomShell(t *testing.T) {
+	ci := CloudInit{
+		User:           "cirros",
+		SSHKey:         "ssh-ed25519 AAAATEST nido-test",
+		CustomUserData: "#!/bin/sh\necho ok > /tmp/nido-cli-validate-marker\n",
+	}
+	userData := ci.buildUserData()
+
+	for _, want := range []string{
+		"#!/bin/sh",
+		"authorized_keys",
+		"ssh-ed25519 AAAATEST nido-test",
+		"nido-cli-validate-marker",
+	} {
+		if !strings.Contains(userData, want) {
+			t.Fatalf("cirros user-data missing %q:\n%s", want, userData)
+		}
+	}
+	if strings.Contains(userData, "Content-Type: multipart/mixed") {
+		t.Fatal("CirrOS user-data must stay a shell script, not multipart MIME")
 	}
 }
 
