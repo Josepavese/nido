@@ -288,32 +288,7 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 					},
 				}
 
-				// Determine if compression is needed based on URL extension
-				isCompressed := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
-				if len(ver.PartURLs) > 0 {
-					isCompressed = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
-				}
-
-				downloadPath := destPath
-				if isCompressed {
-					downloadPath = destPath + ".zst"
-				}
-
-				// Download
-				var downloadErr error
-				if len(ver.PartURLs) > 0 {
-					downloadErr = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
-				} else {
-					downloadErr = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
-				}
-
-				if downloadErr != nil {
-					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("disk download failed: %w", downloadErr)}}
-					return
-				}
-
-				// Verify Checksum (on the downloaded file)
-				expected := ver.Checksum
+				verForDownload := *ver
 				if ver.ChecksumURL != "" {
 					ch <- ProgressMsg{
 						OpName: opName,
@@ -325,35 +300,22 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 					}
 					fresh, err := image.FetchChecksum(ver.ChecksumURL, ver.ChecksumRegex, ver.ChecksumType)
 					if err == nil {
-						expected = fresh
+						verForDownload.Checksum = fresh
 					}
 					// If fetching fails, we continue with the hardcoded 'ver.Checksum' if it exists.
 				}
 
-				if expected != "" {
-					if err := image.VerifyChecksum(downloadPath, expected, ver.ChecksumType); err != nil {
-						os.Remove(downloadPath)
-						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("disk verification failed: %w", err)}}
-						return
-					}
+				ch <- ProgressMsg{
+					OpName: opName,
+					Status: view.StatusMsg{
+						Loading:   true,
+						Operation: fmt.Sprintf("Preparing %s", pName),
+						Progress:  1.0,
+					},
 				}
-
-				// Decompress if needed
-				if isCompressed {
-					ch <- ProgressMsg{
-						OpName: opName,
-						Status: view.StatusMsg{
-							Loading:   true,
-							Operation: fmt.Sprintf("Decompressing %s", pName),
-							Progress:  1.0,
-						},
-					}
-					if err := downloader.Decompress(downloadPath, destPath); err != nil {
-						os.Remove(downloadPath)
-						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("decompression failed: %w", err)}}
-						return
-					}
-					os.Remove(downloadPath)
+				if err := image.PrepareLocalImage(verForDownload, destPath, downloader); err != nil {
+					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("disk preparation failed: %w", err)}}
+					return
 				}
 			}
 

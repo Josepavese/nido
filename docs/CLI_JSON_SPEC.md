@@ -106,7 +106,7 @@ The following commands support `--json`:
 
 ### `template list`
 
-`data.templates[]`: name, size_bytes
+`data.templates[]`: template names as strings. Empty lists are encoded as `[]`, not `null`.
 
 ### `image list`
 
@@ -118,7 +118,7 @@ The following commands support `--json`:
 
 ### `cache ls`
 
-`data.cache[]`: name, version, size_bytes, modified_at
+`data.cache[]`: name, version, size
 
 ### `cache info`
 

@@ -259,63 +259,18 @@ func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool, 
 					},
 				}
 
-				downloadPath := destPath
-				isTarXz := strings.HasSuffix(ver.URL, ".tar.xz")
-				isZst := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
-				if len(ver.PartURLs) > 0 {
-					isZst = strings.Contains(ver.PartURLs[0], ".zst") || strings.Contains(ver.PartURLs[0], ".zstandard")
-				}
-
-				if isTarXz {
-					downloadPath = destPath + ".tar.xz"
-				} else if isZst {
-					downloadPath = destPath + ".zst"
-				}
-
-				if len(ver.PartURLs) > 0 {
-					err = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
-				} else {
-					err = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
-				}
-
-				if err != nil {
-					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("download failed: %w", err)}}
-					return
-				}
-
-				// Verify & Decompress
 				ch <- ProgressMsg{
 					OpName: opName,
 					Status: view.StatusMsg{
 						Loading:   true,
-						Operation: fmt.Sprintf("Verifying %s", pName),
+						Operation: fmt.Sprintf("Preparing %s", pName),
 						Progress:  1.0,
 					},
 				}
 
-				if ver.Checksum != "" {
-					if err := image.VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
-						os.Remove(downloadPath)
-						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("verification failed: %w", err)}}
-						return
-					}
-				}
-
-				if isTarXz || isZst {
-					ch <- ProgressMsg{
-						OpName: opName,
-						Status: view.StatusMsg{
-							Loading:   true,
-							Operation: fmt.Sprintf("Decompressing %s", pName),
-							Progress:  1.0,
-						},
-					}
-					if err := downloader.Decompress(downloadPath, destPath); err != nil {
-						os.Remove(downloadPath)
-						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("decompression failed: %w", err)}}
-						return
-					}
-					os.Remove(downloadPath)
+				if err := image.PrepareLocalImage(*ver, destPath, downloader); err != nil {
+					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("image preparation failed: %w", err)}}
+					return
 				}
 			}
 

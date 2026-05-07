@@ -16,8 +16,17 @@ lint:
 	go vet ./...
 	@if command -v staticcheck >/dev/null 2>&1; then \
 		staticcheck ./...; \
+	elif [ -x "$$HOME/go/bin/staticcheck" ]; then \
+		"$$HOME/go/bin/staticcheck" ./...; \
 	else \
 		echo "staticcheck not installed, skipping"; \
+	fi
+	@if command -v govulncheck >/dev/null 2>&1; then \
+		govulncheck ./...; \
+	elif [ -x "$$HOME/go/bin/govulncheck" ]; then \
+		"$$HOME/go/bin/govulncheck" ./...; \
+	else \
+		echo "govulncheck not installed, skipping"; \
 	fi
 
 # Run all tests
@@ -26,7 +35,7 @@ test:
 
 # Run only theme tests (quick check during development)
 test-theme:
-	go test -v ./internal/tui/theme/...
+	go test -v ./internal/tui/kit/theme/...
 
 # Build the main binary
 build:

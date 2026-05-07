@@ -72,16 +72,16 @@ func fetchGeneric(src Source, strat Strategy) ([]image.Version, error) {
 		}
 
 		results = append(results, image.Version{
-			Version:      ver,
-			Aliases:      []string{ver}, // TODO: Add aliases config if needed
-			Arch:         "amd64",       // TODO: Make configurable
-			URL:          imgURL,
-			ChecksumType: strat.ChecksumType,
-			Checksum:     chk,
-			ChecksumURL:  checksumURL,
+			Version:       ver,
+			Aliases:       []string{ver}, // TODO: Add aliases config if needed
+			Arch:          "amd64",       // TODO: Make configurable
+			URL:           imgURL,
+			ChecksumType:  strat.ChecksumType,
+			Checksum:      chk,
+			ChecksumURL:   checksumURL,
 			ChecksumRegex: regex,
-			SizeBytes:    size,
-			Format:       format,
+			SizeBytes:     size,
+			Format:        format,
 		})
 	}
 	return results, nil
@@ -148,16 +148,16 @@ func fetchUbuntu(src Source, strat Strategy) ([]image.Version, error) {
 		}
 
 		results = append(results, image.Version{
-			Version:      ver,
-			Aliases:      aliases,
-			Arch:         "amd64",
-			URL:          imgURL,
-			ChecksumType: "sha256",
-			Checksum:     hash,
-			ChecksumURL:  fmt.Sprintf("%s/%s/release/SHA256SUMS", strat.BaseURL, ver),
+			Version:       ver,
+			Aliases:       aliases,
+			Arch:          "amd64",
+			URL:           imgURL,
+			ChecksumType:  "sha256",
+			Checksum:      hash,
+			ChecksumURL:   fmt.Sprintf("%s/%s/release/SHA256SUMS", strat.BaseURL, ver),
 			ChecksumRegex: regexp.QuoteMeta(filename),
-			SizeBytes:    size,
-			Format:       "qcow2",
+			SizeBytes:     size,
+			Format:        "qcow2",
 		})
 	}
 	return results, nil
@@ -225,16 +225,16 @@ func fetchDebian(src Source, strat Strategy) ([]image.Version, error) {
 		size, _ := getRemoteSize(imgURL)
 
 		results = append(results, image.Version{
-			Version:      ver,
-			Aliases:      []string{codename},
-			Arch:         "amd64",
-			URL:          imgURL,
-			ChecksumType: "sha512",
-			Checksum:     hash,
-			ChecksumURL:  fmt.Sprintf("%s/%s/current/SHA512SUMS", strat.BaseURL, codename),
+			Version:       ver,
+			Aliases:       []string{codename},
+			Arch:          "amd64",
+			URL:           imgURL,
+			ChecksumType:  "sha512",
+			Checksum:      hash,
+			ChecksumURL:   fmt.Sprintf("%s/%s/current/SHA512SUMS", strat.BaseURL, codename),
 			ChecksumRegex: regexp.QuoteMeta(filename),
-			SizeBytes:    size,
-			Format:       "qcow2",
+			SizeBytes:     size,
+			Format:        "qcow2",
 		})
 	}
 	return results, nil
@@ -282,16 +282,16 @@ func fetchAlpine(src Source, strat Strategy) ([]image.Version, error) {
 		size, _ := getRemoteSize(imgURL)
 
 		results = append(results, image.Version{
-			Version:      ver,
-			Aliases:      []string{ver, "latest"},
-			Arch:         "amd64",
-			URL:          imgURL,
-			ChecksumType: "sha512",
-			Checksum:     hash,
-			ChecksumURL:  checksumURL,
+			Version:       ver,
+			Aliases:       []string{ver, "latest"},
+			Arch:          "amd64",
+			URL:           imgURL,
+			ChecksumType:  "sha512",
+			Checksum:      hash,
+			ChecksumURL:   checksumURL,
 			ChecksumRegex: "^" + regexp.QuoteMeta(hash) + "$",
-			SizeBytes:    size,
-			Format:       "qcow2",
+			SizeBytes:     size,
+			Format:        "qcow2",
 		})
 	}
 	return results, nil
@@ -341,16 +341,16 @@ func fetchOpenSUSE(src Source, strat Strategy) ([]image.Version, error) {
 		size, _ := getRemoteSize(imgURL)
 
 		results = append(results, image.Version{
-			Version:      "Snapshot" + snapshotDate,
-			Aliases:      []string{ver}, // maps "Latest" to this version
-			Arch:         "amd64",
-			URL:          imgURL,
-			ChecksumType: "sha256",
-			Checksum:     hash,
-			ChecksumURL:  checksumURL,
+			Version:       "Snapshot" + snapshotDate,
+			Aliases:       []string{ver}, // maps "Latest" to this version
+			Arch:          "amd64",
+			URL:           imgURL,
+			ChecksumType:  "sha256",
+			Checksum:      hash,
+			ChecksumURL:   checksumURL,
 			ChecksumRegex: "^" + regexp.QuoteMeta(hash) + "$",
-			SizeBytes:    size,
-			Format:       "qcow2",
+			SizeBytes:     size,
+			Format:        "qcow2",
 		})
 	}
 	return results, nil
@@ -524,16 +524,24 @@ func fetchGithubRelease(src Source, strat Strategy) ([]image.Version, error) {
 			if strings.HasSuffix(suffix, ".sha256") {
 				g.chkType = "sha256"
 				ch, _ := fetchString(asset.DownloadURL)
-				g.checksum = strings.Fields(ch)[0]
+				if fields := strings.Fields(ch); len(fields) > 0 {
+					g.checksum = fields[0]
+				}
 			} else if strings.HasSuffix(suffix, ".sha512") {
 				g.chkType = "sha512"
 				ch, _ := fetchString(asset.DownloadURL)
-				g.checksum = strings.Fields(ch)[0]
+				if fields := strings.Fields(ch); len(fields) > 0 {
+					g.checksum = fields[0]
+				}
 			} else {
 				isZst := strings.Contains(suffix, ".zst")
 				isPart := regexp.MustCompile(`\.(zst\.[a-z]{2}|\d{3})$`).MatchString(suffix) || suffix == ".zst"
 
 				if isPart {
+					if suffix == ".zst" && g.checksum == "" && strings.HasPrefix(asset.Digest, "sha256:") {
+						g.chkType = "sha256"
+						g.checksum = strings.TrimPrefix(asset.Digest, "sha256:")
+					}
 					if isZst && g.compression == "none" {
 						g.parts = []string{}
 						g.size = 0
@@ -567,8 +575,11 @@ func fetchGithubRelease(src Source, strat Strategy) ([]image.Version, error) {
 		}
 	}
 
-	// Deduplicate: Keep only the latest version (first one found since we process releases in order)
+	// Deduplicate deterministically: keep the highest version string for the flavour.
 	if len(results) > 0 {
+		sort.SliceStable(results, func(i, j int) bool {
+			return results[i].Version > results[j].Version
+		})
 		return []image.Version{results[0]}, nil
 	}
 
@@ -584,4 +595,5 @@ type githubAsset struct {
 	Name        string `json:"name"`
 	Size        int64  `json:"size"`
 	DownloadURL string `json:"browser_download_url"`
+	Digest      string `json:"digest"`
 }

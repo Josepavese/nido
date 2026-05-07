@@ -33,7 +33,7 @@ Run this command in your terminal. Do not turn off the console while saving.
 **Linux & macOS:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.sh | bash
+{ curl -fsSL https://github.com/Josepavese/nido/releases/latest/download/install.sh || curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.sh; } | bash
 # Restart your terminal or source your config to initialize the matrix
 source ~/.bashrc  # or ~/.zshrc, power up the path
 nido version         # Check checksum
@@ -42,17 +42,17 @@ nido version         # Check checksum
 **Windows (PowerShell):**
 
 ```powershell
-irm https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.ps1 | iex
+try { irm https://github.com/Josepavese/nido/releases/latest/download/install.ps1 | iex } catch { irm https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.ps1 | iex }
 # Restart your terminal to initialize the matrix
 nido version
 ```
 
-**Android (Termux) & ARM SBCs:**
+**ARM Linux SBCs:**
 
-Run this inside **Termux** or your favorite ARM-based Linux distro (Raspberry Pi, Pine64, etc).
+Run this inside your favorite ARM-based Linux distro (Raspberry Pi, Pine64, etc). Android/Termux users should prefer the source installer when Android-specific packages are needed.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.sh | bash
+{ curl -fsSL https://github.com/Josepavese/nido/releases/latest/download/install.sh || curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.sh; } | bash
 # Reload your config
 source ~/.bashrc
 nido version

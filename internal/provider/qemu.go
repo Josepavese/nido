@@ -44,6 +44,14 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	if name == "" {
 		return fmt.Errorf("name cannot be empty")
 	}
+	if err := ValidateAccelerators(opts.Accelerators); err != nil {
+		return err
+	}
+	for _, pf := range opts.Forwarding {
+		if err := ValidatePortForward(pf); err != nil {
+			return err
+		}
+	}
 	// Only allow alphanumeric, hyphens, underscores, and dots. Rejects spaces.
 	// (Unless it's an absolute path, which we handle separately)
 	if !filepath.IsAbs(name) {
@@ -325,6 +333,9 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	}
 
 	if len(opts.Accelerators) > 0 {
+		if err := ValidateAccelerators(opts.Accelerators); err != nil {
+			return err
+		}
 		state.Accelerators = opts.Accelerators
 		updated = true
 	}
@@ -932,18 +943,32 @@ func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) error 
 		state.Cmdline = *updates.Cmdline
 	}
 	if updates.SSHPort != nil {
+		if err := validatePort(*updates.SSHPort, false, "ssh port"); err != nil {
+			return err
+		}
 		state.SSHPort = *updates.SSHPort
 	}
 	if updates.VNCPort != nil {
+		if err := validatePort(*updates.VNCPort, true, "vnc port"); err != nil {
+			return err
+		}
 		state.VNCPort = *updates.VNCPort
 	}
 	if updates.SSHUser != nil {
 		state.SSHUser = *updates.SSHUser
 	}
 	if updates.Forwarding != nil {
+		for _, pf := range *updates.Forwarding {
+			if err := ValidatePortForward(pf); err != nil {
+				return err
+			}
+		}
 		state.Forwarding = *updates.Forwarding
 	}
 	if updates.Accelerators != nil {
+		if err := ValidateAccelerators(*updates.Accelerators); err != nil {
+			return err
+		}
 		state.Accelerators = *updates.Accelerators
 	}
 
@@ -964,16 +989,16 @@ func (p *QemuProvider) loadState(name string) (VMState, error) {
 // BuildNetDevArgs translates state to QEMU runtime arguments.
 // Implements Section 5.4.C of advanced-port-forwarding.md.
 func (p *QemuProvider) BuildNetDevArgs(sshPort int, fw []PortForward) string {
-	fwd := fmt.Sprintf("tcp::%d-:22", sshPort)
+	fwd := fmt.Sprintf("tcp:127.0.0.1:%d-:22", sshPort)
 	for _, f := range fw {
-		proto := f.Protocol
+		proto := strings.ToLower(strings.TrimSpace(f.Protocol))
 		if proto == "" {
 			proto = "tcp"
 		}
 		// If HostPort is 0, it means it's not yet allocated or failed.
 		// Usually we allocate before calling this.
 		if f.HostPort > 0 {
-			fwd += fmt.Sprintf(",hostfwd=%s::%d-:%d", proto, f.HostPort, f.GuestPort)
+			fwd += fmt.Sprintf(",hostfwd=%s:127.0.0.1:%d-:%d", proto, f.HostPort, f.GuestPort)
 		}
 	}
 	return fmt.Sprintf("user,id=net0,hostfwd=%s", fwd)
@@ -987,19 +1012,24 @@ func (p *QemuProvider) SSHCommand(name string) (string, error) {
 	if info.SSHPort == 0 || info.State != "running" {
 		return "", fmt.Errorf("VM '%s' is not running or has no network access", name)
 	}
-	// Inject options to skip fingerprint check for ephemeral VMs
-	return fmt.Sprintf("ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p %d %s@%s", info.SSHPort, info.SSHUser, info.IP), nil
+	// Inject options to skip fingerprint check for ephemeral VMs.
+	opts := []string{"ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null"}
+	if keyPath := localNidoSSHKeyPath(); keyPath != "" {
+		opts = append(opts, "-i", keyPath)
+	}
+	opts = append(opts, "-p", fmt.Sprintf("%d", info.SSHPort), fmt.Sprintf("%s@%s", info.SSHUser, info.IP))
+	return strings.Join(opts, " "), nil
 }
 
 func (p *QemuProvider) ListTemplates() ([]string, error) {
 	files, err := os.ReadDir(p.Config.BackupDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return []string{}, nil
 		}
 		return nil, err
 	}
-	var templates []string
+	templates := []string{}
 	for _, f := range files {
 		if strings.HasSuffix(f.Name(), ".compact.qcow2") {
 			name := strings.TrimSuffix(f.Name(), ".compact.qcow2")
@@ -1359,7 +1389,11 @@ func (p *QemuProvider) CachePrune(unusedOnly bool) (int, int64, error) {
 	}
 	usedMap := make(map[string]bool)
 	for _, path := range usedBacking {
-		usedMap[path] = true
+		if abs, err := filepath.Abs(path); err == nil {
+			usedMap[abs] = true
+		} else {
+			usedMap[path] = true
+		}
 	}
 
 	files, err := os.ReadDir(imagesDir)
@@ -1375,7 +1409,8 @@ func (p *QemuProvider) CachePrune(unusedOnly bool) (int, int64, error) {
 			continue
 		}
 		fullPath := filepath.Join(imagesDir, f.Name())
-		if unusedOnly && usedMap[fullPath] {
+		absPath, _ := filepath.Abs(fullPath)
+		if unusedOnly && usedMap[absPath] {
 			continue // Skip images in use
 		}
 
@@ -1410,7 +1445,9 @@ func (p *QemuProvider) CacheRemove(name, version string) error {
 	usedBacking, err := p.GetUsedBackingFiles()
 	if err == nil {
 		for _, path := range usedBacking {
-			if path == fullPath {
+			absPath, _ := filepath.Abs(path)
+			absFullPath, _ := filepath.Abs(fullPath)
+			if absPath == absFullPath {
 				return fmt.Errorf("cannot remove image %s: in use by a VM", filename)
 			}
 		}
@@ -1422,6 +1459,9 @@ func (p *QemuProvider) CacheRemove(name, version string) error {
 func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, error) {
 	state, err := p.loadState(name)
 	if err != nil {
+		return pf, err
+	}
+	if err := ValidatePortForward(pf); err != nil {
 		return pf, err
 	}
 
@@ -1461,13 +1501,24 @@ func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, er
 }
 
 func (p *QemuProvider) PortUnforward(name string, guestPort int, protocol string) error {
+	if err := validatePort(guestPort, false, "guest port"); err != nil {
+		return err
+	}
+	protocol = strings.ToLower(strings.TrimSpace(protocol))
+	if protocol != "" && protocol != "tcp" && protocol != "udp" {
+		return fmt.Errorf("protocol must be tcp or udp")
+	}
 	state, err := p.loadState(name)
 	if err != nil {
 		return err
 	}
 
 	for i, f := range state.Forwarding {
-		if f.GuestPort == guestPort && (f.Protocol == protocol || protocol == "") {
+		stateProtocol := strings.ToLower(strings.TrimSpace(f.Protocol))
+		if stateProtocol == "" {
+			stateProtocol = "tcp"
+		}
+		if f.GuestPort == guestPort && (stateProtocol == protocol || protocol == "") {
 			state.Forwarding = append(state.Forwarding[:i], state.Forwarding[i+1:]...)
 			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 		}

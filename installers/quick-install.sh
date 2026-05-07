@@ -39,9 +39,22 @@ case "$ARCH" in
   *) echo "${RED}❌ Unsupported architecture: $ARCH${RESET}"; exit 1 ;;
 esac
 
+case "${OS}/${ARCH}" in
+  linux/amd64|linux/arm64|darwin/amd64|darwin/arm64) ;;
+  *)
+    echo "${RED}❌ No pre-built release artifact for ${OS}/${ARCH}.${RESET}"
+    echo "   Use the source installer instead:"
+    echo "   curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/build-from-source.sh | bash"
+    exit 1
+    ;;
+esac
+
 # Determine latest release
 echo "${CYAN}🔍 Fetching latest release...${RESET}"
-LATEST_RELEASE=$(curl -sL https://api.github.com/repos/Josepavese/nido/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+LATEST_RELEASE="${NIDO_VERSION:-}"
+if [ -z "$LATEST_RELEASE" ]; then
+  LATEST_RELEASE=$(curl -sL https://api.github.com/repos/Josepavese/nido/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+fi
 
 if [ -z "$LATEST_RELEASE" ]; then
   echo "${RED}❌ Failed to fetch latest release${RESET}"
@@ -50,23 +63,60 @@ fi
 
 echo "${GREEN}✅ Latest version: ${LATEST_RELEASE}${RESET}"
 
-# Build download URL
-BINARY_NAME="nido-${OS}-${ARCH}"
-if [ "$OS" = "darwin" ] && [ "$ARCH" = "arm64" ]; then
-  BINARY_NAME="nido-darwin-arm64"
-fi
+ASSET_NAME="nido-${OS}-${ARCH}.tar.gz"
+DOWNLOAD_URL="https://github.com/Josepavese/nido/releases/download/${LATEST_RELEASE}/${ASSET_NAME}"
+CHECKSUM_URL="https://github.com/Josepavese/nido/releases/download/${LATEST_RELEASE}/SHA256SUMS"
 
-DOWNLOAD_URL="https://github.com/Josepavese/nido/releases/download/${LATEST_RELEASE}/${BINARY_NAME}"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/nido-install.XXXXXX")"
+trap 'rm -rf "$TMP_DIR"' EXIT
+ARCHIVE_PATH="${TMP_DIR}/${ASSET_NAME}"
+CHECKSUM_PATH="${TMP_DIR}/SHA256SUMS"
 
-echo "${CYAN}📥 Downloading ${BINARY_NAME}...${RESET}"
-TMP_FILE="$(mktemp /tmp/nido-${LATEST_RELEASE}.XXXXXX)"
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    return 1
+  fi
+}
 
-if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_FILE"; then
+verify_release_checksum() {
+  if ! curl -fsSL "$CHECKSUM_URL" -o "$CHECKSUM_PATH"; then
+    echo "${YELLOW}⚠️  SHA256SUMS not available for ${LATEST_RELEASE}; skipping archive checksum verification.${RESET}"
+    return 0
+  fi
+  expected="$(awk -v asset="$ASSET_NAME" '{name=$2; sub(/^\*/, "", name); if (name == asset) print $1}' "$CHECKSUM_PATH")"
+  if [ -z "$expected" ]; then
+    echo "${YELLOW}⚠️  ${ASSET_NAME} not listed in SHA256SUMS; skipping archive checksum verification.${RESET}"
+    return 0
+  fi
+  actual="$(sha256_file "$ARCHIVE_PATH")" || {
+    echo "${YELLOW}⚠️  No local SHA-256 tool found; skipping archive checksum verification.${RESET}"
+    return 0
+  }
+  if [ "$actual" != "$expected" ]; then
+    echo "${RED}❌ Archive checksum mismatch for ${ASSET_NAME}${RESET}"
+    exit 1
+  fi
+  echo "${GREEN}✅ Archive checksum verified${RESET}"
+}
+
+echo "${CYAN}📥 Downloading ${ASSET_NAME}...${RESET}"
+
+if ! curl -fsSL "$DOWNLOAD_URL" -o "$ARCHIVE_PATH"; then
   echo "${RED}❌ Download failed${RESET}"
   exit 1
 fi
+verify_release_checksum
 
-chmod +x "$TMP_FILE"
+tar -xzf "$ARCHIVE_PATH" -C "$TMP_DIR"
+PKG_DIR="${TMP_DIR}/nido-${OS}-${ARCH}"
+if [ ! -x "${PKG_DIR}/nido" ]; then
+  echo "${RED}❌ Release archive does not contain nido${RESET}"
+  exit 1
+fi
 
 # Setup Nido home directory
 NIDO_HOME="${HOME}/.nido"
@@ -74,9 +124,15 @@ mkdir -p "${NIDO_HOME}/bin"
 mkdir -p "${NIDO_HOME}/vms"
 mkdir -p "${NIDO_HOME}/run"
 mkdir -p "${NIDO_HOME}/images"
+mkdir -p "${NIDO_HOME}/registry"
 
-# Move binary
-mv "$TMP_FILE" "${NIDO_HOME}/bin/nido"
+install -m 0755 "${PKG_DIR}/nido" "${NIDO_HOME}/bin/nido"
+if [ -x "${PKG_DIR}/nido-validator" ]; then
+  install -m 0755 "${PKG_DIR}/nido-validator" "${NIDO_HOME}/bin/nido-validator"
+fi
+if [ -d "${PKG_DIR}/registry" ]; then
+  cp -R "${PKG_DIR}/registry/." "${NIDO_HOME}/registry/"
+fi
 
 echo "${GREEN}✅ Binary installed to ${NIDO_HOME}/bin/nido${RESET}"
 

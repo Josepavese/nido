@@ -69,19 +69,6 @@ func supportedGlobalConfigKeys() []string {
 	}
 }
 
-func isVMName(p provider.VMProvider, name string) bool {
-	vms, err := p.List()
-	if err != nil {
-		return false
-	}
-	for _, v := range vms {
-		if v.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
 func requireQemu(app *appContext) *provider.QemuProvider {
 	if app.Qemu == nil {
 		ui.Error("QEMU provider unavailable")
@@ -102,22 +89,6 @@ func toShellDirective(items []string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	return items, cobra.ShellCompDirectiveNoFileComp
-}
-
-func printHumanCommandError(format string, args ...any) {
-	ui.Error(format, args...)
-	os.Exit(1)
-}
-
-func positionalValue(args []string, idx int) string {
-	if idx < 0 || idx >= len(args) {
-		return ""
-	}
-	return args[idx]
-}
-
-func commandExamples(lines ...string) string {
-	return strings.Join(lines, "\n")
 }
 
 func formatVMTablePortSummary(vm provider.VMStatus) string {
