@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-05-07T10:20:19.267003313Z",
+  "updated_at": "2026-05-08T09:13:07.500455909Z",
   "images": [
     {
       "name": "ubuntu",
@@ -47,18 +47,18 @@
       "homepage": "https://get.opensuse.org/tumbleweed/",
       "versions": [
         {
-          "version": "Snapshot20260505",
+          "version": "Snapshot20260506",
           "aliases": [
             "Latest"
           ],
           "arch": "amd64",
-          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260505.qcow2",
+          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260506.qcow2",
           "checksum_type": "sha256",
-          "checksum": "b07d89440d2deff19b918d9d7ff765814e974374a3663858e2b603bdc35e673c",
-          "size_bytes": 304338944,
+          "checksum": "9fc746d0b447889cecefefc0558c6d9a3cb9a102165ef5db928c13b51536c2b8",
+          "size_bytes": 303386624,
           "format": "qcow2",
-          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260505.qcow2.sha256",
-          "checksum_regex": "^b07d89440d2deff19b918d9d7ff765814e974374a3663858e2b603bdc35e673c$"
+          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260506.qcow2.sha256",
+          "checksum_regex": "^9fc746d0b447889cecefefc0558c6d9a3cb9a102165ef5db928c13b51536c2b8$"
         }
       ]
     },
@@ -230,8 +230,8 @@
           ],
           "arch": "amd64",
           "url": "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-apache-wordpress.qcow2.zst",
-          "checksum_type": "",
-          "checksum": "",
+          "checksum_type": "sha256",
+          "checksum": "74b61c34f594d089f8c5fc1ede86bbacc07cc50a175244a56e231b58305b0f9f",
           "size_bytes": 915821054,
           "format": "qcow2",
           "part_urls": [
@@ -253,8 +253,8 @@
           ],
           "arch": "amd64",
           "url": "https://github.com/Josepavese/nido/releases/download/v4.4.1/flavour-ubuntu-24.04-plesk-web.qcow2.zst",
-          "checksum_type": "",
-          "checksum": "",
+          "checksum_type": "sha256",
+          "checksum": "e5d868027c1fa9c8dffcd971bc99949101dda6f1f69d70dd46bdfb4cab5c5f10",
           "size_bytes": 1008572623,
           "format": "qcow2",
           "part_urls": [
