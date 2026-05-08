@@ -22,7 +22,7 @@ try { irm https://github.com/Josepavese/nido/releases/latest/download/install.ps
 
 Want the latest code without cloning the whole nest? This script downloads the GitHub source archive and builds locally.
 
-**Prerequisites:** Go 1.26.2+
+**Prerequisites:** Go 1.26.3+
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/build-from-source.sh | bash
@@ -48,8 +48,8 @@ bash bin/install-from-source.sh
 |--------|---------|---------------|--------------|
 | `quick-install.sh` | Downloads pre-compiled binary from GitHub Releases | `curl` | End users (Linux/macOS) |
 | `quick-install.ps1` | Downloads pre-compiled binary from GitHub Releases | PowerShell 5.1+ | End users (Windows) |
-| `build-from-source.sh` | Downloads only source files and builds locally | Go 1.26.2+, `curl` | Tinkerers & power users |
-| `../bin/install-from-source.sh` | Full repository clone and build | Go 1.26.2+, Git | Contributors & developers |
+| `build-from-source.sh` | Downloads only source files and builds locally | Go 1.26.3+, `curl` | Tinkerers & power users |
+| `../bin/install-from-source.sh` | Full repository clone and build | Go 1.26.3+, Git | Contributors & developers |
 
 ---
 
