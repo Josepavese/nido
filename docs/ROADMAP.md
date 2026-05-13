@@ -32,6 +32,9 @@ Nido is **AI-centric and automation-first**: a focused execution surface for age
 - Catalog-based image system with cache + checksum verification.
 - Registry sources already structured (`registry/sources.yaml`).
 - Registry builder logic implemented (strategy-based fetching).
+- Buildable blueprints are integrated into CLI, TUI, MCP, cache visibility, and installer docs.
+- Windows evaluation blueprints are available for Windows 11 Enterprise Evaluation, Windows 11 IoT Enterprise LTSC 2024 Evaluation, and Windows Server 2022 Evaluation (Server Core).
+- Windows host support has passed smoke testing for install parsing, diagnostics, catalog/blueprint discovery, and basic VM lifecycle; it still needs heavier long-running validation.
 
 ### Flavours
 

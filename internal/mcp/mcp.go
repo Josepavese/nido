@@ -125,6 +125,19 @@ func ToolsCatalog() []map[string]interface{} {
 			},
 		},
 		{
+			"name":        "nido_blueprint",
+			"description": "Manage buildable image blueprints. Supported actions are list, info, and build. Prefer nido://catalog/blueprints and nido://blueprint/{name} for read-only inspection.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"action":         map[string]interface{}{"type": "string", "enum": []string{"list", "info", "build"}},
+					"name":           map[string]interface{}{"type": "string", "description": "Blueprint name for action=info or action=build."},
+					"blueprint_name": map[string]interface{}{"type": "string", "description": "Compatibility alias for name."},
+				},
+				"required": []string{"action"},
+			},
+		},
+		{
 			"name":        "nido_system",
 			"description": "Access system-wide Nido operations that are not tied to one VM. Supported actions are doctor, config_get, and build_image. Use resources nido://system/config and nido://system/doctor for read-only inspection when possible.",
 			"inputSchema": map[string]interface{}{
@@ -145,6 +158,7 @@ func ResourcesCatalog() []map[string]interface{} {
 		{"name": "Fleet VMs", "uri": "nido://fleet/vms", "mimeType": "application/json", "description": "Compact fleet summary for all known VMs."},
 		{"name": "Fleet Templates", "uri": "nido://fleet/templates", "mimeType": "application/json", "description": "Template names available for cloning."},
 		{"name": "Image Catalog", "uri": "nido://catalog/images", "mimeType": "application/json", "description": "Compact image catalog summary optimized for agent browsing."},
+		{"name": "Blueprint Catalog", "uri": "nido://catalog/blueprints", "mimeType": "application/json", "description": "Buildable image blueprint summaries, including output cache state."},
 		{"name": "Cache Summary", "uri": "nido://storage/cache", "mimeType": "application/json", "description": "Cache stats plus cached image entries."},
 		{"name": "System Config", "uri": "nido://system/config", "mimeType": "application/json", "description": "Current provider configuration."},
 		{"name": "System Doctor", "uri": "nido://system/doctor", "mimeType": "application/json", "description": "Diagnostic report for the local environment."},
@@ -156,6 +170,7 @@ func ResourceTemplatesCatalog() []map[string]interface{} {
 	return []map[string]interface{}{
 		{"name": "VM Detail", "uriTemplate": "nido://vm/{name}", "mimeType": "application/json", "description": "Detailed state for one VM."},
 		{"name": "Image Detail", "uriTemplate": "nido://image/{tag}", "mimeType": "application/json", "description": "Detailed catalog metadata for one image tag."},
+		{"name": "Blueprint Detail", "uriTemplate": "nido://blueprint/{name}", "mimeType": "application/json", "description": "Detailed metadata for one image blueprint."},
 	}
 }
 
@@ -193,6 +208,7 @@ func HelpPayload() map[string]interface{} {
 			"Use nido_vm for VM lifecycle, inspection fallback, config changes, and port operations.",
 			"Use nido_template for template lifecycle.",
 			"Use nido_image for catalog and cache operations.",
+			"Use nido_blueprint for blueprint list, inspection, and image builds.",
 			"Use nido_system for doctor, config_get, and build_image.",
 			"Every high-power tool requires an action field.",
 		},
@@ -315,6 +331,8 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 		payload, err = s.callTemplateTool(params.Arguments)
 	case "nido_image":
 		payload, err = s.callImageTool(params.Arguments)
+	case "nido_blueprint":
+		payload, err = s.callBlueprintTool(params.Arguments)
 	case "nido_system":
 		payload, err = s.callSystemTool(params.Arguments)
 	default:
@@ -626,6 +644,44 @@ func (s *Server) callImageTool(raw json.RawMessage) (interface{}, error) {
 	}
 }
 
+func (s *Server) callBlueprintTool(raw json.RawMessage) (interface{}, error) {
+	var args struct {
+		Action        string `json:"action"`
+		Name          string `json:"name"`
+		BlueprintName string `json:"blueprint_name"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return nil, err
+	}
+	name := args.Name
+	if name == "" {
+		name = args.BlueprintName
+	}
+
+	switch args.Action {
+	case "list":
+		blueprints, err := s.blueprintCatalog()
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "list", "blueprints": blueprints}, nil
+	case "info":
+		info, err := s.blueprintInfo(name)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "info", "blueprint": info}, nil
+	case "build":
+		info, status, err := s.buildBlueprint(name)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "build", "blueprint": info, "status": status}, nil
+	default:
+		return nil, fmt.Errorf("unsupported nido_blueprint action %q", args.Action)
+	}
+}
+
 func (s *Server) callSystemTool(raw json.RawMessage) (interface{}, error) {
 	var args struct {
 		Action        string `json:"action"`
@@ -641,34 +697,11 @@ func (s *Server) callSystemTool(raw json.RawMessage) (interface{}, error) {
 	case "config_get":
 		return map[string]interface{}{"action": "config_get", "config": s.Provider.GetConfig()}, nil
 	case "build_image":
-		home, _ := sysutil.UserHome()
-		cwd, _ := os.Getwd()
-		searchPaths := []string{
-			filepath.Join(cwd, "registry", "blueprints", args.BlueprintName+".yaml"),
-			filepath.Join(home, ".nido", "blueprints", args.BlueprintName+".yaml"),
-		}
-
-		var bpPath string
-		for _, p := range searchPaths {
-			if _, err := os.Stat(p); err == nil {
-				bpPath = p
-				break
-			}
-		}
-		if bpPath == "" {
-			return nil, fmt.Errorf("blueprint %q not found", args.BlueprintName)
-		}
-
-		bp, err := builder.LoadBlueprint(bpPath)
+		info, status, err := s.buildBlueprint(args.BlueprintName)
 		if err != nil {
 			return nil, err
 		}
-		nidoDir := filepath.Join(home, ".nido")
-		eng := builder.NewEngine(filepath.Join(nidoDir, "cache"), filepath.Join(nidoDir, "tmp"), filepath.Join(nidoDir, "images"))
-		if err := eng.Build(bp); err != nil {
-			return nil, err
-		}
-		return map[string]interface{}{"action": "build_image", "blueprint_name": args.BlueprintName, "output_image": bp.OutputImage, "status": "built"}, nil
+		return map[string]interface{}{"action": "build_image", "blueprint_name": info.Name, "output_image": info.OutputImage, "output_tag": info.OutputTag, "status": status}, nil
 	default:
 		return nil, fmt.Errorf("unsupported nido_system action %q", args.Action)
 	}
@@ -716,6 +749,12 @@ func (s *Server) readResource(uri string) (interface{}, error) {
 			return nil, err
 		}
 		return map[string]interface{}{"images": summaries}, nil
+	case "nido://catalog/blueprints":
+		blueprints, err := s.blueprintCatalog()
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"blueprints": blueprints}, nil
 	case "nido://storage/cache":
 		catalog, err := s.loadCatalog(image.DefaultCacheTTL)
 		if err != nil {
@@ -757,6 +796,17 @@ func (s *Server) readResource(uri string) (interface{}, error) {
 			}
 			return map[string]interface{}{"image": detail}, nil
 		}
+		if strings.HasPrefix(uri, "nido://blueprint/") {
+			name, err := url.PathUnescape(strings.TrimPrefix(uri, "nido://blueprint/"))
+			if err != nil {
+				return nil, err
+			}
+			info, err := s.blueprintInfo(name)
+			if err != nil {
+				return nil, err
+			}
+			return map[string]interface{}{"blueprint": info}, nil
+		}
 		return nil, fmt.Errorf("resource not found")
 	}
 }
@@ -779,7 +829,7 @@ func (s *Server) handlePromptGet(req JSONRPCRequest) {
 				"role": "user",
 				"content": map[string]interface{}{
 					"type": "text",
-					"text": "Use resources first for inspection: nido://fleet/vms, nido://vm/{name}, nido://catalog/images, nido://image/{tag}, nido://storage/cache, nido://system/config, and nido://system/doctor. Use tools only when you need to mutate state or when your client cannot read resources. Prefer the compact actions on nido_vm, nido_template, nido_image, and nido_system instead of planning around many micro-tools.",
+					"text": "Use resources first for inspection: nido://fleet/vms, nido://vm/{name}, nido://catalog/images, nido://image/{tag}, nido://catalog/blueprints, nido://blueprint/{name}, nido://storage/cache, nido://system/config, and nido://system/doctor. Use tools only when you need to mutate state or when your client cannot read resources. Prefer the compact actions on nido_vm, nido_template, nido_image, nido_blueprint, and nido_system instead of planning around many micro-tools.",
 				},
 			},
 		},
@@ -862,6 +912,37 @@ func (s *Server) imageDetail(tag string) (map[string]interface{}, error) {
 		"aliases":       version.Aliases,
 	}
 	return data, nil
+}
+
+func (s *Server) blueprintCatalog() ([]builder.BlueprintInfo, error) {
+	cwd, _ := os.Getwd()
+	return builder.ListBlueprints(cwd, s.nidoDir(), s.imageDir())
+}
+
+func (s *Server) blueprintInfo(name string) (builder.BlueprintInfo, error) {
+	cwd, _ := os.Getwd()
+	_, info, err := builder.LoadBlueprintRef(cwd, s.nidoDir(), s.imageDir(), name)
+	if err != nil {
+		return builder.BlueprintInfo{}, err
+	}
+	return info, nil
+}
+
+func (s *Server) buildBlueprint(name string) (builder.BlueprintInfo, string, error) {
+	cwd, _ := os.Getwd()
+	bp, info, err := builder.LoadBlueprintRef(cwd, s.nidoDir(), s.imageDir(), name)
+	if err != nil {
+		return builder.BlueprintInfo{}, "", err
+	}
+	if info.Built {
+		return info, "ready", nil
+	}
+	eng := builder.NewEngine(filepath.Join(s.nidoDir(), "cache"), filepath.Join(s.nidoDir(), "tmp"), s.imageDir())
+	if err := eng.Build(bp); err != nil {
+		return builder.BlueprintInfo{}, "", err
+	}
+	info = builder.NewBlueprintInfo(info.Path, info.Source, s.imageDir(), bp)
+	return info, "built", nil
 }
 
 func (s *Server) resolveImagePath(tag string) (string, error) {
@@ -959,4 +1040,9 @@ func (s *Server) imageDir() string {
 	}
 	home, _ := sysutil.UserHome()
 	return filepath.Join(home, ".nido", "images")
+}
+
+func (s *Server) nidoDir() string {
+	home, _ := sysutil.UserHome()
+	return filepath.Join(home, ".nido")
 }

@@ -1,10 +1,9 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/Josepavese/nido/internal/builder"
 	climeta "github.com/Josepavese/nido/internal/cli"
 	"github.com/spf13/cobra"
 )
@@ -65,39 +64,26 @@ func completeImages(app *appContext) func(cmd *cobra.Command, args []string, toC
 				}
 			}
 		}
+		if blueprints, err := builder.ListBlueprints(app.Cwd, app.NidoDir, app.ImageDir()); err == nil {
+			for _, bp := range blueprints {
+				if bp.Built && bp.OutputTag != "" {
+					items = append(items, bp.OutputTag)
+				}
+			}
+		}
 		return toShellDirective(items)
 	}
 }
 
 func completeBlueprints(app *appContext) func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		paths := []string{
-			filepath.Join(app.Cwd, "registry", "blueprints"),
-			filepath.Join(app.NidoDir, "blueprints"),
-			filepath.Join(app.NidoDir, "registry", "blueprints"),
+		blueprints, err := builder.ListBlueprints(app.Cwd, app.NidoDir, app.ImageDir())
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		seen := map[string]bool{}
-		var items []string
-		for _, dir := range paths {
-			entries, err := os.ReadDir(dir)
-			if err != nil {
-				continue
-			}
-			for _, entry := range entries {
-				if entry.IsDir() {
-					continue
-				}
-				name := entry.Name()
-				if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
-					continue
-				}
-				base := strings.TrimSuffix(strings.TrimSuffix(name, ".yaml"), ".yml")
-				if seen[base] {
-					continue
-				}
-				seen[base] = true
-				items = append(items, base)
-			}
+		items := make([]string, 0, len(blueprints))
+		for _, bp := range blueprints {
+			items = append(items, bp.Name)
 		}
 		return toShellDirective(items)
 	}

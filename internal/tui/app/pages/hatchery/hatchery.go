@@ -19,15 +19,21 @@ import (
 
 // SourceItem adapts the string-based source list to the SidebarItem interface.
 type SourceItem struct {
-	Raw   string
-	Type  string // "TEMPLATE", "FLAVOUR", "CLOUD"
-	Label string
+	Raw     string
+	Type    string // "TEMPLATE", "FLAVOUR", "CLOUD", "BLUEPRINT"
+	Label   string
+	Display string
 }
 
-func (i SourceItem) Title() string       { return i.Label }
+func (i SourceItem) Title() string {
+	if i.Display != "" {
+		return i.Display
+	}
+	return i.Label
+}
 func (i SourceItem) Description() string { return i.Type }
-func (i SourceItem) FilterValue() string { return i.Raw }
-func (i SourceItem) String() string      { return i.Label }
+func (i SourceItem) FilterValue() string { return i.Raw + " " + i.Display }
+func (i SourceItem) String() string      { return i.Title() }
 func (i SourceItem) Icon() string {
 	// Use centralized theme icons
 	return theme.IconForType(i.Type)
@@ -242,7 +248,8 @@ func (i *Incubator) submitSpawn() tea.Cmd {
 	// Construct Msg
 	req := ops.RequestSpawnMsg{
 		Name:        i.input.Value(),
-		Source:      i.SelectedSource.Title(),
+		Source:      i.SelectedSource.Label,
+		SourceType:  i.SelectedSource.Type,
 		GUI:         i.toggle.Checked,
 		MemoryMB:    mem,
 		VCPUs:       cpus,
@@ -336,6 +343,11 @@ func (i *Incubator) SetSource(item *SourceItem) {
 	i.header.Icon = item.Icon()
 	i.header.Title = item.Title()
 	i.header.Subtitle = string(item.Type)
+	if item.Type == "BLUEPRINT" {
+		i.spawnBtn.Text = "BUILD + SPAWN"
+	} else {
+		i.spawnBtn.Text = "SPAWN"
+	}
 
 	i.input.SetValue("")
 	i.PendingPorts = nil
@@ -715,7 +727,12 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 				if len(parts) == 2 {
 					sType := strings.Trim(parts[0], "[]")
 					sName := parts[1]
-					items = append(items, SourceItem{Raw: s, Type: sType, Label: sName})
+					display := ""
+					if fields := strings.SplitN(sName, "\t", 2); len(fields) == 2 {
+						sName = fields[0]
+						display = fields[1]
+					}
+					items = append(items, SourceItem{Raw: s, Type: sType, Label: sName, Display: display})
 				}
 			}
 			if len(items) > 0 {

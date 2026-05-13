@@ -1,16 +1,23 @@
 package builder
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
 	"os/exec"
+	urlpath "path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/Josepavese/nido/internal/image"
+	"github.com/Josepavese/nido/internal/pkg/seediso"
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"gopkg.in/yaml.v3"
 )
 
@@ -67,6 +74,13 @@ func LoadBlueprint(path string) (*image.Blueprint, error) {
 			bp.Scripts[name] = string(scriptData)
 		}
 	}
+	for name, content := range bp.Scripts {
+		content = applyBlueprintVariables(content, bp.Variables)
+		if err := validateScript(name, content); err != nil {
+			return nil, err
+		}
+		bp.Scripts[name] = content
+	}
 
 	return &bp, nil
 }
@@ -91,10 +105,21 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 	if _, err := os.Stat(outputPath); err == nil {
 		return fmt.Errorf("output image already exists: %s", outputPath)
 	}
+	tmpOutputPath := fmt.Sprintf("%s.%d.building", outputPath, os.Getpid())
+	defer os.Remove(tmpOutputPath)
 
 	// 2. Download Assets
-	isoName := filepath.Base(bp.ISOURL)
-	isoPath := filepath.Join(e.CacheDir, isoName)
+	isoName, err := cacheAssetName(bp.ISOName, bp.ISOURL, "installer.iso")
+	if err != nil {
+		return fmt.Errorf("invalid iso asset name: %w", err)
+	}
+	isoPath, err := safeJoin(e.CacheDir, isoName)
+	if err != nil {
+		return fmt.Errorf("invalid iso asset path: %w", err)
+	}
+	if err := e.migrateLegacyISOCache(bp.ISOURL, isoName, isoPath, bp.ISOChecksum); err != nil {
+		return err
+	}
 	if err := e.ensureAsset(bp.ISOURL, isoPath, bp.ISOChecksum); err != nil {
 		return err
 	}
@@ -138,17 +163,20 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 	if err != nil {
 		return fmt.Errorf("invalid seed iso path: %w", err)
 	}
-	// Use mkisofs/genisoimage to create the seed ISO
-	// -J (Joliet) -R (Rock Ridge) -V (Label)
-	cmd := exec.Command("mkisofs", "-J", "-R", "-V", "OEMDRV", "-o", seedISO, seedDir)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create seed ISO: %v (%s)", err, string(out))
+	defer os.RemoveAll(seedDir)
+	defer os.Remove(seedISO)
+	if err := createSeedISO(seedISO, seedDir, "OEMDRV"); err != nil {
+		return err
 	}
 
 	// 4. Create Target Disk
 	e.Reporter.Info("Creating disk %s (%s)...", bp.OutputImage, bp.OutputSize)
 	// qemu-img create -f qcow2 path size
-	cmd = exec.Command("qemu-img", "create", "-f", "qcow2", outputPath, bp.OutputSize)
+	qemuImg, err := sysutil.QemuImgBinary()
+	if err != nil {
+		return fmt.Errorf("failed to find qemu-img: %w", err)
+	}
+	cmd := exec.Command(qemuImg, "create", "-f", "qcow2", tmpOutputPath, bp.OutputSize)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("failed to create disk: %v (%s)", err, string(out))
 	}
@@ -160,7 +188,7 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 	qemuArgs := []string{
 		"-m", bp.BuildSpecs.Memory,
 		"-smp", fmt.Sprintf("%d", bp.BuildSpecs.CPU),
-		"-drive", fmt.Sprintf("file=%s,if=virtio", outputPath),
+		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", tmpOutputPath),
 		"-cdrom", isoPath,
 		"-netdev", "user,id=net0",
 		"-device", "virtio-net-pci,netdev=net0",
@@ -176,11 +204,12 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 		qemuArgs = append(qemuArgs, "-drive", fmt.Sprintf("file=%s,media=cdrom", drv))
 	}
 
-	// KVM if available
-	if _, err := os.Stat("/dev/kvm"); err == nil {
-		qemuArgs = append(qemuArgs, "-enable-kvm", "-cpu", "host")
+	if accelArgs, cpuArg, accelerated := installerAccelerationArgs(runtime.GOOS); accelerated {
+		qemuArgs = append(qemuArgs, accelArgs...)
+		qemuArgs = append(qemuArgs, "-cpu", cpuArg)
 	} else {
-		e.Reporter.Warn("KVM not available. Build will be slower.")
+		qemuArgs = append(qemuArgs, "-cpu", "qemu64")
+		e.Reporter.Warn("Hardware acceleration not available. Build will be slower.")
 	}
 
 	// Add loopback-only VNC for debugging visibility.
@@ -188,7 +217,11 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 	e.Reporter.Info("VNC available on 127.0.0.1:99 (port 5999).")
 
 	e.Reporter.Info("Starting QEMU...")
-	qemuCmd := exec.Command("qemu-system-x86_64", qemuArgs...)
+	qemuSystem, err := sysutil.QemuSystemBinary()
+	if err != nil {
+		return fmt.Errorf("failed to find QEMU: %w", err)
+	}
+	qemuCmd := exec.Command(qemuSystem, qemuArgs...)
 	if e.CommandOutput != nil {
 		qemuCmd.Stdout = e.CommandOutput
 		qemuCmd.Stderr = e.CommandOutput
@@ -214,7 +247,11 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 	select {
 	case <-time.After(timeout):
 		if qemuCmd.Process != nil {
-			qemuCmd.Process.Kill()
+			_ = qemuCmd.Process.Kill()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+			}
 		}
 		return fmt.Errorf("build timed out after %s", timeout)
 	case err := <-done:
@@ -226,15 +263,103 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 	e.Reporter.Success("Build completed in %s.", time.Since(start))
 
 	// Validate Output
-	if info, err := os.Stat(outputPath); err != nil || info.Size() < 100*1024*1024 { // < 100MB is suspicious
+	if info, err := os.Stat(tmpOutputPath); err != nil || info.Size() < 100*1024*1024 { // < 100MB is suspicious
 		return fmt.Errorf("build finished but output image seems invalid (too small or missing)")
 	}
-
-	// Clean up seed
-	os.RemoveAll(seedDir)
-	os.Remove(seedISO)
+	if err := os.Rename(tmpOutputPath, outputPath); err != nil {
+		return fmt.Errorf("failed to finalize output image: %w", err)
+	}
 
 	return nil
+}
+
+func applyBlueprintVariables(content string, vars map[string]string) string {
+	for key, value := range vars {
+		content = strings.ReplaceAll(content, "{{"+key+"}}", value)
+	}
+	return content
+}
+
+func validateScript(name, content string) error {
+	if !strings.EqualFold(filepath.Ext(name), ".xml") {
+		return nil
+	}
+	decoder := xml.NewDecoder(strings.NewReader(content))
+	for {
+		if _, err := decoder.Token(); err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return fmt.Errorf("invalid XML script %s: %w", name, err)
+		}
+	}
+}
+
+func cacheAssetName(preferredName, rawURL, fallbackName string) (string, error) {
+	name := strings.TrimSpace(preferredName)
+	if name == "" {
+		parsed, err := url.Parse(rawURL)
+		if err != nil {
+			return "", fmt.Errorf("invalid URL %q: %w", rawURL, err)
+		}
+		name = urlpath.Base(parsed.EscapedPath())
+		if name == "." || name == "/" || name == "" {
+			name = fallbackName
+		}
+		name = sanitizeFilename(name)
+		if name == "" {
+			name = fallbackName
+		}
+		if filepath.Ext(name) == "" {
+			sum := sha256.Sum256([]byte(rawURL))
+			name = fmt.Sprintf("%s-%s%s", name, hex.EncodeToString(sum[:])[:8], filepath.Ext(fallbackName))
+		}
+	} else {
+		name = sanitizeFilename(name)
+	}
+	clean := filepath.Clean(name)
+	if clean == "." || filepath.IsAbs(clean) || clean != filepath.Base(clean) {
+		return "", fmt.Errorf("asset name must be a filename")
+	}
+	return clean, nil
+}
+
+func sanitizeFilename(name string) string {
+	name = strings.TrimSpace(name)
+	var b strings.Builder
+	for _, r := range name {
+		switch {
+		case r < 32:
+			b.WriteByte('_')
+		case strings.ContainsRune(`<>:"/\|?*`, r):
+			b.WriteByte('_')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	name = strings.Trim(b.String(), ". ")
+	if name == "" {
+		return ""
+	}
+	return name
+}
+
+func createSeedISO(outputPath, sourceDir, label string) error {
+	return seediso.Create(outputPath, sourceDir, label)
+}
+
+func installerAccelerationArgs(goos string) ([]string, string, bool) {
+	switch goos {
+	case "linux", "android":
+		if _, err := os.Stat("/dev/kvm"); err == nil {
+			return []string{"-enable-kvm"}, "host", true
+		}
+	case "darwin":
+		return []string{"-accel", "hvf"}, "host", true
+	case "windows":
+		return []string{"-accel", "whpx"}, "host", true
+	}
+	return nil, "qemu64", false
 }
 
 func (e *Engine) ensureAsset(url, dest, checksum string) error {
@@ -258,6 +383,32 @@ func (e *Engine) ensureAsset(url, dest, checksum string) error {
 		_ = os.Remove(dest)
 		return fmt.Errorf("downloaded asset checksum failed for %s: %w", filepath.Base(dest), err)
 	}
+	return nil
+}
+
+func (e *Engine) migrateLegacyISOCache(rawURL, currentName, currentPath, checksum string) error {
+	legacyName := filepath.Base(rawURL)
+	if legacyName == "." || legacyName == string(filepath.Separator) || legacyName == "" || legacyName == currentName {
+		return nil
+	}
+	legacyPath := filepath.Join(e.CacheDir, legacyName)
+	if legacyPath == currentPath {
+		return nil
+	}
+	if _, err := os.Stat(currentPath); err == nil {
+		return nil
+	}
+	if _, err := os.Stat(legacyPath); err != nil {
+		return nil
+	}
+	if err := verifyOptionalChecksum(legacyPath, checksum); err != nil {
+		return fmt.Errorf("legacy cached asset checksum failed for %s: %w", filepath.Base(legacyPath), err)
+	}
+	if err := os.Rename(legacyPath, currentPath); err != nil {
+		e.Reporter.Warn("Could not migrate legacy cached asset %s: %v", filepath.Base(legacyPath), err)
+		return nil
+	}
+	e.Reporter.Info("Migrated cached asset: %s -> %s", filepath.Base(legacyPath), filepath.Base(currentPath))
 	return nil
 }
 

@@ -12,6 +12,8 @@ func ImageCacheTemplate() Scenario {
 		Name: "image-cache-template",
 		Steps: []Step{
 			imageListStep,
+			blueprintListStep,
+			blueprintInfoStep,
 			imagePullStep,
 			cacheInfoStep,
 			cacheListStep,
@@ -40,6 +42,56 @@ func imageListStep(ctx *Context) report.StepResult {
 		} else {
 			addAssertion(&res, "data_object", false, "data not object")
 		}
+	}
+	finalize(&res)
+	return res
+}
+
+func blueprintListStep(ctx *Context) report.StepResult {
+	args := []string{"blueprint", "list", "--json"}
+	res := runNido(ctx, "blueprint-list", args, 15*time.Second)
+	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
+	payload, err := parseJSON(res.Stdout)
+	addAssertion(&res, "json_parse", err == nil, errDetails(err))
+	if err == nil {
+		status, _ := mustGet(payload, "status")
+		addAssertion(&res, "status_ok", status == "ok", "")
+		if data, ok := payload["data"].(map[string]interface{}); ok {
+			list, ok := data["blueprints"].([]interface{})
+			addAssertion(&res, "blueprints_present", ok, "missing blueprints list")
+			if ok && len(list) > 0 {
+				if first, ok := list[0].(map[string]interface{}); ok {
+					if name, ok := first["name"].(string); ok && name != "" {
+						setVar(ctx, "auto_blueprint", name)
+					}
+				}
+			}
+		} else {
+			addAssertion(&res, "data_object", false, "data not object")
+		}
+	}
+	finalize(&res)
+	return res
+}
+
+func blueprintInfoStep(ctx *Context) report.StepResult {
+	name, _ := getVar(ctx, "auto_blueprint")
+	if name == "" {
+		return skipResult(ctx.Config.NidoBin, []string{"blueprint", "info"}, "no blueprint available; skipping info")
+	}
+	args := []string{"blueprint", "info", name, "--json"}
+	res := runNido(ctx, "blueprint-info", args, 15*time.Second)
+	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
+	if payload, err := parseJSON(res.Stdout); err == nil {
+		addAssertion(&res, "json_parse", true, "")
+		if data, ok := payload["data"].(map[string]interface{}); ok {
+			_, hasBlueprint := data["blueprint"]
+			addAssertion(&res, "blueprint_present", hasBlueprint, "missing blueprint object")
+		} else {
+			addAssertion(&res, "data_object", false, "data not object")
+		}
+	} else {
+		addAssertion(&res, "json_parse", false, err.Error())
 	}
 	finalize(&res)
 	return res

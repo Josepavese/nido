@@ -333,11 +333,46 @@ commands:
           - name: json
         action: images.update
 
+  - id: blueprint
+    use: blueprint
+    aliases: ["blueprints"]
+    group: storage
+    short: "Manage image blueprints"
+    long: "List, inspect, and build local image blueprints."
+    commands:
+      - id: blueprint.list
+        use: list
+        aliases: ["ls"]
+        short: "List available blueprints"
+        flags:
+          - name: json
+        action: blueprint.list
+      - id: blueprint.info
+        use: info <blueprint>
+        short: "Show blueprint metadata"
+        flags:
+          - name: json
+        args:
+          min: 1
+          max: 1
+        positional_completions: ["blueprints"]
+        action: blueprint.info
+      - id: blueprint.build
+        use: build <blueprint>
+        short: "Build an image from blueprint"
+        flags:
+          - name: json
+        args:
+          min: 1
+          max: 1
+        positional_completions: ["blueprints"]
+        action: blueprint.build
+
   - id: build
     use: build <blueprint>
     group: storage
     short: "Build an image from blueprint"
-    long: "Build a VM image from a blueprint recipe."
+    long: "Build a VM image from a blueprint recipe. Alias of `nido blueprint build`."
     flags:
       - name: json
     args:

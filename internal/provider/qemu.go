@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	nidonet "github.com/Josepavese/nido/internal/net"
@@ -117,14 +116,17 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	// 2. Create Disk
 	diskSize := sysutil.DefaultDiskSize
 	if tpl != "" {
-		if out, err := exec.Command("qemu-img", "info", "--output=json", tpl).Output(); err == nil {
-			var info struct {
-				VirtualSize int64 `json:"virtual-size"`
-			}
-			if json.Unmarshal(out, &info) == nil && info.VirtualSize > 0 {
-				diskSize = fmt.Sprintf("%d", info.VirtualSize)
-				if info.VirtualSize < sysutil.DefaultDiskBytes {
-					diskSize = sysutil.DefaultDiskSize
+		qemuImg, qemuImgErr := sysutil.QemuImgBinary()
+		if qemuImgErr == nil {
+			if out, err := exec.Command(qemuImg, "info", "--output=json", tpl).Output(); err == nil {
+				var info struct {
+					VirtualSize int64 `json:"virtual-size"`
+				}
+				if json.Unmarshal(out, &info) == nil && info.VirtualSize > 0 {
+					diskSize = fmt.Sprintf("%d", info.VirtualSize)
+					if info.VirtualSize < sysutil.DefaultDiskBytes {
+						diskSize = sysutil.DefaultDiskSize
+					}
 				}
 			}
 		}
@@ -364,35 +366,106 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	// 3. Build Arguments (cross-platform)
 	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, state.Forwarding, runDir, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 
-	cmd := exec.Command("qemu-system-x86_64", args...)
-
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("QEMU failed to start: %w (stderr: %s)", err, stderr.String())
+	launchedPID, err := p.launchQEMU(args)
+	if err != nil && runtime.GOOS == "windows" {
+		fallbackArgs := windowsTCGFallbackArgs(args)
+		if !sameStringSlice(args, fallbackArgs) {
+			launchedPID, err = p.launchQEMU(fallbackArgs)
+		}
+	}
+	if err != nil {
+		return err
 	}
 
 	// 4. Skip Bootloader (Background)
 	go p.skipBootloader(name)
 
-	// 5. Read daemon PID from QEMU pidfile
-	pidFile := filepath.Join(runDir, name+".pid")
-	pid := 0
-	for i := 0; i < 10; i++ {
-		pidData, err := os.ReadFile(pidFile)
-		if err == nil {
-			fmt.Sscanf(string(pidData), "%d", &pid)
-			if pid > 0 {
-				break
+	// 5. Read daemon PID from QEMU pidfile on Unix; Windows has no -daemonize.
+	pid := launchedPID
+	if runtime.GOOS != "windows" {
+		pidFile := filepath.Join(runDir, name+".pid")
+		for i := 0; i < 10; i++ {
+			pidData, err := os.ReadFile(pidFile)
+			if err == nil {
+				fmt.Sscanf(string(pidData), "%d", &pid)
+				if pid > 0 {
+					break
+				}
 			}
+			time.Sleep(100 * time.Millisecond)
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
 
 	// 6. Update State with PID (0 if unknown)
 	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 
 	return nil
+}
+
+func (p *QemuProvider) launchQEMU(args []string) (int, error) {
+	qemuBin, err := sysutil.QemuSystemBinary()
+	if err != nil {
+		qemuBin = "qemu-system-x86_64"
+	}
+	cmd := exec.Command(qemuBin, args...)
+	cmd.SysProcAttr = detachedQemuSysProcAttr()
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if runtime.GOOS != "windows" {
+		if err := cmd.Run(); err != nil {
+			return 0, fmt.Errorf("QEMU failed to start: %w (stderr: %s)", err, stderr.String())
+		}
+		return 0, nil
+	}
+
+	if err := cmd.Start(); err != nil {
+		return 0, fmt.Errorf("QEMU failed to start: %w (stderr: %s)", err, stderr.String())
+	}
+	pid := cmd.Process.Pid
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			return 0, fmt.Errorf("QEMU failed to start: %w (stderr: %s)", err, stderr.String())
+		}
+		return 0, fmt.Errorf("QEMU exited immediately (stderr: %s)", stderr.String())
+	case <-time.After(1500 * time.Millisecond):
+		return pid, nil
+	}
+}
+
+func windowsTCGFallbackArgs(args []string) []string {
+	out := append([]string(nil), args...)
+	for i := 0; i < len(out)-1; i++ {
+		switch out[i] {
+		case "-accel":
+			if out[i+1] == "whpx" {
+				out[i+1] = "tcg"
+			}
+		case "-cpu":
+			if out[i+1] == "host" {
+				out[i+1] = "qemu64"
+			}
+		}
+	}
+	return out
+}
+
+func sameStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // buildQemuArgs constructs the heavy-duty command line arguments for QEMU.
@@ -463,9 +536,14 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 	// Common arguments
 	args = append(args,
 		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", diskPath),
-
-		"-daemonize",
-		"-pidfile", filepath.Join(runDir, name+".pid"),
+	)
+	if runtime.GOOS != "windows" {
+		args = append(args,
+			"-daemonize",
+			"-pidfile", filepath.Join(runDir, name+".pid"),
+		)
+	}
+	args = append(args,
 		"-netdev", p.BuildNetDevArgs(sshPort, fw),
 		"-device", "virtio-net-pci,netdev=net0",
 		"-boot", "menu=off,strict=on,splash-time=0", // Fast boot: skip menu, no splash timeout
@@ -554,20 +632,16 @@ func (p *QemuProvider) List() ([]VMStatus, error) {
 			pidData, _ := os.ReadFile(pidFile)
 			pid := 0
 			fmt.Sscanf(string(pidData), "%d", &pid)
-
-			stateStr := "stopped"
-			if pid > 0 {
-				process, err := os.FindProcess(pid)
-				if err == nil && process.Signal(syscall.Signal(0)) == nil {
-					stateStr = "running"
-				}
+			vmState, _ := p.loadState(name)
+			if pid == 0 {
+				pid = vmState.PID
 			}
 
-			// Load state if exists (for ports etc)
-			// If stopped, state json might persist or not?
-			// Stop() removes pid/qmp but currently leaves json? No, Stop() doesn't remove json in qemu.go currently.
-			// Let's check Stop implementation. It removes pid, qmp. It does NOT remove json.
-			vmState, _ := p.loadState(name)
+			stateStr := "stopped"
+			if processAlive(pid) {
+				stateStr = "running"
+			}
+
 			results = append(results, VMStatus{
 				Name:       name,
 				State:      stateStr,
@@ -607,11 +681,11 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 	pidData, _ := os.ReadFile(filepath.Join(p.RootDir, "run", name+".pid"))
 	pid := 0
 	fmt.Sscanf(string(pidData), "%d", &pid)
-	if pid > 0 {
-		process, err := os.FindProcess(pid)
-		if err == nil && process.Signal(syscall.Signal(0)) == nil {
-			liveness = "running"
-		}
+	if pid == 0 {
+		pid = state.PID
+	}
+	if processAlive(pid) {
+		liveness = "running"
 	}
 
 	diskPath := filepath.Join(p.RootDir, "vms", name+".qcow2")
@@ -659,7 +733,11 @@ func backingInfo(diskPath string) (string, bool) {
 	type info struct {
 		Backing string `json:"backing-filename"`
 	}
-	out, err := exec.Command("qemu-img", "info", "-U", "--output=json", diskPath).Output()
+	qemuImg, err := sysutil.QemuImgBinary()
+	if err != nil {
+		return "", false
+	}
+	out, err := exec.Command(qemuImg, "info", "-U", "--output=json", diskPath).Output()
 	if err != nil {
 		return "", false
 	}
@@ -681,20 +759,34 @@ func (p *QemuProvider) Stop(name string, graceful bool) error {
 	pidData, _ := os.ReadFile(pidFile)
 	pid := 0
 	fmt.Sscanf(string(pidData), "%d", &pid)
+	if pid == 0 {
+		if state, err := p.loadState(name); err == nil {
+			pid = state.PID
+		}
+	}
 
 	if pid > 0 {
-		process, _ := os.FindProcess(pid)
-		process.Signal(os.Interrupt)
-		for i := 0; i < 50; i++ {
-			if process.Signal(syscall.Signal(0)) != nil {
-				break
+		process, err := os.FindProcess(pid)
+		if err == nil && process != nil {
+			_ = stopQemuProcess(process, graceful)
+			for i := 0; i < 50; i++ {
+				if !processAlive(pid) {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
 			}
-			time.Sleep(100 * time.Millisecond)
+			if processAlive(pid) {
+				_ = process.Kill()
+			}
 		}
 	}
 
 	os.Remove(pidFile)
 	os.Remove(filepath.Join(runDir, name+".qmp"))
+
+	if state, err := p.loadState(name); err == nil {
+		_ = p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+	}
 
 	// RESTORE ACCELERATORS (Start of Double Fix)
 	// We must release any VFIO devices back to the host
@@ -741,7 +833,11 @@ func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (strin
 	}
 
 	// qemu-img convert -O qcow2 -c <src> <dest>
-	cmd := exec.Command("qemu-img", "convert", "-O", "qcow2", "-c", srcDisk, targetTemplate)
+	qemuImg, err := sysutil.QemuImgBinary()
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.Command(qemuImg, "convert", "-O", "qcow2", "-c", srcDisk, targetTemplate)
 	if err := cmd.Run(); err != nil {
 		return "", err
 	}
@@ -793,11 +889,15 @@ func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
 	if !useLinked && tpl != "" {
 		return sysutil.ProvisionFile(target, func() error {
 			// Convert (Full Copy)
-			if out, err := exec.Command("qemu-img", "convert", "-O", "qcow2", tpl, target).CombinedOutput(); err != nil {
+			qemuImg, err := sysutil.QemuImgBinary()
+			if err != nil {
+				return err
+			}
+			if out, err := exec.Command(qemuImg, "convert", "-O", "qcow2", tpl, target).CombinedOutput(); err != nil {
 				return fmt.Errorf("create(convert) failed: %v (%s)", err, string(out))
 			}
 			// Resize to target size
-			if out, err := exec.Command("qemu-img", "resize", target, size).CombinedOutput(); err != nil {
+			if out, err := exec.Command(qemuImg, "resize", target, size).CombinedOutput(); err != nil {
 				return fmt.Errorf("create(resize) failed: %v (%s)", err, string(out))
 			}
 			return nil
@@ -809,7 +909,11 @@ func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
 	if tpl != "" {
 		// Autodetect template format
 		format := "qcow2"
-		out, err := exec.Command("qemu-img", "info", "--output=json", tpl).Output()
+		qemuImg, err := sysutil.QemuImgBinary()
+		if err != nil {
+			return err
+		}
+		out, err := exec.Command(qemuImg, "info", "--output=json", tpl).Output()
 		if err == nil {
 			var info struct {
 				Format string `json:"format"`
@@ -822,7 +926,11 @@ func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
 	}
 	args = append(args, target, size)
 
-	cmd := exec.Command("qemu-img", args...)
+	qemuImg, err := sysutil.QemuImgBinary()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(qemuImg, args...)
 	return sysutil.ProvisionFile(target, func() error {
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("qemu-img create failed: %v (%s)", err, string(out))
@@ -1083,11 +1191,7 @@ func (p *QemuProvider) Doctor() []string {
 	}
 
 	// 2. Binaries
-	qemu, err := exec.LookPath("qemu-system-x86_64")
-	if err != nil {
-		// Try generic qemu-system for non-x86 if needed, but the doctor check usually targets the host arch
-		qemu, err = exec.LookPath("qemu-system")
-	}
+	qemu, err := sysutil.QemuSystemBinary()
 
 	qemuHint := ""
 	if err != nil {
@@ -1103,7 +1207,7 @@ func (p *QemuProvider) Doctor() []string {
 	}
 	add("Binary: QEMU", err == nil, qemu+" "+qemuHint)
 
-	qimg, err := exec.LookPath("qemu-img")
+	qimg, err := sysutil.QemuImgBinary()
 	qimgHint := ""
 	if err != nil && runtime.GOOS == "linux" {
 		qimgHint = "(Included in qemu-utils)"
@@ -1122,15 +1226,9 @@ func (p *QemuProvider) Doctor() []string {
 
 	isoHint := foundTool
 	if foundTool == "" {
-		if runtime.GOOS == "linux" {
-			isoHint = "(Missing. Install 'cloud-utils' or 'genisoimage')"
-		} else if runtime.GOOS == "darwin" {
-			isoHint = "(Missing. Install 'cdrtools' via brew)"
-		} else {
-			isoHint = "(Missing. Install 'cdrtools' or 'xorriso')"
-		}
+		isoHint = "built-in Go ISO writer"
 	}
-	add("Tools: ISO Creator", foundTool != "", isoHint)
+	add("Tools: ISO Creator", true, isoHint)
 
 	// 3. KVM (Linux only)
 	if runtime.GOOS == "linux" {

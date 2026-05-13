@@ -46,8 +46,8 @@ bash bin/install-from-source.sh
 
 | Script | Purpose | Prerequisites | Target Users |
 |--------|---------|---------------|--------------|
-| `quick-install.sh` | Downloads pre-compiled binary from GitHub Releases | `curl` | End users (Linux/macOS) |
-| `quick-install.ps1` | Downloads pre-compiled binary from GitHub Releases | PowerShell 5.1+ | End users (Windows) |
+| `quick-install.sh` | Downloads pre-compiled binary from GitHub Releases, checks QEMU | `curl` | End users (Linux/macOS) |
+| `quick-install.ps1` | Downloads pre-compiled binary from GitHub Releases, checks QEMU/WHPX | PowerShell 5.1+ | End users (Windows) |
 | `build-from-source.sh` | Downloads only source files and builds locally | Go 1.26.3+, `curl` | Tinkerers & power users |
 | `../bin/install-from-source.sh` | Full repository clone and build | Go 1.26.3+, Git | Contributors & developers |
 
@@ -62,7 +62,11 @@ nido version
 nido doctor
 ```
 
-Install QEMU if not already present:
+The quick installers check runtime dependencies. On Windows, `quick-install.ps1` can register/install winget when needed, install QEMU via winget, and offer to enable Windows Hypervisor Platform for WHPX acceleration. Enabling WHPX requires administrator approval and a Windows restart.
+
+Windows support is smoke-tested on a real Windows VM for installer parsing, diagnostics, catalog/blueprint listing, and basic VM lifecycle. It is usable for core workflows, but still needs heavier long-running validation.
+
+If you prefer manual dependency installation:
 
 ```bash
 # Linux (Debian/Ubuntu)
@@ -72,7 +76,7 @@ sudo apt install qemu-system-x86 qemu-utils
 brew install qemu
 
 # Windows
-winget install --id SoftwareFreedomConservancy.QEMU -e --scope machine --accept-package-agreements --accept-source-agreements
+winget install --id SoftwareFreedomConservancy.QEMU -e --source winget --scope machine --accept-package-agreements --accept-source-agreements
 ```
 
 QEMU's official download page also links Windows alternatives, including Stefan Weil's installers and MSYS2 packages: <https://www.qemu.org/download/#windows>.

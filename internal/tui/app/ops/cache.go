@@ -3,7 +3,11 @@ package ops
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
+	"github.com/Josepavese/nido/internal/builder"
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"github.com/Josepavese/nido/internal/provider"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -12,9 +16,12 @@ import (
 
 // CacheItem represents a cached image.
 type CacheItem struct {
-	Name    string
-	Version string
-	Size    string
+	Name          string
+	Version       string
+	Size          string
+	Kind          string
+	DeleteName    string
+	DeleteVersion string
 }
 
 // CacheStats contains cache statistics.
@@ -49,16 +56,61 @@ func ListCache(prov provider.VMProvider) tea.Cmd {
 		if err != nil {
 			return CacheListMsg{Err: err}
 		}
+		blueprints := cachedBlueprintsByOutput(prov)
 		var cacheItems []CacheItem
 		for _, img := range items {
-			cacheItems = append(cacheItems, CacheItem{
-				Name:    img.Name,
-				Version: img.Version,
-				Size:    img.Size,
-			})
+			item := CacheItem{
+				Name:          img.Name,
+				Version:       img.Version,
+				Size:          img.Size,
+				Kind:          "image",
+				DeleteName:    img.Name,
+				DeleteVersion: img.Version,
+			}
+			if bp, ok := blueprints[cacheFilename(img.Name, img.Version)]; ok {
+				item.Name = bp.DisplayName
+				if item.Name == "" {
+					item.Name = bp.Name
+				}
+				item.Version = bp.Version
+				item.Kind = "blueprint"
+			}
+			cacheItems = append(cacheItems, item)
 		}
 		return CacheListMsg{Items: cacheItems}
 	}
+}
+
+func cachedBlueprintsByOutput(prov provider.VMProvider) map[string]builder.BlueprintInfo {
+	out := map[string]builder.BlueprintInfo{}
+	if prov == nil {
+		return out
+	}
+	cfg := prov.GetConfig()
+	home, _ := sysutil.UserHome()
+	nidoDir := filepath.Join(home, ".nido")
+	imageDir := cfg.ImageDir
+	if imageDir == "" {
+		imageDir = filepath.Join(nidoDir, "images")
+	}
+	cwd, _ := os.Getwd()
+	blueprints, err := builder.ListBlueprints(cwd, nidoDir, imageDir)
+	if err != nil {
+		return out
+	}
+	for _, bp := range blueprints {
+		if bp.OutputImage != "" && bp.Built {
+			out[bp.OutputImage] = bp
+		}
+	}
+	return out
+}
+
+func cacheFilename(name, version string) string {
+	if version == "" {
+		return fmt.Sprintf("%s.qcow2", name)
+	}
+	return fmt.Sprintf("%s-%s.qcow2", name, version)
 }
 
 // FetchCacheStats retrieves cache statistics.

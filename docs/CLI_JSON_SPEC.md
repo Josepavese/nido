@@ -84,6 +84,7 @@ The following commands support `--json`:
 - `prune`
 - `template list|create|delete`
 - `image list|pull|info|remove|update`
+- `blueprint list|info|build`
 - `cache ls|info|rm|prune`
 - `version`
 - `doctor`
@@ -110,11 +111,23 @@ The following commands support `--json`:
 
 ### `image list`
 
-`data.images[]`: name, version, registry, size_bytes, aliases, downloaded
+`data.images[]`: name, display_name, version, registry, kind (`image` or `blueprint`), size_bytes, aliases, downloaded, output_tag
 
 ### `image pull|update`
 
 `data.action`: name, version, result
+
+### `blueprint list`
+
+`data.blueprints[]`: name, display_name, description, version, source, output_image, output_tag, output_path, built
+
+### `blueprint info`
+
+`data.blueprint`: name, display_name, description, version, source, path, output_image, output_tag, output_path, built, cpu, memory, timeout
+
+### `blueprint build`
+
+`data`: result (`built` or `ready`), blueprint, output_image, output_tag, output_path
 
 ### `cache ls`
 

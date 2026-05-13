@@ -1,0 +1,33 @@
+name: windows-11-eval
+display_name: "Windows 11 Enterprise Evaluation"
+description: "Windows 11 Enterprise Evaluation (90 Days). Auto-install via unattended XML."
+version: "1.0.0"
+ssh_user: "vmuser"
+ssh_password: "nido"
+
+# Microsoft Evaluation Center permalink (English US, 64-bit).
+iso_url: "https://go.microsoft.com/fwlink/?linkid=2334167&clcid=0x409&culture=en-us&country=us"
+iso_name: "windows-11-enterprise-eval.iso"
+iso_checksum: ""
+
+# VirtIO drivers for Windows.
+drivers:
+  - name: "virtio-win.iso"
+    url: "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso"
+    checksum: ""
+
+variables:
+  windows_driver_profile: "w11"
+  windows_image_index: "1"
+
+build_specs:
+  cpu: 2
+  memory: "4G"
+  disk: "64G"
+  timeout: "1h"
+
+output_image: "windows-11-eval.qcow2"
+output_size: "64G"
+
+scripts:
+  autounattend.xml: "@shared/windows-autounattend.xml"

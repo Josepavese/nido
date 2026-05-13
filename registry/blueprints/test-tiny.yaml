@@ -1,6 +1,7 @@
 name: test-tiny
 description: "Tiny test blueprint to verify Nido Builder Engine mechanism (Alpine based)"
 version: "0.0.1"
+hidden: true
 
 # Small Alpine ISO (~60MB)
 iso_url: https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/alpine-virt-3.19.1-x86_64.iso
