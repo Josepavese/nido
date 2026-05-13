@@ -24,7 +24,9 @@ Built on QEMU and fueled by 80s nostalgia, Nido feels like a game console for De
 
 ## ⚡ Loading... (Installation)
 
-> **SYSTEM REQUIREMENTS:** Linux, macOS, Android (Termux), or Windows (WSL2/PowerShell). QEMU must be installed.
+> **SYSTEM REQUIREMENTS:** Linux, macOS, Android (Termux), or Windows (WSL2/PowerShell). QEMU is required to run VMs; the quick installers check for it and offer to install it where supported. On Windows, the installer can also register/install winget and enable Windows Hypervisor Platform for WHPX acceleration.
+
+> **WINDOWS STATUS:** Windows host support is now smoke-tested on a real Windows VM: online installer parsing, `nido doctor`, catalog/blueprint listing, and basic VM lifecycle passed. Treat it as usable for core workflows, but still young compared with Linux/macOS; it needs heavier long-running and workload-specific testing.
 
 ### 💾 Quick Install (Web)
 
@@ -75,6 +77,22 @@ source <(nido completion bash)  # or zsh / fish / powershell
 
 Nido supports a wide roster of "fighters" (Cloud Images). Ubuntu, Debian, Alpine, Arch, choose your pixelated champion.
 
+### Windows Blueprints
+
+Windows images are available as buildable blueprints because Microsoft distributes installer media rather than ready-to-run qcow2 cloud images. The current official-name entries are:
+
+- `windows-11-eval` - Windows 11 Enterprise Evaluation
+- `windows-11-iot-ltsc-eval` - Windows 11 IoT Enterprise LTSC 2024 Evaluation
+- `windows-server-2022-core-eval` - Windows Server 2022 Evaluation (Server Core)
+
+```bash
+nido blueprint list
+nido blueprint build windows-11-eval
+nido spawn my-win --image windows-11-eval --gui
+```
+
+The first boot may continue Windows OOBE/post-install work after the blueprint build reports ready. Use `--gui` for that first boot so the setup state is visible.
+
 ### 🎮 Real World Example (Combo Move)
 
 Let's hatch a **Ubuntu 24.04** bird named `agent-01`, attach a graphical interface (GUI), and log in immediately.
@@ -100,7 +118,7 @@ Nido is designed to be driven by **Large Language Models** (Claude, GPT-4, Gemin
 
 ### 🤖 Model Context Protocol (MCP)
 
-Nido speaks native MCP. The server now exposes a compact agent-facing surface: a few high-power tools (`nido_vm`, `nido_template`, `nido_image`, `nido_system`) plus read-only resources like `nido://fleet/vms` and `nido://system/config`. This reduces tool-selection ambiguity, lowers token overhead, and makes agent planning simpler than a flood of one-action tools.
+Nido speaks native MCP. The server now exposes a compact agent-facing surface: a few high-power tools (`nido_vm`, `nido_template`, `nido_image`, `nido_blueprint`, `nido_system`) plus read-only resources like `nido://fleet/vms`, `nido://catalog/blueprints`, and `nido://system/config`. This reduces tool-selection ambiguity, lowers token overhead, and makes agent planning simpler than a flood of one-action tools.
 
 ```bash
 nido register  # Generates the config for your AI client
@@ -159,7 +177,10 @@ Here is the full move list for the Nido console.
 | `nido template list`               | List custom templates     | **USER SKINS**       |
 | `nido template create <vm> <name>` | Save VM state as template | **SAVE STATE**       |
 | `nido template delete <name>`      | Delete template           | **ERASE**            |
-| `nido build <blueprint>`           | Build VM image from recipe| **CRAFTING**         |
+| `nido blueprint list`              | Browse image recipes      | **SCHEMATICS**       |
+| `nido blueprint info <name>`       | Inspect a build recipe    | **BLUEPRINT VIEWER** |
+| `nido blueprint build <name>`      | Build VM image from recipe| **CRAFTING**         |
+| `nido build <blueprint>`           | Compatibility alias       | **CRAFTING**         |
 
 ### ⚙️ System (Options Menu)
 

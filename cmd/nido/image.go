@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Josepavese/nido/internal/builder"
 	clijson "github.com/Josepavese/nido/internal/cli"
 	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/provider"
@@ -15,11 +16,10 @@ import (
 
 // cmdImageList identifies all species currently documented in the catalog
 // and identifies which ones have already been pulle to our local nest.
-func cmdImageList(imageDir string, args []string, jsonOut bool) {
+func cmdImageList(cwd, nidoDir, imageDir string, args []string, jsonOut bool) {
 	// Load catalog
 	var catalog *image.Catalog
 	var err error
-	cwd, _ := os.Getwd()
 	localRegistry := filepath.Join(cwd, "registry", "images.json")
 	if _, statErr := os.Stat(localRegistry); statErr == nil {
 		catalog, err = image.LoadCatalogFromFile(localRegistry)
@@ -39,15 +39,20 @@ func cmdImageList(imageDir string, args []string, jsonOut bool) {
 
 	if jsonOut {
 		type imageJSON struct {
-			Name       string   `json:"name"`
-			Version    string   `json:"version"`
-			Registry   string   `json:"registry"`
-			SizeBytes  int64    `json:"size_bytes"`
-			Aliases    []string `json:"aliases,omitempty"`
-			Downloaded bool     `json:"downloaded"`
+			Name        string   `json:"name"`
+			DisplayName string   `json:"display_name,omitempty"`
+			Version     string   `json:"version"`
+			Registry    string   `json:"registry"`
+			Kind        string   `json:"kind"`
+			SizeBytes   int64    `json:"size_bytes"`
+			Aliases     []string `json:"aliases,omitempty"`
+			Downloaded  bool     `json:"downloaded"`
+			OutputTag   string   `json:"output_tag,omitempty"`
 		}
 
 		items := []imageJSON{}
+		flavourItems := []imageJSON{}
+		officialItems := []imageJSON{}
 		for _, img := range catalog.Images {
 			for _, v := range img.Versions {
 				imagePath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.qcow2", img.Name, v.Version))
@@ -55,16 +60,37 @@ func cmdImageList(imageDir string, args []string, jsonOut bool) {
 				if _, err := os.Stat(imagePath); err == nil {
 					downloaded = true
 				}
-				items = append(items, imageJSON{
+				item := imageJSON{
 					Name:       img.Name,
 					Version:    v.Version,
 					Registry:   img.Registry,
+					Kind:       "image",
 					SizeBytes:  v.SizeBytes,
 					Aliases:    v.Aliases,
 					Downloaded: downloaded,
+				}
+				if img.Registry == "nido" {
+					flavourItems = append(flavourItems, item)
+				} else {
+					officialItems = append(officialItems, item)
+				}
+			}
+		}
+		items = append(items, flavourItems...)
+		if blueprints, err := builder.ListBlueprints(cwd, nidoDir, imageDir); err == nil {
+			for _, bp := range blueprints {
+				items = append(items, imageJSON{
+					Name:        bp.Name,
+					DisplayName: bp.DisplayName,
+					Version:     bp.Version,
+					Registry:    "blueprint",
+					Kind:        "blueprint",
+					Downloaded:  bp.Built,
+					OutputTag:   bp.OutputTag,
 				})
 			}
 		}
+		items = append(items, officialItems...)
 
 		resp := clijson.NewResponseOK("image list", map[string]interface{}{
 			"images": items,
@@ -80,6 +106,7 @@ func cmdImageList(imageDir string, args []string, jsonOut bool) {
 	// Group images by registry
 	official := []image.Image{}
 	nidoImages := []image.Image{}
+	blueprints, _ := builder.ListBlueprints(cwd, nidoDir, imageDir)
 
 	for _, img := range catalog.Images {
 		if img.Registry == "official" {
@@ -89,7 +116,42 @@ func cmdImageList(imageDir string, args []string, jsonOut bool) {
 		}
 	}
 
-	// Display official images
+	// Display nido-optimized flavours first.
+	if len(nidoImages) > 0 {
+		fmt.Printf("%sNido Images%s\n", ui.Bold+ui.Magenta, ui.Reset)
+		for _, img := range nidoImages {
+			for _, v := range img.Versions {
+				downloaded := ""
+				imagePath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.qcow2", img.Name, v.Version))
+				if _, err := os.Stat(imagePath); err == nil {
+					downloaded = fmt.Sprintf(" %s[downloaded]%s", ui.Green, ui.Reset)
+				}
+
+				fmt.Printf("  %s%-20s%s %s%s%s%s %s[PRECONFIGURED]%s\n",
+					ui.Magenta, fmt.Sprintf("%s:%s", img.Name, v.Version), ui.Reset,
+					ui.Dim, ui.HumanSize(v.SizeBytes), ui.Reset, downloaded,
+					ui.Bold+ui.Magenta, ui.Reset)
+			}
+		}
+		fmt.Println("")
+	}
+
+	if len(blueprints) > 0 {
+		fmt.Printf("%sBlueprints%s\n", ui.Bold+ui.Yellow, ui.Reset)
+		for _, bp := range blueprints {
+			status := ""
+			if bp.Built {
+				status = fmt.Sprintf(" %s[ready]%s", ui.Green, ui.Reset)
+			}
+			fmt.Printf("  %s%-46s%s %s%s%s%s %s[%s]%s\n",
+				ui.Yellow, blueprintDisplayName(bp), ui.Reset,
+				ui.Dim, bp.OutputSize, ui.Reset, status,
+				ui.Bold+ui.Yellow, bp.OutputTag, ui.Reset)
+		}
+		fmt.Println("")
+	}
+
+	// Display official images last.
 	if len(official) > 0 {
 		fmt.Printf("%sOfficial%s\n", ui.Bold+ui.Cyan, ui.Reset)
 		for _, img := range official {
@@ -108,26 +170,6 @@ func cmdImageList(imageDir string, args []string, jsonOut bool) {
 				fmt.Printf("  %s%-20s%s%s %s%s%s%s\n",
 					ui.Cyan, fmt.Sprintf("%s:%s", img.Name, v.Version), ui.Reset,
 					aliases, ui.Dim, ui.HumanSize(v.SizeBytes), ui.Reset, downloaded)
-			}
-		}
-		fmt.Println("")
-	}
-
-	// Display nido-optimized flavours
-	if len(nidoImages) > 0 {
-		fmt.Printf("%sNido Images%s\n", ui.Bold+ui.Magenta, ui.Reset)
-		for _, img := range nidoImages {
-			for _, v := range img.Versions {
-				downloaded := ""
-				imagePath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.qcow2", img.Name, v.Version))
-				if _, err := os.Stat(imagePath); err == nil {
-					downloaded = fmt.Sprintf(" %s[downloaded]%s", ui.Green, ui.Reset)
-				}
-
-				fmt.Printf("  %s%-20s%s %s%s%s%s %s[PRECONFIGURED]%s\n",
-					ui.Magenta, fmt.Sprintf("%s:%s", img.Name, v.Version), ui.Reset,
-					ui.Dim, ui.HumanSize(v.SizeBytes), ui.Reset, downloaded,
-					ui.Bold+ui.Magenta, ui.Reset)
 			}
 		}
 		fmt.Println("")

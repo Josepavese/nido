@@ -15,10 +15,12 @@ import (
 
 // RegistryItem represents an image in the sidebar (either remote or local).
 type RegistryItem struct {
-	Name     string
-	Version  string
-	Provider string // "nido" or "official"
-	IsLocal  bool   // True = Cache, False = Remote Catalog
+	Name          string
+	Version       string
+	Provider      string // "nido", "official", or "blueprint"
+	IsLocal       bool   // True = Cache, False = Remote Catalog
+	DeleteName    string
+	DeleteVersion string
 }
 
 func (i RegistryItem) Title() string {
@@ -27,6 +29,9 @@ func (i RegistryItem) Title() string {
 
 func (i RegistryItem) Description() string {
 	if i.IsLocal {
+		if i.Provider == "blueprint" {
+			return fmt.Sprintf("Blueprint cache • %s", i.Version)
+		}
 		return fmt.Sprintf("Cached • %s", i.Version)
 	}
 	// "nido" => Flavour, "official" => Cloud
@@ -40,7 +45,13 @@ func (i RegistryItem) FilterValue() string { return i.Name }
 func (i RegistryItem) String() string      { return i.Name }
 func (i RegistryItem) Icon() string {
 	if i.IsLocal {
+		if i.Provider == "blueprint" {
+			return theme.IconBlueprint
+		}
 		return theme.IconCache
+	}
+	if i.Provider == "blueprint" {
+		return theme.IconBlueprint
 	}
 	if i.Provider == "nido" {
 		return theme.IconFlavour
@@ -127,8 +138,14 @@ func NewRegistry(prov provider.VMProvider) *Registry {
 		func() tea.Cmd {
 			if r.DetailView.Item.Name != "" && r.DetailView.Item.IsLocal {
 				item := r.DetailView.Item
+				deleteName := item.DeleteName
+				deleteVersion := item.DeleteVersion
+				if deleteName == "" {
+					deleteName = item.Name
+					deleteVersion = item.Version
+				}
 				return func() tea.Msg {
-					return ops.RequestDeleteImageMsg{Name: item.Name, Version: item.Version}
+					return ops.RequestDeleteImageMsg{Name: deleteName, Version: deleteVersion}
 				}
 			}
 			return nil
@@ -247,9 +264,12 @@ func (r *Registry) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 		var items []RegistryItem
 		for _, img := range msg.Items {
 			items = append(items, RegistryItem{
-				Name:    img.Name,
-				Version: img.Version,
-				IsLocal: true,
+				Name:          img.Name,
+				Version:       img.Version,
+				Provider:      img.Kind,
+				IsLocal:       true,
+				DeleteName:    img.DeleteName,
+				DeleteVersion: img.DeleteVersion,
 			})
 		}
 		r.localItems = items
@@ -393,8 +413,13 @@ func (d *RegistryDetail) UpdateItem(item RegistryItem) {
 	d.VersionInput.SetValue(item.Version)
 
 	if item.IsLocal {
-		d.Header.Icon = theme.IconCache
-		d.SourceInput.SetValue("Local Cache")
+		if item.Provider == "blueprint" {
+			d.Header.Icon = theme.IconBlueprint
+			d.SourceInput.SetValue("Blueprint Cache")
+		} else {
+			d.Header.Icon = theme.IconCache
+			d.SourceInput.SetValue("Local Cache")
+		}
 	} else {
 		// Use IconPackage for consistency with the list view icons
 		d.Header.Icon = theme.IconPackage

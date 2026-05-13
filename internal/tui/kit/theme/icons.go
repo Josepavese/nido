@@ -15,9 +15,10 @@ const (
 	IconSystem   = "💾" // System Page (Floppy Disk / Nerdy)
 
 	// Asset Types
-	IconTemplate = "🧬" // VM Template
-	IconFlavour  = "🍦" // Nido Flavour (Pre-configured)
-	IconPackage  = "🥚" // Generic Cloud Image / Distro
+	IconTemplate  = "🧬" // VM Template
+	IconFlavour   = "🍦" // Nido Flavour (Pre-configured)
+	IconPackage   = "🥚" // Generic Cloud Image / Distro
+	IconBlueprint = "📐" // Build recipe for a local image
 
 	// Storage Locations
 	IconCache = "👾"  // Local Disk (Alien Tech)
@@ -46,6 +47,8 @@ func IconForType(t string) string {
 		return IconFlavour
 	case "CLOUD":
 		return IconPackage
+	case "BLUEPRINT":
+		return IconBlueprint
 	case "CACHE", "LOCAL":
 		return IconCache
 	case "REMOTE":

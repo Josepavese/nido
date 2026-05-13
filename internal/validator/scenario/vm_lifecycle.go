@@ -231,21 +231,9 @@ func sshCheck(ctx *Context) report.StepResult {
 		}
 	}
 
-	args := []string{
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "ConnectTimeout=10",
-		"-p", sshPort,
-		fmt.Sprintf("%s@%s", sshUser, host),
-		"--", "echo", "ok",
-	}
-
-	execCmd := "ssh"
-	execArgs := args
-	if sshPwd != "" {
-		execCmd = "sshpass"
-		execArgs = append([]string{"-p", sshPwd, "ssh"}, args...)
-	}
+	vmName, _ := getVar(ctx, "vm_primary")
+	execCmd := ctx.Config.NidoBin
+	execArgs := []string{"ssh", vmName, "--", "echo ok"}
 
 	var last report.StepResult
 	// Increased retries for stability (40 attempts * 5s sleep + 10s exec = ~10 mins max)
@@ -299,19 +287,33 @@ func sshCheck(ctx *Context) report.StepResult {
 }
 
 func runSSHCommand(ctx *Context, port, user, host, cmd string, timeout time.Duration) runner.Result {
+	if vmName, ok := getVar(ctx, "vm_primary"); ok && vmName != "" {
+		return ctx.Runner.Exec(runner.Invocation{
+			Command: ctx.Config.NidoBin,
+			Args:    []string{"ssh", vmName, "--", cmd},
+			Timeout: timeout,
+		})
+	}
+
 	sshUser := user
 	if ctx.Config.SSHUser != "" {
 		sshUser = ctx.Config.SSHUser
 	}
 
 	args := []string{
+		"-n",
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "ConnectTimeout=10",
+		"-o", "BatchMode=yes",
+		"-o", "NumberOfPasswordPrompts=0",
+	}
+	args = append(args, validatorSSHKeyArgs()...)
+	args = append(args,
 		"-p", port,
 		fmt.Sprintf("%s@%s", sshUser, host),
 		"--", cmd,
-	}
+	)
 
 	execCmd := "ssh"
 	execArgs := args
@@ -332,6 +334,18 @@ func runSSHCommand(ctx *Context, port, user, host, cmd string, timeout time.Dura
 		Args:    execArgs,
 		Timeout: timeout,
 	})
+}
+
+func validatorSSHKeyArgs() []string {
+	home, err := sysutil.UserHome()
+	if err != nil {
+		return nil
+	}
+	keyPath := filepath.Join(home, ".nido", "nido_ed25519")
+	if _, err := os.Stat(keyPath); err != nil {
+		return nil
+	}
+	return []string{"-i", keyPath}
 }
 
 func stopVM(ctx *Context) report.StepResult {

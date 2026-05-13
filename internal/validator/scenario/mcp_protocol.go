@@ -39,10 +39,11 @@ func mcpProtocolStep(ctx *Context) report.StepResult {
 	toolsResp, err := client.CallMethod("tools/list", nil, 10*time.Second)
 	addAssertion(&res, "tools_list", err == nil, errDetails(err))
 	expected := map[string]bool{
-		"nido_vm":       true,
-		"nido_template": true,
-		"nido_image":    true,
-		"nido_system":   true,
+		"nido_vm":        true,
+		"nido_template":  true,
+		"nido_image":     true,
+		"nido_blueprint": true,
+		"nido_system":    true,
 	}
 	if err == nil {
 		if tools, ok := toolsResp["result"].(map[string]interface{})["tools"].([]interface{}); ok {
@@ -71,7 +72,7 @@ func mcpProtocolStep(ctx *Context) report.StepResult {
 	addAssertion(&res, "resources_list", err == nil, errDetails(err))
 	if err == nil {
 		if resources, ok := resourcesResp["result"].(map[string]interface{})["resources"].([]interface{}); ok {
-			addAssertion(&res, "resources_nonempty", len(resources) >= 6, "")
+			addAssertion(&res, "resources_nonempty", len(resources) >= 7, "")
 		} else {
 			addAssertion(&res, "resources_parse", false, "resources array missing")
 		}

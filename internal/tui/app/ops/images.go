@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Josepavese/nido/internal/builder"
 	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"github.com/Josepavese/nido/internal/provider"
@@ -73,8 +74,8 @@ func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, for
 			// 2. Cloud Images from Catalog (with registry distinction)
 			cfg := prov.GetConfig()
 			catalogDir := cfg.ImageDir
+			home, _ := sysutil.UserHome()
 			if catalogDir == "" {
-				home, _ := sysutil.UserHome()
 				catalogDir = filepath.Join(home, ".nido", "images")
 			}
 
@@ -83,6 +84,7 @@ func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, for
 
 			cwd, _ := os.Getwd()
 			localRegistry := filepath.Join(cwd, "registry", "images.json")
+			blueprints, bpErr := builder.ListBlueprints(cwd, filepath.Join(home, ".nido"), catalogDir)
 
 			if cachedOnly {
 				catalog, catErr = image.LoadCatalogFromFile(filepath.Join(catalogDir, image.CatalogCacheFile))
@@ -103,6 +105,11 @@ func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, for
 				for _, tpl := range templates {
 					srcList = append(srcList, fmt.Sprintf("[TEMPLATE] %s", tpl))
 				}
+				if bpErr == nil {
+					for _, bp := range blueprints {
+						srcList = append(srcList, formatBlueprintSource(bp))
+					}
+				}
 				if len(srcList) == 0 {
 					return SourcesLoadedMsg{Err: fmt.Errorf("no templates found and catalog unavailable: %v", catErr)}
 				}
@@ -115,8 +122,7 @@ func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, for
 			for _, tpl := range templates {
 				srcList = append(srcList, fmt.Sprintf("[TEMPLATE] %s", tpl))
 			}
-
-			// Then Flavours (registry=nido), then Cloud (registry=official)
+			// Then Flavours (registry=nido), Blueprints, then Cloud (registry=official)
 			var flavours, cloud []string
 			for _, img := range catalog.Images {
 				for _, ver := range img.Versions {
@@ -134,6 +140,11 @@ func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, for
 
 			for _, f := range flavours {
 				srcList = append(srcList, fmt.Sprintf("[FLAVOUR] %s", f))
+			}
+			if bpErr == nil {
+				for _, bp := range blueprints {
+					srcList = append(srcList, formatBlueprintSource(bp))
+				}
 			}
 			for _, c := range cloud {
 				srcList = append(srcList, fmt.Sprintf("[CLOUD] %s", c))
@@ -164,6 +175,14 @@ func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, for
 
 		return SourcesLoadedMsg{Sources: srcList}
 	}
+}
+
+func formatBlueprintSource(bp builder.BlueprintInfo) string {
+	display := bp.DisplayName
+	if display == "" {
+		display = bp.Name
+	}
+	return fmt.Sprintf("[BLUEPRINT] %s\t%s", bp.Name, display)
 }
 
 // FetchRegistryImages retrieves availableremote images as structured data.

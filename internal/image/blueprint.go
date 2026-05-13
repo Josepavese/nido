@@ -5,15 +5,23 @@ package image
 type Blueprint struct {
 	// Metadata
 	Name        string `yaml:"name" json:"name"`
+	DisplayName string `yaml:"display_name,omitempty" json:"display_name,omitempty"`
 	Description string `yaml:"description" json:"description"`
 	Version     string `yaml:"version" json:"version"` // Blueprint version, not OS version
+	Hidden      bool   `yaml:"hidden,omitempty" json:"hidden,omitempty"`
+	SSHUser     string `yaml:"ssh_user,omitempty" json:"ssh_user,omitempty"`
+	SSHPassword string `yaml:"ssh_password,omitempty" json:"ssh_password,omitempty"`
 
 	// Source Media
 	ISOURL      string `yaml:"iso_url" json:"iso_url"`
+	ISOName     string `yaml:"iso_name,omitempty" json:"iso_name,omitempty"`
 	ISOChecksum string `yaml:"iso_checksum" json:"iso_checksum"` // Optional but recommended
 
 	// Drivers & Tools (e.g., VirtIO for Windows)
 	Drivers []Resource `yaml:"drivers" json:"drivers"`
+
+	// Variables are expanded in scripts using {{name}} placeholders.
+	Variables map[string]string `yaml:"variables,omitempty" json:"variables,omitempty"`
 
 	// Automation (e.g., autounattend.xml)
 	// The key is the destination filename in the root of the build ISO/Floppy

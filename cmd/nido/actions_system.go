@@ -591,6 +591,13 @@ func cmdSsh(prov provider.VMProvider, name string, args []string) {
 		"-o", "LogLevel=ERROR",
 		"-o", "ConnectTimeout=5",
 	}
+	if len(args) > 0 {
+		extraOptions = append(extraOptions,
+			"-n",
+			"-o", "BatchMode=yes",
+			"-o", "NumberOfPasswordPrompts=0",
+		)
+	}
 	finalArgs := append([]string{}, extraOptions...)
 	finalArgs = append(finalArgs, parts[1:]...)
 	finalArgs = append(finalArgs, args...)

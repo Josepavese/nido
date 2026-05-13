@@ -5,6 +5,25 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.21] - 2026-05-13 "The Windows Blueprint" 🪟🧬
+
+### Added
+
+- Windows image blueprints for Windows 11 Enterprise Evaluation, Windows 11 IoT Enterprise LTSC 2024 Evaluation, and Windows Server 2022 Evaluation (Server Core).
+- CLI, TUI, MCP, JSON output, and cache integration for buildable blueprints.
+- Built-in Go seed ISO writer, removing the runtime dependency on mkisofs/genisoimage/xorriso for cloud-init and blueprint automation.
+
+### Improved
+
+- Windows host PAL support for QEMU lifecycle management, including detached process launch, stop/delete handling, SSH command mode, and WHPX-to-TCG fallback.
+- Windows installer dependency flow: winget registration/install, QEMU install via winget, and optional Windows Hypervisor Platform enablement.
+- Registry ordering now shows Nido flavours first, blueprints second, and official cloud images last.
+
+### Tested
+
+- Windows host smoke test on a real Windows VM: installer script parsing, `nido doctor`, catalog/blueprint listing, and basic spawn/SSH/stop/delete lifecycle.
+- Linux test suite: `go test ./...`.
+
 ## [4.5.2] - 2026-01-20 "The Clean Break" 🧼📺✨
 
 ### Fixed 🐛

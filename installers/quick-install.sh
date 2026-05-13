@@ -251,36 +251,40 @@ fi
 # --- Dependency Check & Proactive Install ---
 echo "${CYAN}🔍 Checking flight readiness (dependencies)...${RESET}"
 QEMU_INSTALLED=0
+QEMU_SYSTEM_INSTALLED=0
+QEMU_IMG_INSTALLED=0
 if command -v qemu-system-x86_64 >/dev/null 2>&1 || command -v qemu-system-aarch64 >/dev/null 2>&1 || command -v qemu-system >/dev/null 2>&1; then
+    QEMU_SYSTEM_INSTALLED=1
+fi
+if command -v qemu-img >/dev/null 2>&1; then
+    QEMU_IMG_INSTALLED=1
+fi
+if [ $QEMU_SYSTEM_INSTALLED -eq 1 ] && [ $QEMU_IMG_INSTALLED -eq 1 ]; then
     QEMU_INSTALLED=1
 fi
 
-ISO_TOOL_INSTALLED=0
-if command -v cloud-localds >/dev/null 2>&1 || command -v genisoimage >/dev/null 2>&1 || command -v mkisofs >/dev/null 2>&1 || command -v xorriso >/dev/null 2>&1; then
-    ISO_TOOL_INSTALLED=1
-fi
-
-if [ $QEMU_INSTALLED -eq 0 ] || [ $ISO_TOOL_INSTALLED -eq 0 ]; then
-    echo "${YELLOW}⚠️  Missing dependencies. Nido needs QEMU and ISO tools (cloud-utils/genisoimage).${RESET}"
-    if [ $QEMU_INSTALLED -eq 0 ]; then echo "   - QEMU: Missing"; else echo "   - QEMU: OK"; fi
-    if [ $ISO_TOOL_INSTALLED -eq 0 ]; then echo "   - ISO Tools: Missing"; else echo "   - ISO Tools: OK"; fi
+if [ $QEMU_INSTALLED -eq 0 ]; then
+    echo "${YELLOW}⚠️  Missing dependencies. Nido needs qemu-system and qemu-img to hatch VMs.${RESET}"
+    if [ $QEMU_SYSTEM_INSTALLED -eq 0 ]; then echo "   - qemu-system: Missing"; else echo "   - qemu-system: OK"; fi
+    if [ $QEMU_IMG_INSTALLED -eq 0 ]; then echo "   - qemu-img: Missing"; else echo "   - qemu-img: OK"; fi
+    echo "   - ISO Creator: Built into Nido"
     
     read -p "📦 Would you like to install dependencies automatically? (y/N) " -n 1 -r < /dev/tty
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         if [ $IS_TERMUX -eq 1 ]; then
-            PKG="qemu-system-x86-64-headless qemu-utils xorriso"
+            PKG="qemu-system-x86-64-headless qemu-utils"
             echo "${CYAN}🛠️  Installing ${PKG}...${RESET}"
             pkg install -y $PKG
         elif [ "$OS" = "linux" ]; then
-            PKG="qemu-system-x86 qemu-utils cloud-utils genisoimage"
-            [ "$ARCH" = "arm64" ] && PKG="qemu-system-arm qemu-system-gui qemu-utils cloud-utils genisoimage"
+            PKG="qemu-system-x86 qemu-utils"
+            [ "$ARCH" = "arm64" ] && PKG="qemu-system-arm qemu-system-gui qemu-utils"
             echo "${CYAN}🛠️  Updating repositories and installing ${PKG}...${RESET}"
             sudo apt update && sudo apt install -y $PKG
         elif [ "$OS" = "darwin" ]; then
             if command -v brew >/dev/null 2>&1; then
-                echo "${CYAN}🛠️  Installing QEMU & cdrtools via Homebrew...${RESET}"
-                brew install qemu cdrtools
+                echo "${CYAN}🛠️  Installing QEMU via Homebrew...${RESET}"
+                brew install qemu
             else
                 echo "${RED}❌ Homebrew not found. Please install Homebrew manually.${RESET}"
             fi
@@ -289,7 +293,7 @@ if [ $QEMU_INSTALLED -eq 0 ] || [ $ISO_TOOL_INSTALLED -eq 0 ]; then
         echo "${YELLOW}⚠️  Skipping automatic installation. You'll need to install them manually.${RESET}"
     fi
 else
-    echo "${GREEN}✅ Dependencies (QEMU & ISO tools) are ready.${RESET}"
+    echo "${GREEN}✅ Dependencies are ready. ISO creation is built into Nido.${RESET}"
 fi
 
 # KVM Permissions (Linux Only)
@@ -330,19 +334,19 @@ echo "  1. Reload shell:  ${CYAN}source ${SHELL_RC:-~/.bashrc}${RESET}"
 echo "  2. Verify install: ${CYAN}nido version${RESET}"
 echo "  3. Check system:   ${CYAN}nido doctor${RESET}"
 echo ""
-if command -v qemu-system-x86_64 >/dev/null 2>&1 || command -v qemu-system-aarch64 >/dev/null 2>&1 || command -v qemu-system >/dev/null 2>&1; then
+if { command -v qemu-system-x86_64 >/dev/null 2>&1 || command -v qemu-system-aarch64 >/dev/null 2>&1 || command -v qemu-system >/dev/null 2>&1; } && command -v qemu-img >/dev/null 2>&1; then
     if [ "$OS" = "linux" ] && [ $IS_TERMUX -eq 0 ] && [ ! -w /dev/kvm ]; then
         echo "${YELLOW}⚠️  KVM needs permission: sudo usermod -aG kvm \$USER && newgrp kvm${RESET}"
     else
         echo "${GREEN}✨ QEMU is ready for liftoff!${RESET}"
     fi
 else
-    QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils cloud-utils genisoimage"
-    [ "$ARCH" = "arm64" ] && QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-system-gui qemu-utils cloud-utils genisoimage"
-    echo "${YELLOW}💡 Note: You still need QEMU & ISO tools to run VMs${RESET}"
+    QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils"
+    [ "$ARCH" = "arm64" ] && QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-system-gui qemu-utils"
+    echo "${YELLOW}💡 Note: You still need QEMU to run VMs${RESET}"
     echo "   Linux: ${CYAN}${QEMU_CMD}${RESET}"
-    [ $IS_TERMUX -eq 1 ] && echo "   Termux: ${CYAN}pkg install qemu-system-x86-64-headless qemu-utils xorriso${RESET}"
-    echo "   macOS: ${CYAN}brew install qemu cdrtools${RESET}"
+    [ $IS_TERMUX -eq 1 ] && echo "   Termux: ${CYAN}pkg install qemu-system-x86-64-headless qemu-utils${RESET}"
+    echo "   macOS: ${CYAN}brew install qemu${RESET}"
 fi
 echo ""
 echo "${BOLD}\"It's not a VM, it's a lifestyle.\" 🪺${RESET}"

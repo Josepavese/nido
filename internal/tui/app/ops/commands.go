@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Josepavese/nido/internal/build"
+	"github.com/Josepavese/nido/internal/builder"
 	"github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/pkg/sysutil"
@@ -58,6 +59,13 @@ type OpResultMsg struct {
 	Err  error
 	Path string // Optional: for templates
 	Data any    // Generic data (e.g., stats)
+}
+
+// BlueprintSpawnResult describes a blueprint image built or reused during spawn.
+type BlueprintSpawnResult struct {
+	Blueprint string
+	OutputTag string
+	Built     bool
 }
 
 // UpdateCheckMsg contains version check results.
@@ -130,11 +138,94 @@ func FetchVMInfo(prov provider.VMProvider, name string) tea.Cmd {
 	}
 }
 
-// SpawnVM creates a new VM options. It automatically pulls the image if missing.
-func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool, memoryMB, vcpus int, ports []provider.PortForward, rawArgs []string, accelerators []string) tea.Cmd {
+// SpawnVM creates a new VM. It pulls images or builds blueprints when needed.
+func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string, gui bool, memoryMB, vcpus int, ports []provider.PortForward, rawArgs []string, accelerators []string) tea.Cmd {
 	opName := "spawn"
 
 	return func() tea.Msg {
+		if sourceType == "BLUEPRINT" {
+			ch := make(chan ProgressMsg, 16)
+			go func() {
+				defer close(ch)
+				if prov == nil {
+					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("provider is nil")}}
+					return
+				}
+
+				cfg := prov.GetConfig()
+				home, _ := sysutil.UserHome()
+				nidoDir := filepath.Join(home, ".nido")
+				imgDir := cfg.ImageDir
+				if imgDir == "" {
+					imgDir = filepath.Join(nidoDir, "images")
+				}
+				cwd, _ := os.Getwd()
+
+				bp, info, err := builder.LoadBlueprintRef(cwd, nidoDir, imgDir, source)
+				if err != nil {
+					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: err}}
+					return
+				}
+
+				built := false
+				if !info.Built {
+					ch <- ProgressMsg{
+						OpName: opName,
+						Status: view.StatusMsg{
+							Loading:   true,
+							Operation: fmt.Sprintf("Building %s", bp.Name),
+							Progress:  -1,
+						},
+					}
+					eng := builder.NewEngine(
+						filepath.Join(nidoDir, "cache"),
+						filepath.Join(nidoDir, "tmp"),
+						imgDir,
+						builder.WithReporter(tuiBuildReporter{ch: ch, opName: opName}),
+					)
+					if err := eng.Build(bp); err != nil {
+						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("blueprint build failed: %w", err)}}
+						return
+					}
+					built = true
+				}
+
+				imagePath := filepath.Join(imgDir, bp.OutputImage)
+				ch <- ProgressMsg{
+					OpName: opName,
+					Status: view.StatusMsg{
+						Loading:   true,
+						Operation: fmt.Sprintf("Hatching %s", name),
+						Progress:  1.0,
+					},
+				}
+
+				opts := provider.VMOptions{
+					DiskPath:     imagePath,
+					UserDataPath: userData,
+					Gui:          gui,
+					SSHUser:      bp.SSHUser,
+					SSHPassword:  bp.SSHPassword,
+					MemoryMB:     memoryMB,
+					VCPUs:        vcpus,
+					Forwarding:   ports,
+					RawQemuArgs:  rawArgs,
+					Accelerators: accelerators,
+				}
+				err = prov.Spawn(name, opts)
+				ch <- ProgressMsg{Result: &OpResultMsg{
+					Op:  opName,
+					Err: err,
+					Data: BlueprintSpawnResult{
+						Blueprint: bp.Name,
+						OutputTag: builder.BlueprintOutputTag(bp),
+						Built:     built,
+					},
+				}}
+			}()
+			return waitForProgress(ch)()
+		}
+
 		// 1. Check if source is a local template (file or name)
 		// Logic similar to QemuProvider.Spawn but used here to decide whether to pull.
 
@@ -302,6 +393,29 @@ func SpawnVM(prov provider.VMProvider, name, source, userData string, gui bool, 
 		}()
 
 		return waitForProgress(ch)()
+	}
+}
+
+type tuiBuildReporter struct {
+	ch     chan<- ProgressMsg
+	opName string
+}
+
+func (r tuiBuildReporter) Header(title string)          { r.emit(title) }
+func (r tuiBuildReporter) Info(msg string, args ...any) { r.emit(fmt.Sprintf(msg, args...)) }
+func (r tuiBuildReporter) Warn(msg string, args ...any) { r.emit(fmt.Sprintf(msg, args...)) }
+func (r tuiBuildReporter) Success(msg string, args ...any) {
+	r.emit(fmt.Sprintf(msg, args...))
+}
+
+func (r tuiBuildReporter) emit(message string) {
+	r.ch <- ProgressMsg{
+		OpName: r.opName,
+		Status: view.StatusMsg{
+			Loading:   true,
+			Operation: message,
+			Progress:  -1,
+		},
 	}
 }
 

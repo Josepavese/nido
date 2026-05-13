@@ -49,6 +49,12 @@
             </DiskConfiguration>
             <ImageInstall>
                 <OSImage>
+                    <InstallFrom>
+                        <MetaData wcm:action="add">
+                            <Key>/IMAGE/INDEX</Key>
+                            <Value>{{windows_image_index}}</Value>
+                        </MetaData>
+                    </InstallFrom>
                     <InstallTo>
                         <DiskID>0</DiskID>
                         <PartitionID>2</PartitionID>
@@ -91,22 +97,22 @@
 
                 <!-- 2. Populate Driver Directory (Robust Loop) -->
                 <!-- We check multiple common paths because the ISO structure changes -->
-                                <RunSynchronousCommand wcm:action="add">
+                <RunSynchronousCommand wcm:action="add">
                     <Order>5</Order>
                     <!-- Check viostor (Block) -->
-                    <Path>cmd /c "for %d in (C D E F G) do (if exist %d:\viostor\w11\amd64\viostor.inf xcopy %d:\viostor\w11\amd64\*.* X:\VirtIO\ /S /Y /I) & (if exist %d:\amd64\w11\viostor.inf xcopy %d:\amd64\w11\*.* X:\VirtIO\ /S /Y /I)"</Path>
+                    <Path>cmd /c "for %d in (C D E F G) do (if exist %d:\viostor\{{windows_driver_profile}}\amd64\viostor.inf xcopy %d:\viostor\{{windows_driver_profile}}\amd64\*.* X:\VirtIO\ /S /Y /I &amp; if exist %d:\amd64\{{windows_driver_profile}}\viostor.inf xcopy %d:\amd64\{{windows_driver_profile}}\*.* X:\VirtIO\ /S /Y /I)"</Path>
                     <Description>Copy VirtIO Storage</Description>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Order>6</Order>
                     <!-- Check netkvm (Network) -->
-                    <Path>cmd /c "for %d in (C D E F G) do (if exist %d:\NetKVM\w11\amd64\netkvm.inf xcopy %d:\NetKVM\w11\amd64\*.* X:\VirtIO\ /S /Y /I) & (if exist %d:\amd64\w11\netkvm.inf xcopy %d:\amd64\w11\*.* X:\VirtIO\ /S /Y /I)"</Path>
+                    <Path>cmd /c "for %d in (C D E F G) do (if exist %d:\NetKVM\{{windows_driver_profile}}\amd64\netkvm.inf xcopy %d:\NetKVM\{{windows_driver_profile}}\amd64\*.* X:\VirtIO\ /S /Y /I &amp; if exist %d:\amd64\{{windows_driver_profile}}\netkvm.inf xcopy %d:\amd64\{{windows_driver_profile}}\*.* X:\VirtIO\ /S /Y /I)"</Path>
                     <Description>Copy VirtIO Network</Description>
                 </RunSynchronousCommand>
                 <RunSynchronousCommand wcm:action="add">
                     <Order>7</Order>
                     <!-- Check vioscsi (SCSI) - Just in case -->
-                    <Path>cmd /c "for %d in (C D E F G) do (if exist %d:\vioscsi\w11\amd64\vioscsi.inf xcopy %d:\vioscsi\w11\amd64\*.* X:\VirtIO\ /S /Y /I) & (if exist %d:\amd64\w11\vioscsi.inf xcopy %d:\amd64\w11\*.* X:\VirtIO\ /S /Y /I)"</Path>
+                    <Path>cmd /c "for %d in (C D E F G) do (if exist %d:\vioscsi\{{windows_driver_profile}}\amd64\vioscsi.inf xcopy %d:\vioscsi\{{windows_driver_profile}}\amd64\*.* X:\VirtIO\ /S /Y /I &amp; if exist %d:\amd64\{{windows_driver_profile}}\vioscsi.inf xcopy %d:\amd64\{{windows_driver_profile}}\*.* X:\VirtIO\ /S /Y /I)"</Path>
                     <Description>Copy VirtIO SCSI</Description>
                 </RunSynchronousCommand>
 
@@ -136,18 +142,33 @@
             <DriverPaths>
                 <PathAndCredentials wcm:action="add" wcm:keyValue="1">
                     <Path>X:\VirtIO</Path>
-                    <Order>1</Order>
                 </PathAndCredentials>
             </DriverPaths>
         </component>
     </settings>
     <settings pass="specialize">
-            <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
             <ComputerName>Nido-VM</ComputerName>
         </component>
     </settings>
     <settings pass="oobeSystem">
+        <component name="Microsoft-Windows-International-Core" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <InputLocale>en-US</InputLocale>
+            <SystemLocale>en-US</SystemLocale>
+            <UILanguage>en-US</UILanguage>
+            <UserLocale>en-US</UserLocale>
+        </component>
         <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+            <TimeZone>UTC</TimeZone>
+            <AutoLogon>
+                <Password>
+                    <Value>nido</Value>
+                    <PlainText>true</PlainText>
+                </Password>
+                <Enabled>true</Enabled>
+                <LogonCount>1</LogonCount>
+                <Username>vmuser</Username>
+            </AutoLogon>
             <UserAccounts>
                 <AdministratorPassword>
                     <Value>nido</Value>
@@ -169,6 +190,7 @@
             <OOBE>
                 <HideEULAPage>true</HideEULAPage>
                 <HideLocalAccountScreen>true</HideLocalAccountScreen>
+                <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
                 <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
                 <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
                 <ProtectYourPC>3</ProtectYourPC>
@@ -189,7 +211,7 @@
                     <CommandLine>powershell -Command "Set-Service -Name sshd -StartupType 'Automatic'"</CommandLine>
                     <Description>Enable SSHD AutoStart</Description>
                 </SynchronousCommand>
-                    <SynchronousCommand wcm:action="add">
+                <SynchronousCommand wcm:action="add">
                     <Order>4</Order>
                     <CommandLine>powershell -Command "New-NetFirewallRule -Name sshd -DisplayName 'OpenSSH Server (sshd)' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22"</CommandLine>
                     <Description>Allow SSH Firewall</Description>

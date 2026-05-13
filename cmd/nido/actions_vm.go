@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Josepavese/nido/internal/builder"
 	clijson "github.com/Josepavese/nido/internal/cli"
 	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/provider"
@@ -211,6 +212,7 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 				if !jsonOut {
 					ui.Info("Found local image: %s", filepath.Base(localPath))
 				}
+				applyBlueprintImageMetadata(app, imageTag, &customSshUser, &customSshPassword)
 				tpl = localPath
 			} else {
 				catalog, err := imageCatalog(app)
@@ -335,6 +337,30 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 				ui.Step("Linked clones disabled: cleaned temporary image cache.")
 			}
 		}
+	}
+}
+
+func applyBlueprintImageMetadata(app *appContext, imageTag string, sshUser, sshPassword *string) {
+	cleanTag := strings.TrimSuffix(filepath.Base(imageTag), ".qcow2")
+	blueprints, err := builder.ListBlueprints(app.Cwd, app.NidoDir, app.ImageDir())
+	if err != nil {
+		return
+	}
+	for _, info := range blueprints {
+		if info.OutputTag != cleanTag && strings.TrimSuffix(filepath.Base(info.OutputImage), ".qcow2") != cleanTag {
+			continue
+		}
+		bp, _, err := builder.LoadBlueprintRef(app.Cwd, app.NidoDir, app.ImageDir(), info.Name)
+		if err != nil {
+			return
+		}
+		if sshUser != nil && *sshUser == "" && bp.SSHUser != "" {
+			*sshUser = bp.SSHUser
+		}
+		if sshPassword != nil && *sshPassword == "" && bp.SSHPassword != "" {
+			*sshPassword = bp.SSHPassword
+		}
+		return
 	}
 }
 

@@ -19,6 +19,7 @@ func TestJSONCommandsProduceSingleJSONAndNoStderr(t *testing.T) {
 		{"info", "vm-a", "--json"},
 		{"template", "list", "--json"},
 		{"cache", "info", "--json"},
+		{"blueprint", "list", "--json"},
 		{"doctor", "--json"},
 		{"config", "--json"},
 		{"version", "--json"},
@@ -139,6 +140,47 @@ func TestImageInfoAndRemoveJSONStayClean(t *testing.T) {
 	assertSingleJSON(t, stdout)
 }
 
+func TestBlueprintListAndInfoJSONStayClean(t *testing.T) {
+	app := testAppContext(t)
+	writeBlueprintFixture(t, app.Cwd)
+
+	root, err := newRootCommand(app)
+	if err != nil {
+		t.Fatalf("newRootCommand failed: %v", err)
+	}
+	stdout, stderr := captureProcessIO(t, func() {
+		root.SetArgs([]string{"blueprint", "list", "--json"})
+		if err := root.Execute(); err != nil {
+			t.Fatalf("Execute(blueprint list) failed: %v", err)
+		}
+	})
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !bytes.Contains([]byte(stdout), []byte("fixture-blueprint")) {
+		t.Fatalf("expected fixture blueprint in list output:\n%s", stdout)
+	}
+	assertSingleJSON(t, stdout)
+
+	root, err = newRootCommand(app)
+	if err != nil {
+		t.Fatalf("newRootCommand failed: %v", err)
+	}
+	stdout, stderr = captureProcessIO(t, func() {
+		root.SetArgs([]string{"blueprint", "info", "fixture-blueprint", "--json"})
+		if err := root.Execute(); err != nil {
+			t.Fatalf("Execute(blueprint info) failed: %v", err)
+		}
+	})
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	if !bytes.Contains([]byte(stdout), []byte("fixture-blueprint.qcow2")) {
+		t.Fatalf("expected fixture output image in info output:\n%s", stdout)
+	}
+	assertSingleJSON(t, stdout)
+}
+
 func testAppContext(t *testing.T) *appContext {
 	t.Helper()
 	nidoDir := t.TempDir()
@@ -162,6 +204,31 @@ func testAppContext(t *testing.T) *appContext {
 		ConfigPath: filepath.Join(nidoDir, "config.env"),
 		Config:     cfg,
 		Provider:   fakeProvider{},
+	}
+}
+
+func writeBlueprintFixture(t *testing.T, cwd string) {
+	t.Helper()
+	dir := filepath.Join(cwd, "registry", "blueprints")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir blueprint registry: %v", err)
+	}
+	data := []byte(`name: fixture-blueprint
+description: Fixture blueprint
+version: "0.1.0"
+iso_url: https://example.test/fixture.iso
+iso_checksum: ""
+build_specs:
+  cpu: 1
+  memory: 512M
+  timeout: 1m
+output_image: fixture-blueprint.qcow2
+output_size: 1G
+scripts:
+  setup.cmd: echo ok
+`)
+	if err := os.WriteFile(filepath.Join(dir, "fixture-blueprint.yaml"), data, 0o644); err != nil {
+		t.Fatalf("write blueprint fixture: %v", err)
 	}
 }
 

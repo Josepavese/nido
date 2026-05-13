@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 )
 
 // DefaultMemory calculated as min(2048MB, 50% system RAM).
@@ -106,4 +108,59 @@ func ProvisionFile(path string, generator func() error) error {
 		return err
 	}
 	return FixPermissions(path)
+}
+
+// FindExecutable resolves an executable from PATH, with Windows fallbacks for
+// installers that place binaries in a standard directory without updating PATH.
+func FindExecutable(names ...string) (string, error) {
+	var lastErr error
+	for _, name := range names {
+		path, err := exec.LookPath(name)
+		if err == nil {
+			return path, nil
+		}
+		lastErr = err
+	}
+
+	if runtime.GOOS == "windows" {
+		for _, dir := range windowsFallbackExecutableDirs() {
+			for _, name := range names {
+				exe := name
+				if filepath.Ext(exe) == "" {
+					exe += ".exe"
+				}
+				path := filepath.Join(dir, exe)
+				if info, err := os.Stat(path); err == nil && !info.IsDir() {
+					return path, nil
+				}
+			}
+		}
+	}
+
+	if lastErr != nil {
+		return "", lastErr
+	}
+	return "", exec.ErrNotFound
+}
+
+// QemuSystemBinary resolves the QEMU system emulator used by Nido.
+func QemuSystemBinary() (string, error) {
+	return FindExecutable("qemu-system-x86_64", "qemu-system")
+}
+
+// QemuImgBinary resolves qemu-img.
+func QemuImgBinary() (string, error) {
+	return FindExecutable("qemu-img")
+}
+
+func windowsFallbackExecutableDirs() []string {
+	dirs := []string{}
+	if programFiles := os.Getenv("ProgramFiles"); programFiles != "" {
+		dirs = append(dirs, filepath.Join(programFiles, "qemu"))
+	}
+	if programFilesX86 := os.Getenv("ProgramFiles(x86)"); programFilesX86 != "" {
+		dirs = append(dirs, filepath.Join(programFilesX86, "qemu"))
+	}
+	dirs = append(dirs, `C:\Program Files\qemu`, `C:\Program Files (x86)\qemu`)
+	return dirs
 }

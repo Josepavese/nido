@@ -8,52 +8,136 @@ import (
 
 	"github.com/Josepavese/nido/internal/builder"
 	clijson "github.com/Josepavese/nido/internal/cli"
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/ui"
+	"github.com/spf13/cobra"
 )
 
-func cmdBuild(nidoDir, imageDir string, args []string, jsonOut bool) {
+func actionBlueprintList(app *appContext) func(cmd *cobra.Command, args []string) {
+	return func(cmd *cobra.Command, args []string) {
+		cmdBlueprintList(app.Cwd, app.NidoDir, app.ImageDir(), jsonEnabled(cmd))
+	}
+}
+
+func actionBlueprintInfo(app *appContext) func(cmd *cobra.Command, args []string) {
+	return func(cmd *cobra.Command, args []string) {
+		cmdBlueprintInfo(app.Cwd, app.NidoDir, app.ImageDir(), args, jsonEnabled(cmd))
+	}
+}
+
+func actionBlueprintBuild(app *appContext) func(cmd *cobra.Command, args []string) {
+	return func(cmd *cobra.Command, args []string) {
+		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), args, jsonEnabled(cmd), "blueprint build")
+	}
+}
+
+func cmdBlueprintList(cwd, nidoDir, imageDir string, jsonOut bool) {
+	blueprints, err := builder.ListBlueprints(cwd, nidoDir, imageDir)
+	if err != nil {
+		if jsonOut {
+			resp := clijson.NewResponseError("blueprint list", "ERR_IO", "Blueprint list failed", err.Error(), "Check the blueprint registry path and try again.", nil)
+			clijson.PrintJSON(resp)
+		} else {
+			ui.Error("Failed to list blueprints: %v", err)
+		}
+		os.Exit(1)
+	}
+
+	if jsonOut {
+		resp := clijson.NewResponseOK("blueprint list", map[string]interface{}{"blueprints": blueprints})
+		clijson.PrintJSON(resp)
+		return
+	}
+
+	if len(blueprints) == 0 {
+		ui.Info("No blueprints found.")
+		return
+	}
+
+	ui.Header("Blueprints")
+	fmt.Printf("\n %s%-46s %-10s %-8s %-24s %s%s\n", ui.Bold, "BLUEPRINT", "VERSION", "STATUS", "TAG", "SOURCE", ui.Reset)
+	fmt.Printf(" %s%s%s\n", ui.Dim, strings.Repeat("-", 104), ui.Reset)
+	for _, bp := range blueprints {
+		status := "missing"
+		if bp.Built {
+			status = "ready"
+		}
+		fmt.Printf(" %-46s %-10s %-8s %-24s %s\n", blueprintDisplayName(bp), bp.Version, status, bp.OutputTag, bp.Source)
+	}
+	fmt.Println("")
+}
+
+func cmdBlueprintInfo(cwd, nidoDir, imageDir string, args []string, jsonOut bool) {
+	if len(args) < 1 {
+		ui.Error("Usage: nido blueprint info <blueprint>")
+		os.Exit(1)
+	}
+
+	_, info, err := builder.LoadBlueprintRef(cwd, nidoDir, imageDir, args[0])
+	if err != nil {
+		if jsonOut {
+			resp := clijson.NewResponseError("blueprint info", "ERR_NOT_FOUND", "Blueprint not found", err.Error(), "Run 'nido blueprint list' to see available blueprints.", nil)
+			clijson.PrintJSON(resp)
+		} else {
+			ui.Error("Blueprint not found: %v", err)
+		}
+		os.Exit(1)
+	}
+
+	if jsonOut {
+		resp := clijson.NewResponseOK("blueprint info", map[string]interface{}{"blueprint": info})
+		clijson.PrintJSON(resp)
+		return
+	}
+
+	status := "missing"
+	if info.Built {
+		status = "ready"
+	}
+	ui.Header("Blueprint")
+	ui.FancyLabel("Name", info.Name)
+	if info.DisplayName != "" {
+		ui.FancyLabel("Display Name", info.DisplayName)
+	}
+	ui.FancyLabel("Version", info.Version)
+	ui.FancyLabel("Status", status)
+	ui.FancyLabel("Output", info.OutputImage)
+	ui.FancyLabel("Spawn Tag", info.OutputTag)
+	if info.SSHUser != "" {
+		ui.FancyLabel("SSH User", info.SSHUser)
+	}
+	ui.FancyLabel("Initial Password", ternaryString(info.HasPassword, "Provided by blueprint metadata", "Not specified"))
+	ui.FancyLabel("Source", info.Source)
+	ui.FancyLabel("Path", info.Path)
+	ui.FancyLabel("Build", fmt.Sprintf("%d CPU, %s RAM, timeout %s", info.CPU, info.Memory, info.Timeout))
+	if info.Description != "" {
+		ui.Info("%s", info.Description)
+	}
+}
+
+func blueprintDisplayName(info builder.BlueprintInfo) string {
+	if info.DisplayName != "" {
+		return info.DisplayName
+	}
+	return info.Name
+}
+
+func cmdBuild(cwd, nidoDir, imageDir string, args []string, jsonOut bool, command string) {
 	if len(args) < 1 {
 		ui.Error("Usage: nido build <blueprint>")
 		ui.Info("Example: nido build windows-11-eval")
 		os.Exit(1)
 	}
 
-	blueprintName := args[0]
-	// Auto-append .yaml if missing
-	if !strings.HasSuffix(blueprintName, ".yaml") && !strings.HasSuffix(blueprintName, ".yml") {
-		blueprintName += ".yaml"
-	}
-
-	// Locate blueprint
-	// 1. Current directory
-	cwd, _ := os.Getwd()
-	localPath := filepath.Join(cwd, blueprintName)
-
-	// 2. Registry directory in CWD
-	// 2. Registry directory in CWD
-	registryPath := filepath.Join(cwd, "registry", "blueprints", blueprintName)
-
-	// 3. Global Registry (~/.nido/registry)
-	homeDir, _ := sysutil.UserHome()
-	globalRegistryPath := filepath.Join(homeDir, ".nido", "registry", "blueprints", blueprintName)
-
-	targetPath := ""
-	if _, err := os.Stat(localPath); err == nil {
-		targetPath = localPath
-	} else if _, err := os.Stat(registryPath); err == nil {
-		targetPath = registryPath
-	} else if _, err := os.Stat(globalRegistryPath); err == nil {
-		targetPath = globalRegistryPath
-	} else {
-		ui.Error("Blueprint not found: %s", blueprintName)
-		ui.Info("Searched in:\n  - %s\n  - %s\n  - %s", localPath, registryPath, globalRegistryPath)
-		os.Exit(1)
-	}
-
-	bp, err := builder.LoadBlueprint(targetPath)
+	bp, info, err := builder.LoadBlueprintRef(cwd, nidoDir, imageDir, args[0])
 	if err != nil {
-		ui.Error("Failed to load blueprint: %v", err)
+		if jsonOut {
+			resp := clijson.NewResponseError(command, "ERR_NOT_FOUND", "Blueprint not found", err.Error(), "Run 'nido blueprint list' to see available blueprints.", nil)
+			clijson.PrintJSON(resp)
+		} else {
+			ui.Error("Failed to load blueprint: %v", err)
+			ui.Info("Run 'nido blueprint list' to see available blueprints.")
+		}
 		os.Exit(1)
 	}
 
@@ -71,6 +155,23 @@ func cmdBuild(nidoDir, imageDir string, args []string, jsonOut bool) {
 	cacheDir := filepath.Join(nidoDir, "cache")
 	workDir := filepath.Join(nidoDir, "tmp")
 
+	if info.Built {
+		if jsonOut {
+			resp := clijson.NewResponseOK(command, map[string]string{
+				"result":       "ready",
+				"blueprint":    bp.Name,
+				"output_image": bp.OutputImage,
+				"output_tag":   info.OutputTag,
+				"output_path":  info.OutputPath,
+			})
+			clijson.PrintJSON(resp)
+			return
+		}
+		ui.Success("Image already built: %s", bp.OutputImage)
+		printBlueprintSpawnHint(bp)
+		return
+	}
+
 	opts := []builder.EngineOption{}
 	if !jsonOut {
 		opts = append(opts, builder.WithReporter(cliBuildReporter{}))
@@ -79,7 +180,7 @@ func cmdBuild(nidoDir, imageDir string, args []string, jsonOut bool) {
 
 	if err := eng.Build(bp); err != nil {
 		if jsonOut {
-			resp := clijson.NewResponseError("build", "ERR_BUILD_FAILED", "Build failed", err.Error(), "", nil)
+			resp := clijson.NewResponseError(command, "ERR_BUILD_FAILED", "Build failed", err.Error(), "", nil)
 			clijson.PrintJSON(resp)
 			os.Exit(1)
 		}
@@ -88,15 +189,22 @@ func cmdBuild(nidoDir, imageDir string, args []string, jsonOut bool) {
 	}
 
 	if jsonOut {
-		resp := clijson.NewResponseOK("build", map[string]string{
-			"result": "success",
-			"image":  bp.OutputImage,
+		resp := clijson.NewResponseOK(command, map[string]string{
+			"result":       "built",
+			"blueprint":    bp.Name,
+			"output_image": bp.OutputImage,
+			"output_tag":   builder.BlueprintOutputTag(bp),
+			"output_path":  filepath.Join(imageDir, bp.OutputImage),
 		})
 		clijson.PrintJSON(resp)
 		return
 	}
 
 	ui.Success("Image built successfully: %s", bp.OutputImage)
+	printBlueprintSpawnHint(bp)
+}
+
+func printBlueprintSpawnHint(bp *image.Blueprint) {
 	imageTag := strings.TrimSuffix(bp.OutputImage, ".qcow2")
 
 	// Special handling for Windows images which require a "second stage" installation on first boot
@@ -109,6 +217,12 @@ func cmdBuild(nidoDir, imageDir string, args []string, jsonOut bool) {
 		fmt.Println("")
 		ui.Info("If you spawn headless (without --gui), it will work but you won't see the status.")
 		ui.Info("SSH will be available automatically after the setup completes (approx 2-5 mins).")
+		if bp.SSHUser != "" {
+			ui.Info("Initial SSH user: %s", bp.SSHUser)
+		}
+		if bp.SSHPassword != "" {
+			ui.Info("Initial SSH password: %s", bp.SSHPassword)
+		}
 	} else {
 		ui.Info("You can now spawn a VM using: nido spawn my-vm --image %s", imageTag)
 	}

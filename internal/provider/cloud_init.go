@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Josepavese/nido/internal/pkg/seediso"
 	"github.com/Josepavese/nido/internal/pkg/sysutil"
 )
 
@@ -38,37 +39,7 @@ func (c *CloudInit) GenerateISO(outPath string) error {
 		return err
 	}
 
-	// 3. Create ISO/Disk
-	if _, err := exec.LookPath("cloud-localds"); err == nil {
-		// cloud-localds <output> <user-data> [meta-data]
-		cmd := exec.Command("cloud-localds", outPath, filepath.Join(tmpDir, "user-data"), filepath.Join(tmpDir, "meta-data"))
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("cloud-localds failed: %v (%s)", err, string(output))
-		}
-		return nil
-	}
-
-	// Fallback to ISO generation (genisoimage/mkisofs)
-	tool := "genisoimage"
-	if _, err := exec.LookPath("genisoimage"); err != nil {
-		if _, err := exec.LookPath("mkisofs"); err == nil {
-			tool = "mkisofs"
-		} else if _, err := exec.LookPath("xorriso"); err == nil {
-			tool = "xorriso"
-		} else {
-			return fmt.Errorf("no suitable ISO creation tool found (install cloud-utils or genisoimage)")
-		}
-	}
-
-	// genisoimage -output <iso> -volid cidata -joliet -rock <dir>
-	cmd := exec.Command(tool, "-output", outPath, "-volid", "cidata", "-joliet", "-rock", tmpDir)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("iso creation failed: %v (%s)", err, string(output))
-	}
-
-	return nil
+	return seediso.Create(outPath, tmpDir, "cidata")
 }
 
 func (c *CloudInit) buildUserData() string {

@@ -57,10 +57,11 @@ func (m *mockProvider) CachePrune(unusedOnly bool) (int, int64, error) {
 func TestToolsCatalogIncludesExpectedToolsAndOmitsPassword(t *testing.T) {
 	tools := ToolsCatalog()
 	expected := map[string]bool{
-		"nido_vm":       false,
-		"nido_template": false,
-		"nido_image":    false,
-		"nido_system":   false,
+		"nido_vm":        false,
+		"nido_template":  false,
+		"nido_image":     false,
+		"nido_blueprint": false,
+		"nido_system":    false,
 	}
 
 	for _, tool := range tools {
@@ -86,11 +87,11 @@ func TestToolsCatalogIncludesExpectedToolsAndOmitsPassword(t *testing.T) {
 }
 
 func TestResourceAndPromptCatalogsExposeCompactSurface(t *testing.T) {
-	if len(ResourcesCatalog()) != 6 {
-		t.Fatalf("ResourcesCatalog() count = %d, want 6", len(ResourcesCatalog()))
+	if len(ResourcesCatalog()) != 7 {
+		t.Fatalf("ResourcesCatalog() count = %d, want 7", len(ResourcesCatalog()))
 	}
-	if len(ResourceTemplatesCatalog()) != 2 {
-		t.Fatalf("ResourceTemplatesCatalog() count = %d, want 2", len(ResourceTemplatesCatalog()))
+	if len(ResourceTemplatesCatalog()) != 3 {
+		t.Fatalf("ResourceTemplatesCatalog() count = %d, want 3", len(ResourceTemplatesCatalog()))
 	}
 	if len(PromptsCatalog()) != 1 {
 		t.Fatalf("PromptsCatalog() count = %d, want 1", len(PromptsCatalog()))

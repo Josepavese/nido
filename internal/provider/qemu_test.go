@@ -132,14 +132,16 @@ func TestBuildQemuArgs_CommonArguments(t *testing.T) {
 	args := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0, nil, nil)
 
 	requiredArgs := map[string]bool{
-		"-name":      false,
-		"-m":         false,
-		"-drive":     false,
-		"-daemonize": false,
-		"-pidfile":   false,
-		"-netdev":    false,
-		"-device":    false,
-		"-qmp":       false,
+		"-name":   false,
+		"-m":      false,
+		"-drive":  false,
+		"-netdev": false,
+		"-device": false,
+		"-qmp":    false,
+	}
+	if runtime.GOOS != "windows" {
+		requiredArgs["-daemonize"] = false
+		requiredArgs["-pidfile"] = false
 	}
 
 	for _, arg := range args {
@@ -152,6 +154,29 @@ func TestBuildQemuArgs_CommonArguments(t *testing.T) {
 		if !found {
 			t.Errorf("Required argument %q not found in QEMU args", arg)
 		}
+	}
+}
+
+func TestWindowsTCGFallbackArgs(t *testing.T) {
+	args := []string{
+		"-name", "vm",
+		"-accel", "whpx",
+		"-cpu", "host",
+		"-display", "none",
+	}
+
+	got := windowsTCGFallbackArgs(args)
+	if !contains(got, "-accel") || !contains(got, "tcg") {
+		t.Fatalf("fallback args should switch WHPX to TCG: %v", got)
+	}
+	if !contains(got, "-cpu") || !contains(got, "qemu64") {
+		t.Fatalf("fallback args should switch host CPU to qemu64: %v", got)
+	}
+	if contains(got, "whpx") || contains(got, "host") {
+		t.Fatalf("fallback args kept WHPX-only values: %v", got)
+	}
+	if args[3] != "whpx" || args[5] != "host" {
+		t.Fatalf("fallback mutated original args: %v", args)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 type RequestSpawnMsg struct {
 	Name         string
 	Source       string
+	SourceType   string
 	IsFile       bool
 	UserData     string
 	GUI          bool

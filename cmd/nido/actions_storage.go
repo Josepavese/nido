@@ -246,7 +246,7 @@ func actionCachePrune(app *appContext) func(cmd *cobra.Command, args []string) {
 
 func actionImagesList(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		cmdImageList(app.ImageDir(), args, jsonEnabled(cmd))
+		cmdImageList(app.Cwd, app.NidoDir, app.ImageDir(), args, jsonEnabled(cmd))
 	}
 }
 
@@ -276,7 +276,7 @@ func actionImagesUpdate(app *appContext) func(cmd *cobra.Command, args []string)
 
 func actionBuild(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		cmdBuild(app.NidoDir, app.ImageDir(), args, jsonEnabled(cmd))
+		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), args, jsonEnabled(cmd), "build")
 	}
 }
 

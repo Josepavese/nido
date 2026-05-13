@@ -81,7 +81,7 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		n.Shell.SwitchTo("fleet")
 		id, cmd := n.Shell.StartAction(fmt.Sprintf("Spawning %s", msg.Name))
 		n.activeActions[opName] = id
-		return n, tea.Batch(cmd, ops.SpawnVM(n.prov, msg.Name, msg.Source, msg.UserData, msg.GUI, msg.MemoryMB, msg.VCPUs, msg.Ports, msg.RawQemuArgs, msg.Accelerators))
+		return n, tea.Batch(cmd, ops.SpawnVM(n.prov, msg.Name, msg.Source, msg.SourceType, msg.UserData, msg.GUI, msg.MemoryMB, msg.VCPUs, msg.Ports, msg.RawQemuArgs, msg.Accelerators))
 
 	case ops.RequestCreateTemplateMsg:
 		opName := "create-template"
@@ -249,7 +249,8 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// 5. Heuristic-based Refreshes
 		// If it's a destructive or acquisition op, refresh the registry/sources
-		if msg.Op == "prune" || strings.HasPrefix(msg.Op, "delete") || strings.HasPrefix(msg.Op, "pull") {
+		_, blueprintSpawn := msg.Data.(ops.BlueprintSpawnResult)
+		if msg.Op == "prune" || strings.HasPrefix(msg.Op, "delete") || strings.HasPrefix(msg.Op, "pull") || blueprintSpawn {
 			// Refresh Sources (Dropdowns in Hatchery/Spawn)
 			cmds = append(cmds, ops.FetchSources(n.prov, ops.SourceActionSpawn, false, true))
 
@@ -265,6 +266,10 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if strings.HasPrefix(msg.Op, "pull ") && n.Hatchery != nil {
 				imgName := strings.TrimPrefix(msg.Op, "pull ")
 				n.Hatchery.SetPendingSelection(imgName)
+			}
+			if blueprintSpawn && n.Hatchery != nil {
+				result := msg.Data.(ops.BlueprintSpawnResult)
+				n.Hatchery.SetPendingSelection(result.Blueprint)
 			}
 
 			// Special Feedback for Prune
