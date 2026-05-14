@@ -5,6 +5,19 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.22] - 2026-05-14 "The Safer Windows Blueprint"
+
+### Fixed
+
+- Windows blueprints now install and enable OpenSSH Server during the elevated `specialize` phase instead of relying on first-login user commands.
+- `nido-validator` now uses direct SSH readiness checks, safer Windows subprocess timeout handling, and strict validator-owned resource names before cleanup.
+- Validator cleanup and prune no longer target user VMs such as `nido-win-pal` or legacy non-validator names.
+
+### Tested
+
+- Linux test suite: `go test ./...`.
+- Validator safety smoke with `nido-win-pal` present confirmed prune is skipped instead of deleting non-validator VMs.
+
 ## [4.5.21] - 2026-05-13 "The Windows Blueprint" 🪟🧬
 
 ### Added

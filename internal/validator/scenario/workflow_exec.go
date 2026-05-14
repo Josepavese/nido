@@ -8,7 +8,6 @@ import (
 
 	"github.com/Josepavese/nido/internal/validator/mcpclient"
 	"github.com/Josepavese/nido/internal/validator/report"
-	"github.com/Josepavese/nido/internal/validator/util"
 	"github.com/Josepavese/nido/internal/validator/workflows"
 )
 
@@ -151,7 +150,7 @@ func executeWorkflowCLI(ctx *Context, name string, wf workflows.Workflow) error 
 			}
 			setVar(ctx, "last_pulled_image", img)
 		case "spawn":
-			vmName := util.RandomName(step.VMVar)
+			vmName := validatorRandomName("vm-" + step.VMVar)
 			setVar(ctx, step.VMVar, vmName)
 			args := []string{"spawn", vmName}
 			if step.TemplateVar != "" {
@@ -192,7 +191,7 @@ func executeWorkflowCLI(ctx *Context, name string, wf workflows.Workflow) error 
 			if !ok {
 				return fmt.Errorf("vm var %s not set", step.VMVar)
 			}
-			tplName := util.RandomName(step.TemplateVar)
+			tplName := validatorRandomName("tpl-" + step.TemplateVar)
 			setVar(ctx, step.TemplateVar, tplName)
 			args := []string{"template", "create", vmName, tplName, "--json"}
 			resp := runNido(ctx, "template-create", args, ctx.Config.DownloadTimeout)
@@ -218,8 +217,7 @@ func executeWorkflowCLI(ctx *Context, name string, wf workflows.Workflow) error 
 			if !ok {
 				return fmt.Errorf("template var %s not set", step.TemplateVar)
 			}
-			args := []string{"template", "delete", tplName, "--json"}
-			resp := runNido(ctx, "template-delete", args, 30*time.Second)
+			resp := runDeleteValidatorTemplate(ctx, tplName, 30*time.Second)
 			finalize(&resp)
 			_ = ctx.Reporter.WriteStep(resp)
 			if resp.Result == "FAIL" {
@@ -231,8 +229,7 @@ func executeWorkflowCLI(ctx *Context, name string, wf workflows.Workflow) error 
 			if !ok {
 				continue
 			}
-			args := []string{"delete", vmName, "--json"}
-			resp := runNido(ctx, "delete-wf", args, 30*time.Second)
+			resp := runDeleteValidatorVM(ctx, vmName, 30*time.Second)
 			finalize(&resp)
 			_ = ctx.Reporter.WriteStep(resp)
 			if resp.Result == "FAIL" {
@@ -300,7 +297,7 @@ func executeWorkflowMCP(ctx *Context, client *mcpclient.Client, name string, wf 
 			}
 			setVar(ctx, "last_pulled_image", img)
 		case "spawn":
-			vmName := util.RandomName(step.VMVar)
+			vmName := validatorRandomName("vm-" + step.VMVar)
 			setVar(ctx, step.VMVar, vmName)
 			args := map[string]interface{}{
 				"name": vmName,
@@ -341,7 +338,7 @@ func executeWorkflowMCP(ctx *Context, client *mcpclient.Client, name string, wf 
 			if !ok {
 				return fmt.Errorf("vm var %s not set", step.VMVar)
 			}
-			tplName := util.RandomName(step.TemplateVar)
+			tplName := validatorRandomName("tpl-" + step.TemplateVar)
 			setVar(ctx, step.TemplateVar, tplName)
 			if _, err := client.CallWithTimeout("nido_template", map[string]interface{}{
 				"action":        "create",
@@ -356,6 +353,9 @@ func executeWorkflowMCP(ctx *Context, client *mcpclient.Client, name string, wf 
 			if !ok {
 				return fmt.Errorf("template var %s not set", step.TemplateVar)
 			}
+			if !isValidatorGeneratedTemplateName(tplName) {
+				return fmt.Errorf("refusing to delete non-validator template %s", tplName)
+			}
 			if _, err := client.CallWithTimeout("nido_template", map[string]interface{}{
 				"action": "delete",
 				"name":   tplName,
@@ -367,6 +367,9 @@ func executeWorkflowMCP(ctx *Context, client *mcpclient.Client, name string, wf 
 			vmName, ok := getVar(ctx, step.VMVar)
 			if !ok {
 				continue
+			}
+			if !isValidatorGeneratedVMName(vmName) {
+				return fmt.Errorf("refusing to delete non-validator VM %s", vmName)
 			}
 			if _, err := client.CallWithTimeout("nido_vm", map[string]interface{}{
 				"action": "delete",

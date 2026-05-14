@@ -191,6 +191,24 @@ func TestLoadRegistryWindowsBlueprints(t *testing.T) {
 			if !strings.Contains(content, `Microsoft-Windows-International-Core`) || !strings.Contains(content, "<AutoLogon>") {
 				t.Fatal("autounattend.xml missing oobeSystem locale or autologon settings")
 			}
+			oobeStart := strings.Index(content, `<settings pass="oobeSystem">`)
+			if specializeStart == -1 || oobeStart == -1 || specializeStart >= oobeStart {
+				t.Fatal("autounattend.xml missing expected specialize block")
+			}
+			specialize := content[specializeStart:oobeStart]
+			if !strings.Contains(specialize, "Microsoft-Windows-Deployment") ||
+				!strings.Contains(specialize, "windows-setup-openssh.ps1") {
+				t.Fatal("autounattend.xml must install and enable OpenSSH Server during specialize")
+			}
+			sshScript := bp.Scripts["windows-setup-openssh.ps1"]
+			if !strings.Contains(sshScript, "OpenSSH.Server*") ||
+				!strings.Contains(sshScript, "Win32-OpenSSH/releases/latest/download/OpenSSH-Win64.zip") ||
+				!strings.Contains(sshScript, "Set-Service -Name sshd -StartupType Automatic") {
+				t.Fatal("windows OpenSSH setup script missing capability, archive fallback, or service enablement")
+			}
+			if strings.Contains(content, "<FirstLogonCommands>") {
+				t.Fatal("autounattend.xml must not depend on FirstLogonCommands for SSH provisioning")
+			}
 		})
 	}
 }

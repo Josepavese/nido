@@ -9,7 +9,6 @@ import (
 
 	"github.com/Josepavese/nido/internal/validator/report"
 	"github.com/Josepavese/nido/internal/validator/runner"
-	"github.com/Josepavese/nido/internal/validator/util"
 )
 
 // VMSpawnResources verifies that custom memory and CPU can be set during nido spawn (CLI & MCP).
@@ -28,7 +27,7 @@ func VMSpawnResources() Scenario {
 }
 
 func spawnResourcesCLI(ctx *Context) report.StepResult {
-	vmName := util.RandomName("val-spawn-res-cli")
+	vmName := validatorRandomName("vm-spawn-res-cli")
 
 	args := []string{"spawn", vmName, "--memory", "1024", "--cpus", "2"}
 	if ctx.Config.BaseImage != "" {
@@ -59,7 +58,7 @@ func spawnResourcesCLI(ctx *Context) report.StepResult {
 		}
 
 		// Cleanup
-		runNido(ctx, "delete", []string{"delete", vmName, "--json"}, 10*time.Second)
+		runDeleteValidatorVM(ctx, vmName, 10*time.Second)
 		ctx.State.RemoveVM(vmName)
 	}
 
@@ -68,7 +67,7 @@ func spawnResourcesCLI(ctx *Context) report.StepResult {
 }
 
 func spawnResourcesMCP(ctx *Context) report.StepResult {
-	vmName := util.RandomName("val-spawn-res-mcp")
+	vmName := validatorRandomName("vm-spawn-res-mcp")
 
 	// Prepare MCP request
 	req := map[string]interface{}{
@@ -138,7 +137,7 @@ func spawnResourcesMCP(ctx *Context) report.StepResult {
 		}
 
 		// Cleanup
-		runNido(ctx, "delete", []string{"delete", vmName, "--json"}, 10*time.Second)
+		runDeleteValidatorVM(ctx, vmName, 10*time.Second)
 		ctx.State.RemoveVM(vmName)
 	}
 
@@ -147,7 +146,7 @@ func spawnResourcesMCP(ctx *Context) report.StepResult {
 }
 
 func spawnResourcesRawArgs(ctx *Context) report.StepResult {
-	vmName := util.RandomName("val-spawn-raw")
+	vmName := validatorRandomName("vm-spawn-raw")
 	marker := fmt.Sprintf("guest=%s", vmName)
 
 	args := []string{"spawn", vmName, "--qemu-arg", "-name", "--qemu-arg", marker}
@@ -196,7 +195,7 @@ func spawnResourcesRawArgs(ctx *Context) report.StepResult {
 		}
 
 		// Cleanup
-		runNido(ctx, "delete", []string{"delete", vmName, "--json"}, 10*time.Second)
+		runDeleteValidatorVM(ctx, vmName, 10*time.Second)
 		ctx.State.RemoveVM(vmName)
 	}
 
@@ -205,7 +204,7 @@ func spawnResourcesRawArgs(ctx *Context) report.StepResult {
 }
 
 func spawnResourcesAccelAuto(ctx *Context) report.StepResult {
-	vmName := util.RandomName("val-spawn-accel")
+	vmName := validatorRandomName("vm-spawn-accel")
 
 	// We test --accel auto specifically
 	args := []string{"spawn", vmName, "--accel", "auto"}
@@ -218,7 +217,7 @@ func spawnResourcesAccelAuto(ctx *Context) report.StepResult {
 	defer func() {
 		// We use a separate context or just fire-and-forget delete
 		// Note: we can't use the original ctx if it's cancelled, but here ctx is likely fine.
-		runNido(ctx, "delete", []string{"delete", vmName, "--json"}, 10*time.Second)
+		runDeleteValidatorVM(ctx, vmName, 10*time.Second)
 		ctx.State.RemoveVM(vmName)
 	}()
 

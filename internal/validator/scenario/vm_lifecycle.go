@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -33,7 +34,7 @@ func VMLifecycle() Scenario {
 }
 
 func spawnVM(ctx *Context) report.StepResult {
-	vmName := util.RandomName("cli-val-vm")
+	vmName := validatorRandomName("vm-lifecycle")
 	setVar(ctx, "vm_primary", vmName)
 
 	args := []string{"spawn", vmName}
@@ -186,14 +187,8 @@ func chooseTemplate(ctx *Context) string {
 func sshCheck(ctx *Context) report.StepResult {
 	start := time.Now()
 	sshPort, _ := getVar(ctx, "vm_primary_ssh_port")
-	sshUser, okUser := getVar(ctx, "vm_primary_ssh_user")
-	if !okUser || sshUser == "" {
-		if ctx.Config.SSHUser != "" {
-			sshUser = ctx.Config.SSHUser
-		} else {
-			sshUser = "vmuser" // ultimate fallback
-		}
-	}
+	sshUser, _ := getVar(ctx, "vm_primary_ssh_user")
+	sshUser = resolveSSHUser(ctx, sshUser)
 	host := "127.0.0.1"
 	if ip, ok := getVar(ctx, "vm_primary_ip"); ok && ip != "" {
 		host = ip
@@ -202,138 +197,208 @@ func sshCheck(ctx *Context) report.StepResult {
 		return skipResult("ssh", []string{}, "ssh metadata missing (port or user)")
 	}
 
-	// Safety check: ensure sshpass is available if needed
-	sshPwd, okPwd := getVar(ctx, "vm_primary_ssh_password")
-	if !okPwd || sshPwd == "" {
-		if ctx.Config.SSHPassword != "" {
-			sshPwd = ctx.Config.SSHPassword
-		}
-	}
-	if sshPwd != "" {
-		if _, err := os.Stat("/usr/bin/sshpass"); os.IsNotExist(err) {
-			// Try to find in PATH if not at standard location
-			if _, err := exec.LookPath("sshpass"); err != nil {
-				return skipResult("sshpass", []string{}, "sshpass not found (required for password auth)")
-			}
-		}
-	}
-
-	// Use Config.BootTimeout for waiting for port
 	waitTimeout := ctx.Config.BootTimeout
-	if err := waitForPort(host, sshPort, waitTimeout); err != nil {
-		return report.StepResult{
-			Command:    "ssh",
-			Args:       []string{},
-			Result:     "FAIL",
-			Stderr:     err.Error(),
-			DurationMs: time.Since(start).Milliseconds(),
-			StartedAt:  time.Now(),
-		}
+	if waitTimeout <= 0 {
+		waitTimeout = 3 * time.Minute
 	}
 
-	vmName, _ := getVar(ctx, "vm_primary")
-	execCmd := ctx.Config.NidoBin
-	execArgs := []string{"ssh", vmName, "--", "echo ok"}
-
-	var last report.StepResult
-	// Increased retries for stability (40 attempts * 5s sleep + 10s exec = ~10 mins max)
-	for attempt := 0; attempt < 40; attempt++ {
-		inv := runner.Invocation{
-			Command: execCmd,
-			Args:    execArgs,
-			Timeout: 10 * time.Second, // Tighter execution timeout
-		}
-		execRes := ctx.Runner.Exec(inv)
-		res := report.StepResult{
-			Command:    inv.Command,
-			Args:       inv.Args,
-			ExitCode:   execRes.ExitCode,
-			DurationMs: execRes.Duration.Milliseconds(),
-			TimedOut:   execRes.TimedOut,
-			Stdout:     execRes.Stdout,
-			Stderr:     execRes.Stderr,
-			Result:     "FAIL",
-			StartedAt:  execRes.StartTime,
-		}
-		addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
-		addAssertion(&res, "stdout_ok", res.Stdout != "" && containsOK(res.Stdout), res.Stdout)
-		finalize(&res)
-		if res.Result == "PASS" {
-			// Optional cloud-init marker check
-			if ctx.Config.CheckCloudInit {
-				markerRes := runSSHCommand(ctx, sshPort, sshUser, host, "cat /tmp/nido-cli-validate-marker", 10*time.Second)
-				addAssertion(&res, "cloud_init_marker", markerRes.ExitCode == 0, markerRes.Stderr)
-			}
-			// Optional forwarding connectivity check
-			if ctx.Config.CheckForward {
-				if hostPort := getVarOrDefault(ctx, "vm_primary_host_port", ""); hostPort != "" {
-					runSSHCommand(ctx, sshPort, sshUser, host, "nohup python3 -m http.server 80 >/tmp/http.log 2>&1 &", 5*time.Second)
-					if err := waitForPort("127.0.0.1", hostPort, 10*time.Second); err == nil {
-						addAssertion(&res, "forward_dial", true, "")
-					} else {
-						addAssertion(&res, "forward_dial", false, err.Error())
-					}
-					// best-effort cleanup
-					runSSHCommand(ctx, sshPort, sshUser, host, "pkill -f http.server || true", 5*time.Second)
-				}
-			}
-			return res
-		}
-		last = res
-		time.Sleep(5 * time.Second)
+	inv, execRes, attempts, err := waitForSSHCommand(ctx, sshPort, sshUser, host, "echo ok", waitTimeout, 10*time.Second, func(res runner.Result) bool {
+		return res.ExitCode == 0 && !res.TimedOut && containsOK(res.Stdout)
+	})
+	res := buildResult("ssh", inv, execRes)
+	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
+	addAssertion(&res, "stdout_ok", res.Stdout != "" && containsOK(res.Stdout), res.Stdout)
+	if err != nil {
+		res.Stderr = appendDiagnostic(res.Stderr, fmt.Sprintf("SSH readiness failed after %d attempts within %s: %s", attempts, waitTimeout, err.Error()))
 	}
-	last.DurationMs = time.Since(start).Milliseconds()
-	return last
+	res.DurationMs = time.Since(start).Milliseconds()
+	finalize(&res)
+	if res.Result != "PASS" {
+		return res
+	}
+
+	if attempts > 1 {
+		addAssertion(&res, "ssh_ready_retries", true, fmt.Sprintf("attempts=%d", attempts))
+	}
+	if ctx.Config.CheckCloudInit {
+		markerRes := runSSHCommand(ctx, sshPort, sshUser, host, "cat /tmp/nido-cli-validate-marker", 10*time.Second)
+		addAssertion(&res, "cloud_init_marker", markerRes.ExitCode == 0 && containsOK(markerRes.Stdout), appendDiagnostic(markerRes.Stderr, markerRes.Stdout))
+	}
+	if ctx.Config.CheckForward {
+		if hostPort := getVarOrDefault(ctx, "vm_primary_host_port", ""); hostPort != "" {
+			runSSHCommand(ctx, sshPort, sshUser, host, "nohup python3 -m http.server 80 >/tmp/http.log 2>&1 &", 5*time.Second)
+			if err := waitForPort("127.0.0.1", hostPort, 10*time.Second); err == nil {
+				addAssertion(&res, "forward_dial", true, "")
+			} else {
+				addAssertion(&res, "forward_dial", false, err.Error())
+			}
+			runSSHCommand(ctx, sshPort, sshUser, host, "pkill -f http.server || true", 5*time.Second)
+		}
+	}
+	res.DurationMs = time.Since(start).Milliseconds()
+	finalize(&res)
+	return res
 }
 
 func runSSHCommand(ctx *Context, port, user, host, cmd string, timeout time.Duration) runner.Result {
-	if vmName, ok := getVar(ctx, "vm_primary"); ok && vmName != "" {
-		return ctx.Runner.Exec(runner.Invocation{
-			Command: ctx.Config.NidoBin,
-			Args:    []string{"ssh", vmName, "--", cmd},
-			Timeout: timeout,
-		})
+	inv, err := buildSSHInvocation(ctx, port, user, host, cmd, timeout)
+	if err != nil {
+		return runner.Result{
+			Stderr:    err.Error(),
+			ExitCode:  -1,
+			StartTime: time.Now(),
+		}
+	}
+	return ctx.Runner.Exec(inv)
+}
+
+func waitForSSHCommand(ctx *Context, port, user, host, cmd string, waitTimeout, attemptTimeout time.Duration, ready func(runner.Result) bool) (runner.Invocation, runner.Result, int, error) {
+	if waitTimeout <= 0 {
+		waitTimeout = 3 * time.Minute
+	}
+	if attemptTimeout <= 0 {
+		attemptTimeout = 10 * time.Second
+	}
+	if ready == nil {
+		ready = func(res runner.Result) bool {
+			return res.ExitCode == 0 && !res.TimedOut
+		}
 	}
 
-	sshUser := user
-	if ctx.Config.SSHUser != "" {
-		sshUser = ctx.Config.SSHUser
+	deadline := time.Now().Add(waitTimeout)
+	var lastInv runner.Invocation
+	var lastRes runner.Result
+	attempts := 0
+	for {
+		remaining := time.Until(deadline)
+		if attempts > 0 && remaining <= 0 {
+			break
+		}
+		timeout := attemptTimeout
+		if remaining > 0 && remaining < timeout {
+			timeout = remaining
+		}
+
+		inv, err := buildSSHInvocation(ctx, port, user, host, cmd, timeout)
+		if err != nil {
+			return inv, runner.Result{Stderr: err.Error(), ExitCode: -1, StartTime: time.Now()}, attempts, err
+		}
+		attempts++
+		lastInv = inv
+		lastRes = ctx.Runner.Exec(inv)
+		if ready(lastRes) {
+			return lastInv, lastRes, attempts, nil
+		}
+
+		remaining = time.Until(deadline)
+		if remaining <= 0 {
+			break
+		}
+		sleepFor := 5 * time.Second
+		if remaining < sleepFor {
+			sleepFor = remaining
+		}
+		time.Sleep(sleepFor)
 	}
 
+	if lastRes.StartTime.IsZero() {
+		lastRes = runner.Result{Stderr: "SSH command was not attempted", ExitCode: -1, StartTime: time.Now()}
+	}
+	detail := strings.TrimSpace(lastRes.Stderr)
+	if detail == "" {
+		detail = strings.TrimSpace(lastRes.Stdout)
+	}
+	return lastInv, lastRes, attempts, fmt.Errorf("command %q did not become ready; last output: %s", cmd, detail)
+}
+
+func buildSSHInvocation(ctx *Context, port, user, host, cmd string, timeout time.Duration) (runner.Invocation, error) {
+	sshUser := resolveSSHUser(ctx, user)
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	if port == "" {
+		return runner.Invocation{Command: "ssh", Timeout: timeout}, fmt.Errorf("ssh port is empty")
+	}
 	args := []string{
-		"-n",
 		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "ConnectTimeout=10",
-		"-o", "BatchMode=yes",
-		"-o", "NumberOfPasswordPrompts=0",
+		"-o", "UserKnownHostsFile=" + os.DevNull,
+		"-o", "ConnectTimeout=5",
+		"-o", "ConnectionAttempts=1",
+		"-o", "ServerAliveInterval=5",
+		"-o", "ServerAliveCountMax=1",
+	}
+	if runtime.GOOS != "windows" {
+		args = append([]string{"-n"}, args...)
+	}
+
+	sshPwd := resolveSSHPassword(ctx)
+	if sshPwd == "" {
+		args = append(args,
+			"-o", "BatchMode=yes",
+			"-o", "NumberOfPasswordPrompts=0",
+		)
+	} else {
+		args = append(args, "-o", "NumberOfPasswordPrompts=1")
 	}
 	args = append(args, validatorSSHKeyArgs()...)
 	args = append(args,
 		"-p", port,
 		fmt.Sprintf("%s@%s", sshUser, host),
-		"--", cmd,
+		cmd,
 	)
 
 	execCmd := "ssh"
 	execArgs := args
-	sshPwd, okPwd := getVar(ctx, "vm_primary_ssh_password")
-	if ctx.Config.SSHPassword != "" {
-		sshPwd = ctx.Config.SSHPassword
-	} else if !okPwd {
-		sshPwd = ""
-	}
+	env := map[string]string{}
 
+	if _, err := exec.LookPath("ssh"); err != nil {
+		return runner.Invocation{Command: execCmd, Args: execArgs, Timeout: timeout}, fmt.Errorf("ssh not found in PATH: %w", err)
+	}
 	if sshPwd != "" {
 		execCmd = "sshpass"
-		execArgs = append([]string{"-p", sshPwd, "ssh"}, args...)
+		execArgs = append([]string{"-e", "ssh"}, args...)
+		env["SSHPASS"] = sshPwd
+		if _, err := exec.LookPath("sshpass"); err != nil {
+			return runner.Invocation{Command: execCmd, Args: execArgs, Timeout: timeout, Env: env}, fmt.Errorf("sshpass not found in PATH (required for password auth): %w", err)
+		}
 	}
 
-	return ctx.Runner.Exec(runner.Invocation{
+	return runner.Invocation{
 		Command: execCmd,
 		Args:    execArgs,
 		Timeout: timeout,
-	})
+		Env:     env,
+	}, nil
+}
+
+func resolveSSHUser(ctx *Context, user string) string {
+	if user != "" {
+		return user
+	}
+	if ctx.Config.SSHUser != "" {
+		return ctx.Config.SSHUser
+	}
+	return "vmuser"
+}
+
+func resolveSSHPassword(ctx *Context) string {
+	if ctx.Config.SSHPassword != "" {
+		return ctx.Config.SSHPassword
+	}
+	sshPwd, _ := getVar(ctx, "vm_primary_ssh_password")
+	return sshPwd
+}
+
+func appendDiagnostic(a, b string) string {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	if a == "" {
+		return b
+	}
+	if b == "" {
+		return a
+	}
+	return a + "\n" + b
 }
 
 func validatorSSHKeyArgs() []string {
@@ -377,8 +442,7 @@ func deleteVM(ctx *Context) report.StepResult {
 	if !ok {
 		return skipResult(ctx.Config.NidoBin, []string{"delete"}, "vm_primary not set")
 	}
-	args := []string{"delete", vmName, "--json"}
-	res := runNido(ctx, "delete", args, 30*time.Second)
+	res := runDeleteValidatorVM(ctx, vmName, 30*time.Second)
 	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
 	if res.ExitCode == 0 {
 		ctx.State.RemoveVM(vmName)
@@ -388,26 +452,68 @@ func deleteVM(ctx *Context) report.StepResult {
 }
 
 func pruneVM(ctx *Context) report.StepResult {
+	listRes := runNido(ctx, "prune-safety-list", []string{"list", "--json"}, 15*time.Second)
+	if listRes.ExitCode != 0 {
+		return skipResult(ctx.Config.NidoBin, []string{"prune", "--json"}, "skipping prune: failed to inspect VM list before prune")
+	}
+	blocked, err := stoppedNonValidatorVMs(listRes.Stdout)
+	if err != nil {
+		return skipResult(ctx.Config.NidoBin, []string{"prune", "--json"}, "skipping prune: failed to parse VM list before prune: "+err.Error())
+	}
+	if len(blocked) > 0 {
+		return skipResult(ctx.Config.NidoBin, []string{"prune", "--json"}, "skipping prune: stopped non-validator VMs exist: "+strings.Join(blocked, ","))
+	}
+
 	args := []string{"prune", "--json"}
 	res := runNido(ctx, "prune", args, 15*time.Second)
 	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
+	if payload, err := parseJSON(res.Stdout); err == nil {
+		addAssertion(&res, "json_parse", true, "")
+		addAssertion(&res, "status_ok", payload["status"] == "ok", "")
+	} else {
+		addAssertion(&res, "json_parse", false, err.Error())
+	}
 	finalize(&res)
 	return res
 }
 
+func stoppedNonValidatorVMs(raw string) ([]string, error) {
+	payload, err := parseJSON(raw)
+	if err != nil {
+		return nil, err
+	}
+	var blocked []string
+	data, _ := payload["data"].(map[string]interface{})
+	vms, _ := data["vms"].([]interface{})
+	for _, entry := range vms {
+		vm, ok := entry.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := vm["name"].(string)
+		state, _ := vm["state"].(string)
+		if name != "" && state == "stopped" && !isValidatorGeneratedVMName(name) {
+			blocked = append(blocked, name)
+		}
+	}
+	return blocked, nil
+}
+
 func cmdlineTest(ctx *Context) report.StepResult {
+	stepStart := time.Now()
 	vmName, ok := getVar(ctx, "vm_primary")
 	if !ok {
 		return skipResult(ctx.Config.NidoBin, []string{"cmdline-test"}, "vm_primary not set")
 	}
 	sshPort, okPort := getVar(ctx, "vm_primary_ssh_port")
-	sshUser, okUser := getVar(ctx, "vm_primary_ssh_user")
+	sshUser, _ := getVar(ctx, "vm_primary_ssh_user")
+	sshUser = resolveSSHUser(ctx, sshUser)
 	host := "127.0.0.1"
 	if ip, ok := getVar(ctx, "vm_primary_ip"); ok && ip != "" {
 		host = ip
 	}
 
-	if !okPort || !okUser {
+	if !okPort {
 		return skipResult("ssh", []string{}, "ssh metadata missing")
 	}
 
@@ -428,26 +534,30 @@ func cmdlineTest(ctx *Context) report.StepResult {
 		return startRes
 	}
 
-	// 3. Wait for SSH and check /proc/cmdline
-	if err := waitForPort(host, sshPort, ctx.Config.BootTimeout); err != nil {
-		addAssertion(&startRes, "ssh_ready", false, err.Error())
+	// 3. Wait for SSH, then check /proc/cmdline only for Direct Kernel Boot guests.
+	_, readyRes, attempts, err := waitForSSHCommand(ctx, sshPort, sshUser, host, "echo ok", ctx.Config.BootTimeout, 10*time.Second, func(res runner.Result) bool {
+		return res.ExitCode == 0 && !res.TimedOut && containsOK(res.Stdout)
+	})
+	addAssertion(&startRes, "ssh_ready", err == nil, fmt.Sprintf("attempts=%d %s", attempts, appendDiagnostic(readyRes.Stderr, errDetails(err))))
+	if err != nil {
+		startRes.DurationMs = time.Since(stepStart).Milliseconds()
 		finalize(&startRes)
 		return startRes
 	}
 
-	checkRes := runSSHCommand(ctx, sshPort, sshUser, host, "cat /proc/cmdline", 15*time.Second)
-
-	// Only assert match if we are in Direct Kernel Boot mode
 	home, _ := sysutil.UserHome()
 	vmsDir := filepath.Join(home, ".nido", "vms")
 	kernelPath := filepath.Join(vmsDir, vmName+".kernel")
 	if _, err := os.Stat(kernelPath); err == nil {
+		checkRes := runSSHCommand(ctx, sshPort, sshUser, host, "cat /proc/cmdline", 15*time.Second)
+		addAssertion(&startRes, "ssh_cmdline_exit_zero", checkRes.ExitCode == 0, checkRes.Stderr)
 		found := strings.Contains(checkRes.Stdout, magicParam)
 		addAssertion(&startRes, "cmdline_match", found, fmt.Sprintf("Expected '%s' in /proc/cmdline, got: %s", magicParam, checkRes.Stdout))
 	} else {
 		addAssertion(&startRes, "cmdline_test", true, "Skipped match check (not Direct Kernel Boot)")
 	}
 
+	startRes.DurationMs = time.Since(stepStart).Milliseconds()
 	finalize(&startRes)
 	return startRes
 }

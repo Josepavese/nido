@@ -1,8 +1,7 @@
 package runner
 
 import (
-	"bytes"
-	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -49,11 +48,9 @@ func (r Runner) Exec(inv Invocation) Result {
 		timeout = 5 * time.Minute
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, inv.Command, inv.Args...)
+	cmd := exec.Command(inv.Command, inv.Args...)
 	cmd.Dir = inv.Workdir
+	prepareCommand(cmd)
 
 	// Wire up Stdin if present
 	if inv.Stdin != "" {
@@ -67,24 +64,69 @@ func (r Runner) Exec(inv Invocation) Result {
 	}
 	cmd.Env = env
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdoutFile, err := os.CreateTemp("", "nido-runner-stdout-*")
+	if err != nil {
+		return Result{Stderr: err.Error(), ExitCode: -1, StartTime: time.Now()}
+	}
+	defer os.Remove(stdoutFile.Name())
+	stderrFile, err := os.CreateTemp("", "nido-runner-stderr-*")
+	if err != nil {
+		stdoutFile.Close()
+		return Result{Stderr: err.Error(), ExitCode: -1, StartTime: time.Now()}
+	}
+	defer os.Remove(stderrFile.Name())
+	cmd.Stdout = stdoutFile
+	cmd.Stderr = stderrFile
 
 	start := time.Now()
-	err := cmd.Run()
+	err = cmd.Start()
+	if err != nil {
+		stdoutText, stderrText := readCommandOutput(stdoutFile, stderrFile)
+		return Result{
+			Stdout:    stdoutText,
+			Stderr:    strings.TrimSpace(stderrText + "\n" + err.Error()),
+			ExitCode:  -1,
+			Duration:  time.Since(start),
+			StartTime: start,
+		}
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	timedOut := false
+	select {
+	case err = <-done:
+	case <-time.After(timeout):
+		timedOut = true
+		terminateProcessTree(cmd.Process)
+		select {
+		case err = <-done:
+		case <-time.After(5 * time.Second):
+			err = fmt.Errorf("process did not exit after timeout")
+		}
+	}
 	duration := time.Since(start)
+	stdoutText, stderrText := readCommandOutput(stdoutFile, stderrFile)
 
 	res := Result{
-		Stdout:    stdout.String(),
-		Stderr:    stderr.String(),
+		Stdout:    stdoutText,
+		Stderr:    stderrText,
 		Duration:  duration,
 		StartTime: start,
 	}
 
-	if ctx.Err() == context.DeadlineExceeded {
+	if timedOut {
 		res.TimedOut = true
 		res.ExitCode = -1
+		timeoutMessage := fmt.Sprintf("command timed out after %s", timeout)
+		if strings.TrimSpace(res.Stderr) == "" {
+			res.Stderr = timeoutMessage
+		} else {
+			res.Stderr = strings.TrimRight(res.Stderr, "\r\n") + "\n" + timeoutMessage
+		}
 		return res
 	}
 
@@ -99,4 +141,14 @@ func (r Runner) Exec(inv Invocation) Result {
 
 	res.ExitCode = 0
 	return res
+}
+
+func readCommandOutput(stdoutFile, stderrFile *os.File) (string, string) {
+	stdoutPath := stdoutFile.Name()
+	stderrPath := stderrFile.Name()
+	_ = stdoutFile.Close()
+	_ = stderrFile.Close()
+	stdout, _ := os.ReadFile(stdoutPath)
+	stderr, _ := os.ReadFile(stderrPath)
+	return string(stdout), string(stderr)
 }
