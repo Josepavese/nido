@@ -4,7 +4,7 @@ Nido Validation Engine
 What this does
 - End-to-end validation of both Nido CLI and MCP: version/doctor, images/cache/templates, VM lifecycle (spawn/info/list/ssh/start/stop/delete/prune), template workflows, image-pool flows, MCP tools parity, auxiliary commands, and cleanup.
 - Single source of truth for workflows: YAML at `internal/validator/workflows/default.yaml` is executed twice (CLI and MCP) to keep behavior aligned.
-- Auto-picks the smallest image and template when none are provided, so you can run with zero flags; artifacts are cleaned up (VMs, templates, cache entry).
+- Auto-picks the smallest image and template when none are provided, so you can run with zero flags; validator-owned artifacts are cleaned up (VMs, templates, cache entry).
 - Outputs machine-readable NDJSON plus a human summary and a live, colored progress HUD on stdout.
 
 How to run
@@ -28,14 +28,14 @@ How to run
   - Behavior: `--skip-gui`, `--skip-update`, `--fail-fast`, `--keep-artifacts`, `--workflow` / `NIDO_WORKFLOW` for custom YAML, `--check-forwarding`, `--check-cloud-init`.
 
 What gets tested (scenarios)
-- Pre-clean: remove stale VMs/templates with test prefixes.
+- Pre-clean: remove stale validator-owned VMs/templates named `nido-val-...-<hex>`.
 - Pre-flight: `version --json` and `doctor --json` schema/values.
 - Images/cache/templates: list + base/pool image pull, cache info/list, template list with auto selection.
-- VM lifecycle: spawn (with optional ports/user-data), info/list consistency, SSH echo, start/stop/delete, prune, optional forwarding + cloud-init checks.
+- VM lifecycle: spawn (with optional ports/user-data), info/list consistency, direct SSH echo, start/stop/delete, safe prune, optional forwarding + cloud-init checks.
 - Workflows (from YAML): template flow (spawn → template create → spawn from template → delete VMs → delete template); image-pool flow (pull → spawn from image → delete VM → cache rm). Executed via CLI and again via the compact MCP tool surface for parity.
 - MCP protocol: initialize, tools/list expected set, resources/list, prompts/list, positive and negative tool calls.
 - Auxiliary: help, completion, register, mcp-help; GUI/update are opt-in skips by default.
-- Cleanup: tracked VMs/templates and temp files removed unless `--keep-artifacts`.
+- Cleanup: validator-owned VMs/templates and temp files removed unless `--keep-artifacts`.
 
 Outputs
 - NDJSON log: `logs/cli-validate-<timestamp>.ndjson` (every step with command, args, exit code, duration, stdout/stderr, assertions, result).
@@ -45,7 +45,8 @@ Outputs
 Behavior and defaults
 - Auto image/template selection chooses the smallest advertised size when none are provided, and records them for both CLI and MCP workflows.
 - Image pulls and cache removals are mirrored between CLI and MCP; templates created during workflows are deleted at the end.
-- Even if the validator stops early, panics, or receives `SIGINT`/`SIGTERM`, it performs a best-effort sweep of test VMs and templates unless `--keep-artifacts` is set.
+- Even if the validator stops early, panics, or receives `SIGINT`/`SIGTERM`, it performs a best-effort sweep of validator-owned VMs and templates unless `--keep-artifacts` is set.
+- Destructive cleanup is ownership-safe: automatic delete/sweep only targets generated `nido-val-...-<hex>` resources or resources tracked during the current run. `nido prune` is skipped when stopped non-validator VMs exist, so local stopped VMs are not removed by validation.
 - MCP client tolerates stdout noise by line-buffered JSON parsing; MCP server uses quiet downloads to keep JSON clean.
 - Fail-fast stops early on failure (except cleanup), but defaults are tuned for full coverage.
 

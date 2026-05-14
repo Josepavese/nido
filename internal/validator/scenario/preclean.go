@@ -7,7 +7,7 @@ import (
 	"github.com/Josepavese/nido/internal/validator/report"
 )
 
-// PreClean removes stale prefixed VMs before running the suite.
+// PreClean removes stale validator-owned resources before running the suite.
 func PreClean() Scenario {
 	return Scenario{
 		Name: "preclean",
@@ -18,7 +18,7 @@ func PreClean() Scenario {
 	}
 }
 
-// Sweep performs a best-effort global cleanup of all test artifacts.
+// Sweep performs a best-effort cleanup of validator-owned artifacts.
 // It is designed to be safe to run from signal handlers or cleanup hooks.
 func Sweep(ctx *Context) {
 	snapshot := ctx.State.Snapshot()
@@ -29,7 +29,7 @@ func Sweep(ctx *Context) {
 	res := runNido(ctx, "sweep-list", args, 5*time.Second)
 	vmSet := map[string]bool{}
 	for _, name := range snapshot.VMs {
-		if name != "" {
+		if isValidatorGeneratedVMName(name) {
 			vmSet[name] = true
 		}
 	}
@@ -40,7 +40,7 @@ func Sweep(ctx *Context) {
 				if arr, ok := data["vms"].([]interface{}); ok {
 					for _, v := range arr {
 						if m, ok := v.(map[string]interface{}); ok {
-							if name, ok := m["name"].(string); ok && isPrefixedTestVM(name) {
+							if name, ok := m["name"].(string); ok && isValidatorGeneratedVMName(name) {
 								vmSet[name] = true
 							}
 						}
@@ -52,13 +52,12 @@ func Sweep(ctx *Context) {
 
 	// 2. Destroy them all
 	for name := range vmSet {
-		// Fire and forget delete
-		runNido(ctx, "sweep-delete", []string{"delete", name}, 10*time.Second)
+		runDeleteValidatorVM(ctx, name, 10*time.Second)
 	}
 
 	templateSet := map[string]bool{}
 	for _, name := range snapshot.Templates {
-		if name != "" {
+		if isValidatorGeneratedTemplateName(name) {
 			templateSet[name] = true
 		}
 	}
@@ -71,7 +70,7 @@ func Sweep(ctx *Context) {
 				if arr, ok := data["templates"].([]interface{}); ok {
 					for _, t := range arr {
 						name := templateName(t)
-						if strings.HasPrefix(name, "tpl_primary") {
+						if isValidatorGeneratedTemplateName(name) {
 							templateSet[name] = true
 						}
 					}
@@ -81,16 +80,11 @@ func Sweep(ctx *Context) {
 	}
 
 	for name := range templateSet {
-		runNido(ctx, "sweep-template-delete", []string{"template", "delete", name, "--force"}, 10*time.Second)
+		runDeleteValidatorTemplate(ctx, name, 10*time.Second)
 	}
 }
 
 func precleanStep(ctx *Context) report.StepResult {
-	// Re-use Sweep logic implicitly?
-	// For now, keep the rigorous assertions of precleanStep but maybe share detection logic?
-	// Actually, precleanStep has specific assertions we want to keep.
-	// But let's at least update the prefix check.
-
 	args := []string{"list", "--json"}
 	res := runNido(ctx, "preclean-list", args, 15*time.Second)
 	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
@@ -105,7 +99,7 @@ func precleanStep(ctx *Context) report.StepResult {
 		if arr, ok := data["vms"].([]interface{}); ok {
 			for _, v := range arr {
 				if m, ok := v.(map[string]interface{}); ok {
-					if name, ok := m["name"].(string); ok && isPrefixedTestVM(name) {
+					if name, ok := m["name"].(string); ok && isValidatorGeneratedVMName(name) {
 						vms = append(vms, name)
 					}
 				}
@@ -113,23 +107,13 @@ func precleanStep(ctx *Context) report.StepResult {
 		}
 	}
 	for _, name := range vms {
-		del := runNido(ctx, "preclean-delete", []string{"delete", name, "--json"}, 30*time.Second)
+		del := runDeleteValidatorVM(ctx, name, 30*time.Second)
 		finalize(&del)
 		_ = ctx.Reporter.WriteStep(del)
-		if del.Result == "PASS" {
-			ctx.State.AddVM(name)
-		}
 	}
-	addAssertion(&res, "deleted_prefixed", true, strings.Join(vms, ","))
+	addAssertion(&res, "deleted_validator_vms", true, strings.Join(vms, ","))
 	finalize(&res)
 	return res
-}
-
-func isPrefixedTestVM(name string) bool {
-	return strings.HasPrefix(name, "cli-val-") ||
-		strings.HasPrefix(name, "val-") || // Added for new test pattern
-		strings.HasPrefix(name, "vm_template_src") ||
-		strings.HasPrefix(name, "vm_from_template")
 }
 
 func precleanTemplates(ctx *Context) report.StepResult {
@@ -147,21 +131,21 @@ func precleanTemplates(ctx *Context) report.StepResult {
 		if arr, ok := data["templates"].([]interface{}); ok {
 			for _, t := range arr {
 				name := templateName(t)
-				if strings.HasPrefix(name, "tpl_primary") {
+				if isValidatorGeneratedTemplateName(name) {
 					toDelete = append(toDelete, name)
 				}
 			}
 		}
 	}
 	for _, tpl := range toDelete {
-		del := runNido(ctx, "preclean-template-delete", []string{"template", "delete", tpl, "--force"}, 30*time.Second)
+		del := runDeleteValidatorTemplate(ctx, tpl, 30*time.Second)
 		finalize(&del)
 		_ = ctx.Reporter.WriteStep(del)
 		if del.Result == "PASS" {
 			ctx.State.AddTemplate(tpl)
 		}
 	}
-	addAssertion(&res, "deleted_templates", true, strings.Join(toDelete, ","))
+	addAssertion(&res, "deleted_validator_templates", true, strings.Join(toDelete, ","))
 	finalize(&res)
 	return res
 }

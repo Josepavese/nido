@@ -8,7 +8,6 @@ import (
 
 	"github.com/Josepavese/nido/internal/validator/report"
 	"github.com/Josepavese/nido/internal/validator/runner"
-	"github.com/Josepavese/nido/internal/validator/util"
 )
 
 // VMMutableConfig covers the 'nido config' command and the MCP VM action surface.
@@ -25,7 +24,7 @@ func VMMutableConfig() Scenario {
 }
 
 func spawnConfigVM(ctx *Context) report.StepResult {
-	vmName := util.RandomName("val-cfg-vm")
+	vmName := validatorRandomName("vm-cfg")
 	setVar(ctx, "vm_config", vmName)
 
 	args := []string{"spawn", vmName}
@@ -208,8 +207,7 @@ func deleteConfigVM(ctx *Context) report.StepResult {
 		return skipResult(ctx.Config.NidoBin, []string{"delete"}, "vm_config not set")
 	}
 
-	args := []string{"delete", vmName, "--json"}
-	res := runNido(ctx, "delete", args, 10*time.Second)
+	res := runDeleteValidatorVM(ctx, vmName, 10*time.Second)
 	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
 
 	if res.Result == "PASS" {
