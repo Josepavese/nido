@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nido VM Testing"
+  short_description: "Run faithful VM tests and isolated agent labs"
+  default_prompt: "Use $nido-vm-testing to design a Nido-based VM test workflow for this project."

@@ -109,7 +109,7 @@ jobs:
             fi
             sleep $((attempt * 10))
           done
-          shellcheck -S error bin/*.sh bin/housekeeping/*.sh installers/*.sh manual_verify_gpu.sh restore_gpu.sh run_test.sh tools/nido-init/nido-init.sh
+          shellcheck -S error bin/*.sh bin/housekeeping/*.sh installers/*.sh manual_verify_gpu.sh restore_gpu.sh run_test.sh tools/nido-init/nido-init.sh extras/skills/*/scripts/*.sh
 
       - name: Validate PowerShell installer syntax
         if: runner.os == 'Windows'

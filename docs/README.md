@@ -8,3 +8,4 @@ Support notes and operational history live here.
 - `CLI_JSON_SPEC.md` (Structured JSON output contract)
 - `images.md` (Image catalog and blueprint usage)
 - `windows.md` (Windows host and blueprint status)
+- `agent-skills.md` (Installable agent skills distributed with Nido)
