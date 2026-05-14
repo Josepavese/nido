@@ -6,6 +6,10 @@ config/config.env
 .improvements/
 #.tone_of_voice.md
 
+# Local agent workspaces
+.agent/
+.codex/
+
 # Build Artifacts
 /nido
 /registry-builder

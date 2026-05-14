@@ -126,6 +126,17 @@ nido mcp --help  # Human-readable MCP guide
 nido mcp-help    # Machine-readable MCP guide for agents
 ```
 
+### 🧩 Agent Skill
+
+Nido also ships an optional Codex-compatible skill for developers who want agents to use Nido as a standard VM test and isolation layer.
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+cp -R extras/skills/nido-vm-testing "${CODEX_HOME:-$HOME/.codex}/skills/"
+```
+
+The skill teaches agents how to spawn disposable VMs, provision prerequisites with `--user-data`, upload software under test, parse dynamic ports, run tests, remove the VM, and speed repeated runs with templates. See `docs/agent-skills.md`.
+
 ### 🧠 JSON Mode
 
 Every command supports `--json`. Perfect for scripts and robot eyes.
