@@ -30,6 +30,13 @@ type BlueprintInfo struct {
 	Timeout     string `json:"timeout"`
 }
 
+type BlueprintImageMetadata struct {
+	Blueprint   BlueprintInfo
+	SSHUser     string
+	SSHPassword string
+	SeedFiles   map[string]string
+}
+
 type blueprintSearchDir struct {
 	dir    string
 	source string
@@ -195,6 +202,30 @@ func NormalizeBlueprintName(name string) string {
 // BlueprintOutputTag is the tag accepted by nido spawn --image once built.
 func BlueprintOutputTag(bp *image.Blueprint) string {
 	return strings.TrimSuffix(bp.OutputImage, ".qcow2")
+}
+
+func ResolveBlueprintImageMetadata(cwd, nidoDir, imageDir, imageTag string) (BlueprintImageMetadata, bool, error) {
+	cleanTag := strings.TrimSuffix(filepath.Base(imageTag), ".qcow2")
+	blueprints, err := ListBlueprints(cwd, nidoDir, imageDir)
+	if err != nil {
+		return BlueprintImageMetadata{}, false, err
+	}
+	for _, info := range blueprints {
+		if info.OutputTag != cleanTag && strings.TrimSuffix(filepath.Base(info.OutputImage), ".qcow2") != cleanTag {
+			continue
+		}
+		bp, loadedInfo, err := LoadBlueprintRef(cwd, nidoDir, imageDir, info.Name)
+		if err != nil {
+			return BlueprintImageMetadata{}, false, err
+		}
+		return BlueprintImageMetadata{
+			Blueprint:   loadedInfo,
+			SSHUser:     bp.SSHUser,
+			SSHPassword: bp.SSHPassword,
+			SeedFiles:   BlueprintSpawnSeedFiles(bp),
+		}, true, nil
+	}
+	return BlueprintImageMetadata{}, false, nil
 }
 
 func explicitBlueprintCandidates(cwd, name string) []string {

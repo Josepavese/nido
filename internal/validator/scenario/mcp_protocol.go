@@ -7,7 +7,7 @@ import (
 	"github.com/Josepavese/nido/internal/validator/report"
 )
 
-// MCPProtocol validates MCP protocol basics: initialize, tools/list contents, tool call, negative tool.
+// MCPProtocol validates MCP protocol basics: initialize, tools/list contents, resources, tool calls, and negative tool.
 func MCPProtocol() Scenario {
 	return Scenario{
 		Name: "mcp-protocol",
@@ -62,6 +62,19 @@ func mcpProtocolStep(ctx *Context) report.StepResult {
 				}
 			}
 			addAssertion(&res, "tools_expected", !missing, "")
+			addAssertion(&res, "system_actions_expected", toolHasActions(tools, "nido_system", []string{
+				"doctor",
+				"version",
+				"update_check",
+				"update",
+				"config_get",
+				"config_set",
+				"accel_list",
+				"register",
+				"completion",
+				"build_image",
+				"uninstall",
+			}), "")
 		} else {
 			addAssertion(&res, "tools_parse", false, "tools array missing")
 		}
@@ -72,7 +85,14 @@ func mcpProtocolStep(ctx *Context) report.StepResult {
 	addAssertion(&res, "resources_list", err == nil, errDetails(err))
 	if err == nil {
 		if resources, ok := resourcesResp["result"].(map[string]interface{})["resources"].([]interface{}); ok {
-			addAssertion(&res, "resources_nonempty", len(resources) >= 7, "")
+			addAssertion(&res, "resources_nonempty", len(resources) >= 10, "")
+			addAssertion(&res, "resources_expected", resourcesInclude(resources, []string{
+				"nido://fleet/vms",
+				"nido://catalog/blueprints",
+				"nido://system/version",
+				"nido://system/accelerators",
+				"nido://system/mcp-registration",
+			}), "")
 		} else {
 			addAssertion(&res, "resources_parse", false, "resources array missing")
 		}
@@ -96,6 +116,19 @@ func mcpProtocolStep(ctx *Context) report.StepResult {
 		addAssertion(&res, "nido_vm_list_call", true, "")
 	}
 
+	for _, action := range []string{"version", "doctor", "config_get", "register"} {
+		if _, err := client.CallWithTimeout("nido_system", map[string]interface{}{"action": action}, 10*time.Second); err != nil {
+			addAssertion(&res, "nido_system_"+action, false, err.Error())
+		} else {
+			addAssertion(&res, "nido_system_"+action, true, "")
+		}
+	}
+
+	for _, uri := range []string{"nido://system/version", "nido://system/mcp-registration"} {
+		_, err := client.CallMethod("resources/read", map[string]interface{}{"uri": uri}, 10*time.Second)
+		addAssertion(&res, "resource_read_"+uri, err == nil, errDetails(err))
+	}
+
 	// negative tool call
 	if _, err := client.CallWithTimeout("nonexistent_tool", map[string]interface{}{}, 5*time.Second); err != nil {
 		addAssertion(&res, "unknown_tool_error", true, "")
@@ -105,4 +138,51 @@ func mcpProtocolStep(ctx *Context) report.StepResult {
 
 	finalize(&res)
 	return res
+}
+
+func toolHasActions(tools []interface{}, toolName string, expected []string) bool {
+	for _, tool := range tools {
+		m, ok := tool.(map[string]interface{})
+		if !ok || m["name"] != toolName {
+			continue
+		}
+		schema, _ := m["inputSchema"].(map[string]interface{})
+		props, _ := schema["properties"].(map[string]interface{})
+		action, _ := props["action"].(map[string]interface{})
+		rawActions, _ := action["enum"].([]interface{})
+		seen := map[string]bool{}
+		for _, raw := range rawActions {
+			name, ok := raw.(string)
+			if ok {
+				seen[name] = true
+			}
+		}
+		for _, want := range expected {
+			if !seen[want] {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func resourcesInclude(resources []interface{}, expected []string) bool {
+	seen := map[string]bool{}
+	for _, resource := range resources {
+		m, ok := resource.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		uri, ok := m["uri"].(string)
+		if ok {
+			seen[uri] = true
+		}
+	}
+	for _, want := range expected {
+		if !seen[want] {
+			return false
+		}
+	}
+	return true
 }
