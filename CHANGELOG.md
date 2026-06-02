@@ -5,6 +5,25 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.25] - 2026-06-02 "The MCP Parity Release"
+
+### Added
+
+- MCP system coverage now includes version, update checks, update, global config set, accelerator list, MCP registration, shell completion generation, image build aliasing, and guarded uninstall.
+- MCP resources now expose system version, accelerator discovery, and MCP registration data for read-only agent inspection.
+
+### Fixed
+
+- MCP VM creation now matches the CLI spawn path for `web`/`ftp` defaults and local images produced by blueprints, including Windows blueprint SSH metadata and seed files.
+- Global config key validation is shared between CLI and MCP to avoid drift.
+
+### Tested
+
+- Linux test suite: `go test ./...`.
+- Release lint/build checks: `make lint`, `make build`.
+- MCP smoke tests against both `./bin/nido mcp` and `/home/jose/.nido/bin/nido mcp` confirmed 11 system actions.
+- Local install doctor passed 9/9 checks.
+
 ## [4.5.24] - 2026-06-02 "The Self-Syncing Registry"
 
 ### Fixed

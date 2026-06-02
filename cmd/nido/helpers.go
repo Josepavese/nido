@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	clijson "github.com/Josepavese/nido/internal/cli"
+	"github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/provider"
 	"github.com/Josepavese/nido/internal/ui"
@@ -52,21 +53,7 @@ func imageCatalog(app *appContext) (*image.Catalog, error) {
 }
 
 func supportedGlobalConfigKeys() []string {
-	return []string{
-		"BACKUP_DIR",
-		"SSH_USER",
-		"IMAGE_DIR",
-		"LINKED_CLONES",
-		"THEME",
-		"TUI_SIDEBAR_WIDTH",
-		"TUI_SIDEBAR_WIDE_WIDTH",
-		"TUI_INSET_CONTENT",
-		"TUI_TAB_MIN_WIDTH",
-		"TUI_EXIT_ZONE_WIDTH",
-		"TUI_GAP_SCALE",
-		"PORT_RANGE_START",
-		"PORT_RANGE_END",
-	}
+	return config.SupportedGlobalConfigKeys()
 }
 
 func requireQemu(app *appContext) *provider.QemuProvider {

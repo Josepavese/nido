@@ -42,6 +42,25 @@ type TUIConfig struct {
 	GapScale         int
 }
 
+// SupportedGlobalConfigKeys returns the global config keys accepted by CLI and MCP.
+func SupportedGlobalConfigKeys() []string {
+	return []string{
+		"BACKUP_DIR",
+		"SSH_USER",
+		"IMAGE_DIR",
+		"LINKED_CLONES",
+		"THEME",
+		"TUI_SIDEBAR_WIDTH",
+		"TUI_SIDEBAR_WIDE_WIDTH",
+		"TUI_INSET_CONTENT",
+		"TUI_TAB_MIN_WIDTH",
+		"TUI_EXIT_ZONE_WIDTH",
+		"TUI_GAP_SCALE",
+		"PORT_RANGE_START",
+		"PORT_RANGE_END",
+	}
+}
+
 // LoadConfig reads the genetic configuration from a file.
 // If a key is missing, it falls back to historical defaults.
 func LoadConfig(path string) (*Config, error) {

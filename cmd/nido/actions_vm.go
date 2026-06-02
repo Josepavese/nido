@@ -343,29 +343,18 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 }
 
 func applyBlueprintImageMetadata(app *appContext, imageTag string, sshUser, sshPassword *string, seedFiles *map[string]string) {
-	cleanTag := strings.TrimSuffix(filepath.Base(imageTag), ".qcow2")
-	blueprints, err := builder.ListBlueprints(app.Cwd, app.NidoDir, app.ImageDir())
-	if err != nil {
+	metadata, ok, err := builder.ResolveBlueprintImageMetadata(app.Cwd, app.NidoDir, app.ImageDir(), imageTag)
+	if err != nil || !ok {
 		return
 	}
-	for _, info := range blueprints {
-		if info.OutputTag != cleanTag && strings.TrimSuffix(filepath.Base(info.OutputImage), ".qcow2") != cleanTag {
-			continue
-		}
-		bp, _, err := builder.LoadBlueprintRef(app.Cwd, app.NidoDir, app.ImageDir(), info.Name)
-		if err != nil {
-			return
-		}
-		if sshUser != nil && *sshUser == "" && bp.SSHUser != "" {
-			*sshUser = bp.SSHUser
-		}
-		if sshPassword != nil && *sshPassword == "" && bp.SSHPassword != "" {
-			*sshPassword = bp.SSHPassword
-		}
-		if seedFiles != nil {
-			*seedFiles = builder.BlueprintSpawnSeedFiles(bp)
-		}
-		return
+	if sshUser != nil && *sshUser == "" && metadata.SSHUser != "" {
+		*sshUser = metadata.SSHUser
+	}
+	if sshPassword != nil && *sshPassword == "" && metadata.SSHPassword != "" {
+		*sshPassword = metadata.SSHPassword
+	}
+	if seedFiles != nil {
+		*seedFiles = metadata.SeedFiles
 	}
 }
 

@@ -9,7 +9,7 @@ import (
 
 // Version is the current evolutionary state of Nido.
 // This is normally injected at build time, but we provide a default.
-var Version = "v4.5.24"
+var Version = "v4.5.25"
 
 // GetLatestVersion fetches the latest release tag from the GitHub mother nest.
 func GetLatestVersion() (string, error) {

@@ -30,6 +30,8 @@ Unified VM tool. Actions:
 - `port_unforward`
 - `port_list`
 
+`create` accepts the CLI spawn surface exposed to agents: image or template source, user-data content, GUI/cmdline overrides, memory/vCPU sizing, raw QEMU args, accelerators, explicit port mappings, and `web`/`ftp` default forwards. Local images produced by blueprints are resolved from the configured image directory and inherit blueprint SSH/seed metadata.
+
 ### `nido_template`
 
 Template management. Actions:
@@ -57,8 +59,18 @@ Image catalog and cache management. Actions:
 System-wide operations. Actions:
 
 - `doctor`
+- `version`
+- `update_check`
+- `update`
 - `config_get`
+- `config_set`
+- `accel_list`
+- `register`
+- `completion`
 - `build_image`
+- `uninstall`
+
+`update`, `config_set`, and `uninstall` mutate the host Nido installation or global config. `uninstall` requires `force=true`.
 
 ## Resources
 
@@ -67,14 +79,19 @@ Fixed resources:
 - `nido://fleet/vms`
 - `nido://fleet/templates`
 - `nido://catalog/images`
+- `nido://catalog/blueprints`
 - `nido://storage/cache`
 - `nido://system/config`
 - `nido://system/doctor`
+- `nido://system/version`
+- `nido://system/accelerators`
+- `nido://system/mcp-registration`
 
 Parameterized resource templates:
 
 - `nido://vm/{name}`
 - `nido://image/{tag}`
+- `nido://blueprint/{name}`
 
 ## Prompt
 

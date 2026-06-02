@@ -6,13 +6,16 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/Josepavese/nido/internal/build"
 	"github.com/Josepavese/nido/internal/builder"
+	"github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/image"
+	"github.com/Josepavese/nido/internal/lifecycle"
 	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"github.com/Josepavese/nido/internal/provider"
 )
@@ -93,6 +96,8 @@ func ToolsCatalog() []map[string]interface{} {
 					"ssh_port":      map[string]interface{}{"type": "integer"},
 					"vnc_port":      map[string]interface{}{"type": "integer"},
 					"ssh_user":      map[string]interface{}{"type": "string"},
+					"web":           map[string]interface{}{"type": "boolean", "description": "Expose HTTP and HTTPS defaults for action=create."},
+					"ftp":           map[string]interface{}{"type": "boolean", "description": "Expose FTP default port for action=create."},
 				},
 				"required": []string{"action"},
 			},
@@ -139,12 +144,16 @@ func ToolsCatalog() []map[string]interface{} {
 		},
 		{
 			"name":        "nido_system",
-			"description": "Access system-wide Nido operations that are not tied to one VM. Supported actions are doctor, config_get, and build_image. Use resources nido://system/config and nido://system/doctor for read-only inspection when possible.",
+			"description": "Access system-wide Nido operations that are not tied to one VM. Supported actions are doctor, version, update_check, update, config_get, config_set, accel_list, register, completion, build_image, and uninstall. Use read-only resources when possible.",
 			"inputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"action":         map[string]interface{}{"type": "string", "enum": []string{"doctor", "config_get", "build_image"}},
+					"action":         map[string]interface{}{"type": "string", "enum": []string{"doctor", "version", "update_check", "update", "config_get", "config_set", "accel_list", "register", "completion", "build_image", "uninstall"}},
 					"blueprint_name": map[string]interface{}{"type": "string", "description": "Blueprint used by action=build_image."},
+					"key":            map[string]interface{}{"type": "string", "description": "Global config key for action=config_set."},
+					"value":          map[string]interface{}{"type": "string", "description": "Global config value for action=config_set."},
+					"shell":          map[string]interface{}{"type": "string", "enum": []string{"bash", "zsh", "fish", "powershell"}, "description": "Shell for action=completion."},
+					"force":          map[string]interface{}{"type": "boolean", "description": "Required for action=uninstall."},
 				},
 				"required": []string{"action"},
 			},
@@ -162,6 +171,9 @@ func ResourcesCatalog() []map[string]interface{} {
 		{"name": "Cache Summary", "uri": "nido://storage/cache", "mimeType": "application/json", "description": "Cache stats plus cached image entries."},
 		{"name": "System Config", "uri": "nido://system/config", "mimeType": "application/json", "description": "Current provider configuration."},
 		{"name": "System Doctor", "uri": "nido://system/doctor", "mimeType": "application/json", "description": "Diagnostic report for the local environment."},
+		{"name": "System Version", "uri": "nido://system/version", "mimeType": "application/json", "description": "Current Nido version and protocol."},
+		{"name": "System Accelerators", "uri": "nido://system/accelerators", "mimeType": "application/json", "description": "PCI accelerator candidates."},
+		{"name": "MCP Registration", "uri": "nido://system/mcp-registration", "mimeType": "application/json", "description": "MCP client registration block."},
 	}
 }
 
@@ -209,7 +221,8 @@ func HelpPayload() map[string]interface{} {
 			"Use nido_template for template lifecycle.",
 			"Use nido_image for catalog and cache operations.",
 			"Use nido_blueprint for blueprint list, inspection, and image builds.",
-			"Use nido_system for doctor, config_get, and build_image.",
+			"Use nido_system for system operations: doctor, version, update_check, update, config_get, config_set, accel_list, register, completion, build_image, and guarded uninstall.",
+			"Use nido_system update, config_set, and uninstall only when the user explicitly asked for those mutations.",
 			"Every high-power tool requires an action field.",
 		},
 		"examples": []map[string]interface{}{
@@ -248,6 +261,16 @@ func HelpPayload() map[string]interface{} {
 					"params": map[string]interface{}{
 						"name":      "nido_image",
 						"arguments": map[string]interface{}{"action": "refresh_catalog"},
+					},
+				},
+			},
+			{
+				"goal": "Build a Windows blueprint image",
+				"call": map[string]interface{}{
+					"method": "tools/call",
+					"params": map[string]interface{}{
+						"name":      "nido_blueprint",
+						"arguments": map[string]interface{}{"action": "build", "name": "windows"},
 					},
 				},
 			},
@@ -382,6 +405,8 @@ func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 		SSHPort      *int     `json:"ssh_port"`
 		VNCPort      *int     `json:"vnc_port"`
 		SSHUser      *string  `json:"ssh_user"`
+		Web          bool     `json:"web"`
+		FTP          bool     `json:"ftp"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return nil, err
@@ -416,28 +441,49 @@ func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 			}
 			opts.Forwarding = append(opts.Forwarding, pf)
 		}
+		if args.Web {
+			opts.Forwarding = append(opts.Forwarding,
+				provider.PortForward{Label: "HTTP", GuestPort: 80, Protocol: "tcp"},
+				provider.PortForward{Label: "HTTPS", GuestPort: 443, Protocol: "tcp"},
+			)
+		}
+		if args.FTP {
+			opts.Forwarding = append(opts.Forwarding, provider.PortForward{Label: "FTP", GuestPort: 21, Protocol: "tcp"})
+		}
 		if args.UserData != "" {
 			tmpDir, _ := os.MkdirTemp("", "nido-mcp-*")
 			tmpFile := filepath.Join(tmpDir, "user-data")
-			if err := os.WriteFile(tmpFile, []byte(args.UserData), 0644); err != nil {
+			if err := os.WriteFile(tmpFile, []byte(args.UserData), 0o644); err != nil {
 				return nil, err
 			}
 			opts.UserDataPath = tmpFile
 			defer os.RemoveAll(tmpDir)
 		}
+		source := chooseSource(args.Image, args.Template)
 		if args.Image != "" {
-			imgPath, err := s.resolveImagePath(args.Image)
+			resolved, err := s.resolveCreateImage(args.Image)
 			if err != nil {
 				return nil, err
 			}
-			opts.DiskPath = imgPath
+			opts.DiskPath = resolved.DiskPath
+			if opts.SSHUser == "" {
+				opts.SSHUser = resolved.SSHUser
+			}
+			if opts.SSHPassword == "" {
+				opts.SSHPassword = resolved.SSHPassword
+			}
+			if opts.Cmdline == "" {
+				opts.Cmdline = resolved.Cmdline
+			}
+			opts.SeedFiles = resolved.SeedFiles
+			source = resolved.Source
 		} else if args.Template != "" {
 			opts.DiskPath = args.Template
 		}
 		if err := s.Provider.Spawn(args.Name, opts); err != nil {
 			return nil, err
 		}
-		return map[string]interface{}{"action": "create", "name": args.Name, "source": chooseSource(args.Image, args.Template), "status": "created"}, nil
+		return map[string]interface{}{"action": "create", "name": args.Name, "source": source, "status": "created"}, nil
 	case "start":
 		if err := s.Provider.Start(args.Name, provider.VMOptions{Gui: args.Gui, Cmdline: args.Cmdline}); err != nil {
 			return nil, err
@@ -686,6 +732,10 @@ func (s *Server) callSystemTool(raw json.RawMessage) (interface{}, error) {
 	var args struct {
 		Action        string `json:"action"`
 		BlueprintName string `json:"blueprint_name"`
+		Key           string `json:"key"`
+		Value         string `json:"value"`
+		Shell         string `json:"shell"`
+		Force         bool   `json:"force"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return nil, err
@@ -694,14 +744,70 @@ func (s *Server) callSystemTool(raw json.RawMessage) (interface{}, error) {
 	switch args.Action {
 	case "doctor":
 		return map[string]interface{}{"action": "doctor", "reports": s.Provider.Doctor()}, nil
+	case "version":
+		return map[string]interface{}{"action": "version", "version": build.Version, "state": "Evolved", "protocol": "v3.0"}, nil
+	case "update_check":
+		latest, err := build.GetLatestVersion()
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "update_check", "current": build.Version, "latest": latest, "update_available": latest != "" && latest != build.Version}, nil
+	case "update":
+		out, err := runSelfCommand("update")
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "update", "output": out, "status": "completed"}, nil
 	case "config_get":
-		return map[string]interface{}{"action": "config_get", "config": s.Provider.GetConfig()}, nil
+		return map[string]interface{}{"action": "config_get", "config_path": s.configPath(), "config": s.Provider.GetConfig()}, nil
+	case "config_set":
+		key := strings.ToUpper(strings.TrimSpace(args.Key))
+		if key == "" {
+			return nil, fmt.Errorf("config key is required")
+		}
+		if !supportedConfigKey(key) {
+			return nil, fmt.Errorf("invalid config key %q", key)
+		}
+		if err := config.UpdateConfig(s.configPath(), key, args.Value); err != nil {
+			return nil, err
+		}
+		cfg, err := config.LoadConfig(s.configPath())
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "config_set", "key": key, "value": args.Value, "config_path": s.configPath(), "config": cfg}, nil
+	case "accel_list":
+		devs, err := s.Provider.ListAccelerators()
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "accel_list", "devices": devs}, nil
+	case "register":
+		return map[string]interface{}{"action": "register", "registration": s.registrationPayload()}, nil
+	case "completion":
+		out, err := s.shellCompletion(args.Shell)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "completion", "shell": args.Shell, "script": out}, nil
 	case "build_image":
 		info, status, err := s.buildBlueprint(args.BlueprintName)
 		if err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"action": "build_image", "blueprint_name": info.Name, "output_image": info.OutputImage, "output_tag": info.OutputTag, "status": status}, nil
+	case "uninstall":
+		if !args.Force {
+			return nil, fmt.Errorf("uninstall requires force=true")
+		}
+		exe, err := os.Executable()
+		if err != nil {
+			return nil, err
+		}
+		if err := lifecycle.Uninstall(s.nidoDir(), exe); err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "uninstall", "status": "uninstalled"}, nil
 	default:
 		return nil, fmt.Errorf("unsupported nido_system action %q", args.Action)
 	}
@@ -770,9 +876,19 @@ func (s *Server) readResource(uri string) (interface{}, error) {
 		}
 		return map[string]interface{}{"stats": stats, "entries": entries}, nil
 	case "nido://system/config":
-		return map[string]interface{}{"config": s.Provider.GetConfig()}, nil
+		return map[string]interface{}{"config_path": s.configPath(), "config": s.Provider.GetConfig()}, nil
 	case "nido://system/doctor":
 		return map[string]interface{}{"reports": s.Provider.Doctor()}, nil
+	case "nido://system/version":
+		return map[string]interface{}{"version": build.Version, "state": "Evolved", "protocol": "v3.0"}, nil
+	case "nido://system/accelerators":
+		devs, err := s.Provider.ListAccelerators()
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"devices": devs}, nil
+	case "nido://system/mcp-registration":
+		return s.registrationPayload(), nil
 	default:
 		if strings.HasPrefix(uri, "nido://vm/") {
 			name, err := url.PathUnescape(strings.TrimPrefix(uri, "nido://vm/"))
@@ -829,7 +945,7 @@ func (s *Server) handlePromptGet(req JSONRPCRequest) {
 				"role": "user",
 				"content": map[string]interface{}{
 					"type": "text",
-					"text": "Use resources first for inspection: nido://fleet/vms, nido://vm/{name}, nido://catalog/images, nido://image/{tag}, nido://catalog/blueprints, nido://blueprint/{name}, nido://storage/cache, nido://system/config, and nido://system/doctor. Use tools only when you need to mutate state or when your client cannot read resources. Prefer the compact actions on nido_vm, nido_template, nido_image, nido_blueprint, and nido_system instead of planning around many micro-tools.",
+					"text": "Use resources first for inspection: nido://fleet/vms, nido://vm/{name}, nido://catalog/images, nido://image/{tag}, nido://catalog/blueprints, nido://blueprint/{name}, nido://storage/cache, nido://system/config, nido://system/doctor, nido://system/version, nido://system/accelerators, and nido://system/mcp-registration. Use tools only when you need to mutate state or when your client cannot read resources. Prefer the compact actions on nido_vm, nido_template, nido_image, nido_blueprint, and nido_system instead of planning around many micro-tools.",
 				},
 			},
 		},
@@ -945,6 +1061,79 @@ func (s *Server) buildBlueprint(name string) (builder.BlueprintInfo, string, err
 	return info, "built", nil
 }
 
+type createImageResolution struct {
+	DiskPath    string
+	SSHUser     string
+	SSHPassword string
+	SeedFiles   map[string]string
+	Cmdline     string
+	Source      string
+}
+
+func (s *Server) resolveCreateImage(tag string) (createImageResolution, error) {
+	imageDir := s.imageDir()
+	localPath := filepath.Join(imageDir, tag+".qcow2")
+	if _, err := os.Stat(localPath); err == nil {
+		res := createImageResolution{DiskPath: localPath, Source: "image " + tag}
+		s.applyBlueprintMetadata(tag, &res)
+		return res, nil
+	}
+	localPath = filepath.Join(imageDir, tag)
+	if _, err := os.Stat(localPath); err == nil {
+		res := createImageResolution{DiskPath: localPath, Source: "image " + tag}
+		s.applyBlueprintMetadata(tag, &res)
+		return res, nil
+	}
+
+	catalog, err := s.loadCatalog(image.DefaultCacheTTL)
+	if err != nil {
+		return createImageResolution{}, err
+	}
+	name, verRef := splitImageTag(tag)
+	img, ver, err := catalog.FindImage(name, verRef)
+	if err != nil {
+		return createImageResolution{}, err
+	}
+
+	imgPath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
+	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
+		downloader := image.Downloader{Quiet: true}
+		if err := image.PrepareLocalImage(*ver, imgPath, downloader); err != nil {
+			return createImageResolution{}, err
+		}
+	} else if err != nil {
+		return createImageResolution{}, err
+	}
+
+	res := createImageResolution{
+		DiskPath: imgPath,
+		SSHUser:  img.SSHUser,
+		Cmdline:  ver.Cmdline,
+		Source:   "image " + tag,
+	}
+	if ver.SSHPassword != "" {
+		res.SSHPassword = ver.SSHPassword
+	} else {
+		res.SSHPassword = img.SSHPassword
+	}
+	return res, nil
+}
+
+func (s *Server) applyBlueprintMetadata(imageTag string, res *createImageResolution) {
+	cwd, _ := os.Getwd()
+	metadata, ok, err := builder.ResolveBlueprintImageMetadata(cwd, s.nidoDir(), s.imageDir(), imageTag)
+	if err != nil || !ok {
+		return
+	}
+	if res.SSHUser == "" {
+		res.SSHUser = metadata.SSHUser
+	}
+	if res.SSHPassword == "" {
+		res.SSHPassword = metadata.SSHPassword
+	}
+	res.SeedFiles = metadata.SeedFiles
+}
+
 func (s *Server) resolveImagePath(tag string) (string, error) {
 	catalog, err := s.loadCatalog(image.DefaultCacheTTL)
 	if err != nil {
@@ -966,6 +1155,57 @@ func (s *Server) resolveImagePath(tag string) (string, error) {
 		return "", err
 	}
 	return imgPath, nil
+}
+
+func (s *Server) configPath() string {
+	return filepath.Join(s.nidoDir(), "config.env")
+}
+
+func (s *Server) registrationPayload() map[string]interface{} {
+	exe, _ := os.Executable()
+	return map[string]interface{}{
+		"mcpServers": map[string]interface{}{
+			"nido-local-vm-manager": map[string]interface{}{
+				"command": exe,
+				"args":    []string{"mcp"},
+			},
+		},
+	}
+}
+
+func (s *Server) shellCompletion(shell string) (string, error) {
+	switch shell {
+	case "bash", "zsh", "fish", "powershell":
+	default:
+		return "", fmt.Errorf("unsupported shell %q", shell)
+	}
+	return runSelfCommand("completion", shell)
+}
+
+func runSelfCommand(args ...string) (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	cmd := exec.Command(exe, args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		text := strings.TrimSpace(string(out))
+		if text != "" {
+			return text, fmt.Errorf("%s: %w", text, err)
+		}
+		return "", err
+	}
+	return string(out), nil
+}
+
+func supportedConfigKey(key string) bool {
+	for _, candidate := range config.SupportedGlobalConfigKeys() {
+		if key == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func jsonText(v interface{}) string {
