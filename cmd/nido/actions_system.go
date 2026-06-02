@@ -327,7 +327,7 @@ func actionUpdate(app *appContext) func(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 		if runtime.GOOS != "windows" {
-			if err := os.Chmod(tmpPath, 0755); err != nil {
+			if err := os.Chmod(tmpPath, 0o755); err != nil {
 				ui.Error("Failed to set permissions on updated binary: %v", err)
 				os.Exit(1)
 			}
@@ -345,7 +345,16 @@ func actionUpdate(app *appContext) func(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 
+		registryBackupPath, registryErr := syncBundledRegistryFromReleaseAsset(archivePath, app.NidoDir)
 		ui.Success("Updated to %s.", latest)
+		if registryErr != nil {
+			ui.Warn("Bundled registry sync failed: %v", registryErr)
+			ui.Info("The binary was updated, but blueprint definitions may still be stale.")
+		} else if registryBackupPath != "" {
+			ui.Info("Bundled registry synced to %s (backup: %s).", filepath.Join(app.NidoDir, "registry"), registryBackupPath)
+		} else {
+			ui.Info("Bundled registry synced to %s.", filepath.Join(app.NidoDir, "registry"))
+		}
 		writeInstalledShellCompletions(exePath, app.NidoDir)
 	}
 }
@@ -647,7 +656,7 @@ func writeInstalledShellCompletions(exePath, nidoDir string) {
 			ui.Warn("Failed to refresh %s completion: %v", target.shell, err)
 			continue
 		}
-		if err := os.WriteFile(target.path, out, 0644); err != nil {
+		if err := os.WriteFile(target.path, out, 0o644); err != nil {
 			ui.Warn("Failed to write %s completion: %v", target.shell, err)
 		}
 	}

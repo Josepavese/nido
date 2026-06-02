@@ -15,19 +15,25 @@ import (
 
 func actionBlueprintList(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		cmdBlueprintList(app.Cwd, app.NidoDir, app.ImageDir(), jsonEnabled(cmd))
+		jsonOut := jsonEnabled(cmd)
+		ensureBundledRegistryCurrent("blueprint list", app.NidoDir, jsonOut)
+		cmdBlueprintList(app.Cwd, app.NidoDir, app.ImageDir(), jsonOut)
 	}
 }
 
 func actionBlueprintInfo(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		cmdBlueprintInfo(app.Cwd, app.NidoDir, app.ImageDir(), args, jsonEnabled(cmd))
+		jsonOut := jsonEnabled(cmd)
+		ensureBundledRegistryCurrent("blueprint info", app.NidoDir, jsonOut)
+		cmdBlueprintInfo(app.Cwd, app.NidoDir, app.ImageDir(), args, jsonOut)
 	}
 }
 
 func actionBlueprintBuild(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), args, jsonEnabled(cmd), "blueprint build")
+		jsonOut := jsonEnabled(cmd)
+		ensureBundledRegistryCurrent("blueprint build", app.NidoDir, jsonOut)
+		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), args, jsonOut, "blueprint build")
 	}
 }
 
