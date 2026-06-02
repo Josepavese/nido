@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Josepavese/nido/internal/image"
 )
 
 func TestSafeJoinRejectsPathEscape(t *testing.T) {
@@ -163,9 +165,9 @@ func TestLoadRegistryWindowsBlueprints(t *testing.T) {
 			if bp.SSHUser != "vmuser" || bp.SSHPassword != "nido" {
 				t.Fatalf("unexpected blueprint SSH metadata: user=%q password=%q", bp.SSHUser, bp.SSHPassword)
 			}
-			content := bp.Scripts["autounattend.xml"]
+			content := bp.Scripts["Autounattend.xml"]
 			if content == "" {
-				t.Fatal("missing autounattend.xml script")
+				t.Fatal("missing Autounattend.xml script")
 			}
 			if strings.Contains(content, "{{windows_driver_profile}}") {
 				t.Fatal("windows_driver_profile placeholder was not expanded")
@@ -202,12 +204,16 @@ func TestLoadRegistryWindowsBlueprints(t *testing.T) {
 			}
 			sshScript := bp.Scripts["windows-setup-openssh.ps1"]
 			if !strings.Contains(sshScript, "OpenSSH.Server*") ||
+				!strings.Contains(sshScript, "-LimitAccess") ||
 				!strings.Contains(sshScript, "Win32-OpenSSH/releases/latest/download/OpenSSH-Win64.zip") ||
 				!strings.Contains(sshScript, "Set-Service -Name sshd -StartupType Automatic") {
-				t.Fatal("windows OpenSSH setup script missing capability, archive fallback, or service enablement")
+				t.Fatal("windows OpenSSH setup script missing capability, local-only install, archive fallback, or service enablement")
 			}
 			if strings.Contains(content, "<FirstLogonCommands>") {
 				t.Fatal("autounattend.xml must not depend on FirstLogonCommands for SSH provisioning")
+			}
+			if strings.Contains(content, "<ProductKey>") {
+				t.Fatal("autounattend.xml must not emit an empty windowsPE ProductKey block")
 			}
 		})
 	}
@@ -233,6 +239,55 @@ func TestInstallerAccelerationArgs(t *testing.T) {
 	}
 }
 
+func TestCanonicalSeedScriptsUsesWindowsAnswerFileName(t *testing.T) {
+	scripts, err := canonicalSeedScripts(map[string]string{
+		"autounattend.xml": "<unattend/>",
+		"setup.ps1":        "Write-Host ok",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scripts["Autounattend.xml"] != "<unattend/>" {
+		t.Fatalf("missing canonical Autounattend.xml target: %#v", scripts)
+	}
+	if _, ok := scripts["autounattend.xml"]; ok {
+		t.Fatalf("lowercase autounattend.xml should be canonicalized: %#v", scripts)
+	}
+}
+
+func TestCanonicalSeedScriptsRejectsConflictingWindowsAnswerFiles(t *testing.T) {
+	_, err := canonicalSeedScripts(map[string]string{
+		"autounattend.xml": "<unattend><a/></unattend>",
+		"Autounattend.xml": "<unattend><b/></unattend>",
+	})
+	if err == nil {
+		t.Fatal("canonicalSeedScripts accepted conflicting answer files")
+	}
+}
+
+func TestBlueprintSpawnSeedFilesKeepsSupportScriptsOnly(t *testing.T) {
+	files := BlueprintSpawnSeedFiles(&image.Blueprint{Scripts: map[string]string{
+		"Autounattend.xml":            "<unattend/>",
+		"windows-setup-openssh.ps1":   "Write-Host ssh",
+		"support/windows-helper.ps1":  "Write-Host helper",
+		"support/Autounattend.xml":    "<not-the-root-answer-file/>",
+		"support/autounattend-helper": "helper",
+	}})
+
+	if files["windows-setup-openssh.ps1"] != "Write-Host ssh" {
+		t.Fatalf("missing OpenSSH support script: %#v", files)
+	}
+	if files["support/windows-helper.ps1"] != "Write-Host helper" {
+		t.Fatalf("missing nested support script: %#v", files)
+	}
+	if _, ok := files["Autounattend.xml"]; ok {
+		t.Fatalf("root answer file should not be copied to spawn seed: %#v", files)
+	}
+	if files["support/Autounattend.xml"] == "" {
+		t.Fatalf("non-root support file should be preserved: %#v", files)
+	}
+}
+
 func TestCreateSeedISOFallsBackToBundledWriter(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	tmp := t.TempDir()
@@ -240,7 +295,7 @@ func TestCreateSeedISOFallsBackToBundledWriter(t *testing.T) {
 	if err := os.Mkdir(source, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(source, "autounattend.xml"), []byte("<unattend/>"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(source, "Autounattend.xml"), []byte("<unattend/>"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	out := filepath.Join(tmp, "seed.iso")

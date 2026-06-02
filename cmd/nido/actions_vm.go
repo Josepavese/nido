@@ -196,6 +196,7 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 
 		customSshUser := ""
 		customSshPassword := ""
+		var seedFiles map[string]string
 		var resolvedVersion *image.Version
 
 		if imageTag != "" {
@@ -212,7 +213,7 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 				if !jsonOut {
 					ui.Info("Found local image: %s", filepath.Base(localPath))
 				}
-				applyBlueprintImageMetadata(app, imageTag, &customSshUser, &customSshPassword)
+				applyBlueprintImageMetadata(app, imageTag, &customSshUser, &customSshPassword, &seedFiles)
 				tpl = localPath
 			} else {
 				catalog, err := imageCatalog(app)
@@ -288,6 +289,7 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 			Gui:          gui,
 			SSHUser:      customSshUser,
 			SSHPassword:  customSshPassword,
+			SeedFiles:    seedFiles,
 			Forwarding:   forwardings,
 			Cmdline:      cmdline,
 			MemoryMB:     spawnMem,
@@ -340,7 +342,7 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 	}
 }
 
-func applyBlueprintImageMetadata(app *appContext, imageTag string, sshUser, sshPassword *string) {
+func applyBlueprintImageMetadata(app *appContext, imageTag string, sshUser, sshPassword *string, seedFiles *map[string]string) {
 	cleanTag := strings.TrimSuffix(filepath.Base(imageTag), ".qcow2")
 	blueprints, err := builder.ListBlueprints(app.Cwd, app.NidoDir, app.ImageDir())
 	if err != nil {
@@ -359,6 +361,9 @@ func applyBlueprintImageMetadata(app *appContext, imageTag string, sshUser, sshP
 		}
 		if sshPassword != nil && *sshPassword == "" && bp.SSHPassword != "" {
 			*sshPassword = bp.SSHPassword
+		}
+		if seedFiles != nil {
+			*seedFiles = builder.BlueprintSpawnSeedFiles(bp)
 		}
 		return
 	}

@@ -181,6 +181,49 @@ func TestBlueprintListAndInfoJSONStayClean(t *testing.T) {
 	assertSingleJSON(t, stdout)
 }
 
+func TestApplyBlueprintImageMetadataAddsSpawnSeedFiles(t *testing.T) {
+	app := testAppContext(t)
+	dir := filepath.Join(app.Cwd, "registry", "blueprints")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir blueprint registry: %v", err)
+	}
+	data := []byte(`name: windows-fixture
+description: Windows fixture blueprint
+version: "0.1.0"
+ssh_user: vmuser
+ssh_password: nido
+iso_url: https://example.test/windows.iso
+iso_checksum: ""
+build_specs:
+  cpu: 1
+  memory: 512M
+  timeout: 1m
+output_image: windows-fixture.qcow2
+output_size: 1G
+scripts:
+  Autounattend.xml: "<unattend/>"
+  windows-setup-openssh.ps1: "Write-Host ssh"
+`)
+	if err := os.WriteFile(filepath.Join(dir, "windows-fixture.yaml"), data, 0o644); err != nil {
+		t.Fatalf("write blueprint fixture: %v", err)
+	}
+
+	sshUser := ""
+	sshPassword := ""
+	var seedFiles map[string]string
+	applyBlueprintImageMetadata(app, "windows-fixture", &sshUser, &sshPassword, &seedFiles)
+
+	if sshUser != "vmuser" || sshPassword != "nido" {
+		t.Fatalf("unexpected SSH metadata: user=%q password=%q", sshUser, sshPassword)
+	}
+	if seedFiles["windows-setup-openssh.ps1"] != "Write-Host ssh" {
+		t.Fatalf("missing Windows setup script seed file: %#v", seedFiles)
+	}
+	if _, ok := seedFiles["Autounattend.xml"]; ok {
+		t.Fatalf("Autounattend.xml should not be included in spawn seed files: %#v", seedFiles)
+	}
+}
+
 func testAppContext(t *testing.T) *appContext {
 	t.Helper()
 	nidoDir := t.TempDir()

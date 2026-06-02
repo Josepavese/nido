@@ -5,9 +5,9 @@ version: "1.0.0"
 ssh_user: "vmuser"
 ssh_password: "nido"
 
-# Microsoft Evaluation Center permalink (IoT Enterprise LTSC 2024, English US, 64-bit).
-iso_url: "https://go.microsoft.com/fwlink/?linkid=2288085&clcid=0x409&culture=en-us&country=us"
-iso_name: "windows-11-iot-ltsc-eval.iso"
+# Microsoft Evaluation Center permalink (IoT Enterprise LTSC 2024, English US, x64).
+iso_url: "https://go.microsoft.com/fwlink/?clcid=0x409&country=us&culture=en-us&linkid=2270353"
+iso_name: "windows-11-iot-ltsc-eval-en-us.iso"
 iso_checksum: ""
 
 # VirtIO drivers for Windows.
@@ -30,5 +30,5 @@ output_image: "windows-11-iot-ltsc.qcow2"
 output_size: "40G"
 
 scripts:
-  autounattend.xml: "@shared/windows-autounattend.xml"
+  Autounattend.xml: "@shared/windows-autounattend.xml"
   windows-setup-openssh.ps1: "@shared/windows-setup-openssh.ps1"

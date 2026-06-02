@@ -102,6 +102,8 @@ type VMOptions struct {
 	Gui          bool
 	SSHUser      string
 	SSHPassword  string
+	// SeedFiles are additional files to place at the root of the generated seed ISO.
+	SeedFiles map[string]string
 	// Forwarding requested by the user during spawn/start
 	Forwarding []PortForward
 	Cmdline    string

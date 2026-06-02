@@ -170,6 +170,7 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 		User:           sshUser,
 		SSHKey:         sshKey,
 		CustomUserData: customUserData,
+		ExtraFiles:     opts.SeedFiles,
 	}
 
 	// Create seed ISO (warn on failure but don't block spawn)

@@ -146,7 +146,11 @@ func (e *Engine) Build(bp *image.Blueprint) error {
 		return err
 	}
 
-	for name, content := range bp.Scripts {
+	seedScripts, err := canonicalSeedScripts(bp.Scripts)
+	if err != nil {
+		return err
+	}
+	for name, content := range seedScripts {
 		scriptPath, err := safeJoin(seedDir, name)
 		if err != nil {
 			return fmt.Errorf("invalid script path %q: %w", name, err)
@@ -346,6 +350,40 @@ func sanitizeFilename(name string) string {
 
 func createSeedISO(outputPath, sourceDir, label string) error {
 	return seediso.Create(outputPath, sourceDir, label)
+}
+
+func canonicalSeedScripts(scripts map[string]string) (map[string]string, error) {
+	canonical := make(map[string]string, len(scripts))
+	for name, content := range scripts {
+		dest := canonicalSeedScriptName(name)
+		if existing, ok := canonical[dest]; ok && existing != content {
+			return nil, fmt.Errorf("multiple seed scripts map to %q", dest)
+		}
+		canonical[dest] = content
+	}
+	return canonical, nil
+}
+
+func canonicalSeedScriptName(name string) string {
+	clean := filepath.ToSlash(filepath.Clean(name))
+	if strings.EqualFold(clean, "autounattend.xml") {
+		return "Autounattend.xml"
+	}
+	return name
+}
+
+func BlueprintSpawnSeedFiles(bp *image.Blueprint) map[string]string {
+	files := make(map[string]string, len(bp.Scripts))
+	for name, content := range bp.Scripts {
+		if strings.EqualFold(filepath.ToSlash(filepath.Clean(name)), "autounattend.xml") {
+			continue
+		}
+		files[name] = content
+	}
+	if len(files) == 0 {
+		return nil
+	}
+	return files
 }
 
 func installerAccelerationArgs(goos string) ([]string, string, bool) {

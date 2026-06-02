@@ -17,6 +17,7 @@ type CloudInit struct {
 	User           string
 	SSHKey         string
 	CustomUserData string
+	ExtraFiles     map[string]string
 }
 
 // GenerateISO creates a cloud-init seed ISO using NoCloud format.
@@ -38,8 +39,35 @@ func (c *CloudInit) GenerateISO(outPath string) error {
 	if err := os.WriteFile(filepath.Join(tmpDir, "user-data"), []byte(userData), 0644); err != nil {
 		return err
 	}
+	if err := writeSeedExtraFiles(tmpDir, c.ExtraFiles); err != nil {
+		return err
+	}
 
 	return seediso.Create(outPath, tmpDir, "cidata")
+}
+
+func writeSeedExtraFiles(root string, files map[string]string) error {
+	for name, content := range files {
+		raw := strings.TrimSpace(name)
+		if raw == "" || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "\\") || strings.Contains(raw, ":") {
+			return fmt.Errorf("invalid seed file path %q", name)
+		}
+		clean := filepath.Clean(filepath.FromSlash(raw))
+		if clean == "." || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(os.PathSeparator)) {
+			return fmt.Errorf("invalid seed file path %q", name)
+		}
+		if clean == "meta-data" || clean == "user-data" {
+			return fmt.Errorf("seed file path %q conflicts with cloud-init metadata", name)
+		}
+		outPath := filepath.Join(root, clean)
+		if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(outPath, []byte(content), 0644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *CloudInit) buildUserData() string {
