@@ -5,6 +5,20 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.24] - 2026-06-02 "The Self-Syncing Registry"
+
+### Fixed
+
+- `nido update` now syncs bundled registry assets from the release archive into the PAL home, keeping installed blueprints aligned with the updated binary.
+- Blueprint commands now auto-sync the bundled registry embedded in the binary before resolving blueprints, repairing PAL homes updated by older updater versions.
+- Registry sync creates a backup before overwriting bundled files and skips repeated backups when the installed registry is already current.
+
+### Tested
+
+- Linux test suite: `go test ./...`.
+- Release lint/build checks: `make lint`, `make build`.
+- Isolated PAL-home smoke confirmed `nido blueprint info windows-11-iot-ltsc-eval --json` repairs stale Windows blueprint assets and `nido build windows-11-iot-ltsc-eval --json` resolves the fixed blueprint.
+
 ## [4.5.22] - 2026-05-14 "The Safer Windows Blueprint"
 
 ### Fixed

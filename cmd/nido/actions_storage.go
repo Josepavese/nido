@@ -276,7 +276,9 @@ func actionImagesUpdate(app *appContext) func(cmd *cobra.Command, args []string)
 
 func actionBuild(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), args, jsonEnabled(cmd), "build")
+		jsonOut := jsonEnabled(cmd)
+		ensureBundledRegistryCurrent("build", app.NidoDir, jsonOut)
+		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), args, jsonOut, "build")
 	}
 }
 
