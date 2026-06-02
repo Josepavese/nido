@@ -206,6 +206,7 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 					Gui:          gui,
 					SSHUser:      bp.SSHUser,
 					SSHPassword:  bp.SSHPassword,
+					SeedFiles:    builder.BlueprintSpawnSeedFiles(bp),
 					MemoryMB:     memoryMB,
 					VCPUs:        vcpus,
 					Forwarding:   ports,

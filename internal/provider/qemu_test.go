@@ -339,6 +339,38 @@ func TestCloudInitMergesCustomUserDataWithAdminAccess(t *testing.T) {
 	}
 }
 
+func TestWriteSeedExtraFilesCreatesSupportFiles(t *testing.T) {
+	root := t.TempDir()
+	err := writeSeedExtraFiles(root, map[string]string{
+		"windows-setup-openssh.ps1": "Write-Host ssh",
+		"support/helper.ps1":        "Write-Host helper",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(root, "windows-setup-openssh.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "Write-Host ssh" {
+		t.Fatalf("unexpected support script content: %q", data)
+	}
+	if _, err := os.Stat(filepath.Join(root, "support", "helper.ps1")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWriteSeedExtraFilesRejectsUnsafePaths(t *testing.T) {
+	for _, name := range []string{"", "../escape.ps1", "/escape.ps1", `\escape.ps1`, "C:/escape.ps1", "meta-data", "user-data"} {
+		t.Run(name, func(t *testing.T) {
+			if err := writeSeedExtraFiles(t.TempDir(), map[string]string{name: "x"}); err == nil {
+				t.Fatalf("writeSeedExtraFiles accepted unsafe path %q", name)
+			}
+		})
+	}
+}
+
 func TestCirrOSCloudInitMergesSSHKeyAndCustomShell(t *testing.T) {
 	ci := CloudInit{
 		User:           "cirros",

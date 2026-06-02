@@ -30,5 +30,5 @@ output_image: "windows-11-eval.qcow2"
 output_size: "64G"
 
 scripts:
-  autounattend.xml: "@shared/windows-autounattend.xml"
+  Autounattend.xml: "@shared/windows-autounattend.xml"
   windows-setup-openssh.ps1: "@shared/windows-setup-openssh.ps1"

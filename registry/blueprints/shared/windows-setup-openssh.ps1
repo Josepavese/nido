@@ -4,27 +4,6 @@ $ProgressPreference = "SilentlyContinue"
 $logPath = "C:\Windows\Temp\nido-openssh-setup.log"
 Start-Transcript -Path $logPath -Append | Out-Null
 
-function Invoke-WithTimeout {
-    param(
-        [scriptblock]$ScriptBlock,
-        [int]$TimeoutSeconds = 900
-    )
-
-    $job = Start-Job -ScriptBlock $ScriptBlock
-    try {
-        if (Wait-Job -Job $job -Timeout $TimeoutSeconds) {
-            Receive-Job -Job $job -ErrorAction Stop
-            return $true
-        }
-
-        Write-Warning "Timed out after $TimeoutSeconds seconds."
-        return $false
-    } finally {
-        Stop-Job -Job $job -ErrorAction SilentlyContinue | Out-Null
-        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue | Out-Null
-    }
-}
-
 function Install-OpenSSHCapability {
     try {
         $capability = Get-WindowsCapability -Online -Name "OpenSSH.Server*" | Select-Object -First 1
@@ -38,9 +17,8 @@ function Install-OpenSSHCapability {
         }
 
         $capabilityName = $capability.Name
-        return Invoke-WithTimeout -TimeoutSeconds 900 -ScriptBlock {
-            Add-WindowsCapability -Online -Name $using:capabilityName
-        }
+        Add-WindowsCapability -Online -Name $capabilityName -LimitAccess | Out-Null
+        return $true
     } catch {
         Write-Warning "OpenSSH capability installation failed: $($_.Exception.Message)"
         return $false
