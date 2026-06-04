@@ -14,12 +14,15 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     permissions:
+      actions: write
+      checks: read
       contents: write
       id-token: write
+      pull-requests: read
     env:
-      GO_VERSION: '1.26.3'
+      GO_VERSION: '1.26.4'
       MCP_PUBLISHER_VERSION: 'v1.7.8'
       MCP_PUBLISHER_SHA256: '48230dbec85bd88a0d42977ef533cddda23235f0db4331b9263ce53b432cb75c'
     
@@ -344,3 +347,9 @@ jobs:
           
           # Publish to Official Registry
           mcp-publisher publish --yes
+
+      - name: Verify scheduled automation workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCHEDULED_WORKFLOW_REF: main
+        run: bash bin/verify-scheduled-workflows.sh
