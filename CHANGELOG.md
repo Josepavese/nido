@@ -5,6 +5,26 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.26] - 2026-06-04 "The Scheduled Gate"
+
+### Fixed
+
+- CI now uses Go `1.26.4`, resolving the `govulncheck` failures caused by standard-library vulnerabilities in Go `1.26.3`.
+- Registry update PR checks are no longer blocked by the stale Go toolchain used after `v4.5.25`.
+
+### Changed
+
+- The release workflow now dispatches every scheduled workflow after publication and waits for the workflow result.
+- When a scheduled workflow manages a bot PR, the release workflow also waits for that PR's status checks so downstream automation failures are visible during release validation.
+- Scheduled workflows are required to expose `workflow_dispatch`, making them manually and release-verifiable.
+
+### Tested
+
+- `GOTOOLCHAIN=go1.26.4 go test ./...`.
+- `GOTOOLCHAIN=go1.26.4 make lint`.
+- `GOTOOLCHAIN=go1.26.4 make build`.
+- `bash -n bin/verify-scheduled-workflows.sh`.
+
 ## [4.5.25] - 2026-06-02 "The MCP Parity Release"
 
 ### Added
