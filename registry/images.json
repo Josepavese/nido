@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-06-09T10:56:21.1670419Z",
+  "updated_at": "2026-06-10T11:35:13.395302563Z",
   "images": [
     {
       "name": "ubuntu",
@@ -47,18 +47,18 @@
       "homepage": "https://get.opensuse.org/tumbleweed/",
       "versions": [
         {
-          "version": "Snapshot20260605",
+          "version": "Snapshot20260608",
           "aliases": [
             "Latest"
           ],
           "arch": "amd64",
-          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260605.qcow2",
+          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260608.qcow2",
           "checksum_type": "sha256",
-          "checksum": "00072a49cb5474962217d17dea773b2f90b7303fa70e442c72de6f10fa648a07",
-          "size_bytes": 307411968,
+          "checksum": "5fd0438c0a82e465219bfa17d379c7e6360f8fde787a72fd599422fc9205d400",
+          "size_bytes": 307485696,
           "format": "qcow2",
-          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260605.qcow2.sha256",
-          "checksum_regex": "^00072a49cb5474962217d17dea773b2f90b7303fa70e442c72de6f10fa648a07$"
+          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260608.qcow2.sha256",
+          "checksum_regex": "^5fd0438c0a82e465219bfa17d379c7e6360f8fde787a72fd599422fc9205d400$"
         }
       ]
     },
@@ -81,28 +81,6 @@
           "format": "raw",
           "checksum_url": "https://kali.download/cloud-images/kali-2025.4/SHA256SUMS",
           "checksum_regex": "kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
-        }
-      ]
-    },
-    {
-      "name": "debian",
-      "registry": "official",
-      "description": "Debian GNU/Linux",
-      "homepage": "https://www.debian.org/",
-      "versions": [
-        {
-          "version": "12",
-          "aliases": [
-            "bookworm"
-          ],
-          "arch": "amd64",
-          "url": "https://cloud.debian.org/images/cloud/bookworm/20260601-2496/debian-12-genericcloud-amd64-20260601-2496.qcow2",
-          "checksum_type": "sha512",
-          "checksum": "ff1c5b86c680bf29fb65a485296f45da744c9f636cb3c3ecc573b7c51ff88797ef207119e40f07ae9428b9bb539d57b490cdb2beecdfbac25dc95163e1418936",
-          "size_bytes": 349765632,
-          "format": "qcow2",
-          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/current/SHA512SUMS",
-          "checksum_regex": "debian-12-genericcloud-amd64-20260601-2496\\.qcow2"
         }
       ]
     },
