@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-06-17T12:12:27.056228646Z",
+  "updated_at": "2026-06-18T11:47:37.031654679Z",
   "images": [
     {
       "name": "ubuntu",
@@ -30,10 +30,10 @@
             "jammy"
           ],
           "arch": "amd64",
-          "url": "https://cloud-images.ubuntu.com/releases/22.04/release-20260515/ubuntu-22.04-server-cloudimg-amd64.img",
+          "url": "https://cloud-images.ubuntu.com/releases/22.04/release-20260617/ubuntu-22.04-server-cloudimg-amd64.img",
           "checksum_type": "sha256",
-          "checksum": "f6729b53d930d7f0c6691eb553cfa6be7109de9412125bf1bf2dc6747de8a44d",
-          "size_bytes": 694923776,
+          "checksum": "ec332b438a87c3cc1e38318ced110568392484cc2f33e29c8f4eaf9ecc9de297",
+          "size_bytes": 695563776,
           "format": "qcow2",
           "checksum_url": "https://cloud-images.ubuntu.com/releases/22.04/release/SHA256SUMS",
           "checksum_regex": "ubuntu-22\\.04-server-cloudimg-amd64\\.img"
@@ -47,18 +47,18 @@
       "homepage": "https://get.opensuse.org/tumbleweed/",
       "versions": [
         {
-          "version": "Snapshot20260615",
+          "version": "Snapshot20260616",
           "aliases": [
             "Latest"
           ],
           "arch": "amd64",
-          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260615.qcow2",
+          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260616.qcow2",
           "checksum_type": "sha256",
-          "checksum": "46052f84c77205a71bc5a24fd03426445a4865abbf1e063529cb5713dc960fa7",
-          "size_bytes": 307207168,
+          "checksum": "ad079e78af0a86395bb14255f0eecad0dcdfb753da21b1ba83fdc50b63e618d9",
+          "size_bytes": 307169792,
           "format": "qcow2",
-          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260615.qcow2.sha256",
-          "checksum_regex": "^46052f84c77205a71bc5a24fd03426445a4865abbf1e063529cb5713dc960fa7$"
+          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260616.qcow2.sha256",
+          "checksum_regex": "^ad079e78af0a86395bb14255f0eecad0dcdfb753da21b1ba83fdc50b63e618d9$"
         }
       ]
     },
@@ -96,13 +96,13 @@
             "bookworm"
           ],
           "arch": "amd64",
-          "url": "https://cloud.debian.org/images/cloud/bookworm/20260601-2496/debian-12-genericcloud-amd64-20260601-2496.qcow2",
+          "url": "https://cloud.debian.org/images/cloud/bookworm/20260615-2510/debian-12-genericcloud-amd64-20260615-2510.qcow2",
           "checksum_type": "sha512",
-          "checksum": "ff1c5b86c680bf29fb65a485296f45da744c9f636cb3c3ecc573b7c51ff88797ef207119e40f07ae9428b9bb539d57b490cdb2beecdfbac25dc95163e1418936",
-          "size_bytes": 349765632,
+          "checksum": "800df5e7a08fb4e1f8e955c3cd866e6b2303b85d60d3eef1fc3c8600b0c3dc34a8fc7c47ab46942bd8ae5dedcba160ee58208ed4885bd6ac98b51cac21b5fcb9",
+          "size_bytes": 349306880,
           "format": "qcow2",
           "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/current/SHA512SUMS",
-          "checksum_regex": "debian-12-genericcloud-amd64-20260601-2496\\.qcow2"
+          "checksum_regex": "debian-12-genericcloud-amd64-20260615-2510\\.qcow2"
         }
       ]
     },
