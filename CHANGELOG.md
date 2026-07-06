@@ -5,6 +5,20 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.27] - 2026-07-06 "The Offline Catalog Gate"
+
+### Fixed
+
+- `images pull` and `images info` now resolve local registry fixtures from the app working directory instead of the process working directory.
+- The image JSON cleanup test no longer depends on the GitHub-hosted catalog or transient network/cache state.
+
+### Tested
+
+- `go test -v -count=10 ./cmd/nido -run TestImageInfoAndRemoveJSONStayClean`.
+- `go test -count=1 ./cmd/nido`.
+- `go test -count=1 ./...`.
+- Cross-Platform CI PR run `28790984204`.
+
 ## [4.5.26] - 2026-06-04 "The Scheduled Gate"
 
 ### Fixed
