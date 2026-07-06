@@ -124,12 +124,13 @@ func TestImageInfoAndRemoveJSONStayClean(t *testing.T) {
 	}
 
 	stdout, stderr := captureProcessIO(t, func() {
-		cmdImageInfo(app.ImageDir(), []string{"ubuntu:24.04"}, true)
+		cmdImageInfo(app.Cwd, app.ImageDir(), []string{"ubuntu:24.04"}, true)
 	})
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
 	}
 	assertSingleJSON(t, stdout)
+	assertCatalogFixtureUsed(t, stdout, app.ImageDir())
 
 	stdout, stderr = captureProcessIO(t, func() {
 		cmdImageRemove(app.ImageDir(), fakeProvider{}, []string{"ubuntu:24.04"}, true)
@@ -373,6 +374,32 @@ func assertSingleJSON(t *testing.T, stdout string) {
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("stdout is not valid JSON: %v\n%s", err, stdout)
+	}
+}
+
+func assertCatalogFixtureUsed(t *testing.T, stdout, imageDir string) {
+	t.Helper()
+	var payload struct {
+		Data struct {
+			Image struct {
+				Version struct {
+					URL       string `json:"url"`
+					SizeBytes int64  `json:"size_bytes"`
+				} `json:"version"`
+			} `json:"image"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("stdout is not valid JSON: %v\n%s", err, stdout)
+	}
+	if payload.Data.Image.Version.URL != "https://example.test/ubuntu.qcow2" {
+		t.Fatalf("image info did not use fixture catalog: %s", stdout)
+	}
+	if payload.Data.Image.Version.SizeBytes != 12345 {
+		t.Fatalf("image info size_bytes came from the wrong catalog: %s", stdout)
+	}
+	if _, err := os.Stat(filepath.Join(imageDir, ".catalog.json")); !os.IsNotExist(err) {
+		t.Fatalf("image info should not create or use remote catalog cache, stat err = %v", err)
 	}
 }
 
