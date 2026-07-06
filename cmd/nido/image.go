@@ -213,7 +213,7 @@ func formatDuration(d time.Duration) string {
 // Stubs for other commands (Phase 2+)
 // cmdImagePull initiates the retrieval of a specific image species.
 // It handles resume logic, multi-part downloads, and verification.
-func cmdImagePull(imageDir string, args []string, jsonOut bool) {
+func cmdImagePull(cwd, imageDir string, args []string, jsonOut bool) {
 	if len(args) < 1 {
 		ui.Error("Usage: nido image pull <name>[:version]")
 		os.Exit(1)
@@ -233,7 +233,6 @@ func cmdImagePull(imageDir string, args []string, jsonOut bool) {
 	// Load catalog
 	var catalog *image.Catalog
 	var err error
-	cwd, _ := os.Getwd()
 	localRegistry := filepath.Join(cwd, "registry", "images.json")
 	if _, statErr := os.Stat(localRegistry); statErr == nil {
 		catalog, err = image.LoadCatalogFromFile(localRegistry)
@@ -358,7 +357,7 @@ func cmdImagePull(imageDir string, args []string, jsonOut bool) {
 }
 
 // cmdImageInfo probes an image for metadata. Currently a fledgling command.
-func cmdImageInfo(imageDir string, args []string, jsonOut bool) {
+func cmdImageInfo(cwd, imageDir string, args []string, jsonOut bool) {
 	if len(args) < 1 {
 		if jsonOut {
 			_ = clijson.PrintJSON(clijson.NewResponseError("image info", "ERR_INVALID_ARGS", "Missing image reference", "Usage: nido images info <image>[:version]", "", nil))
@@ -369,7 +368,7 @@ func cmdImageInfo(imageDir string, args []string, jsonOut bool) {
 	}
 
 	name, version := parseImageRef(args[0])
-	catalog, err := loadImageCatalog(imageDir)
+	catalog, err := loadImageCatalog(cwd, imageDir)
 	if err != nil {
 		if jsonOut {
 			_ = clijson.PrintJSON(clijson.NewResponseError("image info", "ERR_IO", "Catalog load failed", err.Error(), "Check your network connection and try again.", nil))
@@ -557,8 +556,7 @@ func cmdImageUpdate(imageDir string, args []string, jsonOut bool) {
 	ui.Success("Catalog updated.")
 }
 
-func loadImageCatalog(imageDir string) (*image.Catalog, error) {
-	cwd, _ := os.Getwd()
+func loadImageCatalog(cwd, imageDir string) (*image.Catalog, error) {
 	localRegistry := filepath.Join(cwd, "registry", "images.json")
 	if _, statErr := os.Stat(localRegistry); statErr == nil {
 		return image.LoadCatalogFromFile(localRegistry)

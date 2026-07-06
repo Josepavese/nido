@@ -252,13 +252,13 @@ func actionImagesList(app *appContext) func(cmd *cobra.Command, args []string) {
 
 func actionImagesPull(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		cmdImagePull(app.ImageDir(), args, jsonEnabled(cmd))
+		cmdImagePull(app.Cwd, app.ImageDir(), args, jsonEnabled(cmd))
 	}
 }
 
 func actionImagesInfo(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		cmdImageInfo(app.ImageDir(), args, jsonEnabled(cmd))
+		cmdImageInfo(app.Cwd, app.ImageDir(), args, jsonEnabled(cmd))
 	}
 }
 
