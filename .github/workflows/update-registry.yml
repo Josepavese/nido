@@ -15,9 +15,6 @@ permissions:
   contents: write
   pull-requests: write
 
-env:
-  GO_VERSION: '1.26.4'
-
 jobs:
   update-registry:
     name: Update Image Registry
@@ -33,7 +30,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: .go-version
+          check-latest: true
           cache: true
           
       - name: Install dependencies

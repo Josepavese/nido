@@ -13,9 +13,6 @@ concurrency:
   group: cross-platform-ci-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  GO_VERSION: '1.26.4'
-
 jobs:
   test:
     name: Test on ${{ matrix.os }}
@@ -37,7 +34,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: .go-version
+          check-latest: true
           cache: true
 
       - name: Build Nido & Validator
@@ -150,7 +148,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: .go-version
+          check-latest: true
           cache: true
 
       - name: Install QEMU and ISO tools
@@ -262,7 +261,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: .go-version
+          check-latest: true
           cache: true
 
       - name: Install release packaging tools
