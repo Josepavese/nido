@@ -29,7 +29,7 @@ echo "  ------------------------------------"
 # 1. Check for Go
 echo "${STEP} Checking for Go compiler..."
 if ! command -v go >/dev/null 2>&1; then
-    echo "  ${ERR} Go is missing! Please install Go (1.21+) to build Nido v3."
+    echo "  ${ERR} Go is missing! Please install Go (1.26.5+) to build Nido v3."
     exit 1
 fi
 echo "  ${OK} Go found: $(go version)"

@@ -22,7 +22,6 @@ jobs:
       id-token: write
       pull-requests: read
     env:
-      GO_VERSION: '1.26.4'
       MCP_PUBLISHER_VERSION: 'v1.7.8'
       MCP_PUBLISHER_SHA256: '48230dbec85bd88a0d42977ef533cddda23235f0db4331b9263ce53b432cb75c'
     
@@ -53,7 +52,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: .go-version
+          check-latest: true
           cache: true
 
       - name: Install release packaging tools
