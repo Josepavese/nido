@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-07-19T09:47:23.23155381Z",
+  "updated_at": "2026-07-20T10:46:25.312121205Z",
   "images": [
     {
       "name": "ubuntu",
@@ -81,28 +81,6 @@
           "format": "raw",
           "checksum_url": "https://kali.download/cloud-images/kali-2025.4/SHA256SUMS",
           "checksum_regex": "kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
-        }
-      ]
-    },
-    {
-      "name": "debian",
-      "registry": "official",
-      "description": "Debian GNU/Linux",
-      "homepage": "https://www.debian.org/",
-      "versions": [
-        {
-          "version": "12",
-          "aliases": [
-            "bookworm"
-          ],
-          "arch": "amd64",
-          "url": "https://cloud.debian.org/images/cloud/bookworm/20260712-2537/debian-12-genericcloud-amd64-20260712-2537.qcow2",
-          "checksum_type": "sha512",
-          "checksum": "6c2607f1846ee86040830c87d0b723f0967da3e884ea4673d9db4aa8eee13a4b7c663524bfa42082c16fc6919f3aa1bf425c004d07ff06c53a319ad0c42647bb",
-          "size_bytes": 346882048,
-          "format": "qcow2",
-          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/current/SHA512SUMS",
-          "checksum_regex": "debian-12-genericcloud-amd64-20260712-2537\\.qcow2"
         }
       ]
     },
