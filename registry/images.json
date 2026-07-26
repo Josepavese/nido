@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-07-25T09:41:10.634841935Z",
+  "updated_at": "2026-07-26T09:54:20.576725166Z",
   "images": [
     {
       "name": "ubuntu",
@@ -16,10 +16,10 @@
             "latest"
           ],
           "arch": "amd64",
-          "url": "https://cloud-images.ubuntu.com/releases/24.04/release-20260705/ubuntu-24.04-server-cloudimg-amd64.img",
+          "url": "https://cloud-images.ubuntu.com/releases/24.04/release-20260725/ubuntu-24.04-server-cloudimg-amd64.img",
           "checksum_type": "sha256",
-          "checksum": "ffe6203da54deeb6db5d2a98a83f9ec8e55f149d3f7ba622e1abe5fa966ee3d6",
-          "size_bytes": 621673984,
+          "checksum": "d1940f7d69d343355e183dff1e08a59852d32e7309baa7a4bad8365b11b005ac",
+          "size_bytes": 624105472,
           "format": "qcow2",
           "checksum_url": "https://cloud-images.ubuntu.com/releases/24.04/release/SHA256SUMS",
           "checksum_regex": "ubuntu-24\\.04-server-cloudimg-amd64\\.img"
@@ -81,6 +81,28 @@
           "format": "raw",
           "checksum_url": "https://kali.download/cloud-images/kali-2025.4/SHA256SUMS",
           "checksum_regex": "kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
+        }
+      ]
+    },
+    {
+      "name": "debian",
+      "registry": "official",
+      "description": "Debian GNU/Linux",
+      "homepage": "https://www.debian.org/",
+      "versions": [
+        {
+          "version": "12",
+          "aliases": [
+            "bookworm"
+          ],
+          "arch": "amd64",
+          "url": "https://cloud.debian.org/images/cloud/bookworm/20260722-2547/debian-12-genericcloud-amd64-20260722-2547.qcow2",
+          "checksum_type": "sha512",
+          "checksum": "ddc98e22b1c0e6647369fba51e285af155f3f19438f372577fb148817e586eed10526240aa71abc44a836679bf6f8c70ba3d092d945989905abc0c81907b97b0",
+          "size_bytes": 0,
+          "format": "qcow2",
+          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/current/SHA512SUMS",
+          "checksum_regex": "debian-12-genericcloud-amd64-20260722-2547\\.qcow2"
         }
       ]
     },
