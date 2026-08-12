@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-08-11T08:47:46.916133508Z",
+  "updated_at": "2026-08-12T09:06:26.936417526Z",
   "images": [
     {
       "name": "ubuntu",
@@ -47,18 +47,18 @@
       "homepage": "https://get.opensuse.org/tumbleweed/",
       "versions": [
         {
-          "version": "Snapshot20260806",
+          "version": "Snapshot20260809",
           "aliases": [
             "Latest"
           ],
           "arch": "amd64",
-          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260806.qcow2",
+          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260809.qcow2",
           "checksum_type": "sha256",
-          "checksum": "8e65a4b369f2678cec45b6d69e8587f726d1fcdab0f3d2493410e07abc0983fb",
-          "size_bytes": 315715072,
+          "checksum": "16b8050f503c31f075a9da81a28690097a35ca6cdfcea59559aaebeaa20d20e1",
+          "size_bytes": 315274752,
           "format": "qcow2",
-          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260806.qcow2.sha256",
-          "checksum_regex": "^8e65a4b369f2678cec45b6d69e8587f726d1fcdab0f3d2493410e07abc0983fb$"
+          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260809.qcow2.sha256",
+          "checksum_regex": "^16b8050f503c31f075a9da81a28690097a35ca6cdfcea59559aaebeaa20d20e1$"
         }
       ]
     },
