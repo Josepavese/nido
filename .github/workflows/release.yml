@@ -56,6 +56,9 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Download Go modules
+        run: bash bin/download-go-modules.sh
+
       - name: Install release packaging tools
         run: |
           for attempt in 1 2 3; do

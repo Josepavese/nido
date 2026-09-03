@@ -34,8 +34,8 @@ jobs:
           check-latest: true
           cache: true
           
-      - name: Install dependencies
-        run: go mod download
+      - name: Download Go modules
+        run: bash bin/download-go-modules.sh
 
       - name: Run Registry Builder
         id: builder

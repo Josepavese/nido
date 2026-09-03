@@ -38,6 +38,10 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Download Go modules
+        shell: bash
+        run: bash bin/download-go-modules.sh
+
       - name: Build Nido & Validator
         shell: bash
         run: |
@@ -152,6 +156,9 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Download Go modules
+        run: bash bin/download-go-modules.sh
+
       - name: Install QEMU and ISO tools
         run: |
           for attempt in 1 2 3; do
@@ -264,6 +271,9 @@ jobs:
           go-version-file: .go-version
           check-latest: true
           cache: true
+
+      - name: Download Go modules
+        run: bash bin/download-go-modules.sh
 
       - name: Install release packaging tools
         run: |
