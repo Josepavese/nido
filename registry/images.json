@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-09-28T16:22:28.236014726Z",
+  "updated_at": "2026-09-29T14:32:44.275595514Z",
   "images": [
     {
       "name": "ubuntu",
@@ -30,10 +30,10 @@
             "jammy"
           ],
           "arch": "amd64",
-          "url": "https://cloud-images.ubuntu.com/releases/22.04/release-20260913/ubuntu-22.04-server-cloudimg-amd64.img",
+          "url": "https://cloud-images.ubuntu.com/releases/22.04/release-20260926/ubuntu-22.04-server-cloudimg-amd64.img",
           "checksum_type": "sha256",
-          "checksum": "9144540e8af7637d258b50dbabe82ce1aa6752c9574fedfb048270da0e087899",
-          "size_bytes": 735388672,
+          "checksum": "0c9811a81e6329acacbb5ae4e701a7650f85cd3f19852cd159d79ab8357b210e",
+          "size_bytes": 735731200,
           "format": "qcow2",
           "checksum_url": "https://cloud-images.ubuntu.com/releases/22.04/release/SHA256SUMS",
           "checksum_regex": "ubuntu-22\\.04-server-cloudimg-amd64\\.img"
