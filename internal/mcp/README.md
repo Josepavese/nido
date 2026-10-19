@@ -128,3 +128,15 @@ It tells MCP-aware clients to prefer resources for inspection and tools for muta
   }
 }
 ```
+
+### Mutation and inspection guarantees
+
+VM/template/image names are identifiers, never filesystem paths. VM info returns
+errors for nonexistent VMs and corrupt state; disk-only recovery is explicitly
+marked by `state_missing`. CLI JSON exposes the same disk/backing health.
+Image removal uses the shared provider usage guard, including complete relative
+and transitive backing chains. Inspection failures prevent destructive cleanup.
+`config_set` refreshes the active provider before returning, so following calls
+in the same MCP session use the saved configuration. Automatic forwarding ports
+configured on a stopped VM are resolved and persisted before its next launch.
+VM stop verifies process identity; an unrelated persisted PID is refused.
