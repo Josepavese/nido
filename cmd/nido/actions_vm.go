@@ -100,6 +100,7 @@ func actionVMInfo(app *appContext) func(cmd *cobra.Command, args []string) {
 					"forwarding":    info.Forwarding,
 					"raw_qemu_args": info.RawQemuArgs,
 					"accelerators":  info.Accelerators,
+					"disk_path":     info.DiskPath, "disk_missing": info.DiskMissing, "state_missing": info.StateMissing, "backing_path": info.BackingPath, "backing_missing": info.BackingMissing,
 				},
 			}))
 			return
@@ -108,6 +109,15 @@ func actionVMInfo(app *appContext) func(cmd *cobra.Command, args []string) {
 		ui.Header("VM Details")
 		ui.FancyLabel("Name", info.Name)
 		ui.FancyLabel("State", info.State)
+		if info.StateMissing {
+			ui.Warn("Persistent state is missing; only the existing disk was found.")
+		}
+		if info.DiskMissing {
+			ui.Warn("VM disk is missing: %s", info.DiskPath)
+		}
+		if info.BackingMissing {
+			ui.Warn("Backing image is missing: %s", info.BackingPath)
+		}
 		ui.FancyLabel("IP Address", info.IP)
 		ui.FancyLabel("SSH Command", fmt.Sprintf("ssh -p %d %s@%s", info.SSHPort, info.SSHUser, info.IP))
 		if info.VNCPort > 0 {
@@ -148,16 +158,6 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		jsonOut := jsonEnabled(cmd)
 		name := args[0]
-		for _, r := range name {
-			if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.') {
-				if jsonOut {
-					_ = clijson.PrintJSON(clijson.NewResponseError("spawn", "ERR_INVALID_ARGS", "Invalid VM name", "Only alphanumeric, hyphens, underscores, and dots allowed.", "Usage: nido spawn <name> ...", nil))
-				} else {
-					ui.Error("Invalid VM name '%s'. (No spaces allowed, only alphanumeric, -, _, .)", name)
-				}
-				os.Exit(1)
-			}
-		}
 
 		tpl := ""
 		if len(args) > 1 {

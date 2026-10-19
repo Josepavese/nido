@@ -5,6 +5,23 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.29] - 2026-10-19 "The Shielded Nest"
+
+### Fixed
+
+- Reject path components in VM, template and image identifiers before filesystem or lifecycle effects.
+- Verify VM process identity before reporting running or stopping it. Linux pidfds and Windows process handles prevent PID reuse from redirecting termination; other Unix hosts stop the verified instance through QMP.
+- Apply the provider's backing-file protection to both MCP image-removal actions. Inspect full backing chains, including relative paths and template dependencies; refuse cleanup when inspection fails.
+- Allocate and persist automatic forwarding ports before restart through the same resolver used by spawn and port updates.
+- Report absent VMs and corrupt runtime state as errors. Expose disk/backing health and disk-only recovery status in CLI JSON.
+- Reload the active MCP provider configuration after config_set, including subsequent storage operations in the same session.
+
+### Tested
+
+- Go suite, vet, staticcheck and govulncheck; Linux, Windows and macOS build coverage.
+- Isolated CLI/MCP regression scenarios using private PID/network namespaces and synthetic state; native QEMU argument and stop checks. The audited v4.5.28 fails the eight original defect scenarios; the repaired binary passes them and preservation/error controls.
+- Full local validator: 48 PASS, 0 FAIL, 3 expected SKIP; disposable CirrOS/KVM workflows, empty VM/template inventory after cleanup. Existing VM files remain outside the test namespaces.
+
 ## [4.5.28] - 2026-10-19 "The Persistent QEMU Cartridge"
 
 ### Fixed

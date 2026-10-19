@@ -133,6 +133,8 @@ type VMDetail struct {
 	RawQemuArgs []string `json:"raw_qemu_args,omitempty"`
 	// Accelerators active
 	Accelerators []string `json:"accelerators,omitempty"`
+	// StateMissing reports an existing disk without persistent runtime state.
+	StateMissing bool `json:"state_missing,omitempty"`
 	// DiskPath is the absolute path to the VM disk image.
 	DiskPath string
 	// DiskMissing indicates the disk file is missing on disk.
@@ -185,6 +187,9 @@ type VMProvider interface {
 
 	// GetConfig returns the current provider configuration.
 	GetConfig() config.Config
+
+	// ReloadConfig refreshes the provider from the canonical config file. Calls are owner-thread confined.
+	ReloadConfig(path string) error
 
 	// Storage operations
 

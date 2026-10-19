@@ -3,7 +3,6 @@
 package provider
 
 import (
-	"os"
 	"syscall"
 )
 
@@ -25,13 +24,10 @@ func processAlive(pid int) bool {
 	}
 	handle, err := syscall.OpenProcess(0x00100000, false, uint32(pid)) // SYNCHRONIZE
 	if err != nil {
-		return false
+		// Inability to inspect is not evidence that deleting the VM disk is safe.
+		return err == syscall.ERROR_ACCESS_DENIED
 	}
 	defer syscall.CloseHandle(handle)
 	status, err := syscall.WaitForSingleObject(handle, 0)
 	return err == nil && status == 0x00000102 // WAIT_TIMEOUT means still running.
-}
-
-func stopQemuProcess(process *os.Process, graceful bool) error {
-	return process.Kill()
 }

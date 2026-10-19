@@ -10,6 +10,11 @@ import (
 	"github.com/Josepavese/nido/internal/pkg/sysutil"
 )
 
+const (
+	DefaultPortRangeStart = 30000
+	DefaultPortRangeEnd   = 32767
+)
+
 // Config defines the DNA of a Nido nest. It controls where life is archived,
 // default hatching species, and how disk cloning should evolve.
 type Config struct {
@@ -72,8 +77,8 @@ func LoadConfig(path string) (*Config, error) {
 		SSHUser:        "vmuser",
 		ImageDir:       filepath.Join(home, ".nido", "images"),
 		LinkedClones:   true, // Default to true (space saving)
-		PortRangeStart: 30000,
-		PortRangeEnd:   32767,
+		PortRangeStart: DefaultPortRangeStart,
+		PortRangeEnd:   DefaultPortRangeEnd,
 		TUI: TUIConfig{
 			SidebarWidth:     30,
 			SidebarWideWidth: 38,

@@ -211,59 +211,6 @@ func (c *Catalog) GetCacheStats(cacheDir string) (*CacheStats, error) {
 	return stats, nil
 }
 
-// RemoveCachedImage removes a specific cached image file.
-// Returns an error if the image is not found or cannot be deleted.
-func (c *Catalog) RemoveCachedImage(cacheDir, name, version string) error {
-	filename := fmt.Sprintf("%s-%s.qcow2", name, version)
-	path := filepath.Join(cacheDir, filename)
-
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("cached image not found: %s:%s", name, version)
-	}
-
-	if err := os.Remove(path); err != nil {
-		return fmt.Errorf("failed to remove cached image: %w", err)
-	}
-
-	return nil
-}
-
-// PruneCache removes cached images based on the specified criteria.
-// If unusedOnly is true, only removes images not currently used by any VM.
-// Returns the number of images removed and any error encountered.
-func (c *Catalog) PruneCache(cacheDir string, unusedOnly bool, activeVMs []string) (int, error) {
-	cached, err := c.GetCachedImages(cacheDir)
-	if err != nil {
-		return 0, err
-	}
-
-	removed := 0
-	for _, img := range cached {
-		// If unusedOnly is true, check if image is in use
-		if unusedOnly {
-			inUse := false
-			for _, vm := range activeVMs {
-				// Check if VM disk path matches this cached image
-				if strings.Contains(vm, img.Name) && strings.Contains(vm, img.Version) {
-					inUse = true
-					break
-				}
-			}
-			if inUse {
-				continue
-			}
-		}
-
-		// Remove the image
-		if err := os.Remove(img.Path); err != nil {
-			continue
-		}
-		removed++
-	}
-
-	return removed, nil
-}
-
 // Internal helper functions
 
 func loadFromFile(path string) (*Catalog, error) {
