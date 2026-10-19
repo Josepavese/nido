@@ -6,7 +6,8 @@ sources:
     strategies:
       - type: "ubuntu-cloud"
         base_url: "https://cloud-images.ubuntu.com/releases"
-        versions: ["24.04", "22.04"]
+        discovery:
+          url: "https://cloud-images.ubuntu.com/releases/streams/v1/com.ubuntu.cloud:released:download.json"
 
   - name: opensuse
     provider: openSUSE Project
@@ -24,7 +25,10 @@ sources:
     strategies:
       - type: "generic"
         base_url: "https://kali.download/cloud-images"
-        versions: ["2025.4"]
+        discovery:
+          url: "https://kali.download/cloud-images/"
+          pattern: 'href="kali-([0-9]{4}\.[0-9]+)/"'
+          limit: 1
         template_url: "{base_url}/kali-{version}/kali-linux-{version}-cloud-genericcloud-amd64.tar.xz"
         checksum_url: "{base_url}/kali-{version}/SHA256SUMS"
         checksum_type: "sha256"
@@ -38,7 +42,9 @@ sources:
     strategies:
       - type: "debian-cloud"
         base_url: "https://cloud.debian.org/images/cloud"
-        versions: ["12"]
+        discovery:
+          url: "https://deb.debian.org/debian/dists"
+          channels: ["stable", "oldstable"]
 
   - name: alpine
     provider: Alpine Linux
@@ -47,7 +53,8 @@ sources:
     strategies:
       - type: "alpine-cdn"
         base_url: "https://dl-cdn.alpinelinux.org/alpine"
-        versions: ["3.20", "3.21"]
+        discovery:
+          url: "https://alpinelinux.org/releases.json"
 
   - name: cirros
     provider: CirrOS Project
@@ -57,7 +64,10 @@ sources:
     strategies:
       - type: "generic"
         base_url: "https://download.cirros-cloud.net"
-        versions: ["0.6.3"]
+        discovery:
+          url: "https://download.cirros-cloud.net/"
+          pattern: 'href="([0-9]+\.[0-9]+\.[0-9]+)/"'
+          limit: 1
         template_url: "{base_url}/{version}/cirros-{version}-x86_64-disk.img"
         checksum_url: "{base_url}/{version}/SHA256SUMS"
         checksum_type: "sha256"
@@ -65,6 +75,7 @@ sources:
 
   - name: ubuntu-24.04-lubuntu-minimal
     registry: nido
+    optional: true
     provider: "Nido Premium Flavours"
     description: "Lubuntu 24.04 - Lightweight LXQt Desktop with Go and Python pre-installed."
     homepage: "https://github.com/Josepavese/nido"
@@ -75,6 +86,7 @@ sources:
 
   - name: ubuntu-24.04-xfce-development
     registry: nido
+    optional: true
     provider: "Nido Premium Flavours"
     description: "XFCE Desktop with Go, Python and Docker pre-installed."
     homepage: "https://github.com/Josepavese/nido"
@@ -85,6 +97,7 @@ sources:
 
   - name: ubuntu-24.04-apache-wordpress
     registry: nido
+    optional: true
     provider: "Nido Premium Flavours"
     description: "Ubuntu 24.04 with Apache 2 and Wordpress pre-installed."
     homepage: "https://github.com/Josepavese/nido"
@@ -95,6 +108,7 @@ sources:
 
   - name: ubuntu-24.04-plesk-web
     registry: nido
+    optional: true
     provider: "Nido Premium Flavours"
     description: "Ubuntu 24.04 with Plesk Obsidian pre-installed."
     homepage: "https://github.com/Josepavese/nido"
@@ -105,6 +119,7 @@ sources:
 
   - name: ubuntu-24.04-comfyui
     registry: nido
+    optional: true
     provider: "Nido Premium Flavours"
     description: "Ubuntu 24.04 with ComfyUI and AI tools pre-installed."
     homepage: "https://github.com/Josepavese/nido"

@@ -27,6 +27,7 @@ func TestNoDirectUserIOInCoreLayers(t *testing.T) {
 		filepath.Join(repoRoot, "internal", "pkg", "sysutil"),
 		filepath.Join(repoRoot, "internal", "image"),
 		filepath.Join(repoRoot, "internal", "builder"),
+		filepath.Join(repoRoot, "internal", "registry", "builder"),
 	}
 
 	var violations []string

@@ -4,7 +4,7 @@ Starting from v3.1.0, Nido includes a built-in Image Registry to easily find, do
 
 ## Concepts
 
-- **Catalog**: A JSON manifest of verified images from official sources (Ubuntu, Debian, Alpine).
+- **Catalog**: A JSON manifest of images with upstream checksum metadata from official sources (Ubuntu, Debian, Alpine).
 - **Image**: A read-only OS disk image (qcow2 format).
 - **Blueprint**: A local recipe that builds a qcow2 image from installer media and automation files. Windows evaluation images use this path because Microsoft ships installers, not cloud qcow2 images.
 - **Backing File (Linked Clones)**: When you spawn a VM from an image, Nido creates a "Clone" (overlay) using QCOW2 backing files. The original image remains untouched and read-only, while your VM only stores the differences. 🧬
@@ -23,9 +23,9 @@ nido image list
 
 ```
 OFFICIAL:
-  ubuntu:24.04 (noble)     600 MB
-  debian:12    (bookworm)  331 MB
-  alpine:3.20  (latest)    52 MB
+  ubuntu:26.04 (resolute, lts, latest)
+  debian:13    (trixie, stable, latest)
+  alpine:3.24  (latest)
 ```
 
 ### Pull Image
@@ -33,7 +33,7 @@ OFFICIAL:
 Download an image to your local cache (`~/.nido/images/`). Partial downloads are automatically resumed.
 
 ```bash
-nido image pull ubuntu:24.04
+nido image pull ubuntu:lts
 ```
 
 ### Spawn from Image
@@ -41,7 +41,7 @@ nido image pull ubuntu:24.04
 Create a new VM using a downloaded image. If the image isn't downloaded, Nido will offer to pull it automatically.
 
 ```bash
-nido spawn my-vm --image ubuntu:24.04
+nido spawn my-vm --image ubuntu:lts
 ```
 
 ### Build from Blueprint
@@ -76,6 +76,18 @@ Refresh the local catalog from the GitHub repository.
 ```bash
 nido image update
 ```
+
+### Automatic upstream discovery
+
+The daily registry job discovers published, supported Ubuntu cloud releases from Canonical SimpleStreams, Debian stable and oldstable from their Release metadata, supported Alpine branches from the release feed, and the newest stable Kali/CirrOS release from official download indexes. openSUSE follows the newest Tumbleweed snapshot. `registry/sources.yaml` owns endpoints and selection policies; OS versions and codenames come from upstream metadata.
+
+`latest` selects the newest available release for that distribution; Ubuntu `lts` selects the newest supported LTS. Newer image builds of the same OS version also trigger validation. Ubuntu and Debian image URLs and checksums refer to the same immutable build.
+
+A failed required source or invalid checksum stops publication and leaves the prior catalog intact. Optional Nido flavours without published assets are reported separately. Hosted CI checks metadata and isolated CLI/MCP behavior; it does not certify guest boot compatibility for every image.
+
+MCP exposes the same catalog through `nido_image` actions `list` and `info`, and resources `nido://catalog/images` and `nido://image/ubuntu:lts`. CLI JSON inspection (`nido images info ubuntu:lts --json`) includes the expected checksum.
+
+Removing an unsupported release from the downloadable catalog does not delete cached images, VM disks or data. Discovery downloads metadata and checks image sizes using HTTP HEAD; guest images download only when explicitly pulled or used to spawn a VM.
 
 ## Known Limitations
 

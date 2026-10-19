@@ -13,6 +13,7 @@ type Source struct {
 	Registry    string     `yaml:"registry,omitempty"` // official, nido, etc.
 	Provider    string     `yaml:"provider"`
 	Description string     `yaml:"description"`
+	Optional    bool       `yaml:"optional,omitempty"` // Sources without published assets may be absent.
 	Homepage    string     `yaml:"homepage"`
 	SSHUser     string     `yaml:"ssh_user,omitempty"`
 	Strategies  []Strategy `yaml:"strategies"`
@@ -20,9 +21,11 @@ type Source struct {
 
 // Strategy defines how to fetch images for a provider
 type Strategy struct {
-	Type     string   `yaml:"type"`     // e.g., "ubuntu-cloud", "generic", "github-release"
-	BaseURL  string   `yaml:"base_url"` // Root URL for scanning
-	Versions []string `yaml:"versions"` // Versions to scan (e.g. ["24.04", "22.04"])
+	Type     string   `yaml:"type"`               // e.g., "ubuntu-cloud", "generic", "github-release"
+	BaseURL  string   `yaml:"base_url"`           // Root URL for scanning
+	Versions []string `yaml:"versions,omitempty"` // Versions to scan (e.g. ["24.04", "22.04"])
+
+	Discovery *Discovery `yaml:"discovery,omitempty"`
 
 	// Generic strategy fields
 	TemplateURL  string `yaml:"template_url,omitempty"`  // "{base_url}/{version}/file.img"
@@ -41,4 +44,13 @@ type Strategy struct {
 type Fetcher interface {
 	// Fetch returns a list of versions (with images) found for this strategy
 	Fetch(source Source, strategy Strategy) ([]image.Version, error)
+}
+
+// Discovery selects versions from upstream metadata, rather than a maintained allowlist.
+// URL and policy are owned by sources.yaml; provider parsers own their wire formats.
+type Discovery struct {
+	URL      string   `yaml:"url"`
+	Channels []string `yaml:"channels,omitempty"` // Debian stable/oldstable Release files.
+	Pattern  string   `yaml:"pattern,omitempty"`  // Generic directory: first capture is a stable version.
+	Limit    int      `yaml:"limit,omitempty"`    // Generic directory: keep this many newest stable versions.
 }
