@@ -256,7 +256,7 @@ def main():
         if fixture.exists(): shutil.rmtree(fixture)
         fixture.mkdir(exist_ok=True)
         (fixture/'bin').mkdir()
-        cmd = ['bwrap','--ro-bind','/','/','--dev','/dev','--unshare-pid','--unshare-net','--proc','/proc','--tmpfs',str(pathlib.Path.home()),'--bind',str(ROOT),str(ROOT),'--bind',str(fixture),str(HOME_DIR),'--ro-bind',os.environ['NIDO_TEST_BINARY'],str(HOME_DIR/'bin'/'nido'),'--setenv','NIDO_SAFETY_ROOT',str(ROOT),'--setenv','TMPDIR',str(ROOT/'tmp'),'--chdir',str(ROOT),'--','/usr/bin/python3',str(ROOT/'probe.py'),'--inside',case]
+        cmd = ['bwrap','--ro-bind','/','/','--dev','/dev','--unshare-user','--unshare-pid','--unshare-net','--proc','/proc','--tmpfs',str(pathlib.Path.home()),'--bind',str(ROOT),str(ROOT),'--bind',str(fixture),str(HOME_DIR),'--ro-bind',os.environ['NIDO_TEST_BINARY'],str(HOME_DIR/'bin'/'nido'),'--setenv','NIDO_SAFETY_ROOT',str(ROOT),'--setenv','TMPDIR',str(ROOT/'tmp'),'--chdir',str(ROOT),'--','/usr/bin/python3',str(ROOT/'probe.py'),'--inside',case]
         p = subprocess.run(cmd,capture_output=True,text=True,timeout=100)
         print(p.stdout or p.stderr,flush=True)
         if p.returncode: failed = True

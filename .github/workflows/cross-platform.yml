@@ -188,6 +188,12 @@ jobs:
           go build -o nido ./cmd/nido
           go build -o nido-validator ./cmd/nido-validator
 
+      - name: Enable isolated user namespaces on the disposable runner
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
       - name: Isolated CLI and MCP safety regressions
         env:
           NIDO_TEST_BINARY: ${{ github.workspace }}/nido
