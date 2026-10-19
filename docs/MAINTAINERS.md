@@ -29,6 +29,10 @@ Nido uses an automated system to keep its image catalog fresh.
     ```
 
 - **Automation**: Runs daily via GitHub Actions (`update-registry.yml`).
+- **Discovery policy**: Canonical released SimpleStreams (supported Ubuntu cloud releases), Debian stable/oldstable Release files, Alpine release branches still under main support, newest stable Kali/CirrOS directory, latest openSUSE snapshot. Endpoints and selection policy live in `registry/sources.yaml`.
+- **Safe publication**: Required source failures, empty discoveries, invalid integrity metadata and ambiguous aliases fail before replacement. Output is written to a sibling temporary file and renamed after complete generation. Explicitly optional unpublished Nido flavours are warnings; prior published flavour records survive a temporary source failure.
+- **Validation**: `VALIDATE:` includes new versions and changed URL/checksum identities under existing versions. Identical output preserves `updated_at`. Run `go test ./internal/registry/builder ./cmd/registry-builder`; the Linux CI smoke job also runs `tests/catalog_surfaces.py` with a disposable, networkless home.
+- **Resource limits**: Discovery uses metadata GET and image HEAD requests only. On constrained hosts put `GOCACHE`, `GOMODCACHE`, `GOTMPDIR`, `TMPDIR` and `NIDO_TEST_STORAGE` on the larger scratch filesystem. Never run VM validation against an existing user home; `bin/validate-registry.sh` writes the home cache and is intended for disposable CI hosts.
 
 ### 🧪 Registry Validator (Testing)
 

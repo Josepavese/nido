@@ -427,6 +427,7 @@ func cmdImageInfo(cwd, imageDir string, args []string, jsonOut bool) {
 					"size":           sizeHuman,
 					"format":         ver.Format,
 					"checksum_type":  ver.ChecksumType,
+					"checksum":       ver.Checksum,
 					"kernel_url":     ver.KernelURL,
 					"initrd_url":     ver.InitrdURL,
 					"cmdline":        ver.Cmdline,

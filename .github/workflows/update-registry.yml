@@ -37,6 +37,9 @@ jobs:
       - name: Download Go modules
         run: bash bin/download-go-modules.sh
 
+      - name: Test discovery and safe catalog publication
+        run: go test -count=1 ./internal/registry/builder ./cmd/registry-builder
+
       - name: Run Registry Builder
         id: builder
         env:
@@ -48,7 +51,7 @@ jobs:
           cat "$output_file"
           
           # Extract images to validate
-          images=$(grep "VALIDATE:" "$output_file" | cut -d' ' -f2 | tr '\n' ',' | sed 's/,$//' || true)
+          images=$(grep "VALIDATE:" "$output_file" | cut -d' ' -f2 | cut -d: -f1 | sort -u | tr '\n' ',' | sed 's/,$//' || true)
           echo "to_validate=$images" >> $GITHUB_OUTPUT
 
       - name: Validate New Images

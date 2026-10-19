@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-10-19T15:12:39.699495577Z",
+  "updated_at": "2026-10-19T16:01:10.526675542Z",
   "images": [
     {
       "name": "ubuntu",
@@ -9,19 +9,35 @@
       "homepage": "https://ubuntu.com/",
       "versions": [
         {
-          "version": "24.04",
+          "version": "26.04",
           "aliases": [
-            "noble",
+            "resolute",
             "lts",
             "latest"
+          ],
+          "arch": "amd64",
+          "url": "https://cloud-images.ubuntu.com/releases/26.04/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img",
+          "checksum_type": "sha256",
+          "checksum": "8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2",
+          "size_bytes": 865115136,
+          "size": "825.0 MB",
+          "format": "qcow2",
+          "checksum_url": "https://cloud-images.ubuntu.com/releases/26.04/release-20260927/SHA256SUMS",
+          "checksum_regex": "ubuntu-26\\.04-server-cloudimg-amd64\\.img"
+        },
+        {
+          "version": "24.04",
+          "aliases": [
+            "noble"
           ],
           "arch": "amd64",
           "url": "https://cloud-images.ubuntu.com/releases/24.04/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img",
           "checksum_type": "sha256",
           "checksum": "04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94",
           "size_bytes": 621284352,
+          "size": "592.5 MB",
           "format": "qcow2",
-          "checksum_url": "https://cloud-images.ubuntu.com/releases/24.04/release/SHA256SUMS",
+          "checksum_url": "https://cloud-images.ubuntu.com/releases/24.04/release-20261017/SHA256SUMS",
           "checksum_regex": "ubuntu-24\\.04-server-cloudimg-amd64\\.img"
         },
         {
@@ -34,8 +50,9 @@
           "checksum_type": "sha256",
           "checksum": "012d81fade7e8ff4428fc35dfeee711d66d1f47d5ea9c5c8ced96a85b959835c",
           "size_bytes": 730497536,
+          "size": "696.7 MB",
           "format": "qcow2",
-          "checksum_url": "https://cloud-images.ubuntu.com/releases/22.04/release/SHA256SUMS",
+          "checksum_url": "https://cloud-images.ubuntu.com/releases/22.04/release-20261004/SHA256SUMS",
           "checksum_regex": "ubuntu-22\\.04-server-cloudimg-amd64\\.img"
         }
       ]
@@ -56,6 +73,7 @@
           "checksum_type": "sha256",
           "checksum": "75932b0d99b876858822369806599ce9683c3a1454fac4c808c193d682a15c12",
           "size_bytes": 316773376,
+          "size": "302.1 MB",
           "format": "qcow2",
           "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261017.qcow2.sha256",
           "checksum_regex": "^75932b0d99b876858822369806599ce9683c3a1454fac4c808c193d682a15c12$"
@@ -69,18 +87,19 @@
       "homepage": "https://www.kali.org/",
       "versions": [
         {
-          "version": "2025.4",
+          "version": "2026.2",
           "aliases": [
-            "2025.4"
+            "latest"
           ],
           "arch": "amd64",
-          "url": "https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz",
+          "url": "https://kali.download/cloud-images/kali-2026.2/kali-linux-2026.2-cloud-genericcloud-amd64.tar.xz",
           "checksum_type": "sha256",
-          "checksum": "649f20a4703f2324c0a5fa286a9260a5eb98d7f5d554d9aa179f284e8338fe8f",
-          "size_bytes": 203023936,
+          "checksum": "3f4ca86ae1eca0dc2bf2092f065a959508e186c6b44f85758813a8e9a0604f3e",
+          "size_bytes": 234114644,
+          "size": "223.3 MB",
           "format": "raw",
-          "checksum_url": "https://kali.download/cloud-images/kali-2025.4/SHA256SUMS",
-          "checksum_regex": "kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
+          "checksum_url": "https://kali.download/cloud-images/kali-2026.2/SHA256SUMS",
+          "checksum_regex": "kali-linux-2026.2-cloud-genericcloud-amd64.tar.xz"
         }
       ]
     },
@@ -91,17 +110,36 @@
       "homepage": "https://www.debian.org/",
       "versions": [
         {
+          "version": "13",
+          "aliases": [
+            "trixie",
+            "stable",
+            "latest"
+          ],
+          "arch": "amd64",
+          "url": "https://cloud.debian.org/images/cloud/trixie/20261017-2634/debian-13-genericcloud-amd64-20261017-2634.qcow2",
+          "checksum_type": "sha512",
+          "checksum": "ec584ccabfef7120b4c4f7482adf0e615894d9292cedec446b64194b951ebe5dd97c336b5dcbae458333764b0edd516334506017f33c4f2020ef8d38b569ffe3",
+          "size_bytes": 342818816,
+          "size": "326.9 MB",
+          "format": "qcow2",
+          "checksum_url": "https://cloud.debian.org/images/cloud/trixie/20261017-2634/SHA512SUMS",
+          "checksum_regex": "debian-13-genericcloud-amd64-20261017-2634\\.qcow2"
+        },
+        {
           "version": "12",
           "aliases": [
-            "bookworm"
+            "bookworm",
+            "oldstable"
           ],
           "arch": "amd64",
           "url": "https://cloud.debian.org/images/cloud/bookworm/20261018-2635/debian-12-genericcloud-amd64-20261018-2635.qcow2",
           "checksum_type": "sha512",
           "checksum": "dc0d7b526a3a9a9265142fe8e903984c03f8d605ac4ba6f14d15d27988a69581fb05fc06cd2a6d79f6eaf68ba9725f2eb38b5ddd64ad166faadad279af776c9e",
           "size_bytes": 348782592,
+          "size": "332.6 MB",
           "format": "qcow2",
-          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/current/SHA512SUMS",
+          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/20261018-2635/SHA512SUMS",
           "checksum_regex": "debian-12-genericcloud-amd64-20261018-2635\\.qcow2"
         }
       ]
@@ -113,31 +151,52 @@
       "homepage": "https://alpinelinux.org/",
       "versions": [
         {
-          "version": "3.20",
+          "version": "3.24",
           "aliases": [
-            "3.20",
             "latest"
           ],
           "arch": "amd64",
-          "url": "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/cloud/nocloud_alpine-3.20.9-x86_64-bios-cloudinit-r0.qcow2",
+          "url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/cloud/generic_alpine-3.24.1-x86_64-bios-cloudinit-r0.qcow2",
           "checksum_type": "sha512",
-          "checksum": "1aa57dc508820f2fbafcd7ef735fa33cb7e5445ad6b21185d015373ab1fa11815b5d5cd8c967585f4355ca5acca487103f18f591fcf10cef19e89060151f78af",
-          "size_bytes": 171900928,
+          "checksum": "8d756f6fc7653daa4fb4e2e213d8a66007bcb1e5a846e28891af62c47b90685c694486c2746099ad99e9e8f5278db76b69d11dfe1e9361aa4c8406df16929a9c",
+          "size_bytes": 183697408,
+          "size": "175.2 MB",
           "format": "qcow2",
-          "checksum_url": "https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/cloud/nocloud_alpine-3.20.9-x86_64-bios-cloudinit-r0.qcow2.sha512",
-          "checksum_regex": "^1aa57dc508820f2fbafcd7ef735fa33cb7e5445ad6b21185d015373ab1fa11815b5d5cd8c967585f4355ca5acca487103f18f591fcf10cef19e89060151f78af$"
+          "checksum_url": "https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/cloud/generic_alpine-3.24.1-x86_64-bios-cloudinit-r0.qcow2.sha512",
+          "checksum_regex": "^8d756f6fc7653daa4fb4e2e213d8a66007bcb1e5a846e28891af62c47b90685c694486c2746099ad99e9e8f5278db76b69d11dfe1e9361aa4c8406df16929a9c$"
+        },
+        {
+          "version": "3.23",
+          "arch": "amd64",
+          "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/cloud/generic_alpine-3.23.5-x86_64-bios-cloudinit-r0.qcow2",
+          "checksum_type": "sha512",
+          "checksum": "a4c1c301b2972e805df318a0b1f5effb3db7106932ecedc0222456aefe18453b5126ebee3f550db5ef9000c644f79a4394c6d3a8906d0ceb05350593e9c4a1c7",
+          "size_bytes": 192413696,
+          "size": "183.5 MB",
+          "format": "qcow2",
+          "checksum_url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/cloud/generic_alpine-3.23.5-x86_64-bios-cloudinit-r0.qcow2.sha512",
+          "checksum_regex": "^a4c1c301b2972e805df318a0b1f5effb3db7106932ecedc0222456aefe18453b5126ebee3f550db5ef9000c644f79a4394c6d3a8906d0ceb05350593e9c4a1c7$"
+        },
+        {
+          "version": "3.22",
+          "arch": "amd64",
+          "url": "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/cloud/generic_alpine-3.22.5-x86_64-bios-cloudinit-r0.qcow2",
+          "checksum_type": "sha512",
+          "checksum": "463f44e95fca714a84d37f9725337f99f54fe4b210488848489584910d8a33afcc8d67ff89737467e099781a09c0d798309fd661ef8e7173cd31a01b47d81705",
+          "size_bytes": 180486144,
+          "size": "172.1 MB",
+          "format": "qcow2",
+          "checksum_url": "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/cloud/generic_alpine-3.22.5-x86_64-bios-cloudinit-r0.qcow2.sha512",
+          "checksum_regex": "^463f44e95fca714a84d37f9725337f99f54fe4b210488848489584910d8a33afcc8d67ff89737467e099781a09c0d798309fd661ef8e7173cd31a01b47d81705$"
         },
         {
           "version": "3.21",
-          "aliases": [
-            "3.21",
-            "latest"
-          ],
           "arch": "amd64",
           "url": "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/cloud/nocloud_alpine-3.21.7-x86_64-bios-cloudinit-r0.qcow2",
           "checksum_type": "sha512",
           "checksum": "5b22a46e9aa6bbacf585c055e87362c8be1993e53c121bdaf74203ac3490c70bdbbf714df4276eef36184ea8c11fd7cd3b28c9ccc74f6a9a82c430d441fa2f95",
           "size_bytes": 172032000,
+          "size": "164.1 MB",
           "format": "qcow2",
           "checksum_url": "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/cloud/nocloud_alpine-3.21.7-x86_64-bios-cloudinit-r0.qcow2.sha512",
           "checksum_regex": "^5b22a46e9aa6bbacf585c055e87362c8be1993e53c121bdaf74203ac3490c70bdbbf714df4276eef36184ea8c11fd7cd3b28c9ccc74f6a9a82c430d441fa2f95$"
@@ -154,13 +213,14 @@
         {
           "version": "0.6.3",
           "aliases": [
-            "0.6.3"
+            "latest"
           ],
           "arch": "amd64",
           "url": "https://download.cirros-cloud.net/0.6.3/cirros-0.6.3-x86_64-disk.img",
           "checksum_type": "sha256",
           "checksum": "7d6355852aeb6dbcd191bcda7cd74f1536cfe5cbf8a10495a7283a8396e4b75b",
           "size_bytes": 21692416,
+          "size": "20.7 MB",
           "format": "qcow2",
           "checksum_url": "https://download.cirros-cloud.net/0.6.3/SHA256SUMS",
           "checksum_regex": "cirros-0.6.3-x86_64-disk.img"

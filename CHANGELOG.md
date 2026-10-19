@@ -5,6 +5,18 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.0] - 2026-10-19 "Fresh Feathers"
+
+### Added
+- Discover supported Ubuntu cloud releases, Debian stable/oldstable, supported Alpine branches, and the latest stable Kali/CirrOS images automatically from upstream metadata.
+- Isolated CLI and MCP tool/resource tests verify every catalog version, alias, default and integrity field without network or existing VM access.
+
+### Fixed
+- Publish current Ubuntu 26.04 LTS, Debian 13, Alpine 3.22/3.23/3.24 and Kali 2026.2 cloud images.
+- Stop catalog publication on required upstream failures or invalid integrity metadata; retain the existing catalog unchanged.
+- Derive unique latest/LTS aliases, compare numeric image revisions correctly, and pin Ubuntu/Debian checksums to the immutable image build.
+- Revalidate changed image bytes under an existing OS version and keep catalog timestamps stable on a no-op sync.
+
 ## [4.5.29] - 2026-10-19 "The Shielded Nest"
 
 ### Fixed

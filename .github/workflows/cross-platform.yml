@@ -198,7 +198,9 @@ jobs:
         env:
           NIDO_TEST_BINARY: ${{ github.workspace }}/nido
           NIDO_TEST_STORAGE: ${{ runner.temp }}
-        run: python3 tests/cli_mcp_safety.py
+        run: |
+          python3 tests/catalog_surfaces.py
+          python3 tests/cli_mcp_safety.py
 
       - name: Run doctor
         run: ./nido doctor --json

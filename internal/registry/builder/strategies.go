@@ -15,34 +15,82 @@ import (
 	"github.com/Josepavese/nido/internal/image"
 )
 
-// Default client with timeout
-var client = &http.Client{
-	Timeout: 30 * time.Second,
+// HTTPClient is the network boundary; tests inject an isolated upstream.
+type HTTPClient interface {
+	Do(*http.Request) (*http.Response, error)
 }
 
-// Fetch dispatches to the correct strategy implementation
-func Fetch(src Source, strat Strategy) ([]image.Version, error) {
+type UpstreamFetcher struct {
+	client HTTPClient
+	now    func() time.Time
+}
+
+const upstreamTimeout = 30 * time.Second
+const maxMetadataBytes = 32 << 20
+
+func NewFetcher(client HTTPClient) *UpstreamFetcher {
+	if client == nil {
+		client = &http.Client{Timeout: upstreamTimeout}
+	}
+	return &UpstreamFetcher{client: client, now: time.Now}
+}
+
+// Fetch resolves current releases and dispatches through the provider boundary.
+func (f *UpstreamFetcher) Fetch(src Source, strat Strategy) ([]image.Version, error) {
+	releases, err := f.discover(strat)
+	if err != nil {
+		return nil, err
+	}
+	strat.Versions = nil
+	for _, rel := range releases {
+		strat.Versions = append(strat.Versions, rel.version)
+	}
+	var result []image.Version
 	switch strat.Type {
 	case "generic":
-		return fetchGeneric(src, strat)
+		result, err = f.fetchGeneric(src, strat)
 	case "ubuntu-cloud":
-		return fetchUbuntu(src, strat)
+		result, err = f.fetchUbuntu(src, strat)
 	case "debian-cloud":
-		return fetchDebian(src, strat)
+		result, err = f.fetchDebian(src, strat, releases)
 	case "alpine-cdn":
-		return fetchAlpine(src, strat)
+		result, err = f.fetchAlpine(src, strat)
 	case "opensuse-tumbleweed":
-		return fetchOpenSUSE(src, strat)
+		result, err = f.fetchOpenSUSE(src, strat)
 	case "github-release":
-		return fetchGithubRelease(src, strat)
+		result, err = f.fetchGithubRelease(src, strat)
 	default:
 		return nil, fmt.Errorf("unknown strategy type: %s", strat.Type)
 	}
+	if err != nil {
+		return nil, err
+	}
+	sort.SliceStable(result, func(i, j int) bool { return numericLess(result[j].Version, result[i].Version) })
+	if strat.Discovery != nil {
+		ltsAssigned := false
+		for i := range result {
+			result[i].Aliases = nil
+			for _, rel := range releases {
+				if rel.version != result[i].Version {
+					continue
+				}
+				result[i].Aliases = append(result[i].Aliases, rel.aliases...)
+				if rel.lts && !ltsAssigned {
+					result[i].Aliases = append(result[i].Aliases, "lts")
+					ltsAssigned = true
+				}
+			}
+			if i == 0 {
+				result[i].Aliases = append(result[i].Aliases, "latest")
+			}
+		}
+	}
+	return result, nil
 }
 
 // --- Strategy Implementations ---
 
-func fetchGeneric(src Source, strat Strategy) ([]image.Version, error) {
+func (f *UpstreamFetcher) fetchGeneric(src Source, strat Strategy) ([]image.Version, error) {
 	var results []image.Version
 
 	for _, ver := range strat.Versions {
@@ -58,17 +106,15 @@ func fetchGeneric(src Source, strat Strategy) ([]image.Version, error) {
 		}
 
 		// 2. Verify Image Existence (HEAD)
-		size, err := getRemoteSize(imgURL)
+		size, err := f.getRemoteSize(imgURL)
 		if err != nil {
-			fmt.Printf("⚠️ [%s] Image not found for %s: %v\n", src.Name, ver, err)
-			continue
+			return nil, fmt.Errorf("%s:%s: %w", src.Name, ver, err)
 		}
 
 		// 3. Fetch Checksum
-		chk, err := findChecksum(checksumURL, regex, strat.ChecksumType)
+		chk, err := f.findChecksum(checksumURL, regex, strat.ChecksumType)
 		if err != nil {
-			fmt.Printf("⚠️ [%s] Checksum failed for %s: %v\n", src.Name, ver, err)
-			continue
+			return nil, fmt.Errorf("%s:%s: %w", src.Name, ver, err)
 		}
 
 		results = append(results, image.Version{
@@ -87,24 +133,22 @@ func fetchGeneric(src Source, strat Strategy) ([]image.Version, error) {
 	return results, nil
 }
 
-func fetchUbuntu(src Source, strat Strategy) ([]image.Version, error) {
+func (f *UpstreamFetcher) fetchUbuntu(src Source, strat Strategy) ([]image.Version, error) {
 	var results []image.Version
 
 	for _, ver := range strat.Versions {
 		// 1. Fetch directory listing to find latest release folder
 		baseURL := fmt.Sprintf("%s/%s", strat.BaseURL, ver)
-		content, err := fetchString(baseURL + "/")
+		content, err := f.fetchString(baseURL + "/")
 		if err != nil {
-			fmt.Printf("⚠️ [%s] Failed to list dir for %s: %v\n", src.Name, ver, err)
-			continue
+			return nil, fmt.Errorf("%s:%s: %w", src.Name, ver, err)
 		}
 
 		// Find latest release folder: href="release-YYYYMMDD/"
 		re := regexp.MustCompile(`href="(release-\d{8}/)"`)
 		matches := re.FindAllStringSubmatch(content, -1)
 		if len(matches) == 0 {
-			fmt.Printf("⚠️ [%s] No release folder found for %s\n", src.Name, ver)
-			continue
+			return nil, fmt.Errorf("%s:%s upstream metadata unavailable or invalid", src.Name, ver)
 		}
 
 		// Extract folder names and sort alphabetically (YYYYMMDD sorts correctly)
@@ -112,23 +156,21 @@ func fetchUbuntu(src Source, strat Strategy) ([]image.Version, error) {
 		for _, m := range matches {
 			folders = append(folders, m[1])
 		}
-		sort.Strings(folders)
+		sort.Slice(folders, func(i, j int) bool { return numericLess(folders[i], folders[j]) })
 		latestReleaseFolder := strings.TrimSuffix(folders[len(folders)-1], "/")
 
 		// 2. Fetch SUMS from the specific immutable folder
 		sumsURL := fmt.Sprintf("%s/%s/%s/SHA256SUMS", strat.BaseURL, ver, latestReleaseFolder)
-		sumsContent, err := fetchString(sumsURL)
+		sumsContent, err := f.fetchString(sumsURL)
 		if err != nil {
-			fmt.Printf("⚠️ [%s] Failed to fetch SUMS for %s %s\n", src.Name, ver, latestReleaseFolder)
-			continue
+			return nil, fmt.Errorf("%s:%s: %w", src.Name, ver, err)
 		}
 
 		// Parse SUMS. Format: <hash> *<filename>
-		lineRegex := regexp.MustCompile(`([a-f0-9]{64}) \*(.+server-cloudimg-amd64\.img)`)
+		lineRegex := regexp.MustCompile(`(?m)^([a-f0-9]{64})\s+\*?(ubuntu-` + regexp.QuoteMeta(ver) + `-server-cloudimg-amd64\.img)$`)
 		sumsMatch := lineRegex.FindStringSubmatch(sumsContent)
 		if sumsMatch == nil {
-			fmt.Printf("⚠️ [%s] No matching image found in SUMS for %s %s\n", src.Name, ver, latestReleaseFolder)
-			continue
+			return nil, fmt.Errorf("%s:%s upstream metadata unavailable or invalid", src.Name, ver)
 		}
 
 		hash := sumsMatch[1]
@@ -136,25 +178,19 @@ func fetchUbuntu(src Source, strat Strategy) ([]image.Version, error) {
 		imgURL := fmt.Sprintf("%s/%s/%s/%s", strat.BaseURL, ver, latestReleaseFolder, filename)
 
 		// 3. Get Size
-		size, _ := getRemoteSize(imgURL)
-
-		// 4. Aliases
-		aliases := []string{}
-		if ver == "24.04" {
-			aliases = []string{"noble", "lts", "latest"}
-		}
-		if ver == "22.04" {
-			aliases = []string{"jammy"}
+		size, err := f.getRemoteSize(imgURL)
+		if err != nil || size <= 0 {
+			return nil, fmt.Errorf("%s: image size unavailable for %s: %v", src.Name, imgURL, err)
 		}
 
 		results = append(results, image.Version{
 			Version:       ver,
-			Aliases:       aliases,
+			Aliases:       []string{},
 			Arch:          "amd64",
 			URL:           imgURL,
 			ChecksumType:  "sha256",
 			Checksum:      hash,
-			ChecksumURL:   fmt.Sprintf("%s/%s/release/SHA256SUMS", strat.BaseURL, ver),
+			ChecksumURL:   sumsURL,
 			ChecksumRegex: regexp.QuoteMeta(filename),
 			SizeBytes:     size,
 			Format:        "qcow2",
@@ -163,29 +199,27 @@ func fetchUbuntu(src Source, strat Strategy) ([]image.Version, error) {
 	return results, nil
 }
 
-func fetchDebian(src Source, strat Strategy) ([]image.Version, error) {
+func (f *UpstreamFetcher) fetchDebian(src Source, strat Strategy, releases []release) ([]image.Version, error) {
 	var results []image.Version
 
-	for _, ver := range strat.Versions {
-		codename := "bookworm" // default
-		if ver == "11" {
-			codename = "bullseye"
+	for _, rel := range releases {
+		ver, codename := rel.version, rel.codename
+		if codename == "" {
+			return nil, fmt.Errorf("Debian discovery must supply a codename for %s", ver)
 		}
 
 		// 1. Fetch directory listing to find latest release folder
 		baseURL := fmt.Sprintf("%s/%s", strat.BaseURL, codename)
-		content, err := fetchString(baseURL + "/")
+		content, err := f.fetchString(baseURL + "/")
 		if err != nil {
-			fmt.Printf("⚠️ [%s] Failed to list dir for %s: %v\n", src.Name, ver, err)
-			continue
+			return nil, fmt.Errorf("%s:%s: %w", src.Name, ver, err)
 		}
 
 		// Find latest release folder: href="20260225-2399/"
-		re := regexp.MustCompile(`href="(\d{8}-\d{4}/)"`)
+		re := regexp.MustCompile(`href="(\d{8}-\d+/)"`)
 		matches := re.FindAllStringSubmatch(content, -1)
 		if len(matches) == 0 {
-			fmt.Printf("⚠️ [%s] No release folder found for %s\n", src.Name, ver)
-			continue
+			return nil, fmt.Errorf("%s:%s upstream metadata unavailable or invalid", src.Name, ver)
 		}
 
 		// Extract folder names and sort
@@ -193,36 +227,33 @@ func fetchDebian(src Source, strat Strategy) ([]image.Version, error) {
 		for _, m := range matches {
 			folders = append(folders, m[1])
 		}
-		sort.Strings(folders)
+		sort.Slice(folders, func(i, j int) bool { return numericLess(folders[i], folders[j]) })
 		latestReleaseFolder := strings.TrimSuffix(folders[len(folders)-1], "/")
 
 		// 2. Fetch SUMS from the specific immutable folder
 		specificBaseURL := fmt.Sprintf("%s/%s/%s", strat.BaseURL, codename, latestReleaseFolder)
 		sumsURL := specificBaseURL + "/SHA512SUMS"
 
-		sumsContent, err := fetchString(sumsURL)
+		sumsContent, err := f.fetchString(sumsURL)
 		if err != nil {
-			fmt.Printf("⚠️ [%s] Failed to fetch SUMS for %s %s\n", src.Name, ver, latestReleaseFolder)
-			continue
+			return nil, fmt.Errorf("%s:%s: %w", src.Name, ver, err)
 		}
 
 		// debian-12-genericcloud-amd64-20260225-2399.qcow2
-		lineRegex := regexp.MustCompile(`([a-f0-9]{128})\s+\*?((debian-\d+-genericcloud-amd64.*\.qcow2))`)
+		lineRegex := regexp.MustCompile(`([a-f0-9]{128})\s+\*?(debian-` + regexp.QuoteMeta(ver) + `-genericcloud-amd64[^\s]*\.qcow2)`)
 		sumsMatch := lineRegex.FindStringSubmatch(sumsContent)
 		if sumsMatch == nil {
-			fmt.Printf("⚠️ [%s] No matching image found in SUMS for %s %s\n", src.Name, ver, latestReleaseFolder)
-			continue
+			return nil, fmt.Errorf("%s:%s upstream metadata unavailable or invalid", src.Name, ver)
 		}
 
 		hash := sumsMatch[1]
 		filename := sumsMatch[2]
 
-		if filename == "" {
-			continue
-		}
-
 		imgURL := specificBaseURL + "/" + filename
-		size, _ := getRemoteSize(imgURL)
+		size, err := f.getRemoteSize(imgURL)
+		if err != nil || size <= 0 {
+			return nil, fmt.Errorf("%s: image size unavailable for %s: %v", src.Name, imgURL, err)
+		}
 
 		results = append(results, image.Version{
 			Version:       ver,
@@ -231,7 +262,7 @@ func fetchDebian(src Source, strat Strategy) ([]image.Version, error) {
 			URL:           imgURL,
 			ChecksumType:  "sha512",
 			Checksum:      hash,
-			ChecksumURL:   fmt.Sprintf("%s/%s/current/SHA512SUMS", strat.BaseURL, codename),
+			ChecksumURL:   sumsURL,
 			ChecksumRegex: regexp.QuoteMeta(filename),
 			SizeBytes:     size,
 			Format:        "qcow2",
@@ -240,7 +271,7 @@ func fetchDebian(src Source, strat Strategy) ([]image.Version, error) {
 	return results, nil
 }
 
-func fetchAlpine(src Source, strat Strategy) ([]image.Version, error) {
+func (f *UpstreamFetcher) fetchAlpine(src Source, strat Strategy) ([]image.Version, error) {
 	var results []image.Version
 
 	for _, ver := range strat.Versions {
@@ -248,23 +279,22 @@ func fetchAlpine(src Source, strat Strategy) ([]image.Version, error) {
 		baseURL := fmt.Sprintf("%s/v%s/releases/cloud", strat.BaseURL, ver)
 
 		// 1. Fetch directory listing
-		content, err := fetchString(baseURL + "/")
+		content, err := f.fetchString(baseURL + "/")
 		if err != nil {
-			fmt.Printf("⚠️ [%s] Failed to list dir for %s: %v\n", src.Name, ver, err)
-			continue
+			return nil, fmt.Errorf("%s:%s: %w", src.Name, ver, err)
 		}
 
 		// 2. Find latest image
 		// Pattern: nocloud_alpine-3.21.0-x86_64-bios-cloudinit-r0.qcow2
 		// Regex: href="(nocloud_alpine-<ver>(\.\d+)*-x86_64-bios-cloudinit-r\d+\.qcow2)"
-		regexStr := fmt.Sprintf(`href="(nocloud_alpine-%s\.\d+-x86_64-bios-cloudinit-r\d+\.qcow2)"`, regexp.QuoteMeta(ver))
+		regexStr := fmt.Sprintf(`href="((?:nocloud|generic)_alpine-%s\.\d+-x86_64-bios-cloudinit-r\d+\.qcow2)"`, regexp.QuoteMeta(ver))
 		re := regexp.MustCompile(regexStr)
 
 		matches := re.FindAllStringSubmatch(content, -1)
 		if len(matches) == 0 {
-			fmt.Printf("⚠️ [%s] No image found for %s in %s\n", src.Name, ver, baseURL)
-			continue
+			return nil, fmt.Errorf("%s:%s no cloud-init BIOS image found", src.Name, ver)
 		}
+		sort.Slice(matches, func(i, j int) bool { return numericLess(matches[i][1], matches[j][1]) })
 
 		// Take the last one (assuming higher version/revision is later in list)
 		filename := matches[len(matches)-1][1]
@@ -272,18 +302,20 @@ func fetchAlpine(src Source, strat Strategy) ([]image.Version, error) {
 		checksumURL := imgURL + ".sha512"
 
 		// 3. Fetch Checksum (it's usually just the hash in the file)
-		hash, err := findChecksum(checksumURL, "", "sha512")
+		hash, err := f.findChecksum(checksumURL, "", "sha512")
 		if err != nil {
-			fmt.Printf("⚠️ [%s] Checksum failed for %s: %v\n", src.Name, ver, err)
-			continue
+			return nil, fmt.Errorf("%s:%s: %w", src.Name, ver, err)
 		}
 
 		// 4. Get Size
-		size, _ := getRemoteSize(imgURL)
+		size, err := f.getRemoteSize(imgURL)
+		if err != nil || size <= 0 {
+			return nil, fmt.Errorf("%s: image size unavailable for %s: %v", src.Name, imgURL, err)
+		}
 
 		results = append(results, image.Version{
 			Version:       ver,
-			Aliases:       []string{ver, "latest"},
+			Aliases:       []string{ver},
 			Arch:          "amd64",
 			URL:           imgURL,
 			ChecksumType:  "sha512",
@@ -297,15 +329,14 @@ func fetchAlpine(src Source, strat Strategy) ([]image.Version, error) {
 	return results, nil
 }
 
-func fetchOpenSUSE(src Source, strat Strategy) ([]image.Version, error) {
+func (f *UpstreamFetcher) fetchOpenSUSE(src Source, strat Strategy) ([]image.Version, error) {
 	var results []image.Version
 
 	for _, ver := range strat.Versions { // ver can be just "Latest" mapped to the latest snapshot
 		// 1. Fetch directory listing
-		content, err := fetchString(strat.BaseURL + "/")
+		content, err := f.fetchString(strat.BaseURL + "/")
 		if err != nil {
-			fmt.Printf("⚠️ [%s] Failed to list dir for %s: %v\n", src.Name, ver, err)
-			continue
+			return nil, fmt.Errorf("%s:%s: %w", src.Name, ver, err)
 		}
 
 		// Find snapshot file: openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20260224.qcow2
@@ -314,8 +345,7 @@ func fetchOpenSUSE(src Source, strat Strategy) ([]image.Version, error) {
 		matches := re.FindAllStringSubmatch(content, -1)
 
 		if len(matches) == 0 {
-			fmt.Printf("⚠️ [%s] No snapshot file found for %s\n", src.Name, ver)
-			continue
+			return nil, fmt.Errorf("%s:%s upstream metadata unavailable or invalid", src.Name, ver)
 		}
 
 		// Sort to find the latest snapshot
@@ -331,14 +361,16 @@ func fetchOpenSUSE(src Source, strat Strategy) ([]image.Version, error) {
 		checksumURL := imgURL + ".sha256"
 
 		// 2. Fetch Checksum
-		hash, err := findChecksum(checksumURL, "", "sha256")
+		hash, err := f.findChecksum(checksumURL, "", "sha256")
 		if err != nil {
-			fmt.Printf("⚠️ [%s] Checksum failed for %s: %v\n", src.Name, ver, err)
-			continue
+			return nil, fmt.Errorf("%s:%s: %w", src.Name, ver, err)
 		}
 
 		// 3. Get Size
-		size, _ := getRemoteSize(imgURL)
+		size, err := f.getRemoteSize(imgURL)
+		if err != nil || size <= 0 {
+			return nil, fmt.Errorf("%s: image size unavailable for %s: %v", src.Name, imgURL, err)
+		}
 
 		results = append(results, image.Version{
 			Version:       "Snapshot" + snapshotDate,
@@ -358,19 +390,28 @@ func fetchOpenSUSE(src Source, strat Strategy) ([]image.Version, error) {
 
 // --- Helpers ---
 
-func getRemoteSize(url string) (int64, error) {
-	resp, err := client.Head(url)
+func (f *UpstreamFetcher) getRemoteSize(url string) (int64, error) {
+	req, err := http.NewRequest(http.MethodHead, url, nil)
 	if err != nil {
 		return 0, err
 	}
-	if resp.StatusCode != 200 {
+	resp, err := f.client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("status %d", resp.StatusCode)
 	}
 	return resp.ContentLength, nil
 }
 
-func fetchString(url string) (string, error) {
-	resp, err := client.Get(url)
+func (f *UpstreamFetcher) fetchString(url string) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := f.client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -380,12 +421,15 @@ func fetchString(url string) (string, error) {
 		return "", fmt.Errorf("status %d", resp.StatusCode)
 	}
 
-	bytes, err := io.ReadAll(resp.Body)
-	return string(bytes), err
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxMetadataBytes+1))
+	if len(data) > maxMetadataBytes {
+		return "", fmt.Errorf("metadata exceeds %d bytes", maxMetadataBytes)
+	}
+	return string(data), err
 }
 
-func findChecksum(url, regexPattern, algo string) (string, error) {
-	content, err := fetchString(url)
+func (f *UpstreamFetcher) findChecksum(url, regexPattern, algo string) (string, error) {
+	content, err := f.fetchString(url)
 	if err != nil {
 		return "", err
 	}
@@ -396,7 +440,10 @@ func findChecksum(url, regexPattern, algo string) (string, error) {
 		// We assume limits: SHA256 (64 chars), SHA512 (128 chars)
 
 		scanner := bufio.NewScanner(strings.NewReader(content))
-		re := regexp.MustCompile(regexPattern)
+		re, err := regexp.Compile(regexPattern)
+		if err != nil {
+			return "", fmt.Errorf("invalid checksum pattern: %w", err)
+		}
 
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -426,7 +473,7 @@ func findChecksum(url, regexPattern, algo string) (string, error) {
 	return "", fmt.Errorf("could not parse checksum")
 }
 
-func fetchGithubRelease(src Source, strat Strategy) ([]image.Version, error) {
+func (f *UpstreamFetcher) fetchGithubRelease(src Source, strat Strategy) ([]image.Version, error) {
 	if strat.Owner == "" || strat.Repo == "" {
 		return nil, fmt.Errorf("github-release strategy requires owner and repo")
 	}
@@ -442,7 +489,7 @@ func fetchGithubRelease(src Source, strat Strategy) ([]image.Version, error) {
 		req.Header.Set("Authorization", "token "+token)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := f.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -523,13 +570,13 @@ func fetchGithubRelease(src Source, strat Strategy) ([]image.Version, error) {
 
 			if strings.HasSuffix(suffix, ".sha256") {
 				g.chkType = "sha256"
-				ch, _ := fetchString(asset.DownloadURL)
+				ch, _ := f.fetchString(asset.DownloadURL)
 				if fields := strings.Fields(ch); len(fields) > 0 {
 					g.checksum = fields[0]
 				}
 			} else if strings.HasSuffix(suffix, ".sha512") {
 				g.chkType = "sha512"
-				ch, _ := fetchString(asset.DownloadURL)
+				ch, _ := f.fetchString(asset.DownloadURL)
 				if fields := strings.Fields(ch); len(fields) > 0 {
 					g.checksum = fields[0]
 				}
