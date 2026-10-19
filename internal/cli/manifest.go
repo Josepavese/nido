@@ -61,6 +61,7 @@ type CommandSpec struct {
 	Hidden                bool             `yaml:"hidden"`
 	Deprecated            string           `yaml:"deprecated"`
 	Flags                 []CommandFlagRef `yaml:"flags"`
+	MutuallyExclusive     [][]string       `yaml:"mutually_exclusive"`
 	Args                  ArgsSpec         `yaml:"args"`
 	PositionalCompletions []string         `yaml:"positional_completions"`
 	CustomCompletion      string           `yaml:"custom_completion"`
@@ -112,6 +113,22 @@ func validateCommand(cmd CommandSpec, flags map[string]FlagSpec, seen map[string
 	for _, ref := range cmd.Flags {
 		if _, ok := flags[ref.Name]; !ok {
 			return fmt.Errorf("command %s references unknown flag %s", cmd.ID, ref.Name)
+		}
+	}
+	for _, group := range cmd.MutuallyExclusive {
+		if len(group) < 2 {
+			return fmt.Errorf("command %s requires at least two mutually exclusive flags", cmd.ID)
+		}
+		seenFlags := map[string]bool{}
+		for _, name := range group {
+			found := false
+			for _, ref := range cmd.Flags {
+				found = found || ref.Name == name
+			}
+			if !found || seenFlags[name] {
+				return fmt.Errorf("command %s has invalid mutually exclusive flag %s", cmd.ID, name)
+			}
+			seenFlags[name] = true
 		}
 	}
 	if cmd.Args.Max >= 0 && cmd.Args.Max < cmd.Args.Min {

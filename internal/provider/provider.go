@@ -129,7 +129,7 @@ type VMDetail struct {
 	Cmdline  string `json:"cmdline,omitempty"`
 	// Active port forwardings
 	Forwarding []PortForward
-	// Raw arguments active
+	// Saved raw arguments, used on the next start (not necessarily active yet).
 	RawQemuArgs []string `json:"raw_qemu_args,omitempty"`
 	// Accelerators active
 	Accelerators []string `json:"accelerators,omitempty"`
@@ -263,6 +263,7 @@ type VMProvider interface {
 
 // VMConfigUpdates holds pointer fields for partial updates to VM configuration.
 // A nil pointer means "do not update".
+// RawQemuArgs replaces the saved list; a pointer to an empty list clears it.
 type VMConfigUpdates struct {
 	MemoryMB     *int
 	VCPUs        *int

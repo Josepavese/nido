@@ -88,7 +88,7 @@ func ToolsCatalog() []map[string]interface{} {
 					"memory_mb":     map[string]interface{}{"type": "integer"},
 					"vcpus":         map[string]interface{}{"type": "integer"},
 					"ports":         map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Port rules like [\"http:80:30080/tcp\"]."},
-					"raw_qemu_args": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+					"raw_qemu_args": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "For config_update: replace saved arguments in order; omit to preserve, or send [] to clear. Takes effect on next start."},
 					"accelerators":  map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
 					"mapping":       map[string]interface{}{"type": "string", "description": "Single port mapping used by action=port_forward."},
 					"guest_port":    map[string]interface{}{"type": "integer", "description": "Guest port used by action=port_unforward."},
@@ -512,6 +512,9 @@ func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 		}
 		return map[string]interface{}{"action": "prune", "removed_count": count}, nil
 	case "config_update":
+		if fieldPresent(raw, "raw_qemu_args") && args.RawQemuArgs == nil {
+			return nil, fmt.Errorf("raw_qemu_args must be an array; use [] to clear")
+		}
 		updates := provider.VMConfigUpdates{
 			MemoryMB:     intPtrIfPresent(args.MemoryMB, raw, "memory_mb"),
 			VCPUs:        intPtrIfPresent(args.VCPUs, raw, "vcpus"),

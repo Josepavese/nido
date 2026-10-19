@@ -137,3 +137,16 @@ func collectManifestHandlers(commands []CommandSpec, flags map[string]FlagSpec, 
 func noOpCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }
+
+func TestManifestRejectsInvalidMutuallyExclusiveFlags(t *testing.T) {
+	for _, group := range [][]string{{"qemu_arg"}, {"qemu_arg", "missing"}, {"qemu_arg", "qemu_arg"}, {"qemu_arg", "clear_qemu_args"}} {
+		cmd := CommandSpec{
+			ID: "fixture", Use: "fixture", Args: ArgsSpec{Max: 0},
+			Flags: []CommandFlagRef{{Name: "qemu_arg"}}, MutuallyExclusive: [][]string{group},
+		}
+		flags := map[string]FlagSpec{"qemu_arg": {}, "clear_qemu_args": {}}
+		if err := validateCommand(cmd, flags, map[string]bool{}); err == nil {
+			t.Fatalf("invalid exclusive group accepted: %#v", group)
+		}
+	}
+}

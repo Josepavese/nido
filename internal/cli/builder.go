@@ -90,6 +90,14 @@ func (b *Builder) buildCommand(spec CommandSpec) (*cobra.Command, error) {
 		}
 	}
 
+	for _, group := range spec.MutuallyExclusive {
+		names := make([]string, 0, len(group))
+		for _, name := range group {
+			names = append(names, b.Manifest.Flags[name].Long)
+		}
+		cmd.MarkFlagsMutuallyExclusive(names...)
+	}
+
 	if spec.CustomCompletion != "" {
 		if fn := b.PositionalCompletions[spec.CustomCompletion]; fn != nil {
 			cmd.ValidArgsFunction = fn

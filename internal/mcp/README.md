@@ -32,6 +32,15 @@ Unified VM tool. Actions:
 
 `create` accepts the CLI spawn surface exposed to agents: image or template source, user-data content, GUI/cmdline overrides, memory/vCPU sizing, raw QEMU args, accelerators, explicit port mappings, and `web`/`ftp` default forwards. Local images produced by blueprints are resolved from the configured image directory and inherit blueprint SSH/seed metadata.
 
+For `config_update`, `raw_qemu_args` replaces the saved argument list, preserving
+order and individual strings. Omit it to retain the current list, or send `[]`
+to clear it. `null` and non-array values are rejected. Changes are saved for the
+next start, including when the VM is stopped; they do not hot-plug devices.
+
+```json
+{"action":"config_update","name":"agent-01","raw_qemu_args":[]}
+```
+
 ### `nido_template`
 
 Template management. Actions:

@@ -535,6 +535,11 @@ func updateVMConfig(cmd *cobra.Command, prov provider.VMProvider, name string, j
 		updates.RawQemuArgs = &val
 		hasUpdates = true
 	}
+	if clear, _ := cmd.Flags().GetBool("clear-qemu-args"); clear {
+		val := []string{}
+		updates.RawQemuArgs = &val
+		hasUpdates = true
+	}
 	if cmd.Flags().Changed("accel") {
 		val, _ := cmd.Flags().GetStringArray("accel")
 		updates.Accelerators = &val

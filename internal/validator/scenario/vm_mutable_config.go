@@ -3,6 +3,7 @@ package scenario
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -51,7 +52,8 @@ func configCLI(ctx *Context) report.StepResult {
 	}
 
 	// Change RAM to 1024, CPUs to 2, Valid Ports, and Accelerator
-	args := []string{"config", vmName, "--memory", "1024", "--cpus", "2", "--ssh-port", "60022", "--port", "80:8080", "--accel", "0000:00:00.0", "--json"}
+	rawArgs := []string{"-name", vmName + "-raw-config"}
+	args := []string{"config", vmName, "--memory", "1024", "--cpus", "2", "--ssh-port", "60022", "--port", "80:8080", "--accel", "0000:00:00.0", "--qemu-arg=" + rawArgs[0], "--qemu-arg=" + rawArgs[1], "--json"}
 	res := runNido(ctx, "config", args, 10*time.Second)
 	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
 
@@ -72,9 +74,11 @@ func configCLI(ctx *Context) report.StepResult {
 	// Verify State Persistence by running 'info'
 	infoArgs := []string{"info", vmName, "--json"}
 	infoRes := runNido(ctx, "info", infoArgs, 5*time.Second)
+	rawPersisted := false
 	if payload, err := parseJSON(infoRes.Stdout); err == nil {
 		if data, ok := payload["data"].(map[string]interface{}); ok {
 			if vm, ok := data["vm"].(map[string]interface{}); ok {
+				rawPersisted = matchesRawConfigArgs(vm, rawArgs)
 				// Check memory
 				mem, _ := vm["memory_mb"].(float64)
 				addAssertion(&res, "mem_persisted", mem == 1024, fmt.Sprintf("Expected 1024, got %v", mem))
@@ -117,6 +121,18 @@ func configCLI(ctx *Context) report.StepResult {
 			}
 		}
 	}
+	addAssertion(&res, "raw_args_persisted", infoRes.ExitCode == 0 && !infoRes.TimedOut && rawPersisted, "Expected ordered CLI raw arguments in persisted info")
+	// An unrelated update must not erase the argument list.
+	preserve := runNido(ctx, "config", []string{"config", vmName, "--cpus", "2", "--json"}, 10*time.Second)
+	addAssertion(&res, "raw_args_omit_update", preserve.ExitCode == 0 && !preserve.TimedOut, preserve.Stderr)
+	readback := runNido(ctx, "info", []string{"info", vmName, "--json"}, 5*time.Second)
+	var readbackPayload struct {
+		Data struct {
+			VM map[string]interface{} `json:"vm"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal([]byte(readback.Stdout), &readbackPayload)
+	addAssertion(&res, "raw_args_preserved", readback.ExitCode == 0 && !readback.TimedOut && err == nil && matchesRawConfigArgs(readbackPayload.Data.VM, rawArgs), "Expected omitted raw arguments to remain unchanged")
 
 	finalize(&res)
 	return res
@@ -135,10 +151,11 @@ func configMCP(ctx *Context) report.StepResult {
 		"params": map[string]interface{}{
 			"name": "nido_vm",
 			"arguments": map[string]interface{}{
-				"action":    "config_update",
-				"name":      vmName,
-				"memory_mb": 512,
-				"gui":       true,
+				"action":        "config_update",
+				"name":          vmName,
+				"memory_mb":     512,
+				"gui":           true,
+				"raw_qemu_args": []string{},
 			},
 		},
 		"id": 1,
@@ -184,9 +201,11 @@ func configMCP(ctx *Context) report.StepResult {
 	// Verify State Persistence again via 'info'
 	infoArgs := []string{"info", vmName, "--json"}
 	infoRes := runNido(ctx, "info", infoArgs, 5*time.Second)
+	rawCleared := false
 	if payload, err := parseJSON(infoRes.Stdout); err == nil {
 		if data, ok := payload["data"].(map[string]interface{}); ok {
 			if vm, ok := data["vm"].(map[string]interface{}); ok {
+				rawCleared = matchesRawConfigArgs(vm, nil)
 				// Check memory (should be 512 now)
 				mem, _ := vm["memory_mb"].(float64)
 				addAssertion(&res, "mcp_mem_persisted", mem == 512, fmt.Sprintf("Expected 512, got %v", mem))
@@ -196,9 +215,33 @@ func configMCP(ctx *Context) report.StepResult {
 			}
 		}
 	}
+	addAssertion(&res, "mcp_raw_args_cleared", infoRes.ExitCode == 0 && !infoRes.TimedOut && rawCleared, "Expected explicit [] to clear saved raw arguments")
 
 	finalize(&res)
 	return res
+}
+
+func matchesRawConfigArgs(vm map[string]interface{}, want []string) bool {
+	value, exists := vm["raw_qemu_args"]
+	if !exists {
+		return false
+	}
+	if value == nil {
+		return len(want) == 0
+	}
+	items, ok := value.([]interface{})
+	if !ok {
+		return false
+	}
+	got := make([]string, 0, len(items))
+	for _, item := range items {
+		arg, ok := item.(string)
+		if !ok {
+			return false
+		}
+		got = append(got, arg)
+	}
+	return slices.Equal(got, want)
 }
 
 func deleteConfigVM(ctx *Context) report.StepResult {

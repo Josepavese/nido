@@ -205,6 +205,19 @@ Here is the full move list for the Nido console.
 | `nido version`   | Show version info       | **CREDITS**           |
 | `nido help`      | Show usage guide        | **TUTORIAL**          |
 
+VM raw QEMU arguments are replaced as an ordered list, preserved when omitted,
+and applied on the next start. Use the explicit clear flag to remove them:
+
+```bash
+nido config agent-01 --qemu-arg=-fw_cfg --qemu-arg='name=opt/example,string=hello world' --json
+nido config agent-01 --cpus 2 --json       # preserves raw arguments
+nido config agent-01 --clear-qemu-args --json
+```
+
+`--clear-qemu-args` and `--qemu-arg` cannot be combined. An empty argument
+(`--qemu-arg=`) is a literal empty argument, not a request to clear the list.
+These commands persist configuration; they do not hot-plug devices or restart a VM.
+
 ---
 
 ## 🧬 Killer Feature: Linked Clones

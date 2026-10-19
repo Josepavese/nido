@@ -47,6 +47,10 @@ flags:
     type: stringArray
     long: qemu-arg
     usage: "Additional raw QEMU argument"
+  clear_qemu_args:
+    type: bool
+    long: clear-qemu-args
+    usage: "Remove all saved raw QEMU arguments (takes effect on next start)"
   accel:
     type: stringArray
     long: accel
@@ -418,7 +422,10 @@ commands:
       - name: cmdline
       - name: port
       - name: qemu_arg
+      - name: clear_qemu_args
       - name: accel
+    mutually_exclusive:
+      - [qemu_arg, clear_qemu_args]
     args:
       min: 0
       max: 1
