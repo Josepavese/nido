@@ -59,7 +59,7 @@ func (f *UpstreamFetcher) discover(s Strategy) ([]release, error) {
 	var out []release
 	if s.Type == "debian-cloud" {
 		if len(d.Channels) == 0 {
-			return nil, fmt.Errorf("Debian discovery requires channels")
+			return nil, fmt.Errorf("discovery for Debian requires channels")
 		}
 		for _, channel := range d.Channels {
 			// Only released channels are valid, never testing/unstable or arbitrary paths.

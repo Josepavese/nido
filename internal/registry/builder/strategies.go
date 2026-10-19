@@ -205,7 +205,7 @@ func (f *UpstreamFetcher) fetchDebian(src Source, strat Strategy, releases []rel
 	for _, rel := range releases {
 		ver, codename := rel.version, rel.codename
 		if codename == "" {
-			return nil, fmt.Errorf("Debian discovery must supply a codename for %s", ver)
+			return nil, fmt.Errorf("discovery for Debian must supply a codename for %s", ver)
 		}
 
 		// 1. Fetch directory listing to find latest release folder
