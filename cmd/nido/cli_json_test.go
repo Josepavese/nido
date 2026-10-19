@@ -290,7 +290,8 @@ func (fakeProvider) Info(name string) (provider.VMDetail, error) {
 		Name: name, State: "running", IP: "127.0.0.1", SSHUser: "vmuser", SSHPort: 50022, VNCPort: 59000, MemoryMB: 2048, VCPUs: 2,
 	}, nil
 }
-func (fakeProvider) GetConfig() config.Config { return config.Config{} }
+func (fakeProvider) ReloadConfig(string) error { return nil }
+func (fakeProvider) GetConfig() config.Config  { return config.Config{} }
 func (fakeProvider) CreateDisk(name string, size string, templatePath string) error {
 	return nil
 }

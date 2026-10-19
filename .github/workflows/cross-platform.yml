@@ -162,7 +162,7 @@ jobs:
       - name: Install QEMU and ISO tools
         run: |
           for attempt in 1 2 3; do
-            if sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils cloud-utils genisoimage; then
+            if sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils cloud-utils genisoimage bubblewrap; then
               exit 0
             fi
             echo "APT install attempt ${attempt} failed; retrying..."
@@ -187,6 +187,12 @@ jobs:
         run: |
           go build -o nido ./cmd/nido
           go build -o nido-validator ./cmd/nido-validator
+
+      - name: Isolated CLI and MCP safety regressions
+        env:
+          NIDO_TEST_BINARY: ${{ github.workspace }}/nido
+          NIDO_TEST_STORAGE: ${{ runner.temp }}
+        run: python3 tests/cli_mcp_safety.py
 
       - name: Run doctor
         run: ./nido doctor --json

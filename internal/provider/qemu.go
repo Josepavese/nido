@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
-	nidonet "github.com/Josepavese/nido/internal/net"
 	"github.com/Josepavese/nido/internal/pkg/sysutil"
 
 	"github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/image"
 )
 
-// QemuProvider implements VMProvider using raw QEMU.
+// QemuProvider implements VMProvider using raw QEMU. Lifecycle and configuration
+// mutations are confined to the caller/owner thread (MCP dispatch is serial).
 type QemuProvider struct {
 	// RootDir is the base path for VM state and disks (usually ~/.nido)
 	RootDir string
@@ -39,25 +39,16 @@ func NewQemuProvider(rootDir string, cfg *config.Config) *QemuProvider {
 // Spawn brings a new VM to life. It handles template resolution, disk creation,
 // and saves the initial state before handing over to Start.
 func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
-	// 0. Validate input
-	if name == "" {
-		return fmt.Errorf("name cannot be empty")
+	if err := validateIdentifier(name); err != nil {
+		return err
 	}
+	// 0. Validate input
 	if err := ValidateAccelerators(opts.Accelerators); err != nil {
 		return err
 	}
 	for _, pf := range opts.Forwarding {
 		if err := ValidatePortForward(pf); err != nil {
 			return err
-		}
-	}
-	// Only allow alphanumeric, hyphens, underscores, and dots. Rejects spaces.
-	// (Unless it's an absolute path, which we handle separately)
-	if !filepath.IsAbs(name) {
-		for _, r := range name {
-			if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.') {
-				return fmt.Errorf("invalid name: only alphanumeric, hyphens, underscores, and dots allowed (no spaces)")
-			}
 		}
 	}
 
@@ -191,39 +182,10 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 		vncPort = p.findAvailablePort(59000, reserved)
 	}
 
-	// 5.1. Custom Port Assignment
-	// Implements Sections 5.4.B and 8.1 of advanced-port-forwarding.md.
-	for i := range opts.Forwarding {
-		if opts.Forwarding[i].HostPort == 0 {
-			// Find a port in the configured range
-			pRangeStart := p.Config.PortRangeStart
-			pRangeEnd := p.Config.PortRangeEnd
-			if pRangeStart == 0 {
-				pRangeStart = 30000
-			}
-			if pRangeEnd == 0 {
-				pRangeEnd = 32767
-			}
-
-			// Mark current selections as reserved to avoid collisions within the same VM spawn
-			reserved[sshPort] = true
-			if vncPort > 0 {
-				reserved[vncPort] = true
-			}
-			for _, f := range opts.Forwarding {
-				if f.HostPort > 0 {
-					reserved[f.HostPort] = true
-				}
-			}
-
-			// Use internal nidonet package for scanning
-			hp, err := nidonet.FindAvailablePort(pRangeStart, pRangeEnd, reserved)
-			if err != nil {
-				return fmt.Errorf("failed to allocate host port for %s: %w", opts.Forwarding[i].Label, err)
-			}
-			opts.Forwarding[i].HostPort = hp
-			reserved[hp] = true
-		}
+	var resolveErr error
+	opts.Forwarding, resolveErr = p.resolveForwarding(opts.Forwarding, sshPort, vncPort)
+	if resolveErr != nil {
+		return resolveErr
 	}
 
 	// 6. Save Initial State (with GUI preference, SSH user, assigned ports, and forwardings)
@@ -270,6 +232,9 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 // Start revives a VM from its deep sleep. It handles port allocation,
 // builds platform-specific QEMU arguments, and launches the process.
 func (p *QemuProvider) Start(name string, opts VMOptions) error {
+	if err := validateIdentifier(name); err != nil {
+		return err
+	}
 	// 0. Check if already running
 	if status, err := p.Info(name); err == nil && status.State == "running" {
 		return nil // Already running
@@ -290,7 +255,10 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	// 2. Port Management
 	state, err := p.loadState(name)
 	if err != nil {
-		// Fallback for direct 'start' without 'spawn' (e.g. legacy)
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("read VM state: %w", err)
+		}
+		// Recover an existing disk that has no persistent runtime state.
 		state = VMState{
 			Name:    name,
 			Gui:     opts.Gui,
@@ -304,35 +272,28 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 		state.Gui = true
 	}
 
-	// Legacy fallback: assign ports if missing (for VMs created before this fix)
-	updated := false
+	// Assign ports for disk-only recovery.
 	if state.SSHPort == 0 {
 		reserved := p.getReservedPorts()
 		state.SSHPort = p.findAvailablePort(50022, reserved)
-		updated = true
 	}
 	if state.Gui && state.VNCPort == 0 {
 		reserved := p.getReservedPorts()
 		state.VNCPort = p.findAvailablePort(59000, reserved)
-		updated = true
 	}
 	// If opts.Cmdline is provided, override the state's cmdline
 	if opts.Cmdline != "" {
 		state.Cmdline = opts.Cmdline
-		updated = true
 	}
 	if opts.MemoryMB > 0 {
 		state.MemoryMB = opts.MemoryMB
-		updated = true
 	}
 	if opts.VCPUs > 0 {
 		state.VCPUs = opts.VCPUs
-		updated = true
 	}
 
 	if len(opts.RawQemuArgs) > 0 {
 		state.RawQemuArgs = opts.RawQemuArgs
-		updated = true
 	}
 
 	if len(opts.Accelerators) > 0 {
@@ -340,10 +301,9 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 			return err
 		}
 		state.Accelerators = opts.Accelerators
-		updated = true
 	}
 
-	// Ensure defaults for legacy states (Dynamic resolution for retro-compatibility via sysutil SSOT)
+	// Resolve absent resources through the canonical host defaults.
 	if state.MemoryMB == 0 {
 		state.MemoryMB = sysutil.DefaultMemory()
 	}
@@ -351,8 +311,13 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 		state.VCPUs = sysutil.DefaultVCPUs()
 	}
 
-	if updated {
-		p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+	resolved, err := p.resolveForwarding(state.Forwarding, state.SSHPort, state.VNCPort)
+	if err != nil {
+		return err
+	}
+	state.Forwarding = resolved
+	if err := p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators); err != nil {
+		return err
 	}
 
 	// 2.5 Prepare Accelerators (Zero-Config)
@@ -633,13 +598,16 @@ func (p *QemuProvider) List() ([]VMStatus, error) {
 			pidData, _ := os.ReadFile(pidFile)
 			pid := 0
 			fmt.Sscanf(string(pidData), "%d", &pid)
-			vmState, _ := p.loadState(name)
+			vmState, stateErr := p.loadState(name)
+			if stateErr != nil && !os.IsNotExist(stateErr) {
+				return nil, fmt.Errorf("read VM %q state: %w", name, stateErr)
+			}
 			if pid == 0 {
 				pid = vmState.PID
 			}
 
 			stateStr := "stopped"
-			if processAlive(pid) {
+			if p.isVMProcess(name, pid) {
 				stateStr = "running"
 			}
 
@@ -660,21 +628,20 @@ func (p *QemuProvider) List() ([]VMStatus, error) {
 // Info dives deep into a VM's neural links, returning detailed state,
 // networking information, and disk health (including backing file integrity).
 func (p *QemuProvider) Info(name string) (VMDetail, error) {
+	if err := validateIdentifier(name); err != nil {
+		return VMDetail{}, err
+	}
 	state, err := p.loadState(name)
 	if err != nil {
-		// If no state file, assume VM is stopped and has no active ports
+		if !os.IsNotExist(err) {
+			return VMDetail{}, fmt.Errorf("read VM %q state: %w", name, err)
+		}
 		diskPath := filepath.Join(p.RootDir, "vms", name+".qcow2")
-		_, statErr := os.Stat(diskPath)
+		if _, err := os.Stat(diskPath); err != nil {
+			return VMDetail{}, fmt.Errorf("VM %q: %w", name, err)
+		}
 		backingPath, backingMissing := backingInfo(diskPath)
-		return VMDetail{
-			Name:           name,
-			State:          "stopped",
-			IP:             "127.0.0.1",
-			DiskPath:       diskPath,
-			DiskMissing:    statErr != nil,
-			BackingPath:    backingPath,
-			BackingMissing: backingMissing,
-		}, nil
+		return VMDetail{Name: name, State: "stopped", IP: "127.0.0.1", DiskPath: diskPath, StateMissing: true, BackingPath: backingPath, BackingMissing: backingMissing}, nil
 	}
 
 	// Check liveness for state string
@@ -685,7 +652,7 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 	if pid == 0 {
 		pid = state.PID
 	}
-	if processAlive(pid) {
+	if p.isVMProcess(name, pid) {
 		liveness = "running"
 	}
 
@@ -732,7 +699,8 @@ func backingInfo(diskPath string) (string, bool) {
 		return "", false
 	}
 	type info struct {
-		Backing string `json:"backing-filename"`
+		Backing     string `json:"backing-filename"`
+		FullBacking string `json:"full-backing-filename"`
 	}
 	qemuImg, err := sysutil.QemuImgBinary()
 	if err != nil {
@@ -746,6 +714,12 @@ func backingInfo(diskPath string) (string, bool) {
 	if json.Unmarshal(out, &meta) != nil || meta.Backing == "" {
 		return "", false
 	}
+	if meta.FullBacking != "" {
+		meta.Backing = meta.FullBacking
+	}
+	if !filepath.IsAbs(meta.Backing) {
+		meta.Backing = filepath.Join(filepath.Dir(diskPath), meta.Backing)
+	}
 	if _, err := os.Stat(meta.Backing); err != nil {
 		return meta.Backing, true
 	}
@@ -755,6 +729,9 @@ func backingInfo(diskPath string) (string, bool) {
 // Stop gracefully asks the VM to go into deep sleep using an interrupt signal.
 // We clean up QMP and PID artifacts to keep the run directory tidy.
 func (p *QemuProvider) Stop(name string, graceful bool) error {
+	if err := validateIdentifier(name); err != nil {
+		return err
+	}
 	runDir := filepath.Join(p.RootDir, "run")
 	pidFile := filepath.Join(runDir, name+".pid")
 	pidData, _ := os.ReadFile(pidFile)
@@ -766,19 +743,9 @@ func (p *QemuProvider) Stop(name string, graceful bool) error {
 		}
 	}
 
-	if pid > 0 {
-		process, err := os.FindProcess(pid)
-		if err == nil && process != nil {
-			_ = stopQemuProcess(process, graceful)
-			for i := 0; i < 50; i++ {
-				if !processAlive(pid) {
-					break
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
-			if processAlive(pid) {
-				_ = process.Kill()
-			}
+	if pid > 0 && processAlive(pid) {
+		if err := p.stopVMProcess(name, pid, graceful); err != nil {
+			return err
 		}
 	}
 
@@ -804,7 +771,12 @@ func (p *QemuProvider) Stop(name string, graceful bool) error {
 }
 
 func (p *QemuProvider) Delete(name string) error {
-	p.Stop(name, false)
+	if err := validateIdentifier(name); err != nil {
+		return err
+	}
+	if err := p.Stop(name, false); err != nil {
+		return err
+	}
 	vmsDir := filepath.Join(p.RootDir, "vms")
 	diskPath := filepath.Join(vmsDir, name+".qcow2")
 
@@ -819,8 +791,16 @@ func (p *QemuProvider) Delete(name string) error {
 // CreateTemplate archives a VM into "cold storage" (a compressed qcow2).
 // This is how we preserve perfected environments for future hatchlings.
 func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (string, error) {
+	if err := validateIdentifier(vmName); err != nil {
+		return "", err
+	}
+	if err := validateIdentifier(templateName); err != nil {
+		return "", err
+	}
 	// 1. Ensure VM is stopped
-	p.Stop(vmName, true)
+	if err := p.Stop(vmName, true); err != nil {
+		return "", err
+	}
 
 	vmsDir := filepath.Join(p.RootDir, "vms")
 	backupsDir := p.Config.BackupDir
@@ -847,6 +827,9 @@ func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (strin
 }
 
 func (p *QemuProvider) DeleteTemplate(name string, force bool) error {
+	if err := validateIdentifier(name); err != nil {
+		return err
+	}
 	templatePath := filepath.Join(p.Config.BackupDir, name+".compact.qcow2")
 
 	// Safety Check: Is it in use?
@@ -857,7 +840,14 @@ func (p *QemuProvider) DeleteTemplate(name string, force bool) error {
 			if err != nil {
 				return fmt.Errorf("failed to check template usage: %v", err)
 			}
-			absTemplate, _ := filepath.Abs(templatePath)
+			absTemplate, err := filepath.EvalSymlinks(templatePath)
+			if err != nil {
+				return err
+			}
+			absTemplate, err = filepath.Abs(absTemplate)
+			if err != nil {
+				return err
+			}
 			for _, u := range used {
 				if u == absTemplate || u == templatePath {
 					return fmt.Errorf("template '%s' is in use by one or more VMs (use --force to override)", name)
@@ -872,6 +862,9 @@ func (p *QemuProvider) DeleteTemplate(name string, force bool) error {
 // CreateDisk prepares the execution surface (the qcow2 file).
 // It supports both standalone "Full Copies" and space-saving "Linked Clones".
 func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
+	if err := validateIdentifier(name); err != nil {
+		return err
+	}
 	vmsDir := filepath.Join(p.RootDir, "vms")
 	os.MkdirAll(vmsDir, 0755)
 	target := filepath.Join(vmsDir, name+".qcow2")
@@ -1026,6 +1019,9 @@ func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int,
 
 // UpdateConfig safely modifies the persistent VMState using a read-modify-write cycle.
 func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) error {
+	if err := validateIdentifier(name); err != nil {
+		return err
+	}
 	// 1. Load existing state
 	state, err := p.loadState(name)
 	if err != nil {
@@ -1089,13 +1085,21 @@ func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) error 
 }
 
 func (p *QemuProvider) loadState(name string) (VMState, error) {
+	if err := validateIdentifier(name); err != nil {
+		return VMState{}, err
+	}
 	var state VMState
 	data, err := os.ReadFile(filepath.Join(p.RootDir, "run", name+".json"))
 	if err != nil {
 		return state, err
 	}
-	err = json.Unmarshal(data, &state)
-	return state, err
+	if err := json.Unmarshal(data, &state); err != nil {
+		return state, err
+	}
+	if state.Name != name {
+		return state, fmt.Errorf("VM state identity %q does not match %q", state.Name, name)
+	}
+	return state, nil
 }
 
 // BuildNetDevArgs translates state to QEMU runtime arguments.
@@ -1259,44 +1263,7 @@ func (p *QemuProvider) Doctor() []string {
 	return reports
 }
 
-func (p *QemuProvider) GetUsedBackingFiles() ([]string, error) {
-	vmsDir := filepath.Join(p.RootDir, "vms")
-	files, err := os.ReadDir(vmsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []string{}, nil
-		}
-		return nil, err
-	}
-
-	used := make(map[string]bool)
-	for _, f := range files {
-		if !f.IsDir() && strings.HasSuffix(f.Name(), ".qcow2") {
-			diskPath := filepath.Join(vmsDir, f.Name())
-			backing, exists := backingInfo(diskPath)
-			if !exists && backing != "" {
-				// Backing file is set but might be missing, still record it
-				// backingInfo returns true if missing, false if present.
-				// Actually backingInfo returns (path, missing bool).
-				// We want the path regardless.
-			}
-			if backing != "" {
-				abs, err := filepath.Abs(backing)
-				if err == nil {
-					used[abs] = true
-				} else {
-					used[backing] = true
-				}
-			}
-		}
-	}
-
-	var result []string
-	for path := range used {
-		result = append(result, path)
-	}
-	return result, nil
-}
+func (p *QemuProvider) GetUsedBackingFiles() ([]string, error) { return p.usedBackingFiles() }
 
 // skipBootloader is our secret weapon for speed. It connects via QMP
 // and mashes the "Enter" key while the VM is starting up to bypass
@@ -1511,7 +1478,14 @@ func (p *QemuProvider) CachePrune(unusedOnly bool) (int, int64, error) {
 			continue
 		}
 		fullPath := filepath.Join(imagesDir, f.Name())
-		absPath, _ := filepath.Abs(fullPath)
+		absPath, err := filepath.EvalSymlinks(fullPath)
+		if err != nil {
+			return 0, 0, err
+		}
+		absPath, err = filepath.Abs(absPath)
+		if err != nil {
+			return 0, 0, err
+		}
 		if unusedOnly && usedMap[absPath] {
 			continue // Skip images in use
 		}
@@ -1530,6 +1504,14 @@ func (p *QemuProvider) CachePrune(unusedOnly bool) (int, int64, error) {
 
 // CacheRemove removes a specific cached image.
 func (p *QemuProvider) CacheRemove(name, version string) error {
+	if err := validateIdentifier(name); err != nil {
+		return err
+	}
+	if version != "" {
+		if err := validateIdentifier(version); err != nil {
+			return err
+		}
+	}
 	imagesDir := p.Config.ImageDir
 	if imagesDir == "" {
 		imagesDir = filepath.Join(p.RootDir, "images")
@@ -1545,10 +1527,21 @@ func (p *QemuProvider) CacheRemove(name, version string) error {
 
 	// Check usage
 	usedBacking, err := p.GetUsedBackingFiles()
-	if err == nil {
+	if err != nil {
+		return err
+	}
+	canonical, err := filepath.EvalSymlinks(fullPath)
+	if err != nil {
+		return err
+	}
+	canonical, err = filepath.Abs(canonical)
+	if err != nil {
+		return err
+	}
+	{
 		for _, path := range usedBacking {
 			absPath, _ := filepath.Abs(path)
-			absFullPath, _ := filepath.Abs(fullPath)
+			absFullPath := canonical
 			if absPath == absFullPath {
 				return fmt.Errorf("cannot remove image %s: in use by a VM", filename)
 			}
@@ -1559,6 +1552,9 @@ func (p *QemuProvider) CacheRemove(name, version string) error {
 }
 
 func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, error) {
+	if err := validateIdentifier(name); err != nil {
+		return pf, err
+	}
 	state, err := p.loadState(name)
 	if err != nil {
 		return pf, err
@@ -1567,23 +1563,13 @@ func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, er
 		return pf, err
 	}
 
-	// Allocate HostPort if 0
-	if pf.HostPort == 0 {
-		reserved := p.getReservedPorts()
-		pRangeStart := p.Config.PortRangeStart
-		pRangeEnd := p.Config.PortRangeEnd
-		if pRangeStart == 0 {
-			pRangeStart = 30000
-		}
-		if pRangeEnd == 0 {
-			pRangeEnd = 32767
-		}
-
-		hp, err := nidonet.FindAvailablePort(pRangeStart, pRangeEnd, reserved)
-		if err != nil {
-			return pf, err
-		}
-		pf.HostPort = hp
+	resolved, err := p.resolveForwarding([]PortForward{pf}, state.SSHPort, state.VNCPort)
+	if err != nil {
+		return pf, err
+	}
+	pf = resolved[0]
+	if pf.Protocol == "" {
+		pf.Protocol = "tcp"
 	}
 
 	// Check if GuestPort already forwarded for this protocol
@@ -1591,8 +1577,8 @@ func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, er
 		if f.GuestPort == pf.GuestPort && f.Protocol == pf.Protocol {
 			// Update existing rule
 			state.Forwarding[i] = pf
-			p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
-			return pf, nil
+			err := p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+			return pf, err
 		}
 	}
 
@@ -1603,6 +1589,9 @@ func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, er
 }
 
 func (p *QemuProvider) PortUnforward(name string, guestPort int, protocol string) error {
+	if err := validateIdentifier(name); err != nil {
+		return err
+	}
 	if err := validatePort(guestPort, false, "guest port"); err != nil {
 		return err
 	}

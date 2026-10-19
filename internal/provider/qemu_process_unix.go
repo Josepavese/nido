@@ -2,8 +2,11 @@
 
 package provider
 
-import "syscall"
-import "os"
+import (
+	"errors"
+	"os"
+	"syscall"
+)
 
 func detachedQemuSysProcAttr() *syscall.SysProcAttr {
 	return nil
@@ -14,9 +17,9 @@ func processAlive(pid int) bool {
 		return false
 	}
 	process, err := os.FindProcess(pid)
-	return err == nil && process.Signal(syscall.Signal(0)) == nil
-}
-
-func stopQemuProcess(process *os.Process, graceful bool) error {
-	return process.Signal(os.Interrupt)
+	if err != nil {
+		return false
+	}
+	err = process.Signal(syscall.Signal(0))
+	return err == nil || errors.Is(err, syscall.EPERM)
 }

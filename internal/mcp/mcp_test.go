@@ -394,3 +394,12 @@ scripts:
 		t.Fatalf("web forwarding count = %d, want 2", len(p.spawnOpts.Forwarding))
 	}
 }
+
+func (m *mockProvider) ReloadConfig(path string) error {
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		return err
+	}
+	m.cfg = *cfg
+	return nil
+}

@@ -633,11 +633,7 @@ func (s *Server) callImageTool(raw json.RawMessage) (interface{}, error) {
 		if ver == "" {
 			ver = "latest"
 		}
-		catalog, err := s.loadCatalog(image.DefaultCacheTTL)
-		if err != nil {
-			return nil, err
-		}
-		if err := catalog.RemoveCachedImage(s.imageDir(), name, ver); err != nil {
+		if err := s.Provider.CacheRemove(name, ver); err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"action": "remove", "image": fmt.Sprintf("%s:%s", name, ver), "status": "removed"}, nil
@@ -674,11 +670,7 @@ func (s *Server) callImageTool(raw json.RawMessage) (interface{}, error) {
 		if ver == "" {
 			ver = "latest"
 		}
-		catalog, err := s.loadCatalog(image.DefaultCacheTTL)
-		if err != nil {
-			return nil, err
-		}
-		if err := catalog.RemoveCachedImage(s.imageDir(), name, ver); err != nil {
+		if err := s.Provider.CacheRemove(name, ver); err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"action": "cache_remove", "image": fmt.Sprintf("%s:%s", name, ver), "status": "removed"}, nil
@@ -774,10 +766,10 @@ func (s *Server) callSystemTool(raw json.RawMessage) (interface{}, error) {
 		if err := config.UpdateConfig(s.configPath(), key, args.Value); err != nil {
 			return nil, err
 		}
-		cfg, err := config.LoadConfig(s.configPath())
-		if err != nil {
+		if err := s.Provider.ReloadConfig(s.configPath()); err != nil {
 			return nil, err
 		}
+		cfg := s.Provider.GetConfig()
 		return map[string]interface{}{"action": "config_set", "key": key, "value": args.Value, "config_path": s.configPath(), "config": cfg}, nil
 	case "accel_list":
 		devs, err := s.Provider.ListAccelerators()
