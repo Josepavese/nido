@@ -5,6 +5,24 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.28] - 2026-10-19 "The Persistent QEMU Cartridge"
+
+### Fixed
+
+- VM configuration now persists explicitly supplied raw QEMU arguments, preserving order and argument boundaries. Omitting the field retains the saved list; an explicit empty list clears it.
+- MCP rejects `raw_qemu_args: null` instead of treating it as a clear request. Configuration remains effective on the next start, including updates made while stopped.
+
+### Added
+
+- `nido config <vm> --clear-qemu-args` explicitly removes saved raw arguments. Mutual exclusion with `--qemu-arg`, help, and completion come from the CLI manifest.
+
+### Tested
+
+- Provider, CLI, and MCP regression tests cover persistence, omission, clearing, invalid requests, and preservation of unrelated state. The tests fail against the original provider behavior.
+- Full Go test suite and release lint (vet, staticcheck, govulncheck).
+- Full local blackbox validation: 48 PASS, 0 FAIL, 3 expected SKIP; no residual VMs or templates.
+- Linux/QEMU/KVM with Ubuntu 24.04.5: a disposable VM on Data verified 9p host/guest file exchange, CLI/MCP updates, omission, explicit clearing, and tag absence after restart. Existing VM disk metadata and state were unchanged.
+
 ## [4.5.27] - 2026-07-06 "The Offline Catalog Gate"
 
 ### Fixed
