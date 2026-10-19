@@ -13,6 +13,7 @@ That file defines:
 - command ids
 - `use`, aliases, groups, descriptions, examples
 - flags attached to each command
+- mutually exclusive flag groups (`mutually_exclusive`, using manifest flag ids)
 - completion sources
 - action ids
 

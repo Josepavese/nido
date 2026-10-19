@@ -1074,6 +1074,9 @@ func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) error 
 		}
 		state.Forwarding = *updates.Forwarding
 	}
+	if updates.RawQemuArgs != nil {
+		state.RawQemuArgs = *updates.RawQemuArgs
+	}
 	if updates.Accelerators != nil {
 		if err := ValidateAccelerators(*updates.Accelerators); err != nil {
 			return err
