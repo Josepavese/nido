@@ -367,16 +367,16 @@ func (f *UpstreamFetcher) fetchOpenSUSE(src Source, strat Strategy) ([]image.Ver
 		}
 
 		// 3. Get Size
-		size, err := f.getRemoteSize(imgURL)
-		if err != nil || size <= 0 {
-			return nil, fmt.Errorf("%s: image size unavailable for %s: %v", src.Name, imgURL, err)
+		resolvedURL, size, err := f.resolveOpenSUSEImage(imgURL, filename, hash)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", src.Name, err)
 		}
 
 		results = append(results, image.Version{
 			Version:       "Snapshot" + snapshotDate,
 			Aliases:       []string{ver}, // maps "Latest" to this version
 			Arch:          "amd64",
-			URL:           imgURL,
+			URL:           resolvedURL,
 			ChecksumType:  "sha256",
 			Checksum:      hash,
 			ChecksumURL:   checksumURL,
@@ -401,7 +401,11 @@ func (f *UpstreamFetcher) getRemoteSize(url string) (int64, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("status %d", resp.StatusCode)
+		finalURL := req.URL
+		if resp.Request != nil {
+			finalURL = resp.Request.URL
+		}
+		return 0, fmt.Errorf("status %d at %s", resp.StatusCode, finalURL)
 	}
 	return resp.ContentLength, nil
 }
