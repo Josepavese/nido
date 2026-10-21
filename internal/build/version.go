@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-var Version = "v5.0.0"
+var Version = "v4.7.0"
 
 const LatestReleaseURL = "https://api.github.com/repos/Josepavese/nido/releases/latest"
 const maxReleaseMetadata = 1 << 20

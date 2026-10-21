@@ -5,7 +5,7 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [5.0.0] - 2026-10-21 "Owned Feathers"
+## [4.7.0] - 2026-10-21 "Owned Feathers"
 
 ### Fixed
 
@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Centralize verified release installation and registry synchronization, with cleanup on errors and staging on the installation filesystem.
 - Remove implicit historical ISO cache conversion and obsolete theme/cache-message paths.
 
-### Breaking changes
+### Upgrade notes
 
 - PCI recovery journals now use a versioned, VM-owned lease. Plain-driver journals are rejected by normal runtime operations. Drain old writers and reconcile device ownership before one offline conversion; preserve useful recovery data. A journal for an already restored, unclaimed device is preserved outside the runtime and retired without inventing an active lease.
 - The internal VM provider now exposes structured SSH arguments and a single actual stop behavior; consumers use the current HAL/PAL contracts.
