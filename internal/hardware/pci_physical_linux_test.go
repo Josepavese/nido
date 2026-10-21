@@ -110,7 +110,7 @@ func TestPhysicalPCIRoundTrip(t *testing.T) {
 	if out, err := sysutil.NewCommand("qemu-img", "create", "-f", "qcow2", disk, "1M").CombinedOutput(); err != nil {
 		t.Fatalf("create disposable disk: %s %v", out, err)
 	}
-	if err := vm.Start(name, provider.VMOptions{MemoryMB: 128, VCPUs: 1, Accelerators: []string{id}, RawQemuArgs: []string{"-S", "-machine", "accel=tcg", "-cpu", "max"}}); err != nil {
+	if err := vm.Start(name, provider.VMOptions{MemoryMB: 128, VCPUs: 1, Accelerators: []string{id}, RawQemuArgs: []string{"-S"}}); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(leasePath)
