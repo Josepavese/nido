@@ -80,8 +80,7 @@ Old plain-driver records are preserved and explicitly rejected, never silently
 converted by normal runtime operations. Before installing this change into an
 existing host, reconcile its driver records and VM ownership in a single offline
 conversion with old writers drained. Preserve the original record and verify the
-current owner before cutover. This code audit performs no such installation or
-mutation of existing host records.
+current owner before cutover. The conversion is a maintenance operation, never an automatic startup path.
 
 ### Opt-in native PCI qualification
 
@@ -116,3 +115,12 @@ original record and its metadata outside the runtime, verify the copy and retire
 the stale runtime record. The resulting current state has no active lease.
 Unknown ownership, an active binding or changed input requires reconciliation;
 normal startup must not infer an owner or replay this conversion.
+
+The 2026-10-21 native qualification passed on an isolated Intel `8086:9a13`
+USB controller, including real QEMU/VFIO attachment, guest PCI identity and host
+`xhci_hcd` restoration. An initial fixture acceleration conflict also exercised
+real preparation rollback successfully; the corrected fixture uses the HAL's
+effective accelerator. The historical `i915` record was verified as already
+restored and unclaimed, preserved outside the runtime, and retired with old
+writers drained. Existing VM metadata remained unchanged. This proves the
+shared PCI lifecycle on that device, not GPU-specific guest functionality.
