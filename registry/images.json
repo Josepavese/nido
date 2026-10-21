@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-10-19T16:01:10.526675542Z",
+  "updated_at": "2026-10-21T13:22:22.671320259Z",
   "images": [
     {
       "name": "ubuntu",
@@ -16,13 +16,13 @@
             "latest"
           ],
           "arch": "amd64",
-          "url": "https://cloud-images.ubuntu.com/releases/26.04/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img",
+          "url": "https://cloud-images.ubuntu.com/releases/26.04/release-20261016/ubuntu-26.04-server-cloudimg-amd64.img",
           "checksum_type": "sha256",
-          "checksum": "8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2",
-          "size_bytes": 865115136,
-          "size": "825.0 MB",
+          "checksum": "5645d0318ad21f643ebb1ac4567514620e9893380b07b0201fda163baa5b7eb5",
+          "size_bytes": 859090944,
+          "size": "819.3 MB",
           "format": "qcow2",
-          "checksum_url": "https://cloud-images.ubuntu.com/releases/26.04/release-20260927/SHA256SUMS",
+          "checksum_url": "https://cloud-images.ubuntu.com/releases/26.04/release-20261016/SHA256SUMS",
           "checksum_regex": "ubuntu-26\\.04-server-cloudimg-amd64\\.img"
         },
         {
@@ -46,13 +46,13 @@
             "jammy"
           ],
           "arch": "amd64",
-          "url": "https://cloud-images.ubuntu.com/releases/22.04/release-20261004/ubuntu-22.04-server-cloudimg-amd64.img",
+          "url": "https://cloud-images.ubuntu.com/releases/22.04/release-20261020/ubuntu-22.04-server-cloudimg-amd64.img",
           "checksum_type": "sha256",
-          "checksum": "012d81fade7e8ff4428fc35dfeee711d66d1f47d5ea9c5c8ced96a85b959835c",
-          "size_bytes": 730497536,
+          "checksum": "2099e63da0b822ef8e05e3d596c1b402eaaae658fc08ab919cb8495bfcdc488b",
+          "size_bytes": 730529792,
           "size": "696.7 MB",
           "format": "qcow2",
-          "checksum_url": "https://cloud-images.ubuntu.com/releases/22.04/release-20261004/SHA256SUMS",
+          "checksum_url": "https://cloud-images.ubuntu.com/releases/22.04/release-20261020/SHA256SUMS",
           "checksum_regex": "ubuntu-22\\.04-server-cloudimg-amd64\\.img"
         }
       ]
@@ -64,19 +64,19 @@
       "homepage": "https://get.opensuse.org/tumbleweed/",
       "versions": [
         {
-          "version": "Snapshot20261017",
+          "version": "Snapshot20261020",
           "aliases": [
             "Latest"
           ],
           "arch": "amd64",
-          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261017.qcow2",
+          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261020.qcow2",
           "checksum_type": "sha256",
-          "checksum": "75932b0d99b876858822369806599ce9683c3a1454fac4c808c193d682a15c12",
-          "size_bytes": 316773376,
-          "size": "302.1 MB",
+          "checksum": "efcf239b810d82475dc6900be9ca9b1ce239b4c1ee1395520a8bb48bcec166cc",
+          "size_bytes": 316837376,
+          "size": "302.2 MB",
           "format": "qcow2",
-          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261017.qcow2.sha256",
-          "checksum_regex": "^75932b0d99b876858822369806599ce9683c3a1454fac4c808c193d682a15c12$"
+          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261020.qcow2.sha256",
+          "checksum_regex": "^efcf239b810d82475dc6900be9ca9b1ce239b4c1ee1395520a8bb48bcec166cc$"
         }
       ]
     },
