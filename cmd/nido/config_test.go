@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/Josepavese/nido/internal/hardware"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -50,7 +51,7 @@ func TestConfigRawQemuArgsCLI(t *testing.T) {
 			if err := json.Unmarshal([]byte(stdout), &resp); err != nil || stderr != "" || resp.Status != "ok" || resp.Data.Result != step.result {
 				t.Fatalf("unexpected CLI response: stdout=%s stderr=%s error=%v", stdout, stderr, err)
 			}
-			reopened := provider.NewQemuProvider(app.NidoDir, app.Config)
+			reopened := provider.NewQemuProvider(app.NidoDir, app.Config, hardware.New())
 			info, err := reopened.Info("fixture")
 			if err != nil || !slices.Equal(info.RawQemuArgs, step.want) || info.State != "stopped" || info.MemoryMB != 512 || info.SSHUser != "fixture-user" {
 				t.Fatalf("persisted config = %#v, error = %v, want raw args %#v", info, err, step.want)
@@ -89,7 +90,7 @@ func configTestApp(t *testing.T) *appContext {
 	if err := os.WriteFile(filepath.Join(run, "fixture.json"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	app.Provider = provider.NewQemuProvider(app.NidoDir, app.Config)
+	app.Provider = provider.NewQemuProvider(app.NidoDir, app.Config, hardware.New())
 	return app
 }
 
@@ -113,7 +114,7 @@ func TestConfigCLIUpdateFailure(t *testing.T) {
 	// Run the real action in a subprocess because its existing error boundary exits.
 	if os.Getenv("NIDO_CONFIG_FAILURE_HELPER") == "1" {
 		rootDir := os.Getenv("NIDO_CONFIG_FAILURE_ROOT")
-		app := &appContext{Provider: provider.NewQemuProvider(rootDir, &config.Config{})}
+		app := &appContext{Provider: provider.NewQemuProvider(rootDir, &config.Config{}, hardware.New())}
 		root, err := newRootCommand(app)
 		if err != nil {
 			t.Fatal(err)

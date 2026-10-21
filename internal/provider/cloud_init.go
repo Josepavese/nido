@@ -3,7 +3,6 @@ package provider
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -183,10 +182,10 @@ func GetLocalSSHKey() string {
 	if data, err := os.ReadFile(pubPath); err == nil {
 		return strings.TrimSpace(string(data))
 	}
-	if _, err := exec.LookPath("ssh-keygen"); err == nil {
+	if _, err := sysutil.FindExecutable("ssh-keygen"); err == nil {
 		_ = os.MkdirAll(nidoDir, 0700)
 		_ = os.Chmod(nidoDir, 0700)
-		cmd := exec.Command("ssh-keygen", "-t", "ed25519", "-N", "", "-f", keyPath, "-C", "nido-local-vm-manager")
+		cmd := sysutil.NewCommand("ssh-keygen", "-t", "ed25519", "-N", "", "-f", keyPath, "-C", "nido-local-vm-manager")
 		if out, err := cmd.CombinedOutput(); err == nil {
 			_ = out
 			if data, readErr := os.ReadFile(pubPath); readErr == nil {

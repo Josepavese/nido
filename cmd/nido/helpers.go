@@ -10,7 +10,6 @@ import (
 	"github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/provider"
-	"github.com/Josepavese/nido/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -54,14 +53,6 @@ func imageCatalog(app *appContext) (*image.Catalog, error) {
 
 func supportedGlobalConfigKeys() []string {
 	return config.SupportedGlobalConfigKeys()
-}
-
-func requireQemu(app *appContext) *provider.QemuProvider {
-	if app.Qemu == nil {
-		ui.Error("QEMU provider unavailable")
-		os.Exit(1)
-	}
-	return app.Qemu
 }
 
 func forceBoolValueForKey(key string) []string {

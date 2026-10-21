@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -108,7 +107,7 @@ func (p *QemuProvider) usedBackingFiles() ([]string, error) {
 			if err != nil {
 				return nil, err
 			}
-			out, err := exec.Command(binary, "info", "-U", "--backing-chain", "--output=json", root).CombinedOutput()
+			out, err := sysutil.NewCommand(binary, "info", "-U", "--backing-chain", "--output=json", root).CombinedOutput()
 			if err != nil {
 				return nil, fmt.Errorf("inspect backing chain %s: %w (%s)", root, err, out)
 			}
@@ -183,6 +182,6 @@ func (p *QemuProvider) isVMProcess(name string, pid int) bool {
 	return processAlive(pid) && inspectVMProcess(pid, p.processIdentity(name)) == nil
 }
 
-func (p *QemuProvider) stopVMProcess(name string, pid int, graceful bool) error {
-	return stopManagedProcess(pid, p.processIdentity(name), graceful)
+func (p *QemuProvider) stopVMProcess(name string, pid int) error {
+	return stopManagedProcess(pid, p.processIdentity(name))
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"syscall"
 )
 
@@ -41,10 +42,10 @@ func getTotalSystemMemoryMB() int {
 func TerminalCommand(cmd string) (string, []string) {
 	// Priority: iTerm2 > Terminal.app
 	if _, err := exec.LookPath("iterm2"); err == nil {
-		return "osascript", []string{"-e", fmt.Sprintf(`tell application "iTerm" to create window with default profile command "%s"`, cmd)}
+		return "osascript", []string{"-e", fmt.Sprintf(`tell application "iTerm" to create window with default profile command %s`, strconv.Quote(cmd))}
 	}
 
-	return "osascript", []string{"-e", fmt.Sprintf(`tell application "Terminal" to do script "%s"`, cmd)}
+	return "osascript", []string{"-e", fmt.Sprintf(`tell application "Terminal" to do script %s`, strconv.Quote(cmd))}
 }
 
 // VNCCommand returns the command to open a VNC viewer.

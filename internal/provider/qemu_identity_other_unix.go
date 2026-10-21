@@ -31,7 +31,7 @@ func inspectVMProcess(pid int, identity vmProcessIdentity) error {
 	return nil
 }
 
-func stopManagedProcess(pid int, identity vmProcessIdentity, _ bool) error {
+func stopManagedProcess(pid int, identity vmProcessIdentity) error {
 	if err := inspectVMProcess(pid, identity); err != nil {
 		return err
 	}

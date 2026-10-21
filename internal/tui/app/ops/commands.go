@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -181,6 +180,7 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 						filepath.Join(nidoDir, "cache"),
 						filepath.Join(nidoDir, "tmp"),
 						imgDir,
+						prov.Virtualization(),
 						builder.WithReporter(tuiBuildReporter{ch: ch, opName: opName}),
 					)
 					if err := eng.Build(bp); err != nil {
@@ -332,24 +332,21 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 					},
 				}
 
-				downloader := image.Downloader{
-					Quiet: true,
-					OnProgress: func(current, total int64) {
-						ratio := 0.0
-						if total > 0 {
-							ratio = float64(current) / float64(total)
-						}
-						// Limit updates?
-						ch <- ProgressMsg{
-							OpName: opName,
-							Status: view.StatusMsg{
-								Loading:   true,
-								Operation: fmt.Sprintf("Pulling %s", source),
-								Progress:  ratio,
-							},
-						}
-					},
-				}
+				downloader := image.NewTransfer(image.TransferOptions{OnProgress: func(current, total int64) {
+					ratio := 0.0
+					if total > 0 {
+						ratio = float64(current) / float64(total)
+					}
+					// Limit updates?
+					ch <- ProgressMsg{
+						OpName: opName,
+						Status: view.StatusMsg{
+							Loading:   true,
+							Operation: fmt.Sprintf("Pulling %s", source),
+							Progress:  ratio,
+						},
+					}
+				}})
 
 				ch <- ProgressMsg{
 					OpName: opName,
@@ -360,7 +357,7 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 					},
 				}
 
-				if err := image.PrepareLocalImage(*ver, destPath, downloader); err != nil {
+				if err := downloader.Prepare(*ver, destPath); err != nil {
 					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("image preparation failed: %w", err)}}
 					return
 				}
@@ -431,7 +428,7 @@ func StartVM(prov provider.VMProvider, name string) tea.Cmd {
 // StopVM stops a running VM.
 func StopVM(prov provider.VMProvider, name string) tea.Cmd {
 	return func() tea.Msg {
-		err := prov.Stop(name, true)
+		err := prov.Stop(name)
 		return OpResultMsg{Op: "stop", Err: err}
 	}
 }
@@ -548,12 +545,7 @@ func ApplyUpdate() tea.Cmd {
 	return func() tea.Msg {
 		// We execute 'nido update' and wait for it to finish.
 		// We try to find the current executable to call it explicitly.
-		exe, err := os.Executable()
-		if err != nil {
-			exe = "nido" // Fallback
-		}
-		cmd := exec.Command(exe, "update")
-		out, err := cmd.CombinedOutput()
+		out, err := sysutil.RunSelf("update")
 		if err != nil {
 			// Wrap the error with the output so the user sees WHY it failed
 			return ApplyUpdateMsg{Err: fmt.Errorf("%s: %s", err, string(out))}
@@ -578,7 +570,7 @@ type DoctorResultMsg struct {
 // RunDoctor executes the system diagnostic tool.
 func RunDoctor() tea.Cmd {
 	return func() tea.Msg {
-		out, err := exec.Command("nido", "doctor", "--json").CombinedOutput()
+		out, err := sysutil.RunSelf("doctor", "--json")
 		if err != nil {
 			return DoctorResultMsg{Err: err}
 		}

@@ -1,8 +1,12 @@
 package main
 
 import (
+	"github.com/Josepavese/nido/internal/hardware"
+	"github.com/Josepavese/nido/internal/lifecycle"
+	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/Josepavese/nido/internal/config"
 	"github.com/Josepavese/nido/internal/pkg/sysutil"
@@ -15,7 +19,7 @@ type appContext struct {
 	ConfigPath string
 	Config     *config.Config
 	Provider   provider.VMProvider
-	Qemu       *provider.QemuProvider
+	Updater    lifecycle.Updater
 }
 
 func newAppContext() *appContext {
@@ -29,7 +33,7 @@ func newAppContext() *appContext {
 	}
 
 	cfg, _ := config.LoadConfig(cfgPath)
-	qemu := provider.NewQemuProvider(nidoDir, cfg)
+	qemu := provider.NewQemuProvider(nidoDir, cfg, hardware.New())
 
 	return &appContext{
 		NidoDir:    nidoDir,
@@ -37,7 +41,7 @@ func newAppContext() *appContext {
 		ConfigPath: cfgPath,
 		Config:     cfg,
 		Provider:   qemu,
-		Qemu:       qemu,
+		Updater:    lifecycle.NewUpdater(&http.Client{Timeout: 30 * time.Second}),
 	}
 }
 

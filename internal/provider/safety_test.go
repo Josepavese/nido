@@ -2,6 +2,7 @@ package provider
 
 import (
 	"errors"
+	"github.com/Josepavese/nido/internal/hardware"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,13 +11,13 @@ import (
 )
 
 func TestIdentifierRejectsPathsBeforeEffects(t *testing.T) {
-	p := NewQemuProvider(t.TempDir(), &config.Config{})
+	p := NewQemuProvider(t.TempDir(), &config.Config{}, hardware.New())
 	for _, name := range []string{"", ".", "..", "../images/base", "a/b", `a\b`, `C:\disk`, "/tmp/other"} {
 		t.Run(name, func(t *testing.T) {
 			operations := []func() error{
 				func() error { return p.Spawn(name, VMOptions{}) },
 				func() error { return p.Start(name, VMOptions{}) },
-				func() error { return p.Stop(name, true) },
+				func() error { return p.Stop(name) },
 				func() error { return p.Delete(name) },
 				func() error { return p.CreateDisk(name, "1M", "") },
 				func() error { return p.UpdateConfig(name, VMConfigUpdates{}) },
@@ -44,7 +45,7 @@ func TestIdentifierRejectsPathsBeforeEffects(t *testing.T) {
 }
 
 func TestInfoDistinguishesMissingAndCorruptState(t *testing.T) {
-	p := NewQemuProvider(t.TempDir(), &config.Config{})
+	p := NewQemuProvider(t.TempDir(), &config.Config{}, hardware.New())
 	if _, err := p.Info("missing"); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected not-found, got %v", err)
 	}
@@ -95,7 +96,7 @@ func TestProcessIdentityRequiresVMNameAndDisk(t *testing.T) {
 
 func TestForwardingAllocationIsTransactional(t *testing.T) {
 	cfg := &config.Config{PortRangeStart: 31000, PortRangeEnd: 31000}
-	p := NewQemuProvider(t.TempDir(), cfg)
+	p := NewQemuProvider(t.TempDir(), cfg, hardware.New())
 	input := []PortForward{{GuestPort: 80}, {GuestPort: 443}}
 	if _, err := p.resolveForwarding(input, 51022, 0); err == nil {
 		t.Fatal("two automatic ports fit into a one-port range")

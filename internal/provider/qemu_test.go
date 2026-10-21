@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -8,11 +9,12 @@ import (
 	"testing"
 
 	"github.com/Josepavese/nido/internal/config"
+	"github.com/Josepavese/nido/internal/hardware"
 )
 
 // TestBuildQemuArgs_CrossPlatform tests QEMU argument generation for all platforms
 func TestBuildQemuArgs_CrossPlatform(t *testing.T) {
-	p := &QemuProvider{
+	p := &QemuProvider{Hardware: hardware.New(),
 		RootDir: filepath.Join(os.TempDir(), "nido-test"),
 		Config:  &config.Config{},
 	}
@@ -29,9 +31,9 @@ func TestBuildQemuArgs_CrossPlatform(t *testing.T) {
 		{
 			name:          "Linux with KVM",
 			goos:          "linux",
-			expectedAccel: []string{"-enable-kvm"},
+			expectedAccel: []string{"-accel", "kvm"},
 			expectedCPU:   "host",
-			shouldContain: []string{"-enable-kvm", "-cpu", "host"},
+			shouldContain: []string{"-accel", "kvm", "-cpu", "host"},
 		},
 		{
 			name:          "macOS with HVF",
@@ -59,6 +61,15 @@ func TestBuildQemuArgs_CrossPlatform(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			p.Hardware = argumentHost{Virtual: hardware.Virtualization{CPU: "qemu64"}}
+			switch tt.goos {
+			case "linux":
+				p.Hardware = argumentHost{Virtual: hardware.Virtualization{Accelerator: "kvm", CPU: "host"}}
+			case "darwin":
+				p.Hardware = argumentHost{Virtual: hardware.Virtualization{Accelerator: "hvf", CPU: "host"}}
+			case "windows":
+				p.Hardware = argumentHost{Virtual: hardware.Virtualization{Accelerator: "whpx", CPU: "host"}}
+			}
 			// pass accelerators from test case if present
 			args := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0, nil, tt.opts.Accelerators)
 
@@ -76,8 +87,8 @@ func TestBuildQemuArgs_CrossPlatform(t *testing.T) {
 				t.Error("Missing memory value")
 			}
 
-			// Verify platform-specific acceleration (only for current platform)
-			if runtime.GOOS == tt.goos {
+			// Verify the injected capabilities on every host.
+			if tt.goos != "" {
 				for _, expected := range tt.shouldContain {
 					if !contains(args, expected) {
 						t.Errorf("Expected argument %q not found in: %v", expected, args)
@@ -124,7 +135,7 @@ func TestBuildQemuArgs_CrossPlatform(t *testing.T) {
 
 // TestBuildQemuArgs_CommonArguments verifies arguments common to all platforms
 func TestBuildQemuArgs_CommonArguments(t *testing.T) {
-	p := &QemuProvider{
+	p := &QemuProvider{Hardware: hardware.New(),
 		RootDir: filepath.Join(os.TempDir(), "nido-test"),
 		Config:  &config.Config{},
 	}
@@ -182,7 +193,7 @@ func TestWindowsTCGFallbackArgs(t *testing.T) {
 
 // TestBuildQemuArgs_DiskPath verifies disk path is correctly formatted
 func TestBuildQemuArgs_DiskPath(t *testing.T) {
-	p := &QemuProvider{
+	p := &QemuProvider{Hardware: hardware.New(),
 		RootDir: filepath.Join(os.TempDir(), "nido-test"),
 		Config:  &config.Config{},
 	}
@@ -205,7 +216,7 @@ func TestBuildQemuArgs_DiskPath(t *testing.T) {
 
 // TestBuildQemuArgs_VNC verifies VNC arguments are correctly generated
 func TestBuildQemuArgs_VNC(t *testing.T) {
-	p := &QemuProvider{
+	p := &QemuProvider{Hardware: hardware.New(),
 		RootDir: filepath.Join(os.TempDir(), "nido-test"),
 		Config:  &config.Config{},
 	}
@@ -232,7 +243,7 @@ func TestBuildQemuArgs_VNC(t *testing.T) {
 
 // TestBuildNetDevArgs verifies multiple port forwardings
 func TestBuildNetDevArgs(t *testing.T) {
-	p := &QemuProvider{}
+	p := &QemuProvider{Hardware: hardware.New()}
 
 	fw := []PortForward{
 		{Label: "web", GuestPort: 80, HostPort: 32080, Protocol: "tcp"},
@@ -275,29 +286,6 @@ func TestParsePortForwardValidation(t *testing.T) {
 			_, err := ParsePortForward(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("ParsePortForward(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestValidateAcceleratorID(t *testing.T) {
-	tests := []struct {
-		id      string
-		wantErr bool
-	}{
-		{id: "auto"},
-		{id: "virtual:gpu"},
-		{id: "01:00.0"},
-		{id: "0000:01:00.0"},
-		{id: "01:00.8", wantErr: true},
-		{id: "01:00.0;touch /tmp/x", wantErr: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.id, func(t *testing.T) {
-			err := ValidateAcceleratorID(tt.id)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("ValidateAcceleratorID(%q) error = %v, wantErr %v", tt.id, err, tt.wantErr)
 			}
 		})
 	}
@@ -402,4 +390,16 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// An injected backend proves capability selection independently of native devices.
+type argumentHost struct{ Virtual hardware.Virtualization }
+
+func (h argumentHost) Virtualization() hardware.Virtualization         { return h.Virtual }
+func (argumentHost) ListAccelerators() ([]hardware.Accelerator, error) { return nil, nil }
+func (argumentHost) PreparePassthrough(context.Context, string, string, string) error {
+	return hardware.ErrUnsupported
+}
+func (argumentHost) RestorePassthrough(context.Context, string, string, string) error {
+	return hardware.ErrUnsupported
 }

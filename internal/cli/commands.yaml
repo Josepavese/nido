@@ -160,7 +160,7 @@ commands:
     use: stop <name>
     group: vm
     short: "Stop a VM"
-    long: "Gracefully stop a running VM."
+    long: "Stop the managed VM process and wait for exit. Guest OS poweroff is a separate guest operation."
     flags:
       - name: json
     args:

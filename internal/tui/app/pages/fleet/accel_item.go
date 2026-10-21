@@ -2,15 +2,15 @@ package fleet
 
 import (
 	"fmt"
+	"github.com/Josepavese/nido/internal/hardware"
 
-	"github.com/Josepavese/nido/internal/provider"
 	"github.com/Josepavese/nido/internal/tui/kit/theme"
 )
 
-// AccelItem adapts provider.Accelerator to the List interface.
+// AccelItem adapts hardware.Accelerator to the List interface.
 // Duplicated from hatchery to avoid import cycles for now.
 type AccelItem struct {
-	Acc provider.Accelerator
+	Acc hardware.Accelerator
 }
 
 func (i AccelItem) Title() string {

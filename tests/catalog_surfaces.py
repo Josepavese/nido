@@ -64,6 +64,15 @@ def probe(binary, catalog):
                     for key in ['url', 'checksum', 'checksum_type', 'size_bytes']:
                         assert actual[key] == version[key], (tag, key, actual)
                 checks += 1
+    # Native HAL inventory consumes a private read-only sysfs, with one isolated
+    # device and one device missing an IOMMU group. No physical host PCI is used.
+    cli_devices = run('accel', 'list', '--json')['data']['devices']
+    tool_devices = mcp('tools/call', {'name': 'nido_system', 'arguments': {'action': 'accel_list'}})['devices']
+    resource_devices = mcp('resources/read', {'uri': 'nido://system/accelerators'})['devices']
+    assert cli_devices == tool_devices == resource_devices
+    assert len(cli_devices) == 2, cli_devices
+    assert cli_devices[0]['IsSafe'] is True, cli_devices
+    assert cli_devices[1]['IsSafe'] is False and not cli_devices[1]['IOMMUGroup'], cli_devices
     # Invalid references stay errors on both machine interfaces.
     for tag in ['missing-distribution:999', 'ubuntu:missing-version']:
         p = subprocess.run([binary, 'images', 'info', tag, '--json'],
@@ -96,7 +105,16 @@ def main():
         shutil.copy2(catalog, cache/'.catalog.json')
         shutil.copy2(catalog, root/'catalog.json')
         (root/'tmp').mkdir()
-        command = ['bwrap', '--ro-bind', '/', '/', '--dev', '/dev', '--unshare-user',
+        sysfs = root/'sys'
+        devices = sysfs/'bus/pci/devices'
+        for slot in ['0000:01:00.0', '0000:02:00.0']:
+            device = devices/slot
+            device.mkdir(parents=True)
+            for name, value in {'class': '0x030000', 'vendor': '0x1234',
+                                'device': '0x5678', 'boot_vga': '0'}.items():
+                (device/name).write_text(value)
+        (devices/'0000:01:00.0/iommu_group').symlink_to('/sys/kernel/iommu_groups/7')
+        command = ['bwrap', '--ro-bind', '/', '/', '--ro-bind', str(sysfs), '/sys', '--dev', '/dev', '--unshare-user',
                    '--unshare-pid', '--unshare-net', '--proc', '/proc', '--tmpfs',
                    str(pathlib.Path.home()), '--bind', temp, temp, '--setenv', 'HOME',
                    str(home), '--setenv', 'TMPDIR', str(root/'tmp'), '--chdir', temp,

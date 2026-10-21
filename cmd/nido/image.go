@@ -274,7 +274,7 @@ func cmdImagePull(cwd, imageDir string, args []string, jsonOut bool) {
 		diskExists = true
 	}
 
-	downloader := image.Downloader{Quiet: jsonOut}
+	downloader := image.NewTransfer(image.TransferOptions{OnProgress: nil})
 
 	if !diskExists {
 		// Announce download
@@ -285,7 +285,7 @@ func cmdImagePull(cwd, imageDir string, args []string, jsonOut bool) {
 			ui.Info("Size:   %s", ui.HumanSize(ver.SizeBytes))
 		}
 
-		if err := image.PrepareLocalImage(*ver, destPath, downloader); err != nil {
+		if err := downloader.Prepare(*ver, destPath); err != nil {
 			if jsonOut {
 				resp := clijson.NewResponseError("image pull", "ERR_IO", "Image preparation failed", err.Error(), "Check your connection and registry checksum metadata.", nil)
 				_ = clijson.PrintJSON(resp)

@@ -28,7 +28,7 @@ func inspectVMProcess(pid int, identity vmProcessIdentity) error {
 	return nil
 }
 
-func stopManagedProcess(pid int, identity vmProcessIdentity, _ bool) error {
+func stopManagedProcess(pid int, identity vmProcessIdentity) error {
 	// Open before inspection. The kernel handle pins this process even if it
 	// exits and its numeric PID is reused before a signal is sent.
 	fd, err := unix.PidfdOpen(pid, 0)

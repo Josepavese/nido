@@ -51,7 +51,7 @@ func inspectVMProcess(pid int, identity vmProcessIdentity) error {
 	return inspectHandle(handle, identity)
 }
 
-func stopManagedProcess(pid int, identity vmProcessIdentity, _ bool) error {
+func stopManagedProcess(pid int, identity vmProcessIdentity) error {
 	// Inspect and terminate the same kernel handle, never a reopened numeric PID.
 	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.PROCESS_TERMINATE|windows.SYNCHRONIZE, false, uint32(pid))
 	if err != nil {

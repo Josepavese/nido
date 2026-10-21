@@ -289,23 +289,20 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 			// --- 1. Download Main Image ---
 			destPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
 			if _, err := os.Stat(destPath); os.IsNotExist(err) {
-				downloader := image.Downloader{
-					Quiet: true,
-					OnProgress: func(current, total int64) {
-						ratio := 0.0
-						if total > 0 {
-							ratio = float64(current) / float64(total)
-						}
-						ch <- ProgressMsg{
-							OpName: opName,
-							Status: view.StatusMsg{
-								Loading:   true,
-								Operation: fmt.Sprintf("Pulling %s (Disk)", imageRef),
-								Progress:  ratio,
-							},
-						}
-					},
-				}
+				downloader := image.NewTransfer(image.TransferOptions{OnProgress: func(current, total int64) {
+					ratio := 0.0
+					if total > 0 {
+						ratio = float64(current) / float64(total)
+					}
+					ch <- ProgressMsg{
+						OpName: opName,
+						Status: view.StatusMsg{
+							Loading:   true,
+							Operation: fmt.Sprintf("Pulling %s (Disk)", imageRef),
+							Progress:  ratio,
+						},
+					}
+				}})
 
 				verForDownload := *ver
 				if ver.ChecksumURL != "" {
@@ -332,7 +329,7 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 						Progress:  1.0,
 					},
 				}
-				if err := image.PrepareLocalImage(verForDownload, destPath, downloader); err != nil {
+				if err := downloader.Prepare(verForDownload, destPath); err != nil {
 					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("disk preparation failed: %w", err)}}
 					return
 				}
@@ -342,23 +339,20 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 			if ver.KernelURL != "" {
 				kernelPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.kernel", img.Name, ver.Version))
 				if _, err := os.Stat(kernelPath); os.IsNotExist(err) {
-					downloader := image.Downloader{
-						Quiet: true,
-						OnProgress: func(current, total int64) {
-							ratio := 0.0
-							if total > 0 {
-								ratio = float64(current) / float64(total)
-							}
-							ch <- ProgressMsg{
-								OpName: opName,
-								Status: view.StatusMsg{
-									Loading:   true,
-									Operation: fmt.Sprintf("Pulling %s (Kernel)", imageRef),
-									Progress:  ratio,
-								},
-							}
-						},
-					}
+					downloader := image.NewTransfer(image.TransferOptions{OnProgress: func(current, total int64) {
+						ratio := 0.0
+						if total > 0 {
+							ratio = float64(current) / float64(total)
+						}
+						ch <- ProgressMsg{
+							OpName: opName,
+							Status: view.StatusMsg{
+								Loading:   true,
+								Operation: fmt.Sprintf("Pulling %s (Kernel)", imageRef),
+								Progress:  ratio,
+							},
+						}
+					}})
 					if err := downloader.Download(ver.KernelURL, kernelPath, 0); err != nil {
 						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("kernel download failed: %w", err)}}
 						return
@@ -377,23 +371,20 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 			if ver.InitrdURL != "" {
 				initrdPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.initrd", img.Name, ver.Version))
 				if _, err := os.Stat(initrdPath); os.IsNotExist(err) {
-					downloader := image.Downloader{
-						Quiet: true,
-						OnProgress: func(current, total int64) {
-							ratio := 0.0
-							if total > 0 {
-								ratio = float64(current) / float64(total)
-							}
-							ch <- ProgressMsg{
-								OpName: opName,
-								Status: view.StatusMsg{
-									Loading:   true,
-									Operation: fmt.Sprintf("Pulling %s (Initrd)", imageRef),
-									Progress:  ratio,
-								},
-							}
-						},
-					}
+					downloader := image.NewTransfer(image.TransferOptions{OnProgress: func(current, total int64) {
+						ratio := 0.0
+						if total > 0 {
+							ratio = float64(current) / float64(total)
+						}
+						ch <- ProgressMsg{
+							OpName: opName,
+							Status: view.StatusMsg{
+								Loading:   true,
+								Operation: fmt.Sprintf("Pulling %s (Initrd)", imageRef),
+								Progress:  ratio,
+							},
+						}
+					}})
 					if err := downloader.Download(ver.InitrdURL, initrdPath, 0); err != nil {
 						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("initrd download failed: %w", err)}}
 						return

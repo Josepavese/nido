@@ -233,7 +233,7 @@ func UpdateConfig(path, key, value string) error {
 		output += "\n"
 	}
 
-	return os.WriteFile(path, []byte(output), 0644)
+	return sysutil.WriteFile(path, []byte(output), 0644)
 }
 
 // UpdateConfigMany modifies multiple settings atomically.
@@ -277,5 +277,5 @@ func UpdateConfigMany(path string, updates map[string]string) error {
 		output += "\n"
 	}
 
-	return os.WriteFile(path, []byte(output), 0644)
+	return sysutil.WriteFile(path, []byte(output), 0644)
 }

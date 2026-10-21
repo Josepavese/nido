@@ -69,3 +69,13 @@ The manifest references completion ids, not shell scripts. Cobra generates Bash/
 - If a command needs metadata, put it in the manifest first.
 
 The CLI should stay declarative at the metadata layer and explicit at the handler layer.
+
+## Host operations
+
+CLI actions use the VM and updater contracts. Host process execution is provided
+by PAL commands; native process types and OS selection belong to backends.
+SSH arguments remain structured through execution. MCP's `ssh` result includes
+`argv` plus a quoted POSIX `command` representation for explicit shell transport.
+`version` is an offline local query; update checks belong to the update operation.
+
+See [runtime boundaries and audit](ARCHITECTURE.md) for ownership and qualification.
