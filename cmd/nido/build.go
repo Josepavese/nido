@@ -8,6 +8,7 @@ import (
 
 	"github.com/Josepavese/nido/internal/builder"
 	clijson "github.com/Josepavese/nido/internal/cli"
+	"github.com/Josepavese/nido/internal/hardware"
 	"github.com/Josepavese/nido/internal/image"
 	"github.com/Josepavese/nido/internal/ui"
 	"github.com/spf13/cobra"
@@ -33,7 +34,7 @@ func actionBlueprintBuild(app *appContext) func(cmd *cobra.Command, args []strin
 	return func(cmd *cobra.Command, args []string) {
 		jsonOut := jsonEnabled(cmd)
 		ensureBundledRegistryCurrent("blueprint build", app.NidoDir, jsonOut)
-		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), args, jsonOut, "blueprint build")
+		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), app.Provider.Virtualization(), args, jsonOut, "blueprint build")
 	}
 }
 
@@ -128,7 +129,7 @@ func blueprintDisplayName(info builder.BlueprintInfo) string {
 	return info.Name
 }
 
-func cmdBuild(cwd, nidoDir, imageDir string, args []string, jsonOut bool, command string) {
+func cmdBuild(cwd, nidoDir, imageDir string, acceleration hardware.Virtualization, args []string, jsonOut bool, command string) {
 	if len(args) < 1 {
 		ui.Error("Usage: nido build <blueprint>")
 		ui.Info("Example: nido build windows-11-eval")
@@ -182,7 +183,7 @@ func cmdBuild(cwd, nidoDir, imageDir string, args []string, jsonOut bool, comman
 	if !jsonOut {
 		opts = append(opts, builder.WithReporter(cliBuildReporter{}))
 	}
-	eng := builder.NewEngine(cacheDir, workDir, imageDir, opts...)
+	eng := builder.NewEngine(cacheDir, workDir, imageDir, acceleration, opts...)
 
 	if err := eng.Build(bp); err != nil {
 		if jsonOut {

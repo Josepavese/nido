@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"github.com/Josepavese/nido/internal/hardware"
 	"io"
 	"os"
 	"path/filepath"
@@ -27,7 +28,7 @@ func (m *mockProvider) Spawn(name string, opts provider.VMOptions) error {
 	return nil
 }
 func (m *mockProvider) Start(name string, opts provider.VMOptions) error               { return nil }
-func (m *mockProvider) Stop(name string, graceful bool) error                          { return nil }
+func (m *mockProvider) Stop(name string) error                                         { return nil }
 func (m *mockProvider) Delete(name string) error                                       { return nil }
 func (m *mockProvider) List() ([]provider.VMStatus, error)                             { return nil, nil }
 func (m *mockProvider) Info(name string) (provider.VMDetail, error)                    { return provider.VMDetail{}, nil }
@@ -38,7 +39,7 @@ func (m *mockProvider) CreateTemplate(vmName string, templateName string) (strin
 }
 func (m *mockProvider) ListTemplates() ([]string, error)                  { return nil, nil }
 func (m *mockProvider) ListImages() ([]string, error)                     { return nil, nil }
-func (m *mockProvider) ListAccelerators() ([]provider.Accelerator, error) { return nil, nil }
+func (m *mockProvider) ListAccelerators() ([]hardware.Accelerator, error) { return nil, nil }
 func (m *mockProvider) GetUsedBackingFiles() ([]string, error)            { return nil, nil }
 func (m *mockProvider) DeleteTemplate(name string, force bool) error      { return nil }
 func (m *mockProvider) Prune() (int, error)                               { return 0, nil }
@@ -47,7 +48,7 @@ func (m *mockProvider) CacheInfo() (provider.CacheInfoResult, error) {
 	return provider.CacheInfoResult{}, nil
 }
 func (m *mockProvider) CacheRemove(name, version string) error { return nil }
-func (m *mockProvider) SSHCommand(name string) (string, error) { return "", nil }
+func (m *mockProvider) SSHArgs(name string) ([]string, error)  { return nil, nil }
 func (m *mockProvider) PortForward(name string, pf provider.PortForward) (provider.PortForward, error) {
 	return pf, nil
 }
@@ -402,4 +403,69 @@ func (m *mockProvider) ReloadConfig(path string) error {
 	}
 	m.cfg = *cfg
 	return nil
+}
+
+func (*mockProvider) Virtualization() hardware.Virtualization {
+	return hardware.Virtualization{CPU: "qemu64"}
+}
+
+// A dedicated substitute proves that tool and resource surfaces depend on the
+// VM contract, rather than the concrete QEMU implementation.
+type acceleratorProvider struct {
+	provider.VMProvider
+	devices   []hardware.Accelerator
+	scanError error
+}
+
+func (p acceleratorProvider) ListAccelerators() ([]hardware.Accelerator, error) {
+	return p.devices, p.scanError
+}
+func TestAcceleratorSurfacesShareProviderContract(t *testing.T) {
+	devices := []hardware.Accelerator{{ID: "0000:01:00.0", IsSafe: false, Warning: "No IOMMU group"}}
+	for _, scanError := range []error{nil, hardware.ErrUnsupported} {
+		server := NewServer(acceleratorProvider{VMProvider: &mockProvider{}, devices: devices, scanError: scanError})
+		tool, toolError := server.callSystemTool(json.RawMessage(`{"action":"accel_list"}`))
+		resource, resourceError := server.readResource("nido://system/accelerators")
+		if scanError != nil {
+			if toolError == nil || resourceError == nil {
+				t.Fatal("unsupported capability reported as success")
+			}
+			continue
+		}
+		if toolError != nil || resourceError != nil {
+			t.Fatalf("tool %v, resource %v", toolError, resourceError)
+		}
+		toolJSON, _ := json.Marshal(tool)
+		resourceJSON, _ := json.Marshal(resource)
+		if !strings.Contains(string(toolJSON), `"IsSafe":false`) || !strings.Contains(string(resourceJSON), `"IsSafe":false`) {
+			t.Fatalf("lost hardware safety: %s %s", toolJSON, resourceJSON)
+		}
+	}
+}
+
+type sshProvider struct{ provider.VMProvider }
+
+func (sshProvider) SSHArgs(string) ([]string, error) {
+	return []string{"ssh", "-i", "key with spaces", "-l", "user;$HOME", "--", "127.0.0.1"}, nil
+}
+func TestSSHResponsePreservesStructuredArguments(t *testing.T) {
+	server := NewServer(sshProvider{VMProvider: &mockProvider{}})
+	result, err := server.callVMTool(json.RawMessage(`{"action":"ssh","name":"fixture"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(result)
+	var payload struct {
+		Argv    []string `json:"argv"`
+		Command string   `json:"command"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Argv) != 7 || payload.Argv[2] != "key with spaces" || payload.Argv[4] != "user;$HOME" {
+		t.Fatalf("argv lost boundaries: %s", data)
+	}
+	if !strings.Contains(payload.Command, "'key with spaces'") || !strings.Contains(payload.Command, "'user;$HOME'") {
+		t.Fatalf("unsafe command rendering: %s", data)
+	}
 }

@@ -24,6 +24,8 @@ func TestNoDirectUserIOInCoreLayers(t *testing.T) {
 	repoRoot := locateRepoRoot(t)
 	protectedDirs := []string{
 		filepath.Join(repoRoot, "internal", "provider"),
+		filepath.Join(repoRoot, "internal", "hardware"),
+		filepath.Join(repoRoot, "internal", "lifecycle"),
 		filepath.Join(repoRoot, "internal", "pkg", "sysutil"),
 		filepath.Join(repoRoot, "internal", "image"),
 		filepath.Join(repoRoot, "internal", "builder"),

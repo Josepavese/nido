@@ -12,9 +12,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// ... (top of file)
-
-// ... (bottom of file)
 func (c *Config) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, tea.Cmd, bool) {
 	return c.MasterDetail.HandleMouse(x, y, msg)
 }
@@ -238,7 +235,7 @@ func (c *Config) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 				// Request Cache Stats? We might need an ops message for simple stats.
 				// ops.ListCache(prov) gives list, here we want explicit stats.
 				// For now, let's assume global cache list is updated elsewhere or we request it.
-				cmds = append(cmds, func() tea.Msg { return RequestCacheMsg{} })
+				cmds = append(cmds, func() tea.Msg { return ops.RequestCacheMsg{} })
 			}
 			if item.Key == "UPDATE" {
 				cmds = append(cmds, func() tea.Msg { return ops.RequestUpdateMsg{Manual: false} })
@@ -391,7 +388,5 @@ func (c *Config) HasActiveFocus() bool {
 	return false
 }
 
-// Internal Messages (kept for compatibility)
-type RequestCacheMsg struct{}
-type RequestPruneMsg struct{}
+// FocusSidebarMsg is local navigation, not an application operation.
 type FocusSidebarMsg struct{}

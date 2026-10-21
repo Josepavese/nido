@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"github.com/Josepavese/nido/internal/hardware"
 	"io"
 	"os"
 	"path/filepath"
@@ -32,7 +33,7 @@ func TestConfigRawQemuArgsMCP(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "run", "fixture.json"), state, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	p := &configRecordingProvider{VMProvider: provider.NewQemuProvider(root, &config.Config{})}
+	p := &configRecordingProvider{VMProvider: provider.NewQemuProvider(root, &config.Config{}, hardware.New())}
 	s := NewServer(p)
 	newArgs := []string{"-fw_cfg", "name=opt/nido-test,string=a b,c"}
 	steps := []struct {
@@ -90,7 +91,7 @@ func TestConfigRawQemuArgsMCP(t *testing.T) {
 					t.Fatalf("decoded arguments = %#v, want %#v", *args, step.want)
 				}
 			}
-			info, err := provider.NewQemuProvider(root, &config.Config{}).Info("fixture")
+			info, err := provider.NewQemuProvider(root, &config.Config{}, hardware.New()).Info("fixture")
 			if err != nil || !slices.Equal(info.RawQemuArgs, step.want) || info.State != "stopped" || info.MemoryMB != 512 || info.SSHUser != "fixture-user" {
 				t.Fatalf("persisted config = %#v, error = %v, want raw args %#v", info, err, step.want)
 			}

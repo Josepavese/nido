@@ -229,11 +229,6 @@ func shouldUse256Colors() bool {
 	return false
 }
 
-// Detect is an alias for Current() for backwards compatibility.
-func Detect() Theme {
-	return Current()
-}
-
 // ForceMode returns a theme with the specified mode, ignoring environment.
 // Useful for testing or explicit user selection.
 func ForceMode(dark bool) Theme {

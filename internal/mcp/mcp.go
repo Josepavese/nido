@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -490,7 +489,7 @@ func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 		}
 		return map[string]interface{}{"action": "start", "name": args.Name, "status": "started"}, nil
 	case "stop":
-		if err := s.Provider.Stop(args.Name, true); err != nil {
+		if err := s.Provider.Stop(args.Name); err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"action": "stop", "name": args.Name, "status": "stopped"}, nil
@@ -500,11 +499,11 @@ func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 		}
 		return map[string]interface{}{"action": "delete", "name": args.Name, "status": "deleted"}, nil
 	case "ssh":
-		cmd, err := s.Provider.SSHCommand(args.Name)
+		cmd, err := s.Provider.SSHArgs(args.Name)
 		if err != nil {
 			return nil, err
 		}
-		return map[string]interface{}{"action": "ssh", "name": args.Name, "command": cmd}, nil
+		return map[string]interface{}{"action": "ssh", "name": args.Name, "command": sysutil.ShellCommand(cmd), "argv": cmd}, nil
 	case "prune":
 		count, err := s.Provider.Prune()
 		if err != nil {
@@ -1048,7 +1047,7 @@ func (s *Server) buildBlueprint(name string) (builder.BlueprintInfo, string, err
 	if info.Built {
 		return info, "ready", nil
 	}
-	eng := builder.NewEngine(filepath.Join(s.nidoDir(), "cache"), filepath.Join(s.nidoDir(), "tmp"), s.imageDir())
+	eng := builder.NewEngine(filepath.Join(s.nidoDir(), "cache"), filepath.Join(s.nidoDir(), "tmp"), s.imageDir(), s.Provider.Virtualization())
 	if err := eng.Build(bp); err != nil {
 		return builder.BlueprintInfo{}, "", err
 	}
@@ -1092,8 +1091,8 @@ func (s *Server) resolveCreateImage(tag string) (createImageResolution, error) {
 
 	imgPath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
 	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
-		downloader := image.Downloader{Quiet: true}
-		if err := image.PrepareLocalImage(*ver, imgPath, downloader); err != nil {
+		downloader := image.NewTransfer(image.TransferOptions{OnProgress: nil})
+		if err := downloader.Prepare(*ver, imgPath); err != nil {
 			return createImageResolution{}, err
 		}
 	} else if err != nil {
@@ -1145,8 +1144,8 @@ func (s *Server) resolveImagePath(tag string) (string, error) {
 		return imgPath, nil
 	}
 
-	downloader := image.Downloader{Quiet: true}
-	if err := image.PrepareLocalImage(*version, imgPath, downloader); err != nil {
+	downloader := image.NewTransfer(image.TransferOptions{OnProgress: nil})
+	if err := downloader.Prepare(*version, imgPath); err != nil {
 		return "", err
 	}
 	return imgPath, nil
@@ -1178,12 +1177,7 @@ func (s *Server) shellCompletion(shell string) (string, error) {
 }
 
 func runSelfCommand(args ...string) (string, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	cmd := exec.Command(exe, args...)
-	out, err := cmd.CombinedOutput()
+	out, err := sysutil.RunSelf(args...)
 	if err != nil {
 		text := strings.TrimSpace(string(out))
 		if text != "" {

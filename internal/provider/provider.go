@@ -2,40 +2,16 @@ package provider
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/Josepavese/nido/internal/config"
+	"github.com/Josepavese/nido/internal/hardware"
 )
 
 // ParseInt is a helper to parse integers from strings, trimming whitespace.
 func ParseInt(val string) (int, error) {
 	return strconv.Atoi(strings.TrimSpace(val))
-}
-
-var pciIDPattern = regexp.MustCompile(`^(?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]$`)
-
-// ValidateAcceleratorID validates the public accelerator tokens accepted by
-// CLI/MCP before any privileged sysfs operation is attempted.
-func ValidateAcceleratorID(id string) error {
-	id = strings.TrimSpace(id)
-	if id == "auto" || id == "virtual:gpu" {
-		return nil
-	}
-	if !pciIDPattern.MatchString(id) {
-		return fmt.Errorf("invalid accelerator %q: use PCI id like 0000:01:00.0, auto, or virtual:gpu", id)
-	}
-	return nil
-}
-
-func ValidateAccelerators(ids []string) error {
-	for _, id := range ids {
-		if err := ValidateAcceleratorID(id); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func validatePort(port int, allowZero bool, label string) error {
@@ -161,6 +137,8 @@ type CacheInfoResult struct {
 // VMProvider defines the contract for OS-specific hypervisor management.
 // Implementations handle VM lifecycle, storage, and connectivity operations.
 type VMProvider interface {
+	Virtualization() hardware.Virtualization
+
 	// Lifecycle operations
 
 	// Spawn creates a new VM from a template and starts it.
@@ -171,8 +149,9 @@ type VMProvider interface {
 	// If gui is true, enables the graphical interface.
 	Start(name string, opts VMOptions) error
 
-	// Stop halts a running VM. If graceful is true, sends ACPI shutdown signal.
-	Stop(name string, graceful bool) error
+	// Stop terminates the owned VM process and waits for exit before cleanup.
+	// It does not claim guest ACPI shutdown; an already stopped VM is a no-op.
+	Stop(name string) error
 
 	// Delete permanently removes a VM and its disk image.
 	Delete(name string) error
@@ -207,7 +186,7 @@ type VMProvider interface {
 	ListImages() ([]string, error)
 
 	// ListAccelerators scans the host PCI bus for potential accelerators.
-	ListAccelerators() ([]Accelerator, error)
+	ListAccelerators() ([]hardware.Accelerator, error)
 
 	// GetUsedBackingFiles identifies all backing files currently in use by VMs.
 	GetUsedBackingFiles() ([]string, error)
@@ -237,9 +216,8 @@ type VMProvider interface {
 
 	// Connectivity
 
-	// SSHCommand generates the SSH connection string for a VM.
-	// Format: "ssh -p <port> <user>@<ip>"
-	SSHCommand(name string) (string, error)
+	// SSHArgs returns a complete argv, preserving argument boundaries.
+	SSHArgs(name string) ([]string, error)
 
 	// Health checks
 

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/Josepavese/nido/internal/hardware"
 	"os"
 	"path/filepath"
 	"testing"
@@ -21,6 +22,7 @@ func TestJSONCommandsProduceSingleJSONAndNoStderr(t *testing.T) {
 		{"cache", "info", "--json"},
 		{"blueprint", "list", "--json"},
 		{"doctor", "--json"},
+		{"accel", "list", "--json"},
 		{"config", "--json"},
 		{"version", "--json"},
 		{"register", "--json"},
@@ -280,7 +282,7 @@ type fakeProvider struct{}
 
 func (fakeProvider) Spawn(name string, opts provider.VMOptions) error { return nil }
 func (fakeProvider) Start(name string, opts provider.VMOptions) error { return nil }
-func (fakeProvider) Stop(name string, graceful bool) error            { return nil }
+func (fakeProvider) Stop(name string) error                           { return nil }
 func (fakeProvider) Delete(name string) error                         { return nil }
 func (fakeProvider) List() ([]provider.VMStatus, error) {
 	return []provider.VMStatus{{Name: "vm-a", State: "running", PID: 123, SSHPort: 50022, VNCPort: 59000, SSHUser: "vmuser"}}, nil
@@ -300,7 +302,7 @@ func (fakeProvider) CreateTemplate(vmName string, templateName string) (string, 
 }
 func (fakeProvider) ListTemplates() ([]string, error)                  { return []string{"base-template"}, nil }
 func (fakeProvider) ListImages() ([]string, error)                     { return []string{"ubuntu:24.04"}, nil }
-func (fakeProvider) ListAccelerators() ([]provider.Accelerator, error) { return nil, nil }
+func (fakeProvider) ListAccelerators() ([]hardware.Accelerator, error) { return nil, nil }
 func (fakeProvider) GetUsedBackingFiles() ([]string, error)            { return nil, nil }
 func (fakeProvider) DeleteTemplate(name string, force bool) error      { return nil }
 func (fakeProvider) Prune() (int, error)                               { return 1, nil }
@@ -312,8 +314,8 @@ func (fakeProvider) CacheInfo() (provider.CacheInfoResult, error) {
 }
 func (fakeProvider) CachePrune(unusedOnly bool) (int, int64, error) { return 1, 1024, nil }
 func (fakeProvider) CacheRemove(name, version string) error         { return nil }
-func (fakeProvider) SSHCommand(name string) (string, error) {
-	return "ssh -p 50022 vmuser@127.0.0.1", nil
+func (fakeProvider) SSHArgs(name string) ([]string, error) {
+	return []string{"ssh", "-p", "50022", "vmuser@127.0.0.1"}, nil
 }
 func (fakeProvider) PortForward(name string, pf provider.PortForward) (provider.PortForward, error) {
 	return pf, nil
@@ -437,4 +439,8 @@ func writeCatalogFixture(t *testing.T, cwd string) {
 	if err := os.WriteFile(filepath.Join(regDir, "images.json"), []byte(data), 0o644); err != nil {
 		t.Fatalf("write catalog: %v", err)
 	}
+}
+
+func (fakeProvider) Virtualization() hardware.Virtualization {
+	return hardware.Virtualization{CPU: "qemu64"}
 }

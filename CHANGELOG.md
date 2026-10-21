@@ -5,6 +5,18 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+- Isolate PCI and virtualization capabilities behind an injectable HAL, with exclusive per-VM leases and recoverable driver changes.
+- Keep process execution, atomic no-replace publication and SSH argument boundaries behind portable contracts.
+- Preserve existing build workspaces, images and partial downloads; bound resume failures and retire multipart scratch incrementally.
+- Centralize verified release installation and registry synchronization, with cleanup on errors and staging on the installation filesystem.
+- Remove implicit historical ISO cache conversion and obsolete theme/cache-message paths.
+
+PCI backend distribution requires dedicated physical qualification and reconciliation of historical driver journals before cutover; this audit does not upgrade existing hosts.
+
 ## [4.6.0] - 2026-10-19 "Fresh Feathers"
 
 ### Added

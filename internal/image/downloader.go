@@ -1,34 +1,65 @@
 package image
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
-
-	"github.com/Josepavese/nido/internal/cli"
 )
 
-// Downloader handles downloading files with resumption and progress tracking.
-type Downloader struct {
-	// Quiet suppresses progress output if true
-	Quiet bool
-	// OnProgress is an optional callback for progress updates (current, total)
+// Transfer owns download, resumption and decompression. Consumers can inject a
+// substitute without depending on the concrete HTTP/process adapter.
+type Transfer interface {
+	Prepare(Version, string) error
+	Download(string, string, int64) error
+	DownloadMultiPart([]string, string, int64) error
+	Decompress(string, string) error
+}
+type TransferOptions struct {
 	OnProgress func(current, total int64)
+	Client     sysutil.HTTPClient
+	Context    context.Context
+}
+type downloader struct {
+	OnProgress func(current, total int64)
+	client     sysutil.HTTPClient
+	ctx        context.Context
+}
+
+func NewTransfer(options TransferOptions) Transfer {
+	client := options.Client
+	if client == nil {
+		client = &http.Client{}
+	}
+	ctx := options.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return &downloader{OnProgress: options.OnProgress, client: client, ctx: ctx}
 }
 
 // Download downloads a file from url to dest.
 // It supports resumption if dest+".part" exists.
 // expectedSize is optional (0 to ignore), used for progress calculation if Content-Length is missing.
-func (d *Downloader) Download(url, dest string, expectedSize int64) error {
+func (d *downloader) Download(url, dest string, expectedSize int64) error {
+	return d.download(url, dest, expectedSize, nil)
+}
+func (d *downloader) download(url, dest string, expectedSize int64, verify func(string) error) (retErr error) {
+	lease, err := sysutil.AcquireResource(dest + ".download.lock")
+	if err != nil {
+		return err
+	}
+	defer func() { retErr = errors.Join(retErr, lease.Close()) }()
+
 	partPath := dest + ".part"
 
 	// Create request
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(d.ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -36,13 +67,16 @@ func (d *Downloader) Download(url, dest string, expectedSize int64) error {
 	var startByte int64 = 0
 
 	// Check for existing partial file
-	if info, err := os.Stat(partPath); err == nil {
+	if info, err := os.Lstat(partPath); err == nil {
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("partial download must be a regular file")
+		}
 		startByte = info.Size()
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", startByte))
 	}
 
 	// Execute request
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := d.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("download failed: %w", err)
 	}
@@ -50,45 +84,42 @@ func (d *Downloader) Download(url, dest string, expectedSize int64) error {
 
 	// Handle status codes
 	if resp.StatusCode == http.StatusRequestedRangeNotSatisfiable {
-		// File likely already fully downloaded or server doesn't support range
-		// For safety, let's restart if size mismatches, or assume done if matches?
-		// Better strategy: if 416, delete part and retry without range
-		os.Remove(partPath)
-		return d.Download(url, dest, expectedSize)
+		return fmt.Errorf("upstream rejected resume range at byte %d; partial download preserved", startByte)
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
 	}
-
-	// Open partial file
-	flags := os.O_CREATE | os.O_WRONLY
 	if resp.StatusCode == http.StatusPartialContent {
-		flags |= os.O_APPEND
-	} else {
-		// Server didn't support range or we started fresh
-		startByte = 0
-		flags |= os.O_TRUNC
+		var first, last, total int64
+		if _, err := fmt.Sscanf(resp.Header.Get("Content-Range"), "bytes %d-%d/%d", &first, &last, &total); err != nil || first != startByte || last < first || total <= last || (resp.ContentLength >= 0 && last-first+1 != resp.ContentLength) {
+			return fmt.Errorf("invalid resume Content-Range %q; partial download preserved", resp.Header.Get("Content-Range"))
+		}
 	}
 
-	out, err := os.OpenFile(partPath, flags, 0644)
+	resume := resp.StatusCode == http.StatusPartialContent
+	if !resume {
+		startByte = 0
+	}
+	out, err := sysutil.OpenDownloadFile(partPath, resume, startByte)
+
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
 	defer out.Close()
 
 	// Setup progress tracking
-	totalSize := resp.ContentLength + startByte
-	if expectedSize > 0 && totalSize == 0 {
-		totalSize = expectedSize
+	totalSize := expectedSize
+	if resp.ContentLength >= 0 {
+		totalSize = resp.ContentLength + startByte
 	}
-
-	quiet := d.Quiet || cli.IsJSONMode()
+	if totalSize < 0 {
+		totalSize = 0
+	}
 
 	counter := &writeCounter{
 		total:      uint64(totalSize),
 		current:    uint64(startByte),
-		quiet:      quiet,
 		onProgress: d.OnProgress,
 	}
 
@@ -101,7 +132,9 @@ func (d *Downloader) Download(url, dest string, expectedSize int64) error {
 	counter.Finish()
 
 	// Close file before rename
-	out.Close()
+	if err := out.Close(); err != nil {
+		return err
+	}
 
 	// Verify size if known
 	if totalSize > 0 {
@@ -112,8 +145,14 @@ func (d *Downloader) Download(url, dest string, expectedSize int64) error {
 		}
 	}
 
+	if verify != nil {
+		if err := verify(partPath); err != nil {
+			return err
+		}
+	}
+
 	// Rename .part to final
-	if err := os.Rename(partPath, dest); err != nil {
+	if err := sysutil.PublishFile(partPath, dest); err != nil {
 		return fmt.Errorf("rename failed: %w", err)
 	}
 
@@ -121,57 +160,69 @@ func (d *Downloader) Download(url, dest string, expectedSize int64) error {
 }
 
 // DownloadMultiPart downloads multiple sequential parts and concatenates them into dest.
-func (d *Downloader) DownloadMultiPart(urls []string, dest string, expectedTotalSize int64) error {
-	tmpDir, err := os.MkdirTemp("", "nido-download-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp dir: %w", err)
-	}
-	defer os.RemoveAll(tmpDir)
+func (d *downloader) DownloadMultiPart(urls []string, dest string, expectedTotalSize int64) error {
+	return d.downloadMultiPart(urls, dest, expectedTotalSize, nil)
+}
+func (d *downloader) downloadMultiPart(urls []string, dest string, expectedTotalSize int64, verify func(string) error) error {
 
-	var parts []string
+	if len(urls) == 0 {
+		return fmt.Errorf("multipart image has no parts")
+	}
+	stage, err := os.CreateTemp(filepath.Dir(dest), ".nido-multipart-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(stage.Name())
+	defer stage.Close()
+	chunk := stage.Name() + ".chunk"
+	defer os.Remove(chunk)
+	defer os.Remove(chunk + ".part")
 	for i, url := range urls {
-		partDest := filepath.Join(tmpDir, fmt.Sprintf("part.%03d", i+1))
 		if d.OnProgress != nil {
 			d.OnProgress(int64(i), int64(len(urls)))
 		}
-		if err := d.Download(url, partDest, 0); err != nil {
-			return fmt.Errorf("failed to download part %d: %w", i+1, err)
+		if err := d.Download(url, chunk, 0); err != nil {
+			return fmt.Errorf("download part %d: %w", i+1, err)
 		}
-		parts = append(parts, partDest)
-	}
-
-	out, err := os.Create(dest)
-	if err != nil {
-		return fmt.Errorf("failed to create final image: %w", err)
-	}
-	defer out.Close()
-
-	for _, part := range parts {
-		f, err := os.Open(part)
+		part, err := os.Open(chunk)
 		if err != nil {
-			return fmt.Errorf("failed to open part %s: %w", part, err)
+			return err
 		}
-		if _, err := io.Copy(out, f); err != nil {
-			f.Close()
-			return fmt.Errorf("failed to concatenate part %s: %w", part, err)
+		_, copyErr := io.Copy(stage, part)
+		closeErr := part.Close()
+		if copyErr != nil {
+			return copyErr
 		}
-		f.Close()
+		if closeErr != nil {
+			return closeErr
+		}
+		if err := os.Remove(chunk); err != nil {
+			return err
+		}
+	}
+	info, err := stage.Stat()
+	if err != nil {
+		return err
+	}
+	if expectedTotalSize > 0 && info.Size() != expectedTotalSize {
+		return fmt.Errorf("final size mismatch: expected %d, got %d", expectedTotalSize, info.Size())
+	}
+	if err := stage.Close(); err != nil {
+		return err
+	}
+	if verify != nil {
+		if err := verify(stage.Name()); err != nil {
+			return err
+		}
 	}
 
-	if expectedTotalSize > 0 {
-		info, err := os.Stat(dest)
-		if err == nil && info.Size() != expectedTotalSize {
-			return fmt.Errorf("final size mismatch: expected %d, got %d", expectedTotalSize, info.Size())
-		}
-	}
-
-	return nil
+	return sysutil.PublishFile(stage.Name(), dest)
 }
 
-// PrepareLocalImage downloads, verifies, and decompresses a catalog version into dest.
-// Missing checksums are allowed for legacy/local flavour entries, but any provided
+// Prepare downloads, verifies, and decompresses a catalog version into dest.
+// Locally supplied images may omit a checksum; any provided
 // checksum is enforced before the image is made available.
-func PrepareLocalImage(ver Version, dest string, downloader Downloader) error {
+func (d *downloader) Prepare(ver Version, dest string) error {
 	downloadPath := dest
 	isTarXz := strings.HasSuffix(ver.URL, ".tar.xz")
 	isZst := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
@@ -186,25 +237,22 @@ func PrepareLocalImage(ver Version, dest string, downloader Downloader) error {
 		downloadPath = dest + ".zst"
 	}
 
+	var verify func(string) error
+	if ver.Checksum != "" {
+		verify = func(path string) error { return VerifyChecksum(path, ver.Checksum, ver.ChecksumType) }
+	}
 	var err error
 	if len(ver.PartURLs) > 0 {
-		err = downloader.DownloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes)
+		err = d.downloadMultiPart(ver.PartURLs, downloadPath, ver.SizeBytes, verify)
 	} else {
-		err = downloader.Download(ver.URL, downloadPath, ver.SizeBytes)
+		err = d.download(ver.URL, downloadPath, ver.SizeBytes, verify)
 	}
 	if err != nil {
 		return err
 	}
 
-	if ver.Checksum != "" {
-		if err := VerifyChecksum(downloadPath, ver.Checksum, ver.ChecksumType); err != nil {
-			_ = os.Remove(downloadPath)
-			return err
-		}
-	}
-
 	if isTarXz || isZst {
-		if err := downloader.Decompress(downloadPath, dest); err != nil {
+		if err := d.Decompress(downloadPath, dest); err != nil {
 			_ = os.Remove(downloadPath)
 			return err
 		}
@@ -216,56 +264,56 @@ func PrepareLocalImage(ver Version, dest string, downloader Downloader) error {
 
 // Decompress extracts an archive to a destination.
 // Currently supported: .tar.xz (standard for Kali cloud images)
-func (d *Downloader) Decompress(src, dest string) error {
-	if strings.HasSuffix(src, ".zst") || strings.HasSuffix(src, ".zstandard") {
-		// zstd -d src -o dest
-		cmd := exec.Command("zstd", "-d", src, "-o", dest)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("zstd decompression failed: %v (%s)", err, string(out))
-		}
-		return nil
+func (d *downloader) Decompress(src, dest string) error {
+	stage, err := os.CreateTemp(filepath.Dir(dest), ".nido-decompress-*")
+	if err != nil {
+		return err
 	}
-
-	if strings.HasSuffix(src, ".tar.xz") {
-		// Kali images are tarballs containing the qcow2
-		// tar -xJf src -C dir
-		destDir := filepath.Dir(dest)
-		cmd := exec.Command("tar", "-xJf", src, "-C", destDir)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("extraction failed: %v (%s)", err, string(out))
-		}
-
-		// Kali convention: kali-linux-2025.4-genericcloud-amd64.tar.xz
-		// contains 'disk.raw' (but in qcow2 format despite the extension!)
-		// We try several candidates for what was extracted
-		candidates := []string{
-			strings.TrimSuffix(filepath.Base(src), ".tar.xz") + ".qcow2",
-			"disk.raw",
-		}
-
-		for _, cand := range candidates {
-			candPath := filepath.Join(destDir, cand)
-			if _, err := os.Stat(candPath); err == nil {
-				if candPath != dest {
-					if err := os.Rename(candPath, dest); err != nil {
-						return fmt.Errorf("failed to move extracted image (%s -> %s): %w", candPath, dest, err)
-					}
-				}
-				return nil
+	defer os.Remove(stage.Name())
+	defer stage.Close()
+	copyOutput := func(reader io.Reader) error { _, err := io.Copy(stage, reader); return err }
+	switch {
+	case strings.HasSuffix(src, ".zst"), strings.HasSuffix(src, ".zstandard"):
+		err = sysutil.ReadCommandOutput(d.ctx, "zstd", []string{"-d", "-c", src}, copyOutput)
+	case strings.HasSuffix(src, ".tar.xz"):
+		// Extract a single image to stdout. Archive paths and other members never get
+		// filesystem write access to the user's image directory.
+		candidateName := strings.TrimSuffix(filepath.Base(src), ".tar.xz") + ".qcow2"
+		candidates := []string{candidateName, "./" + candidateName, "disk.raw", "./disk.raw"}
+		for _, member := range candidates {
+			if err = stage.Truncate(0); err != nil {
+				return err
+			}
+			if _, err = stage.Seek(0, 0); err != nil {
+				return err
+			}
+			err = sysutil.ReadCommandOutput(d.ctx, "tar", []string{"-xJOf", src, "--", member}, copyOutput)
+			if err == nil {
+				break
 			}
 		}
-
-		return fmt.Errorf("extraction succeeded but could not find extracted image in %s", destDir)
+	default:
+		return fmt.Errorf("unsupported compression format for %s", src)
 	}
-
-	return fmt.Errorf("unsupported compression format for %s", src)
+	if err != nil {
+		return fmt.Errorf("decompression failed: %w", err)
+	}
+	info, err := stage.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size() == 0 {
+		return fmt.Errorf("decompressed image is empty")
+	}
+	if err := stage.Close(); err != nil {
+		return err
+	}
+	return sysutil.PublishFile(stage.Name(), dest)
 }
 
 type writeCounter struct {
 	total      uint64
 	current    uint64
-	quiet      bool
-	lastUpd    time.Time
 	onProgress func(current, total int64)
 }
 
@@ -281,16 +329,6 @@ func (wc *writeCounter) Print() {
 	if wc.onProgress != nil {
 		wc.onProgress(int64(wc.current), int64(wc.total))
 	}
-
-	if wc.quiet {
-		return
-	}
-
-	// Update at most every 100ms prevents flickering
-	if time.Since(wc.lastUpd) < 100*time.Millisecond && wc.current < wc.total {
-		return
-	}
-	wc.lastUpd = time.Now()
 
 }
 

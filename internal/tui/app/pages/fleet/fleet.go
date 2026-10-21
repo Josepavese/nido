@@ -2,7 +2,6 @@ package fleet
 
 import (
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/Josepavese/nido/internal/pkg/sysutil"
@@ -217,7 +216,7 @@ func (f *Fleet) OpenAcceleratorModal(vmName string) tea.Cmd {
 
 		var items []list.Item
 		// Add "None" option?
-		// items = append(items, AccelItem{Acc: provider.Accelerator{ID: "", Class: "None"}})
+
 		// Actually treating empty selection or explicit "None" item is design choice.
 		// For now simple list of available devices.
 
@@ -774,7 +773,7 @@ func (c *ComponentsDetail) openSSH(windowed bool) tea.Cmd {
 		return nil
 	}
 
-	sshCmd, err := c.Parent.provider.SSHCommand(d.Name)
+	parts, err := c.Parent.provider.SSHArgs(d.Name)
 	if err != nil {
 		return func() tea.Msg {
 			return ops.OpResultMsg{Err: fmt.Errorf("failed to generate SSH command: %w", err), Path: d.Name}
@@ -783,13 +782,12 @@ func (c *ComponentsDetail) openSSH(windowed bool) tea.Cmd {
 
 	if windowed {
 		// Windowed: Spawn a separate terminal emulator window
-		termBin, termArgs := sysutil.TerminalCommand(sshCmd)
-		return tea.ExecProcess(exec.Command(termBin, termArgs...), nil)
+		termBin, termArgs := sysutil.TerminalCommand(sysutil.ShellCommand(parts))
+		return tea.Exec(sysutil.NewCommand(termBin, termArgs...), nil)
 	}
 
 	// In-Place: Directly execute SSH in current terminal.
 	// We parse the sshCmd which looks like: ssh -o ... -p [port] [user]@[ip]
-	parts := strings.Split(sshCmd, " ")
 	if len(parts) < 1 {
 		return nil
 	}
@@ -799,7 +797,7 @@ func (c *ComponentsDetail) openSSH(windowed bool) tea.Cmd {
 	extraOpts := []string{"-o", "LogLevel=ERROR", "-o", "ConnectTimeout=5"}
 	allArgs := append(extraOpts, parts[1:]...)
 
-	return tea.ExecProcess(exec.Command("ssh", allArgs...), nil)
+	return tea.Exec(sysutil.NewCommand("ssh", allArgs...), nil)
 }
 
 func (c *ComponentsDetail) openVNC() tea.Cmd {
@@ -811,7 +809,7 @@ func (c *ComponentsDetail) openVNC() tea.Cmd {
 
 	// Use SSOT VNC opener from sysutil
 	vncBin, vncArgs := sysutil.VNCCommand(vncAddr)
-	return tea.ExecProcess(exec.Command(vncBin, vncArgs...), nil)
+	return tea.Exec(sysutil.NewCommand(vncBin, vncArgs...), nil)
 }
 
 func (c *ComponentsDetail) Init() tea.Cmd { return nil }

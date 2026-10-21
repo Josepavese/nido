@@ -1,4 +1,4 @@
-package main
+package lifecycle
 
 import (
 	"archive/tar"
@@ -97,7 +97,7 @@ func extractBinaryFromZip(archivePath, destPath, binaryName string) error {
 	return fmt.Errorf("binary %s not found in archive", binaryName)
 }
 
-func syncBundledRegistryFromReleaseAsset(archivePath, nidoDir string) (string, error) {
+func SyncBundledRegistryFromReleaseAsset(archivePath, nidoDir string) (string, error) {
 	tmpDir, err := os.MkdirTemp("", "nido-registry-*")
 	if err != nil {
 		return "", err

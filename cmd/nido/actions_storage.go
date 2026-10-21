@@ -278,7 +278,7 @@ func actionBuild(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		jsonOut := jsonEnabled(cmd)
 		ensureBundledRegistryCurrent("build", app.NidoDir, jsonOut)
-		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), args, jsonOut, "build")
+		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), app.Provider.Virtualization(), args, jsonOut, "build")
 	}
 }
 

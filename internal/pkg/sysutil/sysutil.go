@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
-	"runtime"
 )
 
 // DefaultMemory calculated as min(2048MB, 50% system RAM).
@@ -92,15 +91,6 @@ func UserHome() (string, error) {
 
 // FixPermissions and GetTargetUIDGID are implemented in platform-specific files.
 
-// WriteFile writes data to a file named by filename and enforces correct ownership.
-// If the file does not exist, WriteFile creates it with permissions perm.
-func WriteFile(filename string, data []byte, perm os.FileMode) error {
-	if err := os.WriteFile(filename, data, perm); err != nil {
-		return err
-	}
-	return FixPermissions(filename)
-}
-
 // ProvisionFile wraps a file creation operation (like an external command)
 // and ensures the resulting file has the correct ownership.
 func ProvisionFile(path string, generator func() error) error {
@@ -122,19 +112,8 @@ func FindExecutable(names ...string) (string, error) {
 		lastErr = err
 	}
 
-	if runtime.GOOS == "windows" {
-		for _, dir := range windowsFallbackExecutableDirs() {
-			for _, name := range names {
-				exe := name
-				if filepath.Ext(exe) == "" {
-					exe += ".exe"
-				}
-				path := filepath.Join(dir, exe)
-				if info, err := os.Stat(path); err == nil && !info.IsDir() {
-					return path, nil
-				}
-			}
-		}
+	if path, err := fallbackExecutable(names); err == nil {
+		return path, nil
 	}
 
 	if lastErr != nil {
@@ -153,14 +132,5 @@ func QemuImgBinary() (string, error) {
 	return FindExecutable("qemu-img")
 }
 
-func windowsFallbackExecutableDirs() []string {
-	dirs := []string{}
-	if programFiles := os.Getenv("ProgramFiles"); programFiles != "" {
-		dirs = append(dirs, filepath.Join(programFiles, "qemu"))
-	}
-	if programFilesX86 := os.Getenv("ProgramFiles(x86)"); programFilesX86 != "" {
-		dirs = append(dirs, filepath.Join(programFilesX86, "qemu"))
-	}
-	dirs = append(dirs, `C:\Program Files\qemu`, `C:\Program Files (x86)\qemu`)
-	return dirs
-}
+// MakeExecutable applies native executable permissions to an installed artifact.
+func MakeExecutable(path string) error { return os.Chmod(path, 0755) }

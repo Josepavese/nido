@@ -1,18 +1,13 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"io"
-	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"time"
 
 	"github.com/Josepavese/nido/internal/build"
 	clijson "github.com/Josepavese/nido/internal/cli"
@@ -62,7 +57,7 @@ func actionDoctor(app *appContext) func(cmd *cobra.Command, args []string) {
 func actionAccelList(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		jsonOut := jsonEnabled(cmd)
-		prov := requireQemu(app)
+		prov := app.Provider
 		devs, err := prov.ListAccelerators()
 		if err != nil {
 			if jsonOut {
@@ -210,152 +205,32 @@ func actionVersion(app *appContext) func(cmd *cobra.Command, args []string) {
 		ui.FancyLabel("State", "Evolved")
 		ui.Info("Protocol: v3.0")
 
-		go func() {
-			latest, err := build.GetLatestVersion()
-			if err == nil && latest != "" && latest != build.Version {
-				fmt.Printf("\n%sA new evolutionary state is available: %s%s%s (current: %s)\n", ui.Yellow, ui.Bold, latest, ui.Reset, build.Version)
-				ui.Info("Run 'nido update' to ascend to the next level.")
-			}
-		}()
-		time.Sleep(100 * time.Millisecond)
 	}
 }
 
 func actionUpdate(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		ui.Header("Nido Update")
-		ui.Step("Checking for updates...")
-
-		latest, err := build.GetLatestVersion()
+		result, err := app.Updater.Update(cmd.Context(), lifecycle.UpdateRequest{CurrentVersion: build.Version, NidoDir: app.NidoDir})
 		if err != nil {
-			ui.Error("Failed to reach the mother nest: %v", err)
+			ui.Error("Update failed: %v", err)
 			os.Exit(1)
 		}
-		if latest == build.Version {
-			ui.Success("Already up to date (%s).", build.Version)
+		if result.AlreadyCurrent {
+			ui.Success("Already up to date (%s).", result.Version)
 			return
 		}
-
-		ui.Info("Found new version: %s (current: %s)", latest, build.Version)
-		ui.Step("Downloading release asset...")
-
-		assetName := fmt.Sprintf("nido-%s-%s.tar.gz", runtime.GOOS, runtime.GOARCH)
-		internalBinaryName := "nido"
-		if runtime.GOOS == "windows" {
-			assetName = fmt.Sprintf("nido-%s-%s.zip", runtime.GOOS, runtime.GOARCH)
-			internalBinaryName = "nido.exe"
+		ui.Success("Updated to %s.", result.Version)
+		if result.RegistryError != nil {
+			ui.Warn("Binary installed; bundled registry sync failed: %v", result.RegistryError)
 		}
-
-		client := &http.Client{Timeout: 30 * time.Second}
-		resp, err := client.Get("https://api.github.com/repos/Josepavese/nido/releases/latest")
-		if err != nil {
-			ui.Error("Failed to fetch release details: %v", err)
-			os.Exit(1)
+		if result.PreviousBinary != "" {
+			ui.Info("Previous binary retained at %s until old sessions are closed.", result.PreviousBinary)
 		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			ui.Error("Failed to fetch release details: GitHub returned HTTP %d", resp.StatusCode)
-			os.Exit(1)
+		executable, err := os.Executable()
+		if err == nil {
+			writeInstalledShellCompletions(executable, app.NidoDir)
 		}
-
-		var release struct {
-			Assets []struct {
-				Name               string `json:"name"`
-				BrowserDownloadURL string `json:"browser_download_url"`
-			} `json:"assets"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-			ui.Error("Failed to decode release details: %v", err)
-			os.Exit(1)
-		}
-
-		downloadURL := ""
-		checksumURL := ""
-		for _, asset := range release.Assets {
-			if asset.Name == assetName {
-				downloadURL = asset.BrowserDownloadURL
-			}
-			if asset.Name == "SHA256SUMS" {
-				checksumURL = asset.BrowserDownloadURL
-			}
-		}
-		if downloadURL == "" {
-			ui.Error("Package %s not found in latest release assets.", assetName)
-			ui.Info("You might need to build it from source or wait for the release to finalize.")
-			os.Exit(1)
-		}
-
-		exePath, err := os.Executable()
-		if err != nil {
-			ui.Error("Failed to locate current binary: %v", err)
-			os.Exit(1)
-		}
-		if f, err := os.OpenFile(exePath, os.O_RDWR, 0); err != nil {
-			if os.IsPermission(err) {
-				ui.Error("Permission denied: cannot write to %s", exePath)
-				ui.Info("Run the upgrade command with sudo if the binary is system-installed.")
-				os.Exit(1)
-			}
-		} else {
-			_ = f.Close()
-		}
-
-		tmpDir, err := os.MkdirTemp("", "nido-update-*")
-		if err != nil {
-			ui.Error("Failed to create temporary directory: %v", err)
-			os.Exit(1)
-		}
-		defer os.RemoveAll(tmpDir)
-
-		archivePath := filepath.Join(tmpDir, assetName)
-		if err := downloadFile(client, downloadURL, archivePath); err != nil {
-			ui.Error("Download failed: %v", err)
-			os.Exit(1)
-		}
-		if checksumURL != "" {
-			if err := verifyReleaseAssetChecksum(client, checksumURL, assetName, archivePath); err != nil {
-				ui.Error("Checksum verification failed: %v", err)
-				os.Exit(1)
-			}
-		} else {
-			ui.Warn("SHA256SUMS not found in latest release; skipping archive checksum verification.")
-		}
-
-		tmpPath := filepath.Join(tmpDir, internalBinaryName)
-		if err := extractBinaryFromReleaseAsset(archivePath, tmpPath, internalBinaryName); err != nil {
-			ui.Error("Failed to unpack release asset: %v", err)
-			os.Exit(1)
-		}
-		if runtime.GOOS != "windows" {
-			if err := os.Chmod(tmpPath, 0o755); err != nil {
-				ui.Error("Failed to set permissions on updated binary: %v", err)
-				os.Exit(1)
-			}
-		}
-
-		bakPath := exePath + ".bak"
-		_ = os.Remove(bakPath)
-		if err := os.Rename(exePath, bakPath); err != nil {
-			ui.Error("Update failed while backing up current binary: %v", err)
-			os.Exit(1)
-		}
-		if err := os.Rename(tmpPath, exePath); err != nil {
-			ui.Error("Update failed while installing new binary: %v", err)
-			_ = os.Rename(bakPath, exePath)
-			os.Exit(1)
-		}
-
-		registryBackupPath, registryErr := syncBundledRegistryFromReleaseAsset(archivePath, app.NidoDir)
-		ui.Success("Updated to %s.", latest)
-		if registryErr != nil {
-			ui.Warn("Bundled registry sync failed: %v", registryErr)
-			ui.Info("The binary was updated, but blueprint definitions may still be stale.")
-		} else if registryBackupPath != "" {
-			ui.Info("Bundled registry synced to %s (backup: %s).", filepath.Join(app.NidoDir, "registry"), registryBackupPath)
-		} else {
-			ui.Info("Bundled registry synced to %s.", filepath.Join(app.NidoDir, "registry"))
-		}
-		writeInstalledShellCompletions(exePath, app.NidoDir)
 	}
 }
 
@@ -590,7 +465,7 @@ func updateVMConfig(cmd *cobra.Command, prov provider.VMProvider, name string, j
 }
 
 func cmdSsh(prov provider.VMProvider, name string, args []string) {
-	cmdStr, err := prov.SSHCommand(name)
+	parts, err := prov.SSHArgs(name)
 	if err != nil {
 		ui.Error("Target acquisition failed: %v", err)
 		os.Exit(1)
@@ -600,7 +475,6 @@ func cmdSsh(prov provider.VMProvider, name string, args []string) {
 		ui.Ironic("Establishing secure neural link...")
 	}
 
-	parts := strings.Split(cmdStr, " ")
 	extraOptions := []string{
 		"-o", "LogLevel=ERROR",
 		"-o", "ConnectTimeout=5",
@@ -616,15 +490,12 @@ func cmdSsh(prov provider.VMProvider, name string, args []string) {
 	finalArgs = append(finalArgs, parts[1:]...)
 	finalArgs = append(finalArgs, args...)
 
-	command := exec.Command(parts[0], finalArgs...)
-	command.Stdout = os.Stdout
-	command.Stdin = os.Stdin
-	command.Stderr = os.Stderr
+	command := sysutil.NewCommand(parts[0], finalArgs...)
+	command.SetStdout(os.Stdout)
+	command.SetStdin(os.Stdin)
+	command.SetStderr(os.Stderr)
 	if err := command.Run(); err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
-			os.Exit(exitError.ExitCode())
-		}
-		os.Exit(1)
+		os.Exit(sysutil.ExitCode(err))
 	}
 }
 
@@ -656,7 +527,7 @@ func writeInstalledShellCompletions(exePath, nidoDir string) {
 	}
 
 	for _, target := range targets {
-		out, err := exec.Command(exePath, "completion", target.shell).Output()
+		out, err := sysutil.NewCommand(exePath, "completion", target.shell).Output()
 		if err != nil {
 			ui.Warn("Failed to refresh %s completion: %v", target.shell, err)
 			continue
@@ -666,60 +537,4 @@ func writeInstalledShellCompletions(exePath, nidoDir string) {
 		}
 	}
 	ui.Info("Shell completions updated in %s.", nidoDir)
-}
-
-func downloadFile(client *http.Client, url, destPath string) error {
-	resp, err := client.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected HTTP status %d", resp.StatusCode)
-	}
-
-	out, err := os.Create(destPath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	return err
-}
-
-func verifyReleaseAssetChecksum(client *http.Client, checksumURL, assetName, archivePath string) error {
-	resp, err := client.Get(checksumURL)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected checksum HTTP status %d", resp.StatusCode)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	expected := ""
-	for _, line := range strings.Split(string(body), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) >= 2 && strings.TrimPrefix(fields[1], "*") == assetName {
-			expected = strings.ToLower(fields[0])
-			break
-		}
-	}
-	if expected == "" {
-		return fmt.Errorf("%s not listed in SHA256SUMS", assetName)
-	}
-	data, err := os.ReadFile(archivePath)
-	if err != nil {
-		return err
-	}
-	sum := sha256.Sum256(data)
-	actual := hex.EncodeToString(sum[:])
-	if actual != expected {
-		return fmt.Errorf("%s checksum mismatch", assetName)
-	}
-	return nil
 }

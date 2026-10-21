@@ -13,22 +13,18 @@ import (
 	"time"
 
 	"github.com/Josepavese/nido/internal/image"
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 )
 
-// HTTPClient is the network boundary; tests inject an isolated upstream.
-type HTTPClient interface {
-	Do(*http.Request) (*http.Response, error)
-}
-
 type UpstreamFetcher struct {
-	client HTTPClient
+	client sysutil.HTTPClient
 	now    func() time.Time
 }
 
 const upstreamTimeout = 30 * time.Second
 const maxMetadataBytes = 32 << 20
 
-func NewFetcher(client HTTPClient) *UpstreamFetcher {
+func NewFetcher(client sysutil.HTTPClient) *UpstreamFetcher {
 	if client == nil {
 		client = &http.Client{Timeout: upstreamTimeout}
 	}

@@ -1,4 +1,4 @@
-package provider
+package hardware
 
 // Hardware Class Constants (PCI)
 const (

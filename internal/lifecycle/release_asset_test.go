@@ -1,4 +1,4 @@
-package main
+package lifecycle
 
 import (
 	"archive/tar"
@@ -137,9 +137,9 @@ func TestSyncBundledRegistryFromReleaseAssetBacksUpAndOverlays(t *testing.T) {
 		t.Fatalf("failed to create tar.gz fixture: %v", err)
 	}
 
-	backupPath, err := syncBundledRegistryFromReleaseAsset(archivePath, nidoDir)
+	backupPath, err := SyncBundledRegistryFromReleaseAsset(archivePath, nidoDir)
 	if err != nil {
-		t.Fatalf("syncBundledRegistryFromReleaseAsset failed: %v", err)
+		t.Fatalf("SyncBundledRegistryFromReleaseAsset failed: %v", err)
 	}
 	if backupPath == "" {
 		t.Fatal("expected registry backup path, got empty string")
@@ -173,9 +173,9 @@ scripts:
 		t.Fatalf("failed to write stale shared asset: %v", err)
 	}
 
-	backupPath, err := syncBundledRegistryFromEmbedded(nidoDir)
+	backupPath, err := SyncBundledRegistryFromEmbedded(nidoDir)
 	if err != nil {
-		t.Fatalf("syncBundledRegistryFromEmbedded failed: %v", err)
+		t.Fatalf("SyncBundledRegistryFromEmbedded failed: %v", err)
 	}
 	if backupPath == "" {
 		t.Fatal("expected registry backup path, got empty string")
@@ -189,9 +189,9 @@ scripts:
 	assertFileContains(t, filepath.Join(nidoDir, "registry", "sources.yaml"), "sources:")
 	assertFileContains(t, filepath.Join(backupPath, "blueprints", "windows-11-iot-ltsc-eval.yaml"), `iso_name: "windows-11-iot-ltsc-eval.iso"`)
 
-	secondBackupPath, err := syncBundledRegistryFromEmbedded(nidoDir)
+	secondBackupPath, err := SyncBundledRegistryFromEmbedded(nidoDir)
 	if err != nil {
-		t.Fatalf("second syncBundledRegistryFromEmbedded failed: %v", err)
+		t.Fatalf("second SyncBundledRegistryFromEmbedded failed: %v", err)
 	}
 	if secondBackupPath != "" {
 		t.Fatalf("expected current registry to skip backup, got %s", secondBackupPath)

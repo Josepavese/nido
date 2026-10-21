@@ -7,9 +7,9 @@ import (
 	"strconv"
 )
 
-// GetTargetUIDGID returns the UID and GID of the SUDO_USER,
+// targetUIDGID returns the UID and GID of the SUDO_USER,
 // or the current process's UID/GID if not running under sudo.
-func GetTargetUIDGID() (int, int, error) {
+func targetUIDGID() (int, int, error) {
 	uidStr := os.Getenv("SUDO_UID")
 	gidStr := os.Getenv("SUDO_GID")
 
@@ -31,7 +31,7 @@ func GetTargetUIDGID() (int, int, error) {
 // FixPermissions restores the ownership of a file to the original user
 // if running under sudo.
 func FixPermissions(path string) error {
-	uid, gid, err := GetTargetUIDGID()
+	uid, gid, err := targetUIDGID()
 	if err != nil {
 		return err
 	}

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Josepavese/nido/internal/hardware"
 	"github.com/Josepavese/nido/internal/image"
 )
 
@@ -230,15 +231,6 @@ func TestRegistryWindowsAutounattendXMLIsWellFormed(t *testing.T) {
 	}
 }
 
-func TestInstallerAccelerationArgs(t *testing.T) {
-	if args, cpu, ok := installerAccelerationArgs("windows"); !ok || cpu != "host" || strings.Join(args, " ") != "-accel whpx" {
-		t.Fatalf("windows acceleration mismatch: args=%v cpu=%s ok=%v", args, cpu, ok)
-	}
-	if args, cpu, ok := installerAccelerationArgs("darwin"); !ok || cpu != "host" || strings.Join(args, " ") != "-accel hvf" {
-		t.Fatalf("darwin acceleration mismatch: args=%v cpu=%s ok=%v", args, cpu, ok)
-	}
-}
-
 func TestCanonicalSeedScriptsUsesWindowsAnswerFileName(t *testing.T) {
 	scripts, err := canonicalSeedScripts(map[string]string{
 		"autounattend.xml": "<unattend/>",
@@ -304,5 +296,41 @@ func TestCreateSeedISOFallsBackToBundledWriter(t *testing.T) {
 	}
 	if info, err := os.Stat(out); err != nil || info.Size() == 0 {
 		t.Fatalf("seed ISO was not created: info=%v err=%v", info, err)
+	}
+}
+
+func TestBuildFailurePreservesExistingWorkspaceAndCache(t *testing.T) {
+	root := t.TempDir()
+	cache := filepath.Join(root, "cache")
+	work := filepath.Join(root, "work")
+	images := filepath.Join(root, "images")
+	for _, dir := range []string{cache, work, images, filepath.Join(work, "fixture-seed")} {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sentinels := []string{filepath.Join(cache, "installer.iso"), filepath.Join(work, "fixture-seed", "user-data"), filepath.Join(work, "fixture-seed.iso")}
+	for _, path := range sentinels {
+		if err := os.WriteFile(path, []byte("KEEP"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	engine := NewEngine(cache, work, images, hardware.Virtualization{CPU: "qemu64"})
+	bp := &image.Blueprint{Name: "fixture", ISOName: "installer.iso", ISOURL: "https://example.test/installer.iso", OutputImage: "fixture.qcow2", Scripts: map[string]string{"../escape": "invalid"}}
+	if err := engine.Build(bp); err == nil {
+		t.Fatal("invalid build reported success")
+	}
+	for _, path := range sentinels {
+		if data, err := os.ReadFile(path); err != nil || string(data) != "KEEP" {
+			t.Fatalf("modified existing data: %s %s %v", path, data, err)
+		}
+	}
+	entries, _ := os.ReadDir(work)
+	if len(entries) != 2 {
+		t.Fatalf("private scratch left behind: %v", entries)
+	}
+	entries, _ = os.ReadDir(images)
+	if len(entries) != 0 {
+		t.Fatalf("staging output left behind: %v", entries)
 	}
 }

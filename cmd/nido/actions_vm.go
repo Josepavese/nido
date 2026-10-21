@@ -254,8 +254,8 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 					if !jsonOut {
 						ui.Info("Image not found locally. Pulling %s:%s...", img.Name, ver.Version)
 					}
-					downloader := image.Downloader{Quiet: jsonOut}
-					if err := image.PrepareLocalImage(*ver, imgPath, downloader); err != nil {
+					downloader := image.NewTransfer(image.TransferOptions{OnProgress: nil, Context: cmd.Context()})
+					if err := downloader.Prepare(*ver, imgPath); err != nil {
 						if jsonOut {
 							_ = clijson.PrintJSON(clijson.NewResponseError("spawn", "ERR_IO", "Image preparation failed", err.Error(), "Check your network connection and registry checksum metadata.", nil))
 						} else {
@@ -395,7 +395,7 @@ func actionVMStop(app *appContext) func(cmd *cobra.Command, args []string) {
 		if !jsonOut {
 			ui.Step("Stopping VM...")
 		}
-		if err := app.Provider.Stop(args[0], true); err != nil {
+		if err := app.Provider.Stop(args[0]); err != nil {
 			if jsonOut {
 				_ = clijson.PrintJSON(clijson.NewResponseError("stop", "ERR_INTERNAL", "Stop failed", err.Error(), "Check the VM state and try again.", nil))
 			} else {

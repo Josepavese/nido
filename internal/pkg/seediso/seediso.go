@@ -2,8 +2,8 @@ package seediso
 
 import (
 	"fmt"
+	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/kdomanski/iso9660"
@@ -30,10 +30,10 @@ func createWithTool(outputPath, sourceDir, label string) error {
 		{name: "xorriso", args: []string{"-as", "mkisofs", "-J", "-R", "-V", label, "-o", outputPath, sourceDir}},
 	}
 	for _, tool := range tools {
-		if _, err := exec.LookPath(tool.name); err != nil {
+		if _, err := sysutil.FindExecutable(tool.name); err != nil {
 			continue
 		}
-		cmd := exec.Command(tool.name, tool.args...)
+		cmd := sysutil.NewCommand(tool.name, tool.args...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to create seed ISO with %s: %v (%s)", tool.name, err, string(out))
 		}

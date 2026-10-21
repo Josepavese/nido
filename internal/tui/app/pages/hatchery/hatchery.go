@@ -2,6 +2,7 @@ package hatchery
 
 import (
 	"fmt"
+	"github.com/Josepavese/nido/internal/hardware"
 	"strings"
 
 	"github.com/Josepavese/nido/internal/provider"
@@ -40,9 +41,9 @@ func (i SourceItem) Icon() string {
 }
 func (i SourceItem) IsAction() bool { return false }
 
-// AccelItem adapts provider.Accelerator to the List interface.
+// AccelItem adapts hardware.Accelerator to the List interface.
 type AccelItem struct {
-	Acc provider.Accelerator
+	Acc hardware.Accelerator
 }
 
 func (i AccelItem) Title() string {

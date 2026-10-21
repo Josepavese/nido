@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"github.com/Josepavese/nido/internal/hardware"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -42,7 +43,7 @@ func TestUpdateConfigRawQemuArgs(t *testing.T) {
 				if err := os.Mkdir(filepath.Join(root, "run"), 0o700); err != nil {
 					t.Fatal(err)
 				}
-				p := NewQemuProvider(root, &config.Config{})
+				p := NewQemuProvider(root, &config.Config{}, hardware.New())
 				fw := []PortForward{{Label: "fixture", GuestPort: 80, HostPort: 31080, Protocol: "tcp"}}
 				if err := p.saveState("fixture", pid, 51022, 0, false, "fixture-user", fw, "fixture-cmdline", 512, 1, tt.initial, []string{"virtual:gpu"}); err != nil {
 					t.Fatal(err)
@@ -56,7 +57,7 @@ func TestUpdateConfigRawQemuArgs(t *testing.T) {
 					t.Fatalf("UpdateConfig error = %v, want error %v", err, tt.wantErr)
 				}
 				// Reopen through a new provider: assert durable state, not a shared slice.
-				reopened := NewQemuProvider(root, &config.Config{})
+				reopened := NewQemuProvider(root, &config.Config{}, hardware.New())
 				after, err := reopened.loadState("fixture")
 				if err != nil {
 					t.Fatal(err)
@@ -86,7 +87,7 @@ func TestUpdateConfigRawQemuArgs(t *testing.T) {
 }
 
 func TestUpdateConfigMissingStateFails(t *testing.T) {
-	p := NewQemuProvider(t.TempDir(), &config.Config{})
+	p := NewQemuProvider(t.TempDir(), &config.Config{}, hardware.New())
 	args := []string{"-nodefaults"}
 	if err := p.UpdateConfig("missing", VMConfigUpdates{RawQemuArgs: &args}); err == nil {
 		t.Fatal("updating a VM without state must fail")
