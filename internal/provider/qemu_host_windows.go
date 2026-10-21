@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Josepavese/nido/internal/pkg/sysutil"
 	"os/exec"
+	"slices"
 	"time"
 )
 
@@ -14,7 +15,7 @@ func (p *QemuProvider) launchQEMU(args []string) (int, error) {
 		return pid, nil
 	}
 	fallback := windowsTCGFallbackArgs(args)
-	if sameStringSlice(args, fallback) {
+	if slices.Equal(args, fallback) {
 		return 0, err
 	}
 	return launchWindowsQEMU(fallback)
