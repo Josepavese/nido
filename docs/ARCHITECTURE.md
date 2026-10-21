@@ -82,3 +82,37 @@ existing host, reconcile its driver records and VM ownership in a single offline
 conversion with old writers drained. Preserve the original record and verify the
 current owner before cutover. This code audit performs no such installation or
 mutation of existing host records.
+
+### Opt-in native PCI qualification
+
+`internal/hardware/pci_physical_linux_test.go` provides the physical backend
+qualification. Its default CI result is an explicit skip, not hardware proof.
+It accepts only an explicitly selected, isolated USB controller with no attached
+peripherals and the expected native `xhci_hcd` binding. It uses the public VM
+provider with a private 1 MiB disk, a paused QEMU instance and 128 MiB of RAM.
+The fixture checks real VFIO attachment, the PCI identity exposed through QMP,
+refusal of a foreign lease owner, and restoration of the original host driver.
+It does not detach a primary display or qualify GPU-specific guest functions.
+
+Build the test binary with scratch/cache paths on the designated filesystem,
+then authenticate locally to execute it:
+
+```sh
+go test -c -o "$scratch/pci-qualification.test" ./internal/hardware
+sudo env NIDO_PCI_TEST_DEVICE="$dedicated_controller" \
+  NIDO_PCI_TEST_STORAGE="$scratch" TMPDIR="$scratch" \
+  "$scratch/pci-qualification.test" \
+  -test.run '^TestPhysicalPCIRoundTrip$' -test.count=1 -test.v
+```
+
+The fixture deletes only its own VM and workspace after confirming restoration.
+If restoration fails, it keeps the recovery lease and reports its path. Do not
+remove that workspace or treat a failed/skipped test as qualification.
+
+An old journal whose original driver is already restored and which has no VM
+owner is not converted into an invented active lease. During an offline cutover,
+verify the current binding and empty override, drain old writers, preserve the
+original record and its metadata outside the runtime, verify the copy and retire
+the stale runtime record. The resulting current state has no active lease.
+Unknown ownership, an active binding or changed input requires reconciliation;
+normal startup must not infer an owner or replay this conversion.
