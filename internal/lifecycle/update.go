@@ -44,7 +44,7 @@ func getURL(ctx context.Context, client sysutil.HTTPClient, url string) (*http.R
 func (u *nativeUpdater) Update(ctx context.Context, request UpdateRequest) (UpdateResult, error) {
 	var result UpdateResult
 	if request.NidoDir == "" {
-		return result, fmt.Errorf("Nido data directory is required")
+		return result, fmt.Errorf("nido data directory is required")
 	}
 	release, err := build.LatestRelease(ctx, u.client)
 	if err != nil {

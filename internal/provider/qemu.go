@@ -380,18 +380,6 @@ func windowsTCGFallbackArgs(args []string) []string {
 	return out
 }
 
-func sameStringSlice(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 // buildQemuArgs constructs the heavy-duty command line arguments for QEMU.
 func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort int, fw []PortForward, runDir string, cmdline string, memoryMB, vcpus int, rawArgs []string, accelerators []string) []string {
 	vmsDir := filepath.Join(p.RootDir, "vms")

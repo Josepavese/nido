@@ -87,7 +87,7 @@ func TestMultipartFailureIsAtomicAndRetiresOwnedScratch(t *testing.T) {
 	os.WriteFile(dest, []byte("ORIGINAL"), 0600)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/2" {
-			http.Error(w, "unavailable", 503)
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		fmt.Fprint(w, "part1")
