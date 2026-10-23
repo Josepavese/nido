@@ -5,6 +5,25 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.8.0] - 2026-10-23 "Wider Nest"
+
+### Added
+
+- Publish every release to external channels from the release workflow: npm (`nido-mcp` launcher with trusted publishing), WinGet, Scoop bucket, AUR (`nido-bin`) and Smithery, each gated on its repository secret and skipped when unconfigured.
+- Ship the `nido-mcp` npm launcher: zero-dependency Node wrapper that downloads the matching release asset, verifies it against `SHA256SUMS` and executes it (works with `--ignore-scripts` and pnpm build policies).
+- Add distribution templates (`distribution/`) for the Homebrew tap, Scoop bucket, AUR PKGBUILD and WinGet manifests, plus `glama.json`, `.mcp.json` and `docs/DISTRIBUTION.md` with the verified channel matrix and account/secret checklist.
+- Add the `Josepavese/homebrew-nido` tap and the `Josepavese/scoop-nido` bucket, both refreshed automatically from GitHub Releases.
+
+### Changed
+
+- Rename the Go module to `github.com/Josepavese/nido/v4` so `go install github.com/Josepavese/nido/v4/cmd/nido@latest` and pkg.go.dev resolve the v4 releases; internal import paths updated.
+- Replace the retired Go Report Card badge with pkg.go.dev and MCP Registry badges.
+
+### Upgrade notes
+
+- Go importers of the old module path must switch to `github.com/Josepavese/nido/v4` (the CLI and released binaries are unaffected).
+- Release channels that need credentials stay disabled until their repository secret exists; see `docs/DISTRIBUTION.md`.
+
 ## [4.7.0] - 2026-10-21 "Owned Feathers"
 
 ### Fixed

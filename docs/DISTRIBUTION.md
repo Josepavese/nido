@@ -11,17 +11,18 @@ incremental.
 
 ---
 
-## 1. Channels automated in this repository
+## 1. Channels automated at every release
 
 | Channel | Mechanism | Auth | Secret / setting | Notes |
 | --- | --- | --- | --- | --- |
 | **GitHub Releases** | tarballs, `nido.mcpb`, `server.json`, `SHA256SUMS`, installers | `GITHUB_TOKEN` | none | Asset names are a contract for every other channel. |
 | **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Already live: `io.github.Josepavese/nido`. Versioned, immutable releases. |
-| **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + one npm account | No long-lived npm token. Bootstrap: first publish + Trusted Publisher config (see §3.1). |
-| **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | First manifest must be merged manually; afterwards updates are automated. |
-| **Scoop** (own bucket) | release job rewrites `bucket/nido.json` in `Josepavese/scoop-nido` | fine-grained PAT | `SCOOP_BUCKET_TOKEN` | The bucket's own Excavator (`distribution/scoop/`) also self-updates with zero secrets. |
-| **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | x86_64 only, `-bin` package. |
-| **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | Stdio artifact; Nido does not need to be hosted. |
+| **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + one npm account | Not configured yet: needs the one-time npm bootstrap (§2.4). |
+| **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | First manifest PR is open; afterwards updates are automated. |
+| **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
+| **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | Not configured yet; x86_64 only, `-bin` package. |
+| **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | Not configured yet; stdio artifact, no hosting needed. |
+| **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours. |
 | **Glama** | auto-index + `glama.json` claim | GitHub OAuth, one-time | none | `glama.json` is in the repo root. The claim is manual once. |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
 
@@ -41,13 +42,14 @@ GitHub MCP Registry syncs versions after a manual onboarding.
   (GitHub OAuth) once.
 - `.mcp.json` at root — Open Plugins detection (Cursor Directory and friends).
 
-### 2.2 Homebrew tap (zero secrets)
+### 2.2 Homebrew tap — live, zero secrets
 
-Create the tap repository `Josepavese/homebrew-nido` and copy
-`distribution/homebrew/templates/nido.rb` plus
-`distribution/homebrew/.github/workflows/update-formula.yml` into it. The
-workflow runs every 6 hours, renders the formula from the latest GitHub Release
-and commits with the tap's own `GITHUB_TOKEN`.
+[`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) exists
+with `Formula/nido.rb`, `templates/nido.rb` and
+`.github/workflows/update-formula.yml`. The workflow runs every 6 hours,
+re-renders the formula from the latest GitHub Release and commits with the tap's
+own `GITHUB_TOKEN`; no repository secret is involved. Verified with a manual
+dispatch.
 
 ```bash
 brew install Josepavese/nido/nido
@@ -56,19 +58,21 @@ brew install Josepavese/nido/nido
 `homebrew-core` is **not** viable yet: its acceptance policy requires roughly
 90 forks / 90 watchers / 225 stars for an owner self-submission.
 
-### 2.3 Scoop bucket (zero secrets)
+### 2.3 Scoop bucket — live, zero secrets
 
-Create `Josepavese/scoop-nido` with `distribution/scoop/bucket/nido.json` and
-`distribution/scoop/.github/workflows/excavator.yml`, then add the topic
-`scoop-bucket`.
+[`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) exists with
+`bucket/nido.json` and `.github/workflows/excavator.yml`; the topic
+`scoop-bucket` is set. The Excavator checks GitHub Releases every 4 hours and
+rewrites version/URL/hash with the bucket's own `GITHUB_TOKEN`.
 
 ```powershell
 scoop bucket add nido https://github.com/Josepavese/scoop-nido
 scoop install nido
 ```
 
-For immediate updates on release (instead of the 4-hour Excavator window), add a
-fine-grained PAT with `contents: write` on the bucket as `SCOOP_BUCKET_TOKEN`.
+For immediate updates on release (instead of the 4-hour window), add a
+fine-grained PAT with `contents: write` on the bucket as `SCOOP_BUCKET_TOKEN`;
+the release job then pushes the manifest commit directly.
 
 ### 2.4 npm (one account, one bootstrap, then OIDC)
 
