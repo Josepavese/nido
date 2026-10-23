@@ -7,10 +7,45 @@ import (
 	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"io"
 	"net/http"
+	"runtime/debug"
+	"strings"
 	"time"
 )
 
-var Version = "v4.7.0"
+// Version is stamped by bin/build-release.sh through
+// -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=vX.Y.Z".
+// It stays empty for source builds so init can recover the installed module
+// version (`go install ...@latest`) instead of reporting a stale constant.
+var Version string
+
+func init() {
+	if Version == "" {
+		Version = sourceVersion()
+	}
+}
+
+// sourceVersion returns the module version embedded by the Go toolchain.
+func sourceVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "dev"
+	}
+	if v := normalizeVersion(info.Main.Version); v != "" {
+		return v
+	}
+	return "dev"
+}
+
+func normalizeVersion(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" || v == "(devel)" {
+		return ""
+	}
+	if !strings.HasPrefix(v, "v") {
+		return "v" + v
+	}
+	return v
+}
 
 const LatestReleaseURL = "https://api.github.com/repos/Josepavese/nido/releases/latest"
 const maxReleaseMetadata = 1 << 20

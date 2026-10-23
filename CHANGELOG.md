@@ -5,6 +5,13 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.8.1] - 2026-10-23 "Steady Nest"
+
+### Fixed
+
+- Report the version embedded by the Go toolchain when built with `go install github.com/Josepavese/nido/v4/cmd/nido@vX.Y.Z`, instead of a stale compile-time constant; release builds still stamp the tag with `-ldflags`.
+- Move the scheduled-automation verification out of the release job and make it non-blocking, so a transient upstream image-catalog failure cannot skip the distribution channels at release time.
+
 ## [4.8.0] - 2026-10-23 "Wider Nest"
 
 ### Added
