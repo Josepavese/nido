@@ -1,7 +1,8 @@
 # Distribution & visibility
 
 How Nido reaches users and AI-agent tooling, and what runs automatically on
-every release. Research verified on **2026-10-23**; account/token requirements
+every release. Research verified on **2026-10-23**; the whole pipeline was then
+validated end-to-end on the `v4.8.1` tag (see §1.1). Account/token requirements
 are listed per channel.
 
 The release workflow (`.github/workflows/release.yml`) builds the assets, creates
@@ -16,19 +17,38 @@ incremental.
 | Channel | Mechanism | Auth | Secret / setting | Notes |
 | --- | --- | --- | --- | --- |
 | **GitHub Releases** | tarballs, `nido.mcpb`, `server.json`, `SHA256SUMS`, installers | `GITHUB_TOKEN` | none | Asset names are a contract for every other channel. |
-| **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Already live: `io.github.Josepavese/nido`. Versioned, immutable releases. |
+| **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: `io.github.Josepavese/nido` through `4.8.1`; every tag adds an immutable version. |
 | **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + one npm account | Not configured yet: needs the one-time npm bootstrap (§2.4). |
-| **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | First manifest PR is open; afterwards updates are automated. |
-| **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
+| **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | First manifest PR open: [microsoft/winget-pkgs#460549](https://github.com/microsoft/winget-pkgs/pull/460549) (needs the Microsoft CLA). Updates automate once merged + token exists. |
+| **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours, verified updating to `4.8.1`. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
 | **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | Not configured yet; x86_64 only, `-bin` package. |
 | **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | Not configured yet; stdio artifact, no hosting needed. |
-| **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours. |
+| **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours, verified updating to `4.8.1`. |
 | **Glama** | auto-index + `glama.json` claim | GitHub OAuth, one-time | none | `glama.json` is in the repo root. The claim is manual once. |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
 
 Indirectly covered with no work: **PulseMCP** and **MCP Central** ingest the
 official registry (PulseMCP submissions are paused since 2026-09-03), and the
 GitHub MCP Registry syncs versions after a manual onboarding.
+
+### 1.1 Verified on v4.8.1 (2026-10-23)
+
+- `v4.8.1` release published with all 10 assets; release workflow green,
+  including the `Resolve distribution channels` gate.
+- `io.github.Josepavese/nido` lists version `4.8.1` (MCP Registry).
+- `go install github.com/Josepavese/nido/v4/cmd/nido@v4.8.1` reports
+  `Version v4.8.1`; `proxy.golang.org` serves `@latest` = `v4.8.1` and
+  <https://pkg.go.dev/github.com/Josepavese/nido/v4> is live. New versions may
+  need the pkg.go.dev **Request** button once, or a `go get`, before they appear.
+- Homebrew tap rendered formula `4.8.1` with SHA-256 values identical to
+  `SHA256SUMS`; Scoop bucket manifest points to `4.8.1` with the matching zip
+  hash. Both updates ran from their own scheduled workflows with no secrets.
+- Credential-gated jobs (npm, WinGet, Scoop push, AUR, Smithery) were reported
+  as **skipped**, never failed.
+- Open submissions: [awesome-mcp-servers#17428](https://github.com/punkpeye/awesome-mcp-servers/pull/17428),
+  [winget-pkgs#460549](https://github.com/microsoft/winget-pkgs/pull/460549),
+  [github-mcp-server#3572](https://github.com/github/github-mcp-server/issues/3572)
+  (GitHub MCP Registry curation request).
 
 ---
 
@@ -74,7 +94,9 @@ For immediate updates on release (instead of the 4-hour window), add a
 fine-grained PAT with `contents: write` on the bucket as `SCOOP_BUCKET_TOKEN`;
 the release job then pushes the manifest commit directly.
 
-### 2.4 npm (one account, one bootstrap, then OIDC)
+### 2.4 npm (one account, one bootstrap, then OIDC) — not configured yet
+
+The release job is skipped green until the repository variable exists.
 
 1. Create an npm account (verify the username is available) and enable 2FA.
 2. Publish the first version of `nido-mcp` (the `nido` name is taken by an
@@ -92,16 +114,17 @@ GitHub-hosted runner and `id-token: write` (already set in the workflow).
 
 ### 2.5 WinGet
 
-1. Fork `microsoft/winget-pkgs` as `Josepavese/winget-pkgs`.
-2. Open the first manifest PR with the three files under
-   `distribution/winget/manifests/j/Josepavese/Nido/4.7.0/` (update version,
-   URL and SHA-256 for each release you submit). Merge times for a new portable
-   package can be days; updates are much faster.
-3. Create a **classic** PAT with `public_repo` (fine-grained tokens are not
+1. The fork `Josepavese/winget-pkgs` exists and the first manifest PR is open:
+   [microsoft/winget-pkgs#460549](https://github.com/microsoft/winget-pkgs/pull/460549)
+   (`Josepavese.Nido` 4.8.1, validated against the 1.10.0 schemas). Sign the
+   Microsoft CLA through the bot comment to unblock CI; merge times for a new
+   portable package can be days.
+2. Create a **classic** PAT with `public_repo` (fine-grained tokens are not
    supported by the tooling) and store it as `WINGET_TOKEN`.
 
 After the first version is merged, `winget upgrade Josepavese.Nido` follows every
-release automatically.
+release automatically. The in-repo template lives under
+`distribution/winget/manifests/j/Josepavese/Nido/`.
 
 ### 2.6 AUR
 
@@ -120,7 +143,7 @@ AUR explicitly warns that malfunctioning automated updates can get accounts and
 packages removed; the job is `continue-on-error`, so a failure never blocks a
 release.
 
-### 2.7 Smithery
+### 2.7 Smithery — not configured yet
 
 Log in to Smithery with GitHub, claim the `josepavese` namespace, create an API
 key (Settings → API keys) and store it as `SMITHERY_API_KEY`. Do **not** use
@@ -131,9 +154,9 @@ every release using the `nido.mcpb` asset.
 
 | Where | What to submit | Cost |
 | --- | --- | --- |
-| `github.com/mcp` GitHub MCP Registry | request onboarding in `github/github-mcp-server` discussions with the registry name; versions sync afterwards | free |
-| `punkpeye/awesome-mcp-servers` | PR adding one line to the right category; agents are fast-tracked by appending 🤖🤖🤖 to the PR title | free |
-| `awesome-go` | PR after the next release makes pkg.go.dev reachable (required check) | free |
+| `github.com/mcp` GitHub MCP Registry | curation request open: [github/github-mcp-server#3572](https://github.com/github/github-mcp-server/issues/3572); versions sync afterwards | free |
+| `punkpeye/awesome-mcp-servers` | PR open: [#17428](https://github.com/punkpeye/awesome-mcp-servers/pull/17428) (Code Execution, 🤖🤖🤖 fast-track) | free |
+| `awesome-go` | eligible now that pkg.go.dev and `go install` work; not submitted yet | free |
 | `mcp.so` | repository URL via form | free with review / $39 fast-track |
 | `mcpservers.org` (= wong2 list) | form, include `io.github.Josepavese/nido` in "Official MCP Registry Name" | free 2 weeks / $39 24h |
 | MCP Market (`mcpmarket.com`) | form | free 4–6 weeks / $29 24h |
@@ -167,15 +190,16 @@ automated channels.
 
 Because the module path was `github.com/Josepavese/nido` while releases were
 tagged `v4.x`, the Go proxy rejected those versions and `go install …@latest`
-resolved to a broken `v1.0.0`. The module was renamed to
-`github.com/Josepavese/nido/v4`; from the **next release** on:
+resolved to a broken `v1.0.0`. The module is now
+`github.com/Josepavese/nido/v4` and the path is verified on `v4.8.1`:
 
 ```bash
-go install github.com/Josepavese/nido/v4/cmd/nido@latest
+go install github.com/Josepavese/nido/v4/cmd/nido@latest   # reports the installed version
 ```
 
-and <https://pkg.go.dev/github.com/Josepavese/nido/v4> becomes the Go reference
-page. Old `v1.x` tags remain historical.
+<https://pkg.go.dev/github.com/Josepavese/nido/v4> is the Go reference page; a
+fresh tag may need one **Request** click on pkg.go.dev before it is generated.
+Old `v1.x` tags remain historical.
 
 ---
 
