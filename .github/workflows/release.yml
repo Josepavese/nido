@@ -351,7 +351,25 @@ jobs:
           # Publish to Official Registry
           mcp-publisher publish --yes
 
+  # Kept out of the release job: the check dispatches upstream-dependent
+  # scheduled workflows (image catalog refreshes), so a transient upstream
+  # failure must never block release artifacts or distribution channels.
+  verify_scheduled:
+    name: Verify scheduled automation
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    permissions:
+      actions: write
+      checks: read
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
       - name: Verify scheduled automation workflows
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           SCHEDULED_WORKFLOW_REF: main
