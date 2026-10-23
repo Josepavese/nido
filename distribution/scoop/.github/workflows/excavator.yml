@@ -1,0 +1,21 @@
+name: Excavator
+
+# Lives in the bucket repository (Josepavese/scoop-nido), not in nido.
+# Zero secrets: uses the bucket's own GITHUB_TOKEN to update bucket/nido.json.
+
+on:
+  schedule:
+    - cron: '23 */4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  excavate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ScoopInstaller/GithubActions@main
+        env:
+          SKIP_UPDATED: '1'

@@ -1,0 +1,19 @@
+# Maintainer: Josepavese <josepavese@users.noreply.github.com>
+pkgname=nido-bin
+pkgver=__PKGVER__
+pkgrel=1
+pkgdesc="Fast, local QEMU/KVM VM sandboxes for AI agents, with a native MCP server"
+arch=('x86_64')
+url="https://github.com/Josepavese/nido"
+license=('MIT')
+depends=('qemu')
+provides=('nido')
+conflicts=('nido')
+options=('!strip')
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Josepavese/nido/releases/download/v${pkgver}/nido-linux-amd64.tar.gz")
+sha256sums=('__SHA256__')
+
+package() {
+  install -Dm755 "${srcdir}/nido-linux-amd64/nido" "${pkgdir}/usr/bin/nido"
+  install -Dm755 "${srcdir}/nido-linux-amd64/nido-validator" "${pkgdir}/usr/bin/nido-validator"
+}

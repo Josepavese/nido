@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Josepavese/nido/internal/image"
-	"github.com/Josepavese/nido/internal/registry/builder"
+	"github.com/Josepavese/nido/v4/internal/image"
+	"github.com/Josepavese/nido/v4/internal/registry/builder"
 )
 
 type failedUpstream struct{}

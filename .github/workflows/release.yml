@@ -356,3 +356,196 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SCHEDULED_WORKFLOW_REF: main
         run: bash bin/verify-scheduled-workflows.sh
+
+  dist_gate:
+    name: Resolve distribution channels
+    needs: release
+    runs-on: ubuntu-latest
+    outputs:
+      winget: ${{ steps.gate.outputs.winget }}
+      scoop: ${{ steps.gate.outputs.scoop }}
+      aur: ${{ steps.gate.outputs.aur }}
+      smithery: ${{ steps.gate.outputs.smithery }}
+    steps:
+      - name: Check which channel secrets are configured
+        id: gate
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY }}
+        run: |
+          emit() {
+            if [ -n "${2:-}" ]; then echo "$1=true"; else echo "$1=false"; fi
+          }
+          {
+            emit winget "$WINGET_TOKEN"
+            emit scoop "$SCOOP_BUCKET_TOKEN"
+            emit aur "$AUR_SSH_PRIVATE_KEY"
+            emit smithery "$SMITHERY_API_KEY"
+          } >> "$GITHUB_OUTPUT"
+          echo "Channels:" && cat "$GITHUB_OUTPUT"
+
+  publish-npm:
+    name: Publish to npm (trusted publishing)
+    needs: release
+    if: vars.NPM_TRUSTED_PUBLISHER == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: npm
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          package-manager-cache: false
+
+      - name: Sync package version with the release tag
+        run: npm version "${VERSION#v}" --no-git-tag-version --allow-same-version
+
+      - name: Publish (OIDC, no long-lived token)
+        run: npm publish --access public
+
+  publish-winget:
+    name: Publish to WinGet
+    needs: [release, dist_gate]
+    if: needs.dist_gate.outputs.winget == 'true'
+    runs-on: ubuntu-latest
+    # The PR is merged by WinGet moderators: never fail the release on it.
+    continue-on-error: true
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+    steps:
+      - name: Update WinGet manifest
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: Josepavese.Nido
+          installers-regex: '\.zip$'
+          max-versions-to-keep: 5
+          fork-user: Josepavese
+          release-tag: ${{ env.VERSION }}
+          token: ${{ secrets.WINGET_TOKEN }}
+
+  publish-scoop:
+    name: Publish to Scoop bucket
+    needs: [release, dist_gate]
+    if: needs.dist_gate.outputs.scoop == 'true'
+    runs-on: windows-latest
+    continue-on-error: true
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+    steps:
+      - name: Checkout bucket
+        uses: actions/checkout@v6
+        with:
+          repository: Josepavese/scoop-nido
+          token: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          path: bucket-repo
+
+      - name: Update manifest and push
+        shell: pwsh
+        working-directory: bucket-repo
+        run: |
+          $tag = $env:VERSION
+          if (-not $tag.StartsWith('v')) { $tag = "v$tag" }
+          $version = $tag.Substring(1)
+          $sums = Invoke-RestMethod "https://github.com/Josepavese/nido/releases/download/$tag/SHA256SUMS"
+          $sha = ($sums -split "`n" | Where-Object { $_ -match 'nido-windows-amd64\.zip' } | Select-Object -First 1).Trim().Split(' ')[0]
+          if (-not $sha) { throw "SHA256 for nido-windows-amd64.zip not found" }
+          $manifestPath = 'bucket/nido.json'
+          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          $manifest.version = $version
+          $manifest.architecture.'64bit'.url = "https://github.com/Josepavese/nido/releases/download/$tag/nido-windows-amd64.zip"
+          $manifest.architecture.'64bit'.hash = $sha
+          $json = $manifest | ConvertTo-Json -Depth 10
+          # Write UTF-8 without BOM: Scoop parsers expect a plain JSON file.
+          [System.IO.File]::WriteAllText((Join-Path (Get-Location) $manifestPath), $json)
+          if (-not (git status --porcelain)) {
+            Write-Host 'Manifest already up to date'
+            exit 0
+          }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add $manifestPath
+          git commit -m "nido@$tag: update manifest"
+          git push
+
+  publish-aur:
+    name: Publish to AUR
+    needs: [release, dist_gate]
+    if: needs.dist_gate.outputs.aur == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Render PKGBUILD
+        run: |
+          set -euo pipefail
+          tag="$VERSION"
+          [[ "$tag" == v* ]] || tag="v$tag"
+          version="${tag#v}"
+          sums=$(curl -fsSL "https://github.com/Josepavese/nido/releases/download/${tag}/SHA256SUMS")
+          sha=$(printf '%s\n' "$sums" | awk '$2 == "nido-linux-amd64.tar.gz" { print $1 }')
+          test -n "$sha"
+          sed -e "s/__PKGVER__/${version}/" -e "s/__SHA256__/${sha}/" \
+            distribution/aur/PKGBUILD.in > PKGBUILD
+          cat PKGBUILD
+
+      - name: Push to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
+        with:
+          pkgname: nido-bin
+          pkgbuild: ./PKGBUILD
+          commit_username: ${{ secrets.AUR_USERNAME || 'Josepavese' }}
+          commit_email: ${{ secrets.AUR_EMAIL || 'josepavese@users.noreply.github.com' }}
+          commit_message: "nido-bin ${{ env.VERSION }}"
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+
+  publish-smithery:
+    name: Publish to Smithery
+    needs: [release, dist_gate]
+    if: needs.dist_gate.outputs.smithery == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Download the MCP bundle from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$VERSION"
+          [[ "$tag" == v* ]] || tag="v$tag"
+          gh release download "$tag" --pattern nido.mcpb --dir dist
+          ls -l dist/nido.mcpb
+
+      - name: Publish to Smithery
+        env:
+          SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY }}
+        run: |
+          set -euo pipefail
+          npm install -g smithery@latest
+          smithery mcp publish ./dist/nido.mcpb -n josepavese/nido

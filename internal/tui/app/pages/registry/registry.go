@@ -3,12 +3,12 @@ package registry
 import (
 	"fmt"
 
-	"github.com/Josepavese/nido/internal/provider"
-	"github.com/Josepavese/nido/internal/tui/app/ops"
-	"github.com/Josepavese/nido/internal/tui/kit/layout"
-	"github.com/Josepavese/nido/internal/tui/kit/theme"
-	view "github.com/Josepavese/nido/internal/tui/kit/view"
-	widget "github.com/Josepavese/nido/internal/tui/kit/widget"
+	"github.com/Josepavese/nido/v4/internal/provider"
+	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	view "github.com/Josepavese/nido/v4/internal/tui/kit/view"
+	widget "github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )

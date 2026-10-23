@@ -3,9 +3,9 @@ package main
 import (
 	"os"
 
-	clijson "github.com/Josepavese/nido/internal/cli"
-	"github.com/Josepavese/nido/internal/lifecycle"
-	"github.com/Josepavese/nido/internal/ui"
+	clijson "github.com/Josepavese/nido/v4/internal/cli"
+	"github.com/Josepavese/nido/v4/internal/lifecycle"
+	"github.com/Josepavese/nido/v4/internal/ui"
 )
 
 func ensureBundledRegistryCurrent(command, nidoDir string, jsonOut bool) {

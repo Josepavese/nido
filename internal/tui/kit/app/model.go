@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 
-	"github.com/Josepavese/nido/internal/tui/kit/shell"
-	"github.com/Josepavese/nido/internal/tui/kit/view"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/shell"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

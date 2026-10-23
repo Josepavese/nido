@@ -1,7 +1,7 @@
 package view
 
 import (
-	"github.com/Josepavese/nido/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

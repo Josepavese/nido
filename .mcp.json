@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "nido": {
+      "command": "nido",
+      "args": ["mcp"]
+    }
+  }
+}

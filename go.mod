@@ -1,4 +1,4 @@
-module github.com/Josepavese/nido
+module github.com/Josepavese/nido/v4
 
 go 1.26.5
 

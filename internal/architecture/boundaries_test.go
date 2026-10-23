@@ -53,10 +53,10 @@ func TestDeviceAndAdapterBoundaries(t *testing.T) {
 						t.Errorf("raw device access outside HAL/PAL: %s", rel)
 					}
 					if pkg, ok := selector.X.(*ast.Ident); ok {
-						if aliases[pkg.Name] == "github.com/Josepavese/nido/internal/provider" && selector.Sel.Name == "QemuProvider" {
+						if aliases[pkg.Name] == "github.com/Josepavese/nido/v4/internal/provider" && selector.Sel.Name == "QemuProvider" {
 							t.Errorf("concrete VM adapter type in consumer: %s", rel)
 						}
-						if aliases[pkg.Name] == "github.com/Josepavese/nido/internal/image" && selector.Sel.Name == "Downloader" {
+						if aliases[pkg.Name] == "github.com/Josepavese/nido/v4/internal/image" && selector.Sel.Name == "Downloader" {
 							t.Errorf("concrete transfer adapter in consumer: %s", rel)
 						}
 						if aliases[pkg.Name] == "runtime" && selector.Sel.Name == "GOOS" && (strings.HasPrefix(rel, "internal/provider/") || strings.HasPrefix(rel, "internal/builder/") || strings.HasPrefix(rel, "cmd/nido/") || strings.HasPrefix(rel, "internal/mcp/") || strings.HasPrefix(rel, "internal/tui/")) {

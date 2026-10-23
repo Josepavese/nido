@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Josepavese/nido/internal/image"
+	"github.com/Josepavese/nido/v4/internal/image"
 )
 
 func TestFutureReleasesAcrossProviders(t *testing.T) {

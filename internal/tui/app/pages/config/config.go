@@ -1,12 +1,12 @@
 package config
 
 import (
-	appconfig "github.com/Josepavese/nido/internal/config"
-	"github.com/Josepavese/nido/internal/tui/app/ops"
-	"github.com/Josepavese/nido/internal/tui/kit/layout"
-	"github.com/Josepavese/nido/internal/tui/kit/theme"
-	fv "github.com/Josepavese/nido/internal/tui/kit/view"
-	"github.com/Josepavese/nido/internal/tui/kit/widget"
+	appconfig "github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	fv "github.com/Josepavese/nido/v4/internal/tui/kit/view"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

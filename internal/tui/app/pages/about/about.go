@@ -4,10 +4,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/internal/build"
-	"github.com/Josepavese/nido/internal/tui/kit/layout"
-	"github.com/Josepavese/nido/internal/tui/kit/theme"
-	view "github.com/Josepavese/nido/internal/tui/kit/view"
+	"github.com/Josepavese/nido/v4/internal/build"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	view "github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )

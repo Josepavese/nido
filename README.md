@@ -2,7 +2,8 @@
 
 [![Release](https://img.shields.io/github/v/release/Josepavese/nido?style=flat-square&color=ff00ff)](https://github.com/Josepavese/nido/releases)
 [![License](https://img.shields.io/github/license/Josepavese/nido?style=flat-square&color=00ffff)](LICENSE)
-[![Go Report Card](https://goreportcard.com/badge/github.com/Josepavese/nido?style=flat-square)](https://goreportcard.com/report/github.com/Josepavese/nido)
+[![Go Reference](https://pkg.go.dev/badge/github.com/Josepavese/nido/v4.svg)](https://pkg.go.dev/github.com/Josepavese/nido/v4)
+[![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.Josepavese%2Fnido-blue?style=flat-square)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.Josepavese/nido)
 
 **Nido** is the retro-futuristic nest for your AI agents. It spawns **real Virtual Machines** in milliseconds, giving your autonomous code a safe place to hatch, grow, and execute.
 
@@ -59,6 +60,18 @@ Run this inside your favorite ARM-based Linux distro (Raspberry Pi, Pine64, etc)
 source ~/.bashrc
 nido version
 ```
+
+### 🐹 Go Install (Developers)
+
+If you already live in a Go toolchain, skip the installers:
+
+```bash
+go install github.com/Josepavese/nido/v4/cmd/nido@latest
+```
+
+Homebrew tap, Scoop bucket, WinGet and AUR channels are wired into the release
+workflow; their status and one-time setup are tracked in
+[`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
 
 ### 🪄 Cheat Codes (Auto-Complete)
 
@@ -124,6 +137,12 @@ Nido speaks native MCP. The server now exposes a compact agent-facing surface: a
 nido register  # Generates the config for your AI client
 nido mcp --help  # Human-readable MCP guide
 nido mcp-help    # Machine-readable MCP guide for agents
+```
+
+Nido is published on the [Official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.Josepavese/nido). If your client only knows how to launch `npx`, use the npm launcher (it downloads and checksum-verifies the release binary):
+
+```bash
+npx -y nido-mcp mcp
 ```
 
 ### 🧩 Agent Skill

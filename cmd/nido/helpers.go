@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	clijson "github.com/Josepavese/nido/internal/cli"
-	"github.com/Josepavese/nido/internal/config"
-	"github.com/Josepavese/nido/internal/image"
-	"github.com/Josepavese/nido/internal/provider"
+	clijson "github.com/Josepavese/nido/v4/internal/cli"
+	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/image"
+	"github.com/Josepavese/nido/v4/internal/provider"
 	"github.com/spf13/cobra"
 )
 

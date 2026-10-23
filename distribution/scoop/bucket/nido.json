@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json.schemastore.org/scoop-app-manifest.json",
+  "version": "4.7.0",
+  "description": "Fast, local QEMU/KVM VM sandboxes for AI agents, with a native MCP server",
+  "homepage": "https://github.com/Josepavese/nido",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/Josepavese/nido/releases/download/v4.7.0/nido-windows-amd64.zip",
+      "hash": "1edf8ac88f8eee569e0b421db3abd565eb96dcb5b0bdef32d7b1e38a95974c97"
+    }
+  },
+  "extract_dir": "nido-windows-amd64",
+  "bin": [
+    ["nido.exe", "nido"],
+    ["nido-validator.exe", "nido-validator"]
+  ],
+  "checkver": {
+    "github": "https://github.com/Josepavese/nido"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/Josepavese/nido/releases/download/v$version/nido-windows-amd64.zip"
+      }
+    }
+  },
+  "suggest": {
+    "qemu": "QEMU is required to run VMs: scoop install qemu"
+  }
+}

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/internal/validator/report"
+	"github.com/Josepavese/nido/v4/internal/validator/report"
 )
 
 // PreFlight builds the scenario covering version and doctor checks.

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/internal/image"
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/image"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 )
 
 type UpstreamFetcher struct {

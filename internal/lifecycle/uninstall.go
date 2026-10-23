@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 )
 
 // Uninstall performs the destructive removal of Nido's data and binary.

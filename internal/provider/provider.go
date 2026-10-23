@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Josepavese/nido/internal/config"
-	"github.com/Josepavese/nido/internal/hardware"
+	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/hardware"
 )
 
 // ParseInt is a helper to parse integers from strings, trimming whitespace.

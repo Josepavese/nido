@@ -6,21 +6,21 @@ import (
 	"strings"
 
 	// Added import
-	"github.com/Josepavese/nido/internal/config" // Global config
-	"github.com/Josepavese/nido/internal/image"
-	"github.com/Josepavese/nido/internal/provider"
+	"github.com/Josepavese/nido/v4/internal/config" // Global config
+	"github.com/Josepavese/nido/v4/internal/image"
+	"github.com/Josepavese/nido/v4/internal/provider"
 
-	"github.com/Josepavese/nido/internal/tui/kit/app"
-	"github.com/Josepavese/nido/internal/tui/kit/shell"
-	"github.com/Josepavese/nido/internal/tui/kit/theme"
-	"github.com/Josepavese/nido/internal/tui/kit/widget"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/app"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/shell"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 
-	"github.com/Josepavese/nido/internal/tui/app/ops" // Was services
-	"github.com/Josepavese/nido/internal/tui/app/pages/about"
-	configpage "github.com/Josepavese/nido/internal/tui/app/pages/config" // Alias
-	"github.com/Josepavese/nido/internal/tui/app/pages/fleet"
-	"github.com/Josepavese/nido/internal/tui/app/pages/hatchery"
-	"github.com/Josepavese/nido/internal/tui/app/pages/registry"
+	"github.com/Josepavese/nido/v4/internal/tui/app/ops" // Was services
+	"github.com/Josepavese/nido/v4/internal/tui/app/pages/about"
+	configpage "github.com/Josepavese/nido/v4/internal/tui/app/pages/config" // Alias
+	"github.com/Josepavese/nido/v4/internal/tui/app/pages/fleet"
+	"github.com/Josepavese/nido/v4/internal/tui/app/pages/hatchery"
+	"github.com/Josepavese/nido/v4/internal/tui/app/pages/registry"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

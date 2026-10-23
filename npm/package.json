@@ -1,0 +1,50 @@
+{
+  "name": "nido-mcp",
+  "version": "4.7.0",
+  "description": "Nido — fast local QEMU/KVM VM sandboxes for AI agents, with a native MCP server. Installs the nido binary from GitHub Releases.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "vm",
+    "qemu",
+    "kvm",
+    "sandbox",
+    "ai-agents",
+    "virtualization",
+    "cli"
+  ],
+  "homepage": "https://github.com/Josepavese/nido",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Josepavese/nido.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Josepavese/nido/issues"
+  },
+  "license": "MIT",
+  "author": "Josepavese",
+  "bin": {
+    "nido": "bin/nido.js"
+  },
+  "files": [
+    "bin/nido.js",
+    "lib/install.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

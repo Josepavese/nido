@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	clijson "github.com/Josepavese/nido/internal/cli"
+	clijson "github.com/Josepavese/nido/v4/internal/cli"
 )
 
 func main() {

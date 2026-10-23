@@ -2,7 +2,7 @@ package seediso
 
 import (
 	"fmt"
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"os"
 	"path/filepath"
 

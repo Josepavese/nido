@@ -3,8 +3,8 @@ package main
 import (
 	"strings"
 
-	"github.com/Josepavese/nido/internal/builder"
-	climeta "github.com/Josepavese/nido/internal/cli"
+	"github.com/Josepavese/nido/v4/internal/builder"
+	climeta "github.com/Josepavese/nido/v4/internal/cli"
 	"github.com/spf13/cobra"
 )
 
