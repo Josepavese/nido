@@ -1,9 +1,9 @@
 package config
 
 import (
-	appconfig "github.com/Josepavese/nido/internal/config"
-	"github.com/Josepavese/nido/internal/tui/app/ops"
-	fv "github.com/Josepavese/nido/internal/tui/kit/view"
+	appconfig "github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
+	fv "github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
 	"testing"
 )

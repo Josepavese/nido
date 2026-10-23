@@ -11,11 +11,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 
-	"github.com/Josepavese/nido/internal/config"
-	"github.com/Josepavese/nido/internal/hardware"
-	"github.com/Josepavese/nido/internal/image"
+	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/hardware"
+	"github.com/Josepavese/nido/v4/internal/image"
 )
 
 // QemuProvider implements VMProvider using raw QEMU. Lifecycle and configuration

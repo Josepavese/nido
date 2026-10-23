@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 
-	"github.com/Josepavese/nido/internal/config"
-	"github.com/Josepavese/nido/internal/provider"
-	app "github.com/Josepavese/nido/internal/tui/app"
+	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/provider"
+	app "github.com/Josepavese/nido/v4/internal/tui/app"
 )
 
 // cmdGUI launches the new Bubble Tea GUI for Nido.

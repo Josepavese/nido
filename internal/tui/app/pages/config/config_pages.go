@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Josepavese/nido/internal/build"
-	"github.com/Josepavese/nido/internal/tui/app/ops"
-	"github.com/Josepavese/nido/internal/tui/kit/layout"
-	"github.com/Josepavese/nido/internal/tui/kit/theme"
-	fv "github.com/Josepavese/nido/internal/tui/kit/view"
-	"github.com/Josepavese/nido/internal/tui/kit/widget"
+	"github.com/Josepavese/nido/v4/internal/build"
+	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	fv "github.com/Josepavese/nido/v4/internal/tui/kit/view"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -419,7 +419,7 @@ func (p *ConfigPageCache) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 			if stats.Count == 0 {
 				body = "Nothing to prune.\nYour cache is already efficient."
 			} else {
-				// We still need to import "github.com/Josepavese/nido/internal/image" if we want FormatBytes
+				// We still need to import "github.com/Josepavese/nido/v4/internal/image" if we want FormatBytes
 				// But we can rely on wiring.go for logging, and just show simple text here?
 				// Or better, let's just show raw numbers or simple format if we don't want to add import.
 				// Wait, "image" package is not imported in this file.

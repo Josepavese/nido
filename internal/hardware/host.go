@@ -5,7 +5,7 @@ package hardware
 import (
 	"context"
 	"errors"
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 )
 
 var ErrUnsupported = errors.New("hardware capability unsupported on this host")

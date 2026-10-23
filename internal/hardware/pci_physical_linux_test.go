@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Josepavese/nido/internal/config"
-	"github.com/Josepavese/nido/internal/hardware"
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
-	"github.com/Josepavese/nido/internal/provider"
+	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/hardware"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/provider"
 )
 
 // TestPhysicalPCIRoundTrip is an opt-in native qualification, not a CI mock.

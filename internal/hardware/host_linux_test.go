@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 )
 
 // This PAL redirects all sysfs access into test storage. Privileged commands are

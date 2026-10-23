@@ -4,8 +4,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Josepavese/nido/internal/lifecycle"
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/lifecycle"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

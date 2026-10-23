@@ -11,13 +11,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Josepavese/nido/internal/build"
-	"github.com/Josepavese/nido/internal/builder"
-	"github.com/Josepavese/nido/internal/config"
-	"github.com/Josepavese/nido/internal/image"
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
-	"github.com/Josepavese/nido/internal/provider"
-	view "github.com/Josepavese/nido/internal/tui/kit/view"
+	"github.com/Josepavese/nido/v4/internal/build"
+	"github.com/Josepavese/nido/v4/internal/builder"
+	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/image"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/provider"
+	view "github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

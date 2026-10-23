@@ -45,28 +45,28 @@ rm -f "$OUTPUT_DIR"/nido-linux-amd64.tar.gz \
 
 # Linux (amd64)
 echo "Building for Linux (amd64)..."
-GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-linux-amd64" ./cmd/nido
-GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator-linux-amd64" ./cmd/nido-validator
+GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-linux-amd64" ./cmd/nido
+GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator-linux-amd64" ./cmd/nido-validator
 
 # Linux (arm64)
 echo "Building for Linux (arm64)..."
-GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-linux-arm64" ./cmd/nido
-GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator-linux-arm64" ./cmd/nido-validator
+GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-linux-arm64" ./cmd/nido
+GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator-linux-arm64" ./cmd/nido-validator
 
 # macOS (Intel)
 echo "Building for macOS (Intel)..."
-GOOS=darwin GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-darwin-amd64" ./cmd/nido
-GOOS=darwin GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator-darwin-amd64" ./cmd/nido-validator
+GOOS=darwin GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-darwin-amd64" ./cmd/nido
+GOOS=darwin GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator-darwin-amd64" ./cmd/nido-validator
 
 # macOS (Apple Silicon)
 echo "Building for macOS (Apple Silicon)..."
-GOOS=darwin GOARCH=arm64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-darwin-arm64" ./cmd/nido
-GOOS=darwin GOARCH=arm64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator-darwin-arm64" ./cmd/nido-validator
+GOOS=darwin GOARCH=arm64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-darwin-arm64" ./cmd/nido
+GOOS=darwin GOARCH=arm64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator-darwin-arm64" ./cmd/nido-validator
 
 # Windows (amd64)
 echo "Building for Windows (amd64)..."
-GOOS=windows GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido.exe" ./cmd/nido
-GOOS=windows GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator.exe" ./cmd/nido-validator
+GOOS=windows GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido.exe" ./cmd/nido
+GOOS=windows GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator.exe" ./cmd/nido-validator
 
 echo ""
 echo "📦 Packaging releases..."

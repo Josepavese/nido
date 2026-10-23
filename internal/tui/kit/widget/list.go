@@ -1,8 +1,8 @@
 package widget
 
 import (
-	"github.com/Josepavese/nido/internal/tui/kit/layout"
-	viewlet "github.com/Josepavese/nido/internal/tui/kit/view"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
+	viewlet "github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )

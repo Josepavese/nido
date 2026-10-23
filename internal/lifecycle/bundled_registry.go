@@ -3,7 +3,7 @@ package lifecycle
 import (
 	"bytes"
 	"fmt"
-	registryassets "github.com/Josepavese/nido/registry"
+	registryassets "github.com/Josepavese/nido/v4/registry"
 	"io/fs"
 	"os"
 	"path/filepath"

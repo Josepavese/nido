@@ -3,8 +3,8 @@ package scenario
 import (
 	"time"
 
-	"github.com/Josepavese/nido/internal/validator/mcpclient"
-	"github.com/Josepavese/nido/internal/validator/report"
+	"github.com/Josepavese/nido/v4/internal/validator/mcpclient"
+	"github.com/Josepavese/nido/v4/internal/validator/report"
 )
 
 // MCPProtocol validates MCP protocol basics: initialize, tools/list contents, resources, tool calls, and negative tool.

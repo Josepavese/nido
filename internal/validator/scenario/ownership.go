@@ -4,7 +4,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/Josepavese/nido/internal/validator/util"
+	"github.com/Josepavese/nido/v4/internal/validator/util"
 )
 
 const validatorGeneratedPrefix = "nido-val-"

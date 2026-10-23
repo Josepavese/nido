@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/internal/validator/report"
+	"github.com/Josepavese/nido/v4/internal/validator/report"
 )
 
 // PreClean removes stale validator-owned resources before running the suite.

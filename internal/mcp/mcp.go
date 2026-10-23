@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/internal/build"
-	"github.com/Josepavese/nido/internal/builder"
-	"github.com/Josepavese/nido/internal/config"
-	"github.com/Josepavese/nido/internal/image"
-	"github.com/Josepavese/nido/internal/lifecycle"
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
-	"github.com/Josepavese/nido/internal/provider"
+	"github.com/Josepavese/nido/v4/internal/build"
+	"github.com/Josepavese/nido/v4/internal/builder"
+	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/image"
+	"github.com/Josepavese/nido/v4/internal/lifecycle"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/provider"
 )
 
 // JSONRPCRequest represents a standard JSON-RPC 2.0 request.

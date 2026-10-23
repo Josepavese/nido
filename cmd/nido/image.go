@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/internal/builder"
-	clijson "github.com/Josepavese/nido/internal/cli"
-	"github.com/Josepavese/nido/internal/image"
-	"github.com/Josepavese/nido/internal/provider"
-	"github.com/Josepavese/nido/internal/ui"
+	"github.com/Josepavese/nido/v4/internal/builder"
+	clijson "github.com/Josepavese/nido/v4/internal/cli"
+	"github.com/Josepavese/nido/v4/internal/image"
+	"github.com/Josepavese/nido/v4/internal/provider"
+	"github.com/Josepavese/nido/v4/internal/ui"
 )
 
 // cmdImageList identifies all species currently documented in the catalog

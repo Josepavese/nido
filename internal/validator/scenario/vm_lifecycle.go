@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
-	"github.com/Josepavese/nido/internal/validator/report"
-	"github.com/Josepavese/nido/internal/validator/runner"
-	"github.com/Josepavese/nido/internal/validator/util"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/validator/report"
+	"github.com/Josepavese/nido/v4/internal/validator/runner"
+	"github.com/Josepavese/nido/v4/internal/validator/util"
 )
 
 // VMLifecycle covers spawn/info/list/stop/start/delete/prune.

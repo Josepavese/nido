@@ -1,6 +1,6 @@
 package builder
 
-import "github.com/Josepavese/nido/internal/image"
+import "github.com/Josepavese/nido/v4/internal/image"
 
 // SourcesConfig represents the root of sources.yaml
 type SourcesConfig struct {

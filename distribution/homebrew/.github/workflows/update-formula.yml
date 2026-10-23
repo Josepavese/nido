@@ -1,0 +1,54 @@
+name: Update formula
+
+# Lives in the TAP repository (Josepavese/homebrew-nido), not in nido.
+# Zero secrets: the tap's own GITHUB_TOKEN can commit to the tap.
+# Renders Formula/nido.rb from templates/nido.rb using the latest Nido release.
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Render formula from latest release
+        run: |
+          set -euo pipefail
+          tag=$(curl -fsSL https://api.github.com/repos/Josepavese/nido/releases/latest | jq -r .tag_name)
+          version="${tag#v}"
+          curl -fsSL -o SHA256SUMS "https://github.com/Josepavese/nido/releases/download/${tag}/SHA256SUMS"
+          sha() { awk -v asset="$1" '$2 == asset || $2 == "*" asset { print $1 }' SHA256SUMS; }
+
+          test -n "$(sha nido-linux-amd64.tar.gz)"
+          test -n "$(sha nido-linux-arm64.tar.gz)"
+          test -n "$(sha nido-darwin-amd64.tar.gz)"
+          test -n "$(sha nido-darwin-arm64.tar.gz)"
+
+          mkdir -p Formula
+          sed \
+            -e "s/__VERSION__/${version}/g" \
+            -e "s/__SHA_LINUX_AMD64__/$(sha nido-linux-amd64.tar.gz)/g" \
+            -e "s/__SHA_LINUX_ARM64__/$(sha nido-linux-arm64.tar.gz)/g" \
+            -e "s/__SHA_DARWIN_AMD64__/$(sha nido-darwin-amd64.tar.gz)/g" \
+            -e "s/__SHA_DARWIN_ARM64__/$(sha nido-darwin-arm64.tar.gz)/g" \
+            templates/nido.rb > Formula/nido.rb
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Formula already up to date"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Formula/nido.rb
+          git commit -m "nido: update to $(grep -m1 '^  version ' Formula/nido.rb | cut -d'"' -f2)"
+          git push

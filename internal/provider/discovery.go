@@ -1,6 +1,6 @@
 package provider
 
-import "github.com/Josepavese/nido/internal/hardware"
+import "github.com/Josepavese/nido/v4/internal/hardware"
 
 func (p *QemuProvider) ListAccelerators() ([]hardware.Accelerator, error) {
 	return p.Hardware.ListAccelerators()

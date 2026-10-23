@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Josepavese/nido/internal/builder"
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
-	"github.com/Josepavese/nido/internal/provider"
+	"github.com/Josepavese/nido/v4/internal/builder"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/provider"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

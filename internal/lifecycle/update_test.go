@@ -6,7 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"github.com/Josepavese/nido/internal/build"
+	"github.com/Josepavese/nido/v4/internal/build"
 	"io"
 	"net/http"
 	"os"

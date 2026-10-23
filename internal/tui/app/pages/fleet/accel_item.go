@@ -2,9 +2,9 @@ package fleet
 
 import (
 	"fmt"
-	"github.com/Josepavese/nido/internal/hardware"
+	"github.com/Josepavese/nido/v4/internal/hardware"
 
-	"github.com/Josepavese/nido/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
 )
 
 // AccelItem adapts hardware.Accelerator to the List interface.

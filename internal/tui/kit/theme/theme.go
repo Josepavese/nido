@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Josepavese/nido/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 
 	"github.com/charmbracelet/lipgloss"
 )
