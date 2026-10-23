@@ -61,6 +61,19 @@ source ~/.bashrc
 nido version
 ```
 
+### 🍺 Homebrew (macOS & Linux)
+
+```bash
+brew install Josepavese/nido/nido
+```
+
+### 🥄 Scoop (Windows)
+
+```powershell
+scoop bucket add nido https://github.com/Josepavese/scoop-nido
+scoop install nido
+```
+
 ### 🐹 Go Install (Developers)
 
 If you already live in a Go toolchain, skip the installers:
@@ -69,8 +82,8 @@ If you already live in a Go toolchain, skip the installers:
 go install github.com/Josepavese/nido/v4/cmd/nido@latest
 ```
 
-Homebrew tap, Scoop bucket, WinGet and AUR channels are wired into the release
-workflow; their status and one-time setup are tracked in
+WinGet, AUR and npm channels are wired into the release workflow and activate
+once their credentials are configured; status and setup are tracked in
 [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
 
 ### 🪄 Cheat Codes (Auto-Complete)
@@ -139,7 +152,7 @@ nido mcp --help  # Human-readable MCP guide
 nido mcp-help    # Machine-readable MCP guide for agents
 ```
 
-Nido is published on the [Official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.Josepavese/nido). If your client only knows how to launch `npx`, use the npm launcher (it downloads and checksum-verifies the release binary):
+Nido is published on the [Official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.Josepavese/nido). For clients that only know how to launch `npx`, the `nido-mcp` launcher (enabled once the npm package is bootstrapped — see [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md)) downloads and checksum-verifies the release binary:
 
 ```bash
 npx -y nido-mcp mcp
