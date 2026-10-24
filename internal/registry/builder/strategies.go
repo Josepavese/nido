@@ -46,7 +46,7 @@ func (f *UpstreamFetcher) Fetch(src Source, strat Strategy) ([]image.Version, er
 	case "generic":
 		result, err = f.fetchGeneric(src, strat)
 	case "ubuntu-cloud":
-		result, err = f.fetchUbuntu(src, strat)
+		result, err = f.fetchUbuntu(src, strat, releases)
 	case "debian-cloud":
 		result, err = f.fetchDebian(src, strat, releases)
 	case "alpine-cdn":
@@ -129,15 +129,37 @@ func (f *UpstreamFetcher) fetchGeneric(src Source, strat Strategy) ([]image.Vers
 	return results, nil
 }
 
-func (f *UpstreamFetcher) fetchUbuntu(src Source, strat Strategy) ([]image.Version, error) {
+func (f *UpstreamFetcher) fetchUbuntu(src Source, strat Strategy, releases []release) ([]image.Version, error) {
 	var results []image.Version
 
-	for _, ver := range strat.Versions {
-		// 1. Fetch directory listing to find latest release folder
-		baseURL := fmt.Sprintf("%s/%s", strat.BaseURL, ver)
-		content, err := f.fetchString(baseURL + "/")
-		if err != nil {
-			return nil, fmt.Errorf("%s:%s: %w", src.Name, ver, err)
+	for _, rel := range releases {
+		ver := rel.version
+		// Ubuntu Cloud Images expose the same immutable builds under both
+		// releases/<version>/ and releases/<codename>/. The numeric directory has
+		// answered 403 while the codename directory kept serving them, so try both
+		// instead of failing the whole catalog refresh.
+		bases := []string{fmt.Sprintf("%s/%s", strat.BaseURL, ver)}
+		if rel.codename != "" && rel.codename != ver {
+			bases = append(bases, fmt.Sprintf("%s/%s", strat.BaseURL, rel.codename))
+		}
+
+		var content, base string
+		var failures []string
+		for _, candidate := range bases {
+			body, err := f.fetchString(candidate + "/")
+			if err != nil {
+				failures = append(failures, err.Error())
+				continue
+			}
+			if !strings.Contains(body, "release-") {
+				failures = append(failures, "no release directory")
+				continue
+			}
+			content, base = body, candidate
+			break
+		}
+		if base == "" {
+			return nil, fmt.Errorf("%s:%s: upstream metadata unavailable or invalid (%s)", src.Name, ver, strings.Join(failures, "; "))
 		}
 
 		// Find latest release folder: href="release-YYYYMMDD/"
@@ -156,7 +178,7 @@ func (f *UpstreamFetcher) fetchUbuntu(src Source, strat Strategy) ([]image.Versi
 		latestReleaseFolder := strings.TrimSuffix(folders[len(folders)-1], "/")
 
 		// 2. Fetch SUMS from the specific immutable folder
-		sumsURL := fmt.Sprintf("%s/%s/%s/SHA256SUMS", strat.BaseURL, ver, latestReleaseFolder)
+		sumsURL := fmt.Sprintf("%s/%s/SHA256SUMS", base, latestReleaseFolder)
 		sumsContent, err := f.fetchString(sumsURL)
 		if err != nil {
 			return nil, fmt.Errorf("%s:%s: %w", src.Name, ver, err)
@@ -171,7 +193,7 @@ func (f *UpstreamFetcher) fetchUbuntu(src Source, strat Strategy) ([]image.Versi
 
 		hash := sumsMatch[1]
 		filename := sumsMatch[2]
-		imgURL := fmt.Sprintf("%s/%s/%s/%s", strat.BaseURL, ver, latestReleaseFolder, filename)
+		imgURL := fmt.Sprintf("%s/%s/%s", base, latestReleaseFolder, filename)
 
 		// 3. Get Size
 		size, err := f.getRemoteSize(imgURL)

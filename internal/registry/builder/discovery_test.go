@@ -112,6 +112,51 @@ func TestFutureReleasesAcrossProviders(t *testing.T) {
 	}
 }
 
+func TestUbuntuFallsBackToCodenameDirectory(t *testing.T) {
+	hash := strings.Repeat("c", 64)
+	metadata := `{"products":{"new":{"version":"30.10","release":"future","release_title":"30.10","arch":"amd64","os":"ubuntu","supported":true,"support_eol":"2035-10-01"}}}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodHead:
+			w.Header().Set("Content-Length", "12345")
+		case r.URL.Path == "/metadata":
+			fmt.Fprint(w, metadata)
+		case r.URL.Path == "/u/30.10/":
+			http.Error(w, "forbidden", http.StatusForbidden)
+		case r.URL.Path == "/u/future/":
+			fmt.Fprint(w, `<a href="release-20301001/">new</a>`)
+		case r.URL.Path == "/u/future/release-20301001/SHA256SUMS":
+			fmt.Fprint(w, hash+" *ubuntu-30.10-server-cloudimg-amd64.img\n")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	fetcher := NewFetcher(server.Client())
+	fetcher.now = func() time.Time { return time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC) }
+	versions, err := fetcher.Fetch(Source{Name: "ubuntu"}, Strategy{
+		Type:      "ubuntu-cloud",
+		BaseURL:   server.URL + "/u",
+		Discovery: &Discovery{URL: server.URL + "/metadata"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(versions) != 1 || versions[0].Version != "30.10" {
+		t.Fatalf("unexpected versions: %#v", versions)
+	}
+	if !strings.Contains(versions[0].URL, "/u/future/release-20301001/ubuntu-30.10-server-cloudimg-amd64.img") {
+		t.Fatalf("image URL did not use codename fallback: %s", versions[0].URL)
+	}
+	if !strings.Contains(versions[0].ChecksumURL, "/u/future/release-20301001/SHA256SUMS") {
+		t.Fatalf("checksum URL did not use codename fallback: %s", versions[0].ChecksumURL)
+	}
+	if versions[0].Checksum != hash || versions[0].SizeBytes != 12345 {
+		t.Fatalf("unexpected metadata: %#v", versions[0])
+	}
+}
+
 func TestDiscoveryRejectsMissingMalformedAndAmbiguousInputs(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/error" {
