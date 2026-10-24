@@ -234,7 +234,8 @@ every release using the `nido.mcpb` asset.
 | `mcp.so` | repository URL via form | free with review / $39 fast-track |
 | `mcpservers.org` (= wong2 list) | form, include `io.github.Josepavese/nido` in "Official MCP Registry Name" | free 2 weeks / $39 24h |
 | MCP Market (`mcpmarket.com`) | form | free 4–6 weeks / $29 24h |
-| Directory of agent sandboxes lists (`msyvr/awesome-agent-sandboxes`, `sandbaseai/awesome-agent-runtime`) | PR/issue | free |
+| `msyvr/awesome-agent-sandboxes` | PR open: [#79](https://github.com/msyvr/awesome-agent-sandboxes/pull/79) (Standalone / Local Tools, KVM tier; `data/sandboxes.yaml` + regenerated artifacts) | free |
+| `sandbaseai/awesome-agent-runtime` | issue open: [#31](https://github.com/sandbaseai/awesome-agent-runtime/issues/31) (Execution Sandbox category) | free |
 | Product Hunt / DevHunt / TAAFT | launch | free / $19 / free |
 
 Newsletters (Console.dev, Golang Weekly, Ben's Bites) are editorial pitches, not
