@@ -53,6 +53,11 @@ Example:
 
 ### 📦 Installation
 
+npm (`nido-mcp`), Homebrew, Scoop, Go and WinGet availability are covered in the
+[installation guide](https://github.com/Josepavese/nido/blob/main/installers/README.md).
+For AI clients, the same guide links the Official MCP Registry, Glama and the
+MCPB bundle, with [client setup](https://github.com/Josepavese/nido/blob/main/docs/mcp.md).
+
 #### Quick install
 
 \`\`\`bash

@@ -2,8 +2,9 @@
 
 [Documentation](../docs/README.md) · [Distribution channel status](../docs/DISTRIBUTION.md)
 
-The binary installer is the simplest starting point. It requires no repository
-clone or Go toolchain. QEMU is a separate runtime dependency.
+Choose a binary installer, a package manager or an MCP client integration.
+The binary installers require no repository clone or Go toolchain. QEMU is a
+separate runtime dependency.
 
 ## Binary installers
 
@@ -40,16 +41,53 @@ review it, then execute the saved file.
 
 | Channel | Command |
 | --- | --- |
+| [npm](https://www.npmjs.com/package/nido-mcp), Linux / macOS / Windows | `npm install -g nido-mcp` |
+| npm without global install | `npx -y nido-mcp version` for the CLI; `npx -y nido-mcp mcp` for an MCP client |
 | Homebrew, macOS / Linux | `brew install Josepavese/nido/nido` |
 | Scoop, Windows | Add `https://github.com/Josepavese/scoop-nido` as bucket `nido`, then `scoop install nido` |
-| npm launcher | `npm install -g nido-mcp` |
-| npm without global install | `npx -y nido-mcp mcp` |
+| WinGet, Windows | `Josepavese.Nido`; [check availability below](#winget-windows) while Microsoft reviews the initial package |
 | Go toolchain | `go install github.com/Josepavese/nido/v4/cmd/nido@latest` |
 
 The npm launcher downloads the matching binary on first use and verifies it
 against release `SHA256SUMS`. Go install builds from source and does not install
 QEMU. Companion package channels can lag a new GitHub release; availability and
 credential-dependent channels are tracked in [distribution](../docs/DISTRIBUTION.md).
+
+### WinGet (Windows)
+
+The `Josepavese.Nido` package has been submitted to the community repository:
+[Microsoft review](https://github.com/microsoft/winget-pkgs/pull/460843).
+The CLA and package validation have passed; initial publication still requires
+moderator approval. Check whether the package has reached your WinGet catalog:
+
+```powershell
+winget search --id Josepavese.Nido --exact
+```
+
+Once it appears, install or upgrade it with:
+
+```powershell
+winget install --id Josepavese.Nido --exact
+winget upgrade --id Josepavese.Nido --exact
+```
+
+While that review is pending, use the PowerShell installer, Scoop or npm.
+QEMU remains a host prerequisite, whichever Nido channel you choose.
+
+## MCP catalogs and client installation
+
+| Method | Where to find Nido | How it runs |
+| --- | --- | --- |
+| [Official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Josepavese%2Fnido/versions/latest) | Search for `io.github.Josepavese/nido` in a registry-aware client | The registry advertises the `nido-mcp` npm package and MCPB release bundle |
+| [Glama](https://glama.ai/mcp/servers/Josepavese/nido) | Nido / `nido-mcp` by `Josepavese` | Discovery listing with source and tool information |
+| [npm](https://www.npmjs.com/package/nido-mcp) | `nido-mcp` | Configure the client to launch `npx -y nido-mcp mcp` |
+| [MCPB bundle](https://github.com/Josepavese/nido/releases/latest/download/nido.mcpb) | `nido.mcpb` in every GitHub release | Import into a client that supports MCPB; QEMU must be available on the same host |
+
+These catalogs help clients discover the server. Nido runs locally over stdio;
+QEMU, VM disks and host permissions belong to the machine running that process.
+Use the [MCP guide](../docs/mcp.md#configure-a-client) for the exact configuration.
+Smithery publication and other discovery integrations have their own activation
+status in the [distribution guide](../docs/DISTRIBUTION.md).
 
 ## Host prerequisites
 
