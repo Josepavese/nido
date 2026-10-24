@@ -52,11 +52,11 @@ irm https://github.com/Josepavese/nido/releases/latest/download/install.ps1 | ie
 Open a new terminal, then check `nido version` and `nido doctor`. The quick
 installers check prerequisites and offer QEMU setup where supported.
 
-Prefer a package manager?
+Prefer a package manager? npm works on Linux, macOS and Windows:
 
 ```bash
+npm install -g nido-mcp                # Linux / macOS / Windows launcher
 brew install Josepavese/nido/nido       # macOS / Linux
-npm install -g nido-mcp                # verified binary launcher
 go install github.com/Josepavese/nido/v4/cmd/nido@latest
 ```
 
@@ -64,6 +64,13 @@ go install github.com/Josepavese/nido/v4/cmd/nido@latest
 scoop bucket add nido https://github.com/Josepavese/scoop-nido
 scoop install nido
 ```
+
+**WinGet**: `Josepavese.Nido` is awaiting Microsoft review. See
+[availability and commands](installers/README.md#winget-windows).
+
+For MCP clients, use `npx -y nido-mcp mcp`, discover
+`io.github.Josepavese/nido` in the **Official MCP Registry**, browse **Glama**,
+or import the **MCPB bundle**. [MCP catalogs and client installation](installers/README.md#mcp-catalogs-and-client-installation).
 
 [All install options](installers/README.md) · [Distribution channel status](docs/DISTRIBUTION.md)
 

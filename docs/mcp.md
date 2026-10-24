@@ -7,6 +7,15 @@ and TUI. The MCP client starts `nido mcp` as a local child process. There is no
 remote HTTP/SSE MCP listener. TUI/MCP sessions share a private local event socket
 behind the stdio server; it is not an additional remote MCP transport.
 
+## Choose an installation method
+
+Install the CLI through npm (`nido-mcp`), Homebrew, Scoop or the binary installers,
+or use `npx -y nido-mcp mcp` directly from your client. Registry-aware clients
+can discover `io.github.Josepavese/nido` in the Official MCP Registry; Nido is
+also listed on Glama and ships an MCPB bundle.
+See [installation channels and MCP catalogs](../installers/README.md#mcp-catalogs-and-client-installation),
+including [WinGet availability](../installers/README.md#winget-windows).
+
 ## Configure a client
 
 ```json

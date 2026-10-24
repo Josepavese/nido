@@ -3,7 +3,8 @@
 How Nido reaches users and AI-agent tooling, and what runs automatically on
 every release. Research verified on **2026-10-24**; the whole pipeline was then
 validated end-to-end on the `v4.8.1` tag (§1.1) and again on `v4.8.3` (§1.3).
-Account/token requirements are listed per channel.
+Account/token requirements are listed per channel. For user-facing commands,
+see [installation methods and MCP catalogs](../installers/README.md).
 
 The release workflow (`.github/workflows/release.yml`) builds the assets, creates
 the GitHub Release, and then publishes to the channels below. A channel without
@@ -24,7 +25,7 @@ incremental.
 | **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | Not configured yet; x86_64 only, `-bin` package. |
 | **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | Not configured yet; stdio artifact, no hosting needed. |
 | **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours; the dated verification below records tested versions. |
-| **Glama** | auto-index + `glama.json` claim | GitHub OAuth, one-time | none | `glama.json` is in the repo root. The claim is manual once. |
+| **Glama** | auto-index + `glama.json` claim | GitHub OAuth, one-time | none | [Nido listing is live](https://glama.ai/mcp/servers/Josepavese/nido); `glama.json` identifies the maintainer. Claiming ownership is a separate manual step. |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
 
 Indirectly covered with no work: **PulseMCP** and **MCP Central** ingest the

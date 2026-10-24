@@ -16,6 +16,14 @@ Windows host support is smoke-tested on a real Windows VM. The latest validation
 
 This is enough to call the core workflow usable. It is not yet equivalent to the Linux/macOS path for heavy or long-running workloads. Keep testing intensive agent workloads, repeated lifecycle loops, GUI sessions, and large Windows blueprint builds before relying on it as the default production host.
 
+## Choose an installer
+
+Use the [PowerShell installer](../installers/README.md#binary-installers),
+[Scoop or npm](../installers/README.md#package-managers). For WinGet, the
+`Josepavese.Nido` submission is awaiting Microsoft review; see the
+[availability check and install commands](../installers/README.md#winget-windows).
+For an AI client, see [MCP catalogs and client installation](../installers/README.md#mcp-catalogs-and-client-installation).
+
 ## Installer Behavior
 
 `quick-install.ps1` installs the Nido release into `%USERPROFILE%\.nido`, adds `%USERPROFILE%\.nido\bin` to the user PATH, and installs the bundled registry.
