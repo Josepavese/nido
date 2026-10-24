@@ -87,9 +87,10 @@ type Incubator struct {
 	spawnBtn     *widget.Button
 
 	// Styles
-	LabelStyle  lipgloss.Style
-	ToggleStyle lipgloss.Style
-	ButtonStyle lipgloss.Style
+	LabelStyle        lipgloss.Style
+	ToggleStyle       lipgloss.Style
+	ButtonStyle       lipgloss.Style
+	sourceUnavailable bool
 }
 
 func NewIncubator(parent *Hatchery) *Incubator {
@@ -231,7 +232,7 @@ func (i *Incubator) rebuildForm() {
 }
 
 func (i *Incubator) submitSpawn() tea.Cmd {
-	if i.SelectedSource == nil {
+	if i.SelectedSource == nil || i.sourceUnavailable {
 		return nil
 	}
 
@@ -338,7 +339,10 @@ func (i *Incubator) View() string {
 }
 
 func (i *Incubator) SetSource(item *SourceItem) {
+	same := i.SelectedSource != nil && i.SelectedSource.Type == item.Type && i.SelectedSource.Label == item.Label
 	i.SelectedSource = item
+	i.sourceUnavailable = false
+	i.spawnBtn.Disabled = false
 
 	// Update Header Component
 	i.header.Icon = item.Icon()
@@ -350,10 +354,12 @@ func (i *Incubator) SetSource(item *SourceItem) {
 		i.spawnBtn.Text = "SPAWN"
 	}
 
-	i.input.SetValue("")
-	i.PendingPorts = nil
-	i.rawArgsInput.SetValue("")
-	i.rebuildForm()
+	if !same {
+		i.input.SetValue("")
+		i.PendingPorts = nil
+		i.rawArgsInput.SetValue("")
+		i.rebuildForm()
+	}
 }
 
 func (i *Incubator) Shortcuts() []fv.Shortcut {
@@ -391,6 +397,7 @@ type Hatchery struct {
 	ModalAccel    *widget.ListModal // Accelerator Selection
 
 	prov                     provider.VMProvider
+	pendingDeleteName        string
 	pendingDeleteForce       bool
 	ConfirmDeletePort        *widget.Modal
 	PendingPortToDeleteIndex int
@@ -444,12 +451,9 @@ func NewHatchery(prov provider.VMProvider) *Hatchery {
 		"Delete Template",
 		"Are you sure?",
 		func() tea.Cmd {
-			if item := h.Sidebar.SelectedItem(); item != nil {
-				if srcItem, ok := item.(SourceItem); ok && srcItem.Type == "TEMPLATE" {
-					return func() tea.Msg {
-						return ops.RequestDeleteTemplateMsg{Name: srcItem.Label, Force: h.pendingDeleteForce}
-					}
-				}
+			if h.pendingDeleteName != "" {
+				name, force := h.pendingDeleteName, h.pendingDeleteForce
+				return func() tea.Msg { return ops.RequestDeleteTemplateMsg{Name: name, Force: force} }
 			}
 			return nil
 		},
@@ -612,6 +616,14 @@ func (i *Incubator) Reset() {
 
 func (h *Hatchery) SetPendingSelection(name string) {
 	h.PendingSelection = name
+	for index, item := range h.Sidebar.Items() {
+		if source, ok := item.(SourceItem); ok && source.Label == name {
+			h.Sidebar.Select(index)
+			h.Incubator.SetSource(&source)
+			h.PendingSelection = ""
+			break
+		}
+	}
 }
 
 func (h *Hatchery) OpenAddPortModal() tea.Cmd {
@@ -629,26 +641,27 @@ func (h *Hatchery) Init() tea.Cmd {
 }
 
 func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
+	uiInput := fv.IsInputMessage(msg)
 	// 1. Modals Interception (Blocking)
-	if h.ConfirmDelete.IsActive() {
+	if uiInput && h.ConfirmDelete.IsActive() {
 		newModal, cmd := h.ConfirmDelete.Update(msg)
 		h.ConfirmDelete = newModal
 		return h, cmd
 	}
 
-	if h.ConfirmDeletePort.IsActive() {
+	if uiInput && h.ConfirmDeletePort.IsActive() {
 		newModal, cmd := h.ConfirmDeletePort.Update(msg)
 		h.ConfirmDeletePort = newModal
 		return h, cmd
 	}
 
-	if h.ModalAddPort.IsActive() {
+	if uiInput && h.ModalAddPort.IsActive() {
 		_, cmd := h.ModalAddPort.Update(msg)
 		// No need to reassign ptr as it modifies internal state of struct
 		return h, cmd
 	}
 
-	if h.ModalAccel.IsActive() {
+	if uiInput && h.ModalAccel.IsActive() {
 		_, cmd := h.ModalAccel.Update(msg)
 		return h, cmd
 	}
@@ -677,6 +690,7 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 		return h, nil
 
 	case ops.TemplateUsageMsg:
+		h.pendingDeleteName = msg.Name
 		if msg.Err != nil {
 			h.pendingDeleteForce = false
 			h.ConfirmDelete.Message = fmt.Sprintf("Delete template '%s'?\n(Usage check failed: %v)", msg.Name, msg.Err)
@@ -739,24 +753,27 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 			if len(items) > 0 {
 				h.Sidebar.SetItems(items)
 
-				// Auto-select logic
-				selectedIndex := 0 // Default to first
-				if h.PendingSelection != "" {
-					for i, item := range items {
-						if s, ok := item.(SourceItem); ok {
-							// Check match (Label is typically "name:tag" or "name")
-							if s.Label == h.PendingSelection {
-								selectedIndex = i
-								break
-							}
-						}
-					}
-					h.PendingSelection = "" // Clear after use
+				target := h.PendingSelection
+				targetType := ""
+				if target == "" && h.Incubator.SelectedSource != nil {
+					target = h.Incubator.SelectedSource.Label
+					targetType = h.Incubator.SelectedSource.Type
 				}
-
-				h.Sidebar.Select(selectedIndex)
-				if selected, ok := items[selectedIndex].(SourceItem); ok {
+				selectedIndex := -1
+				for index, item := range items {
+					source := item.(SourceItem)
+					if target == "" || source.Label == target && (targetType == "" || source.Type == targetType) {
+						selectedIndex = index
+						break
+					}
+				}
+				if selectedIndex >= 0 {
+					h.Sidebar.Select(selectedIndex)
+					selected := items[selectedIndex].(SourceItem)
 					h.Incubator.SetSource(&selected)
+					h.PendingSelection = ""
+				} else {
+					h.Incubator.markSourceUnavailable()
 				}
 			} else {
 				emptyItem := SourceItem{
@@ -765,6 +782,7 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 					Label: "No sources found",
 				}
 				h.Sidebar.SetItems([]widget.SidebarItem{emptyItem})
+				h.Incubator.markSourceUnavailable()
 			}
 		}
 
@@ -934,3 +952,12 @@ func (h *Hatchery) HasActiveFocus() bool {
 // Implements Section 5.1 of advanced-port-forwarding.md for TUI.
 
 // End of Hatchery Viewlet
+
+func (i *Incubator) markSourceUnavailable() {
+	if i.SelectedSource == nil {
+		return
+	}
+	i.sourceUnavailable = true
+	i.spawnBtn.Disabled = true
+	i.header.Subtitle = "Source removed; select an available source"
+}

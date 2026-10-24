@@ -161,6 +161,7 @@ def run():
         catalog = json.dumps(dict(schema_version='1.0', updated_at='2026-10-24T00:00:00Z', images=[]))
         (root/'registry/images.json').write_text(catalog)
         (home/'images/.catalog.json').write_text(catalog)
+        (home/'backups/template-a.compact.qcow2').write_bytes(b'private template metadata fixture')
         (home/'config.env').write_text(f'SSH_USER=fixture\nIMAGE_DIR={home}/images\nBACKUP_DIR={home}/backups\n')
         vm = 'event-vm'
         state = dict(name=vm, pid=0, memory_mb=512, vcpus=1, ssh_port=51022, ssh_user='fixture')
@@ -188,7 +189,10 @@ def run():
             # Move the second real terminal to another page while mutations arrive.
             route_cut = len(b.output)
             b.key(b'\x1b[C')
-            b.text('Select a source to begin incubation.', route_cut)
+            b.text('SPAWN', route_cut)
+            b.key(b'\r')
+            b.key(b'draft-vm')
+            b.text('draft-vm')
 
             def configure(memory):
                 result = subprocess.run([BINARY, 'config', vm, '--memory', str(memory), '--json'],
@@ -202,6 +206,16 @@ def run():
             detail = active.resource(uri)["vm"]
             assert detail['memory_mb'] == 640, detail
             a.text('640', cuts[0])
+            active.call('resources/subscribe', {'uri': 'nido://fleet/templates'})
+            (home/'backups/template-b.compact.qcow2').write_bytes(b'another private template metadata fixture')
+            active.notified('nido://fleet/templates')
+            draft_cut = len(b.output)
+            b.key(b'x')
+            b.text('draft-vmx', draft_cut)
+            active.call('resources/unsubscribe', {'uri': 'nido://fleet/templates'})
+            escape_cut = len(b.output)
+            b.key(b'\x1b')
+            b.text('bird-name', escape_cut)
             b.key(b'\x1b[D')
             b.text('640', cuts[1])
             active.collect(.6)
@@ -239,7 +253,7 @@ def run():
             a.text('Select VM', cuts[0])
             b.text('Select VM', cuts[1])
             print(json.dumps(dict(result='PASS', scope='Linux real PTY and independent processes',
-                                  two_tuis=True, background_route=True, cli_to_mcp=True,
+                                  two_tuis=True, background_route=True, draft_preserved=True, cli_to_mcp=True,
                                   no_unsolicited_notifications=True, mute_unmute=True,
                                   external_atomic_update=True, owner_crash_takeover=True,
                                   external_delete=True)))

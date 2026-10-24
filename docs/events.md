@@ -111,14 +111,28 @@ Examples:
   propagation, default silence, mute/unmute, external atomic updates/removal and
   broker crash takeover. Final changed-boundary tests, race detector, vet and
   isolated QEMU qualification all pass.
-- Remaining: native Windows/macOS CI and repository/wiki publication.
+- Native Linux/macOS/Windows build, tests and vet, Linux two-PTY integration,
+  staticcheck, vulnerability checks and full Linux guest lifecycle/cleanup passed
+  in [CI run 40107195162](https://github.com/Josepavese/nido/actions/runs/40107195162).
+  Its packaging step rejected an overlong server description; the metadata was
+  shortened and verified with the canonical release checker.
+- The final UI/MCP follow-up preserves drafts during live source updates, pins
+  deletion confirmations to their original identities, keeps data updates flowing
+  behind page modals, and notifies opted-in stream health subscribers once on
+  observation loss. Targeted race/vet tests and the extended two-PTY draft proof pass.
+- The [PR](https://github.com/Josepavese/nido/pull/322) owns the latest automated
+  candidate status. The [wiki](https://github.com/Josepavese/nido/wiki) now links
+  this development preview (wiki commit `e31af42142a903f5397411a8c48ee35fd966c691`).
+- Next consumer after validation: review PR #322, then the ordinary release
+  workflow. Existing user VMs/data were not used as fixtures.
 - The initial QEMU attempt missed `prelaunch`; the corrected runtime mapping
   passed. PTY observer assertions were corrected against the actual MCP `vm`
   envelope, nullable empty fleet and rendered route text; these were harness
   corrections, not proofs of the final path before the corrected run.
-- Scratch owner: this event goal. `/tmp/nido-events-build` is the shared external
-  build/test area; limit 2 GiB; retire after final consumer. Shared Go module and
-  build caches are reused, not removed. No existing VM or user data is modified.
+- Scratch owner: this event goal. `/tmp/nido-events-build` was the shared external
+  build/test area (2 GiB limit); its artifacts, fixture resources and wiki clone
+  are retired after their final validation/checkpoint consumer. Shared Go caches
+  are reused and preserved. No existing VM or user data is modified.
 
 ## Protocol references
 
@@ -160,3 +174,9 @@ A broker can be connected while its observer is unavailable. MCP exposes both
 are visible rather than interpreted as an empty fleet. Missing optional storage
 directories are watched when they appear, followed by resync. Native process
 wait failures use the documented central reconciliation recovery path.
+
+UI resource refresh is centralized in the event consumer. Action results retain
+local feedback and intentional selection, not a second refresh policy. Source
+reordering preserves draft values and input focus; a removed source disables
+submission without erasing the draft. Confirmation dialogs keep their target
+identity even if background data removes or reorders that object.

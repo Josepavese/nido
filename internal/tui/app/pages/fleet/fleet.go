@@ -92,6 +92,7 @@ type Fleet struct {
 
 	// Local State
 	existingTemplates []string
+	pendingDeleteVM   string
 	pendingTemplateVM string
 	TemplateModal     *CreateTemplateModal
 	ConfirmDelete     *widget.Modal
@@ -123,9 +124,10 @@ func NewFleet(prov provider.VMProvider) *Fleet {
 		"Delete VM",
 		"Are you sure?",
 		func() tea.Cmd {
-			if f.detail.Name != "" {
+			if f.pendingDeleteVM != "" {
+				name := f.pendingDeleteVM
 				return func() tea.Msg {
-					return ops.RequestOpMsg{Op: ops.OpDelete, Name: f.detail.Name}
+					return ops.RequestOpMsg{Op: ops.OpDelete, Name: name}
 				}
 			}
 			return nil
@@ -240,11 +242,7 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	// Modal Interception: Page-level modals block everything
-	uiInput := false
-	switch msg.(type) {
-	case tea.KeyMsg, tea.MouseMsg:
-		uiInput = true
-	}
+	uiInput := view.IsInputMessage(msg)
 	if uiInput && f.ConfirmDelete.IsActive() {
 		newModal, cmd := f.ConfirmDelete.Update(msg)
 		f.ConfirmDelete = newModal
@@ -510,8 +508,12 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 				}
 			}
 		case "backspace", "delete":
-			// Delete Shortcut - show confirmation modal
-			f.ConfirmDelete.Show()
+			// Capture the identity shown by the confirmation before background data changes.
+			if f.detail.Name != "" {
+				f.pendingDeleteVM = f.detail.Name
+				f.ConfirmDelete.Message = fmt.Sprintf("Delete VM %q?", f.pendingDeleteVM)
+				f.ConfirmDelete.Show()
+			}
 		}
 	}
 

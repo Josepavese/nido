@@ -152,3 +152,12 @@ type StatusMsg struct {
 	Operation string
 	Progress  float64
 }
+
+// IsInputMessage distinguishes modal-owned input from background domain data.
+func IsInputMessage(msg tea.Msg) bool {
+	switch msg.(type) {
+	case tea.KeyMsg, tea.MouseMsg:
+		return true
+	}
+	return false
+}

@@ -122,9 +122,14 @@ func (s *Server) receiveEvent(e events.Event) {
 	s.eventMu.Lock()
 	defer s.eventMu.Unlock()
 	if e.Kind == events.Unavailable {
+		wasAvailable := s.observerAvailable
 		s.connected = e.Epoch != ""
 		s.observerAvailable = false
 		s.resyncRequired = true
+		if sub, ok := s.subscriptions[events.Stream]; wasAvailable && ok && !sub.Muted {
+			s.pending[events.Stream] = true
+			s.recordEventLocked(e)
+		}
 		return
 	}
 	s.connected = true
@@ -151,11 +156,14 @@ func (s *Server) receiveEvent(e events.Event) {
 		}
 	}
 	if interested {
-		if len(s.recent) == recentEventLimit {
-			s.recent = s.recent[1:]
-		}
-		s.recent = append(s.recent, e)
+		s.recordEventLocked(e)
 	}
+}
+func (s *Server) recordEventLocked(e events.Event) {
+	if len(s.recent) == recentEventLimit {
+		s.recent = s.recent[1:]
+	}
+	s.recent = append(s.recent, e)
 }
 func (s *Server) runEvents(ctx context.Context, done chan<- struct{}) {
 	defer close(done)

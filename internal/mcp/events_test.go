@@ -138,3 +138,26 @@ func TestServeEOFCancelsAndJoinsEventSource(t *testing.T) {
 		t.Fatal("event source survived EOF")
 	}
 }
+
+func TestOptedInStreamHealthNotifiesOnceOnObservationLoss(t *testing.T) {
+	s := NewServer(&mockProvider{})
+	out := &bytes.Buffer{}
+	s.output = out
+	s.initialized = true
+	if err := s.eventControl("subscribe", events.Stream, nil); err != nil {
+		t.Fatal(err)
+	}
+	s.receiveEvent(events.Event{Source: events.Service, Kind: events.Resync, Epoch: "fixture"})
+	s.flushEvents()
+	out.Reset()
+	for range 10 {
+		s.receiveEvent(events.Event{Source: events.Service, Kind: events.Unavailable, Epoch: "fixture"})
+		s.flushEvents()
+	}
+	if got := bytes.Count(out.Bytes(), []byte("notifications/resources/updated")); got != 1 {
+		t.Fatalf("unavailable observer generated %d notifications", got)
+	}
+	if !s.connected || s.observerAvailable {
+		t.Fatal("wire and observation health were conflated")
+	}
+}

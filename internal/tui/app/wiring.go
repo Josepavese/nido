@@ -14,6 +14,7 @@ import (
 	"github.com/Josepavese/nido/v4/internal/tui/kit/app"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/shell"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 
 	"github.com/Josepavese/nido/v4/internal/tui/app/ops" // Was services
@@ -108,7 +109,7 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return n, cmd
 	}
 	// 0. Modal Interception
-	if n.ErrorModal.IsActive() && isUserInput(msg) {
+	if n.ErrorModal.IsActive() && view.IsInputMessage(msg) {
 		newModal, cmd := n.ErrorModal.Update(msg)
 		n.ErrorModal = newModal
 		return n, cmd
@@ -305,8 +306,6 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Just log warning if needed, or ignore.
 		}
 		// Fleet data refresh is driven by the shared event stream.
-		// We moved FetchSources to the heuristic block below for more targeted refresh
-		// but keeping it here for general safety if needed. Actually let's keep it consistent.
 
 		// 4. Handle Errors
 		if msg.Err != nil {
@@ -321,21 +320,9 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			n.Shell.SetStatus(false, fmt.Sprintf("SUCCESS: %s completed", msg.Op), 0)
 		}
 
-		// 5. Heuristic-based Refreshes
-		// If it's a destructive or acquisition op, refresh the registry/sources
+		// Local feedback and selection; data invalidations come from events.
 		_, blueprintSpawn := msg.Data.(ops.BlueprintSpawnResult)
 		if msg.Op == "prune" || strings.HasPrefix(msg.Op, "delete") || strings.HasPrefix(msg.Op, "pull") || blueprintSpawn {
-			// Refresh Sources (Dropdowns in Hatchery/Spawn)
-			cmds = append(cmds, ops.FetchSources(n.prov, ops.SourceActionSpawn, false, true))
-
-			// Refresh Registry (Image list in Registry)
-			if n.Registry != nil {
-				cmds = append(cmds, ops.FetchRegistryImages(n.prov, false))
-				// Also refresh local cache list
-				_, cmd := n.Registry.Update(ops.CachePruneMsg{})
-				cmds = append(cmds, cmd)
-			}
-
 			// UX: If this was a pull, auto-select the new image in Hatchery
 			if strings.HasPrefix(msg.Op, "pull ") && n.Hatchery != nil {
 				imgName := strings.TrimPrefix(msg.Op, "pull ")
@@ -465,14 +452,6 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config, sour
 func isFleetData(msg tea.Msg) bool {
 	switch msg.(type) {
 	case ops.VMListMsg, ops.VMDetailMsg, ops.TemplateListMsg:
-		return true
-	}
-	return false
-}
-
-func isUserInput(msg tea.Msg) bool {
-	switch msg.(type) {
-	case tea.KeyMsg, tea.MouseMsg:
 		return true
 	}
 	return false

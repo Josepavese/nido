@@ -88,8 +88,9 @@ type Registry struct {
 	ConfirmDelete *widget.Modal
 
 	// Data
-	localItems  []RegistryItem
-	remoteItems []RegistryItem
+	pendingDelete *RegistryItem
+	localItems    []RegistryItem
+	remoteItems   []RegistryItem
 }
 
 func NewRegistry(prov provider.VMProvider) *Registry {
@@ -136,8 +137,8 @@ func NewRegistry(prov provider.VMProvider) *Registry {
 		"Delete Image",
 		"Are you sure?",
 		func() tea.Cmd {
-			if r.DetailView.Item.Name != "" && r.DetailView.Item.IsLocal {
-				item := r.DetailView.Item
+			if r.pendingDelete != nil {
+				item := *r.pendingDelete
 				deleteName := item.DeleteName
 				deleteVersion := item.DeleteVersion
 				if deleteName == "" {
@@ -168,6 +169,7 @@ func (r *Registry) Init() tea.Cmd {
 }
 
 func (r *Registry) rebuildSidebar() {
+	selected := r.DetailView.Item
 	var items []widget.SidebarItem
 
 	// 1. Local Cache Section
@@ -194,18 +196,19 @@ func (r *Registry) rebuildSidebar() {
 
 	r.Sidebar.SetItems(items)
 
-	// Preserve selection or select first relevant?
-	// For now, if nothing selected/empty, select first.
-	// But rebuilding shifts indices.
-	// Simplest: If nothing selected, select first item that is NOT a header (if possible) or just index 1.
-	if r.Sidebar.SelectedItem() == nil && len(items) > 1 {
-		r.Sidebar.Select(1) // Usually index 0 is Header
+	for index, item := range items {
+		if candidate, ok := item.(RegistryItem); ok && candidate.Name == selected.Name && candidate.Version == selected.Version && candidate.IsLocal == selected.IsLocal {
+			r.Sidebar.Select(index)
+			r.DetailView.UpdateItem(candidate)
+			return
+		}
 	}
+	r.DetailView.UpdateItem(RegistryItem{})
 }
 
 func (r *Registry) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 	// 1. Modal Interception
-	if r.ConfirmDelete.IsActive() {
+	if view.IsInputMessage(msg) && r.ConfirmDelete.IsActive() {
 		newModal, cmd := r.ConfirmDelete.Update(msg)
 		r.ConfirmDelete = newModal
 		return r, cmd
@@ -235,6 +238,8 @@ func (r *Registry) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 		case "backspace", "delete":
 			// Delete Action (Contextual)
 			if r.DetailView.Item.Name != "" && r.DetailView.Item.IsLocal {
+				item := r.DetailView.Item
+				r.pendingDelete = &item
 				r.ConfirmDelete.Message = fmt.Sprintf("Delete image '%s'?\nThis cannot be undone.", r.DetailView.Item.Name)
 				r.ConfirmDelete.Show()
 				return r, nil

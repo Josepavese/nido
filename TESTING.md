@@ -82,7 +82,7 @@ NIDO_EVENT_QEMU_TEST_STORAGE="$scratch" go test -v ./internal/provider -run '^Te
 
 The Python integration uses actual Unix PTYs with two TUI processes and separate
 CLI/MCP processes, all in a private fixture home. It covers a hidden route,
-CLI mutation, mute/unmute, external atomic publication/deletion and broker crash
+CLI mutation, draft/focus preservation, mute/unmute, external atomic publication/deletion and broker crash
 handoff. The opt-in QEMU test creates a blank private 1 MiB disk, runs software
 emulation with 128 MiB RAM and confirms pause/resume/termination. No guest OS
 readiness or physical hardware qualification is claimed. Native macOS/Windows
