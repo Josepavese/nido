@@ -42,6 +42,20 @@ checksum_entry() {
   ' "$checksum_file"
 }
 
+validate_metadata() {
+  local manifest=${1:-server.json}
+  # External contract: ServerDetail.description.maxLength in the schema declared
+  # by server.json (https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json).
+  local mcp_description_max_length=100
+  command -v jq >/dev/null 2>&1 || { echo "jq is required for metadata validation." >&2; return 1; }
+  if ! jq -e --argjson max "$mcp_description_max_length" \
+    '.description | (type == "string") and (length > 0) and (length <= $max)' \
+    "$manifest" >/dev/null; then
+    echo "MCP description must contain 1-${mcp_description_max_length} characters: ${manifest}" >&2
+    return 1
+  fi
+}
+
 validate_local() {
   local dist_dir=${1:-dist}
   local missing=0
@@ -83,6 +97,7 @@ validate_local() {
     echo "Local release validation failed."
     return 1
   fi
+  validate_metadata "${dist_dir}/server.json" || return 1
   echo "Local release artifacts look valid."
 }
 
@@ -136,11 +151,14 @@ validate_remote() {
 }
 
 case "${1:-}" in
+  --metadata)
+    validate_metadata "${2:-server.json}"
+    ;;
   --local)
     validate_local "${2:-dist}"
     ;;
   -h|--help)
-    echo "Usage: $0 [--local [dist-dir]] [version]"
+    echo "Usage: $0 [--metadata [manifest] | --local [dist-dir]] [version]"
     ;;
   *)
     validate_remote "${1:-$(default_version)}"

@@ -24,6 +24,9 @@ if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1
     exit 1
 fi
 
+# Reject invalid registry metadata before compiling or publishing any assets.
+bash bin/verify-release.sh --metadata server.json
+
 mkdir -p "$OUTPUT_DIR"
 rm -rf "$OUTPUT_DIR/staging" "$OUTPUT_DIR/mcp_staging"
 rm -f "$OUTPUT_DIR"/nido-linux-amd64.tar.gz \

@@ -5,6 +5,12 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.8.5] - 2026-10-24 "Clear Signal"
+
+### Fixed
+
+- Keep the MCP Registry description within its 100-character limit. Validate source metadata before release builds and the generated manifest before upload, so rejected metadata cannot reach publication.
+
 ## [4.8.4] - 2026-10-24 "Field Guide"
 
 ### Changed
