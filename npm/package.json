@@ -1,7 +1,7 @@
 {
   "name": "nido-mcp",
   "mcpName": "io.github.Josepavese/nido",
-  "version": "4.8.4",
+  "version": "4.8.5",
   "description": "Local VM manager for AI agents. Run QEMU virtual machines through MCP, CLI or TUI.",
   "keywords": [
     "vm-manager",
