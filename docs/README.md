@@ -9,6 +9,7 @@ Start with the [README quickstart](../README.md#press-start), then choose a guid
 | --- | --- |
 | [Installation](../installers/README.md) | Binary installers, package managers, host prerequisites and upgrades |
 | [Everyday workflows](usage.md) | Provisioning, SSH, ports, templates, raw QEMU arguments, sharing and cleanup |
+| [Events](events.md) | Shared local stream, live TUI state and selective agent subscriptions |
 | [MCP](mcp.md) | Client configuration, tools, resources and CLI/MCP differences |
 | [Images and blueprints](images.md) | Catalog discovery, aliases, integrity, cache and image recipes |
 | [Windows](windows.md) | Host qualification, WHPX setup and Windows evaluation guests |

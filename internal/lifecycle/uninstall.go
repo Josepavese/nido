@@ -2,6 +2,7 @@ package lifecycle
 
 import (
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,7 +11,9 @@ import (
 )
 
 // Uninstall performs the destructive removal of Nido's data and binary.
-func Uninstall(dataDir, binPath string) error {
+func Uninstall(dataDir, binPath string, publish events.Publisher) (resultErr error) {
+	finish := events.Begin(publish, events.SystemUninstall, "")
+	defer func() { finish(resultErr) }()
 	// 1. Safety Checks
 	if dataDir == "" || dataDir == "/" || dataDir == "." {
 		return fmt.Errorf("refusing to delete unsafe data directory: %s", dataDir)

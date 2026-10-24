@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 )
 
 type UpdateRequest struct {
+	Events         events.Publisher
 	CurrentVersion string
 	NidoDir        string
 	// Executable is an explicit target; empty selects the running executable.
@@ -41,8 +43,9 @@ func getURL(ctx context.Context, client sysutil.HTTPClient, url string) (*http.R
 	return client.Do(req)
 }
 
-func (u *nativeUpdater) Update(ctx context.Context, request UpdateRequest) (UpdateResult, error) {
-	var result UpdateResult
+func (u *nativeUpdater) Update(ctx context.Context, request UpdateRequest) (result UpdateResult, resultErr error) {
+	finish := events.Begin(request.Events, events.SystemUpdate, "")
+	defer func() { finish(errors.Join(resultErr, result.RegistryError)) }()
 	if request.NidoDir == "" {
 		return result, fmt.Errorf("nido data directory is required")
 	}

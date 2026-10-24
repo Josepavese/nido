@@ -165,3 +165,13 @@ The following commands support `--json`:
 - RFC 7807 (Problem Details): <https://www.rfc-editor.org/rfc/rfc7807>
 - RFC 3339 (Timestamps): <https://www.rfc-editor.org/rfc/rfc3339>
 - JSON Schema: <https://json-schema.org/>
+
+## Event stream
+
+`nido events --json` is a streaming command. It writes NDJSON: each line is a
+complete standard response envelope with `command: "events"` and one event in
+`data`. Read line by line rather than parsing stdout as one JSON document.
+`data` carries version, epoch, sequence, timestamp, source, kind, optional
+operation identity/action, VM, resource URIs and a snapshot marker. A resync
+barrier requires resource refresh; snapshots use its sequence watermark.
+The stream ends on Ctrl+C. See [event semantics](events.md).

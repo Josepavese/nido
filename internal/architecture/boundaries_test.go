@@ -37,6 +37,12 @@ func TestDeviceAndAdapterBoundaries(t *testing.T) {
 					name = imp.Name.Name
 				}
 				aliases[name] = value
+				if value == "github.com/fsnotify/fsnotify" && !strings.HasPrefix(rel, "internal/pkg/sysutil/") {
+					t.Errorf("native watcher outside PAL: %s", rel)
+				}
+				if strings.HasPrefix(rel, "internal/events/") && strings.HasPrefix(value, "github.com/Josepavese/nido/v4/internal/") && value != "github.com/Josepavese/nido/v4/internal/pkg/sysutil" {
+					t.Errorf("event contract depends on domain adapter: %s", rel)
+				}
 				if value == "os/exec" && (strings.HasPrefix(rel, "cmd/nido/") || strings.HasPrefix(rel, "internal/mcp/") || strings.HasPrefix(rel, "internal/tui/") || strings.HasPrefix(rel, "internal/builder/") || strings.HasPrefix(rel, "internal/image/")) {
 					t.Errorf("native process API outside PAL: %s", rel)
 				}
@@ -53,6 +59,9 @@ func TestDeviceAndAdapterBoundaries(t *testing.T) {
 						t.Errorf("raw device access outside HAL/PAL: %s", rel)
 					}
 					if pkg, ok := selector.X.(*ast.Ident); ok {
+						if aliases[pkg.Name] == "net" && (selector.Sel.Name == "Dial" || selector.Sel.Name == "DialTimeout" || selector.Sel.Name == "Listen") && (strings.HasPrefix(rel, "internal/tui/") || strings.HasPrefix(rel, "internal/mcp/") || strings.HasPrefix(rel, "cmd/nido/")) {
+							t.Errorf("native event/network connection outside PAL: %s", rel)
+						}
 						if aliases[pkg.Name] == "github.com/Josepavese/nido/v4/internal/provider" && selector.Sel.Name == "QemuProvider" {
 							t.Errorf("concrete VM adapter type in consumer: %s", rel)
 						}

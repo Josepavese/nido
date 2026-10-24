@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 
 	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"github.com/Josepavese/nido/v4/internal/hardware"
 	"github.com/Josepavese/nido/v4/internal/image"
 )
@@ -22,14 +24,20 @@ import (
 // mutations are confined to the caller/owner thread (MCP dispatch is serial).
 type QemuProvider struct {
 	// RootDir is the base path for VM state and disks (usually ~/.nido)
-	RootDir string
+	RootDir  string
+	configMu sync.RWMutex
 	// Config holds the genetic makeup of our nest
 	Config   *config.Config
 	Hardware hardware.Host
+	Events   events.Publisher
 }
 
 // NewQemuProvider hatches a new provider, ready to manage lifecycle events.
 func NewQemuProvider(rootDir string, cfg *config.Config, host hardware.Host) *QemuProvider {
+	if cfg != nil {
+		copy := *cfg
+		cfg = &copy
+	}
 	return &QemuProvider{
 		RootDir:  rootDir,
 		Config:   cfg,
@@ -39,7 +47,10 @@ func NewQemuProvider(rootDir string, cfg *config.Config, host hardware.Host) *Qe
 
 // Spawn brings a new VM to life. It handles template resolution, disk creation,
 // and saves the initial state before handing over to Start.
-func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
+func (p *QemuProvider) Spawn(name string, opts VMOptions) (resultErr error) {
+	cfg := p.configSnapshot()
+	finish := p.operation(events.VMCreate, name)
+	defer func() { finish(resultErr) }()
 	if err := validateIdentifier(name); err != nil {
 		return err
 	}
@@ -67,9 +78,9 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	if !filepath.IsAbs(tpl) && !strings.Contains(tpl, "/") && tpl != "" {
 		// Defaults fallback if Config is missing (safeguard)
 		var backupsDir, imgDir string
-		if p.Config != nil {
-			backupsDir = p.Config.BackupDir
-			imgDir = p.Config.ImageDir
+		if cfg != nil {
+			backupsDir = cfg.BackupDir
+			imgDir = cfg.ImageDir
 		} else {
 			home, _ := sysutil.UserHome()
 			backupsDir = filepath.Join(home, ".nido", "backups")
@@ -146,7 +157,7 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 	// Resolve SSH user first so it can be used for Cloud-Init and state
 	sshUser := opts.SSHUser
 	if sshUser == "" {
-		sshUser = p.Config.SSHUser
+		sshUser = cfg.SSHUser
 	}
 
 	customUserData := ""
@@ -233,7 +244,10 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) error {
 
 // Start revives a VM from its deep sleep. It handles port allocation,
 // builds platform-specific QEMU arguments, and launches the process.
-func (p *QemuProvider) Start(name string, opts VMOptions) error {
+func (p *QemuProvider) Start(name string, opts VMOptions) (resultErr error) {
+	cfg := p.configSnapshot()
+	finish := p.operation(events.VMStart, name)
+	defer func() { finish(resultErr) }()
 	if err := validateIdentifier(name); err != nil {
 		return err
 	}
@@ -264,7 +278,7 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 		state = VMState{
 			Name:    name,
 			Gui:     opts.Gui,
-			SSHUser: p.Config.SSHUser,
+			SSHUser: cfg.SSHUser,
 		}
 	}
 
@@ -346,6 +360,11 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	// 3. Build Arguments (cross-platform)
 	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, state.Forwarding, runDir, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 
+	eventArgs, err := prepareQEMUEvents(p.RootDir, name)
+	if err != nil {
+		return rollback(err)
+	}
+	args = append(args, eventArgs...)
 	launchedPID, err := p.launchQEMU(args)
 	if err != nil {
 		return rollback(err)
@@ -358,9 +377,7 @@ func (p *QemuProvider) Start(name string, opts VMOptions) error {
 	pid := readLaunchedQemuPID(runDir, name, launchedPID)
 
 	// 6. Update State with PID (0 if unknown)
-	p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
-
-	return nil
+	return p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
 }
 
 func windowsTCGFallbackArgs(args []string) []string {
@@ -638,7 +655,9 @@ func backingInfo(diskPath string) (string, bool) {
 
 // Stop terminates the owned QEMU process and confirms exit before releasing resources.
 // We clean up QMP and PID artifacts to keep the run directory tidy.
-func (p *QemuProvider) Stop(name string) error {
+func (p *QemuProvider) Stop(name string) (resultErr error) {
+	finish := p.operation(events.VMStop, name)
+	defer func() { finish(resultErr) }()
 	if err := validateIdentifier(name); err != nil {
 		return err
 	}
@@ -661,6 +680,7 @@ func (p *QemuProvider) Stop(name string) error {
 
 	os.Remove(pidFile)
 	os.Remove(filepath.Join(runDir, name+".qmp"))
+	os.Remove(filepath.Join(sysutil.EventsDirectory(p.RootDir), name+qemuEventSuffix))
 
 	if state, err := p.loadState(name); err == nil {
 		_ = p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
@@ -682,7 +702,9 @@ func (p *QemuProvider) Stop(name string) error {
 	return nil
 }
 
-func (p *QemuProvider) Delete(name string) error {
+func (p *QemuProvider) Delete(name string) (resultErr error) {
+	finish := p.operation(events.VMDelete, name)
+	defer func() { finish(resultErr) }()
 	if err := validateIdentifier(name); err != nil {
 		return err
 	}
@@ -702,7 +724,10 @@ func (p *QemuProvider) Delete(name string) error {
 
 // CreateTemplate archives a VM into "cold storage" (a compressed qcow2).
 // This is how we preserve perfected environments for future hatchlings.
-func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (string, error) {
+func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (result string, resultErr error) {
+	cfg := p.configSnapshot()
+	finish := p.operation(events.TemplateCreate, "")
+	defer func() { finish(resultErr) }()
 	if err := validateIdentifier(vmName); err != nil {
 		return "", err
 	}
@@ -715,7 +740,7 @@ func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (strin
 	}
 
 	vmsDir := filepath.Join(p.RootDir, "vms")
-	backupsDir := p.Config.BackupDir
+	backupsDir := cfg.BackupDir
 	os.MkdirAll(backupsDir, 0755)
 
 	srcDisk := filepath.Join(vmsDir, vmName+".qcow2")
@@ -738,11 +763,14 @@ func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (strin
 	return targetTemplate, nil
 }
 
-func (p *QemuProvider) DeleteTemplate(name string, force bool) error {
+func (p *QemuProvider) DeleteTemplate(name string, force bool) (resultErr error) {
+	cfg := p.configSnapshot()
+	finish := p.operation(events.TemplateDelete, "")
+	defer func() { finish(resultErr) }()
 	if err := validateIdentifier(name); err != nil {
 		return err
 	}
-	templatePath := filepath.Join(p.Config.BackupDir, name+".compact.qcow2")
+	templatePath := filepath.Join(cfg.BackupDir, name+".compact.qcow2")
 
 	// Safety Check: Is it in use?
 	if !force {
@@ -773,7 +801,10 @@ func (p *QemuProvider) DeleteTemplate(name string, force bool) error {
 
 // CreateDisk prepares the execution surface (the qcow2 file).
 // It supports both standalone "Full Copies" and space-saving "Linked Clones".
-func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
+func (p *QemuProvider) CreateDisk(name, size, tpl string) (resultErr error) {
+	cfg := p.configSnapshot()
+	finish := p.operation(events.DiskCreate, name)
+	defer func() { finish(resultErr) }()
 	if err := validateIdentifier(name); err != nil {
 		return err
 	}
@@ -788,8 +819,8 @@ func (p *QemuProvider) CreateDisk(name, size, tpl string) error {
 	// If LinkedClones is disabled and we have a template, create a standalone copy.
 	// Safety check: if Config is nil, default to Linked Clones behavior (safer)
 	useLinked := true
-	if p.Config != nil {
-		useLinked = p.Config.LinkedClones
+	if cfg != nil {
+		useLinked = cfg.LinkedClones
 	}
 
 	if !useLinked && tpl != "" {
@@ -930,7 +961,9 @@ func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int,
 }
 
 // UpdateConfig safely modifies the persistent VMState using a read-modify-write cycle.
-func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) error {
+func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) (resultErr error) {
+	finish := p.operation(events.VMConfigure, name)
+	defer func() { finish(resultErr) }()
 	if err := validateIdentifier(name); err != nil {
 		return err
 	}
@@ -1050,7 +1083,8 @@ func (p *QemuProvider) SSHArgs(name string) ([]string, error) {
 }
 
 func (p *QemuProvider) ListTemplates() ([]string, error) {
-	files, err := os.ReadDir(p.Config.BackupDir)
+	cfg := p.configSnapshot()
+	files, err := os.ReadDir(cfg.BackupDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []string{}, nil
@@ -1083,14 +1117,25 @@ func (p *QemuProvider) Prune() (int, error) {
 	return count, nil
 }
 
-func (p *QemuProvider) GetConfig() config.Config {
+func (p *QemuProvider) configSnapshot() *config.Config {
+	p.configMu.RLock()
+	defer p.configMu.RUnlock()
 	if p.Config == nil {
+		return nil
+	}
+	cfg := *p.Config
+	return &cfg
+}
+func (p *QemuProvider) GetConfig() config.Config {
+	cfg := p.configSnapshot()
+	if cfg == nil {
 		return config.Config{}
 	}
-	return *p.Config
+	return *cfg
 }
 
 func (p *QemuProvider) Doctor() []string {
+	cfg := p.configSnapshot()
 	var reports []string
 	add := func(label string, passed bool, details string) {
 		status := "[PASS]"
@@ -1102,8 +1147,8 @@ func (p *QemuProvider) Doctor() []string {
 
 	// 1. Directories
 	dirs := []string{p.RootDir, filepath.Join(p.RootDir, "bin"), filepath.Join(p.RootDir, "vms"), filepath.Join(p.RootDir, "run")}
-	if p.Config != nil {
-		dirs = append(dirs, p.Config.BackupDir)
+	if cfg != nil {
+		dirs = append(dirs, cfg.BackupDir)
 	}
 	for _, d := range dirs {
 		_, err := os.Stat(d)
@@ -1150,7 +1195,8 @@ func (p *QemuProvider) Doctor() []string {
 func (p *QemuProvider) GetUsedBackingFiles() ([]string, error) { return p.usedBackingFiles() }
 
 func (p *QemuProvider) ListImages() ([]string, error) {
-	imagesDir := p.Config.ImageDir
+	cfg := p.configSnapshot()
+	imagesDir := cfg.ImageDir
 	if imagesDir == "" {
 		imagesDir = filepath.Join(p.RootDir, "images")
 	}
@@ -1173,7 +1219,8 @@ func (p *QemuProvider) ListImages() ([]string, error) {
 
 // ListCachedImages returns all locally cached cloud images.
 func (p *QemuProvider) ListCachedImages() ([]CachedImage, error) {
-	imagesDir := p.Config.ImageDir
+	cfg := p.configSnapshot()
+	imagesDir := cfg.ImageDir
 	if imagesDir == "" {
 		imagesDir = filepath.Join(p.RootDir, "images")
 	}
@@ -1252,7 +1299,8 @@ func (p *QemuProvider) ListCachedImages() ([]CachedImage, error) {
 
 // CacheInfo returns statistics about the image cache.
 func (p *QemuProvider) CacheInfo() (CacheInfoResult, error) {
-	imagesDir := p.Config.ImageDir
+	cfg := p.configSnapshot()
+	imagesDir := cfg.ImageDir
 	if imagesDir == "" {
 		imagesDir = filepath.Join(p.RootDir, "images")
 	}
@@ -1282,8 +1330,11 @@ func (p *QemuProvider) CacheInfo() (CacheInfoResult, error) {
 }
 
 // CachePrune removes cached images.
-func (p *QemuProvider) CachePrune(unusedOnly bool) (int, int64, error) {
-	imagesDir := p.Config.ImageDir
+func (p *QemuProvider) CachePrune(unusedOnly bool) (resultCount int, resultReclaimed int64, resultErr error) {
+	cfg := p.configSnapshot()
+	finish := p.operation(events.CachePrune, "")
+	defer func() { finish(resultErr) }()
+	imagesDir := cfg.ImageDir
 	if imagesDir == "" {
 		imagesDir = filepath.Join(p.RootDir, "images")
 	}
@@ -1339,7 +1390,10 @@ func (p *QemuProvider) CachePrune(unusedOnly bool) (int, int64, error) {
 }
 
 // CacheRemove removes a specific cached image.
-func (p *QemuProvider) CacheRemove(name, version string) error {
+func (p *QemuProvider) CacheRemove(name, version string) (resultErr error) {
+	cfg := p.configSnapshot()
+	finish := p.operation(events.CacheRemove, "")
+	defer func() { finish(resultErr) }()
 	if err := validateIdentifier(name); err != nil {
 		return err
 	}
@@ -1348,7 +1402,7 @@ func (p *QemuProvider) CacheRemove(name, version string) error {
 			return err
 		}
 	}
-	imagesDir := p.Config.ImageDir
+	imagesDir := cfg.ImageDir
 	if imagesDir == "" {
 		imagesDir = filepath.Join(p.RootDir, "images")
 	}
@@ -1387,7 +1441,9 @@ func (p *QemuProvider) CacheRemove(name, version string) error {
 	return os.Remove(fullPath)
 }
 
-func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, error) {
+func (p *QemuProvider) PortForward(name string, pf PortForward) (result PortForward, resultErr error) {
+	finish := p.operation(events.VMPortForward, name)
+	defer func() { finish(resultErr) }()
 	if err := validateIdentifier(name); err != nil {
 		return pf, err
 	}
@@ -1424,7 +1480,9 @@ func (p *QemuProvider) PortForward(name string, pf PortForward) (PortForward, er
 	return pf, err
 }
 
-func (p *QemuProvider) PortUnforward(name string, guestPort int, protocol string) error {
+func (p *QemuProvider) PortUnforward(name string, guestPort int, protocol string) (resultErr error) {
+	finish := p.operation(events.VMPortUnforward, name)
+	defer func() { finish(resultErr) }()
 	if err := validateIdentifier(name); err != nil {
 		return err
 	}

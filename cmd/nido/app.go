@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/Josepavese/nido/v4/internal/events"
 	"github.com/Josepavese/nido/v4/internal/hardware"
 	"github.com/Josepavese/nido/v4/internal/lifecycle"
 	"net/http"
@@ -20,6 +21,7 @@ type appContext struct {
 	Config     *config.Config
 	Provider   provider.VMProvider
 	Updater    lifecycle.Updater
+	Events     *events.Client
 }
 
 func newAppContext() *appContext {
@@ -33,10 +35,14 @@ func newAppContext() *appContext {
 	}
 
 	cfg, _ := config.LoadConfig(cfgPath)
-	qemu := provider.NewQemuProvider(nidoDir, cfg, hardware.New())
+	host := hardware.New()
+	qemu := provider.NewQemuProvider(nidoDir, cfg, host)
+	bus := events.NewClient(nidoDir, provider.ObserveEvents(nidoDir, cfgPath, host))
+	qemu.Events = bus.Publish
 
 	return &appContext{
 		NidoDir:    nidoDir,
+		Events:     bus,
 		Cwd:        cwd,
 		ConfigPath: cfgPath,
 		Config:     cfg,

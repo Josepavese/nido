@@ -71,6 +71,14 @@ jobs:
       - name: Run unit tests
         run: go test -v -count=1 ./...
 
+      - name: Qualify local events and two real terminal dashboards
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          scratch=$(mktemp -d /tmp/nido-events-ci.XXXXXX)
+          trap 'rm -rf "$scratch"' EXIT
+          NIDO_TEST_BINARY="$GITHUB_WORKSPACE/nido" NIDO_TEST_STORAGE="$scratch" python3 tests/events_integration.py
+
       - name: Run go vet
         run: go vet ./...
 

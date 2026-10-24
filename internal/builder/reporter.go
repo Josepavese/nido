@@ -1,6 +1,9 @@
 package builder
 
-import "io"
+import (
+	"github.com/Josepavese/nido/v4/internal/events"
+	"io"
+)
 
 type Reporter interface {
 	Header(title string)
@@ -31,3 +34,5 @@ func WithCommandOutput(w io.Writer) EngineOption {
 		e.CommandOutput = w
 	}
 }
+
+func WithEvents(publish events.Publisher) EngineOption { return func(e *Engine) { e.Events = publish } }

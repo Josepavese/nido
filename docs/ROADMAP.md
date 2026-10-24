@@ -24,6 +24,11 @@ have native backends and cross-platform CI. Physical PCI qualification has a
 specific device scope; Windows host smoke testing does not prove every intensive
 workload. See [architecture](ARCHITECTURE.md) and [Windows](windows.md).
 
+## Implemented, awaiting release
+
+- Shared local core events with an elected broker, native observers, live TUI
+  refresh and opt-in MCP resource subscription/mute. See [event qualification](events.md).
+
 ## Candidate work
 
 These directions need design and acceptance criteria before implementation:

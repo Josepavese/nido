@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"os"
 	"path/filepath"
 	"strings"
@@ -213,7 +214,7 @@ func formatDuration(d time.Duration) string {
 // Stubs for other commands (Phase 2+)
 // cmdImagePull initiates the retrieval of a specific image species.
 // It handles resume logic, multi-part downloads, and verification.
-func cmdImagePull(cwd, imageDir string, args []string, jsonOut bool) {
+func cmdImagePull(cwd, imageDir string, args []string, jsonOut bool, publish events.Publisher) {
 	if len(args) < 1 {
 		ui.Error("Usage: nido image pull <name>[:version]")
 		os.Exit(1)
@@ -274,7 +275,7 @@ func cmdImagePull(cwd, imageDir string, args []string, jsonOut bool) {
 		diskExists = true
 	}
 
-	downloader := image.NewTransfer(image.TransferOptions{OnProgress: nil})
+	downloader := image.NewTransfer(image.TransferOptions{Events: publish, OnProgress: nil})
 
 	if !diskExists {
 		// Announce download
@@ -515,25 +516,11 @@ func cmdImageRemove(imageDir string, prov provider.VMProvider, args []string, js
 	ui.Success("Image %s removed from cache.", args[0])
 }
 
-func cmdImageUpdate(imageDir string, args []string, jsonOut bool) {
+func cmdImageUpdate(imageDir string, args []string, jsonOut bool, publish events.Publisher) {
 	if !jsonOut {
 		ui.Step("Refreshing catalog...")
 	}
-	cachePath := filepath.Join(imageDir, image.CatalogCacheFile)
-
-	// Remove cache to force refresh
-	if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
-		if jsonOut {
-			resp := clijson.NewResponseError("image update", "ERR_IO", "Cache clear failed", err.Error(), "Check file permissions and try again.", nil)
-			_ = clijson.PrintJSON(resp)
-			os.Exit(1)
-		}
-		ui.Error("Failed to clear cache: %v", err)
-		os.Exit(1)
-	}
-
-	// Reload catalog (will fetch from remote)
-	_, err := image.LoadCatalog(imageDir, 0) // TTL=0 forces refresh
+	_, err := image.RefreshCatalog(imageDir, publish)
 	if err != nil {
 		if jsonOut {
 			resp := clijson.NewResponseError("image update", "ERR_IO", "Catalog update failed", err.Error(), "Check your network connection and try again.", nil)

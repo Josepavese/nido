@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Josepavese/nido/v4/internal/build"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"io"
 	"net/http"
 	"os"
@@ -76,6 +77,8 @@ func TestUpdaterFailurePreservesInstalledBinaryAndRetiresScratch(t *testing.T) {
 	for _, name := range []string{"download fails", "missing checksum", "bad checksum", "existing backup", "cancelled"} {
 		t.Run(name, func(t *testing.T) {
 			client, request := updaterFixture(t)
+			observed := []events.Event{}
+			request.Events = func(e events.Event) { observed = append(observed, e) }
 			ctx := context.Background()
 			switch name {
 			case "download fails":
@@ -93,6 +96,9 @@ func TestUpdaterFailurePreservesInstalledBinaryAndRetiresScratch(t *testing.T) {
 			}
 			if _, err := NewUpdater(client).Update(ctx, request); err == nil {
 				t.Fatal("failure reported success")
+			}
+			if len(observed) != 2 || observed[1].Kind != events.Failed {
+				t.Fatalf("failed update events: %+v", observed)
 			}
 			data, err := os.ReadFile(request.Executable)
 			if err != nil || string(data) != "OLD EXECUTABLE" {
@@ -113,6 +119,8 @@ func TestUpdaterFailurePreservesInstalledBinaryAndRetiresScratch(t *testing.T) {
 }
 func TestUpdaterInstallsVerifiedArtifactAndPreservesData(t *testing.T) {
 	client, request := updaterFixture(t)
+	observed := []events.Event{}
+	request.Events = func(e events.Event) { observed = append(observed, e) }
 	sentinels := []string{filepath.Join(request.NidoDir, "vms", "fixture.qcow2"), filepath.Join(request.NidoDir, "config.env")}
 	for _, p := range sentinels {
 		os.MkdirAll(filepath.Dir(p), 0755)
@@ -121,6 +129,9 @@ func TestUpdaterInstallsVerifiedArtifactAndPreservesData(t *testing.T) {
 	result, err := NewUpdater(client).Update(context.Background(), request)
 	if err != nil || result.RegistryError != nil || result.Version != "v99.0.0" {
 		t.Fatalf("update: %+v %v", result, err)
+	}
+	if len(observed) != 2 || observed[1].Kind != events.Completed {
+		t.Fatalf("update events: %+v", observed)
 	}
 	for p, want := range map[string]string{request.Executable: "NEW EXECUTABLE", request.Executable + ".bak": "OLD EXECUTABLE", sentinels[0]: "KEEP", sentinels[1]: "KEEP"} {
 		data, err := os.ReadFile(p)
@@ -140,5 +151,13 @@ func TestUpdaterInstallsVerifiedArtifactAndPreservesData(t *testing.T) {
 	scratch, _ := filepath.Glob(filepath.Join(filepath.Dir(request.Executable), ".nido-update-*"))
 	if len(scratch) != 0 {
 		t.Fatalf("scratch left behind: %v", scratch)
+	}
+}
+
+func TestUnsafeUninstallEmitsFailureWithoutTouchingData(t *testing.T) {
+	got := []events.Event{}
+	err := Uninstall("/", "", func(e events.Event) { got = append(got, e) })
+	if err == nil || len(got) != 2 || got[0].Kind != events.Started || got[1].Kind != events.Failed {
+		t.Fatalf("unsafe uninstall: %v %+v", err, got)
 	}
 }

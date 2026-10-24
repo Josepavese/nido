@@ -9,7 +9,7 @@ import (
 )
 
 func TestCacheSelectionUsesApplicationMessage(t *testing.T) {
-	model := NewConfig(&appconfig.Config{})
+	model := NewConfig(&appconfig.Config{}, nil)
 	_, command := model.Update(fv.SelectionMsg{Item: ConfigItem{Key: "CACHE"}})
 	if command == nil {
 		t.Fatal("cache selection did not request stats")

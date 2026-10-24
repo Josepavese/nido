@@ -257,7 +257,7 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 					if !jsonOut {
 						ui.Info("Image not found locally. Pulling %s:%s...", img.Name, ver.Version)
 					}
-					downloader := image.NewTransfer(image.TransferOptions{OnProgress: nil, Context: cmd.Context()})
+					downloader := image.NewTransfer(image.TransferOptions{Events: app.Provider.EventPublisher(), OnProgress: nil, Context: cmd.Context()})
 					if err := downloader.Prepare(*ver, imgPath); err != nil {
 						if jsonOut {
 							_ = clijson.PrintJSON(clijson.NewResponseError("spawn", "ERR_IO", "Image preparation failed", err.Error(), "Check your network connection and registry checksum metadata.", nil))

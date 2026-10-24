@@ -2,6 +2,7 @@ package config
 
 import (
 	appconfig "github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
@@ -58,7 +59,8 @@ type Config struct {
 	fv.BaseViewlet
 
 	// State
-	cfg *appconfig.Config
+	cfg     *appconfig.Config
+	publish events.Publisher
 
 	// Components
 	Sidebar *widget.SidebarList
@@ -78,12 +80,13 @@ type Config struct {
 	CacheStats     CacheStats
 
 	// Detail Pages
-	PageGlobal     *ConfigPageGlobalForm
-	PageAppearance *ConfigPageAppearance
-	PageUpdate     *ConfigPageUpdate
-	PageCache      *ConfigPageCache
-	PageDoctor     *ConfigPageDoctor
-	PageUninstall  *ConfigPageUninstall
+	PageGlobal           *ConfigPageGlobalForm
+	PageAppearance       *ConfigPageAppearance
+	PageUpdate           *ConfigPageUpdate
+	PageCache            *ConfigPageCache
+	PageDoctor           *ConfigPageDoctor
+	PageUninstall        *ConfigPageUninstall
+	pendingConfigRefresh bool
 }
 
 type CacheStats struct {
@@ -92,9 +95,10 @@ type CacheStats struct {
 }
 
 // NewConfig returns a new System viewlet.
-func NewConfig(cfg *appconfig.Config) *Config {
+func NewConfig(cfg *appconfig.Config, publish events.Publisher) *Config {
 	c := &Config{
-		cfg: cfg,
+		cfg:     cfg,
+		publish: publish,
 	}
 
 	// Initialize Spinner
@@ -129,6 +133,7 @@ func NewConfig(cfg *appconfig.Config) *Config {
 
 // Init initializes the viewlet.
 func (c *Config) Init() tea.Cmd {
+	c.ApplyConfig(*c.cfg)
 	return tea.Batch(
 		c.MasterDetail.Init(),
 		c.Spinner.Tick,
@@ -217,6 +222,9 @@ func (c *Config) SetUpdateStatus(current, latest string, checking bool) {
 
 // Update handles messages.
 func (c *Config) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
+	if c.pendingConfigRefresh && !c.HasActiveTextInput() && !c.IsModalActive() {
+		c.ApplyConfig(*c.cfg)
+	}
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -390,3 +398,18 @@ func (c *Config) HasActiveFocus() bool {
 
 // FocusSidebarMsg is local navigation, not an application operation.
 type FocusSidebarMsg struct{}
+
+// ApplyConfig runs only on the UI owner thread. Preserve an in-progress form;
+// its fields are rebuilt when editing ends.
+func (c *Config) ApplyConfig(cfg appconfig.Config) {
+	*c.cfg = cfg
+	if c.HasActiveTextInput() || c.IsModalActive() {
+		c.pendingConfigRefresh = true
+		return
+	}
+	c.pendingConfigRefresh = false
+	c.PageGlobal = nil
+	c.PageAppearance = nil
+	c.RefreshItems()
+	c.Pages.Resize(layout.NewRect(0, 0, c.Pages.Width(), c.Pages.Height()))
+}

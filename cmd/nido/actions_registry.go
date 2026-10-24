@@ -15,7 +15,7 @@ func buildActionRegistry(app *appContext) map[string]climeta.ActionFunc {
 		"vm.ssh":                       actionVMSSH(app),
 		"vm.delete":                    actionVMDelete(app),
 		"vm.prune":                     actionVMPrune(app),
-		"ui.gui":                       func(cmd *cobra.Command, args []string) { cmdGUI(app.Provider, app.Config) },
+		"ui.gui":                       func(cmd *cobra.Command, args []string) { cmdGUI(app) },
 		"template.list":                actionTemplateList(app),
 		"template.create":              actionTemplateCreate(app),
 		"template.delete":              actionTemplateDelete(app),
@@ -45,6 +45,7 @@ func buildActionRegistry(app *appContext) map[string]climeta.ActionFunc {
 		"system.completion.fish":       actionShellCompletion("fish"),
 		"system.completion.powershell": actionShellCompletion("powershell"),
 		"system.mcp_help":              actionMCPHelp(app),
+		"system.events":                actionEvents(app),
 		"system.mcp":                   actionMCP(app),
 	}
 }

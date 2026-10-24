@@ -45,3 +45,6 @@ Notes and gaps
 - GUI/update remain opt-in. Keep updater tests pointed at injected fixtures; do
   not enable real updates during a VM lifecycle qualification.
 - Forwarding dial and cloud-init checks depend on guest capabilities; enable only if image supports SSH and Python (for dummy server).
+
+- Event stream: `--scenario event-stream` verifies the streaming JSON contract,
+  cross-process publication and invalid CLI arguments inside a private home.

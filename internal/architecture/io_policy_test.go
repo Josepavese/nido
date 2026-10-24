@@ -23,6 +23,7 @@ var forbiddenPatterns = []struct {
 func TestNoDirectUserIOInCoreLayers(t *testing.T) {
 	repoRoot := locateRepoRoot(t)
 	protectedDirs := []string{
+		filepath.Join(repoRoot, "internal", "events"),
 		filepath.Join(repoRoot, "internal", "provider"),
 		filepath.Join(repoRoot, "internal", "hardware"),
 		filepath.Join(repoRoot, "internal", "lifecycle"),

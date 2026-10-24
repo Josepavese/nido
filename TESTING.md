@@ -66,3 +66,30 @@ The opt-in [native PCI fixture and cutover procedure](docs/ARCHITECTURE.md#opt-i
 protect the primary display, require a suitable empty controller and retain
 failed recovery state. Do not use existing VMs or a user's active peripherals
 as disposable test fixtures.
+
+## Shared events
+
+`go test ./...` includes election/fan-out/handoff, late-subscriber snapshots,
+bounded slow consumers, native filesystem/process waits, QMP identity/whitelist,
+MCP opt-in/filter/mute/coalescing, stdout framing and modal/background TUI state.
+Run the changed concurrent boundaries with the race detector:
+
+```sh
+go test -race ./internal/events ./internal/pkg/sysutil ./internal/provider ./internal/mcp ./internal/tui/app/...
+NIDO_TEST_BINARY="$scratch/nido" NIDO_TEST_STORAGE="$scratch" python3 tests/events_integration.py
+NIDO_EVENT_QEMU_TEST_STORAGE="$scratch" go test -v ./internal/provider -run '^TestRealQEMUEventLifecycle$' -count=1
+```
+
+The Python integration uses actual Unix PTYs with two TUI processes and separate
+CLI/MCP processes, all in a private fixture home. It covers a hidden route,
+CLI mutation, mute/unmute, external atomic publication/deletion and broker crash
+handoff. The opt-in QEMU test creates a blank private 1 MiB disk, runs software
+emulation with 128 MiB RAM and confirms pause/resume/termination. No guest OS
+readiness or physical hardware qualification is claimed. Native macOS/Windows
+contracts run in the existing cross-platform CI; cross-compilation alone is not
+native runtime proof.
+
+The validator's `event-stream` scenario exercises the CLI NDJSON envelope,
+another process's config change and rejected arguments in its own fixture home.
+Use the validator from a disposable environment as documented above; its general
+cleanup scenario is not a permission to sweep an existing user's resources.
