@@ -199,7 +199,7 @@ func ResourcesCatalog() []map[string]interface{} {
 // ResourceTemplatesCatalog returns parameterized resources for targeted inspection.
 func ResourceTemplatesCatalog() []map[string]interface{} {
 	return []map[string]interface{}{
-		{"name": "VM Detail", "uriTemplate": "nido://vm/{name}", "mimeType": "application/json", "description": "Detailed state for one VM."},
+		{"name": "VM Detail", "uriTemplate": events.VMResourcePrefix + "{name}", "mimeType": "application/json", "description": "Detailed state for one VM."},
 		{"name": "Image Detail", "uriTemplate": "nido://image/{tag}", "mimeType": "application/json", "description": "Detailed catalog metadata for one image tag."},
 		{"name": "Blueprint Detail", "uriTemplate": "nido://blueprint/{name}", "mimeType": "application/json", "description": "Detailed metadata for one image blueprint."},
 	}
