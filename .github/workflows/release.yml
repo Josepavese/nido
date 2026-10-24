@@ -350,6 +350,7 @@ jobs:
     env:
       MCP_PUBLISHER_VERSION: 'v1.7.8'
       MCP_PUBLISHER_SHA256: '48230dbec85bd88a0d42977ef533cddda23235f0db4331b9263ce53b432cb75c'
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
     steps:
       - name: Download MCP server manifest
         uses: actions/download-artifact@v7
@@ -363,6 +364,26 @@ jobs:
           jq '.packages |= map(select(.registryType != "npm"))' server.json > server.tmp.json
           mv server.tmp.json server.json
           jq -r '.packages[].registryType' server.json
+
+      - name: Wait for the npm version to be available
+        if: needs.publish-npm.result == 'success'
+        run: |
+          version="${VERSION#v}"
+          echo "⏳ Waiting for nido-mcp@${version} to appear on the npm registry..."
+          # npm processes new releases asynchronously (publish-time scanning), and
+          # the registry validates that this version exists before accepting the
+          # server, so poll with a bounded backoff instead of racing the publish.
+          for attempt in $(seq 1 45); do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/nido-mcp/${version}")
+            if [ "$status" = "200" ]; then
+              echo "✓ nido-mcp@${version} is available after ${attempt} attempt(s)."
+              exit 0
+            fi
+            echo "  attempt ${attempt}: HTTP ${status}, retrying in 20s"
+            sleep 20
+          done
+          echo "::error::nido-mcp@${version} did not appear on the npm registry within 15 minutes."
+          exit 1
 
       - name: Install mcp-publisher
         run: |
@@ -378,7 +399,15 @@ jobs:
         run: |
           echo "🚀 Publishing to MCP Registry..."
           mcp-publisher login github-oidc
-          mcp-publisher publish --yes
+          for attempt in 1 2 3; do
+            if mcp-publisher publish --yes; then
+              exit 0
+            fi
+            echo "registry publish attempt ${attempt} failed; retrying in 30s"
+            sleep 30
+          done
+          echo "::error::MCP Registry publish failed after 3 attempts."
+          exit 1
 
   verify_scheduled:
     name: Verify scheduled automation
