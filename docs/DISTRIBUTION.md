@@ -18,14 +18,15 @@ incremental.
 | Channel | Mechanism | Auth | Secret / setting | Notes |
 | --- | --- | --- | --- | --- |
 | **GitHub Releases** | tarballs, `nido.mcpb`, `server.json`, `SHA256SUMS`, installers | `GITHUB_TOKEN` | none | Asset names are a contract for every other channel. |
+| **Container image** (GHCR) | `distribution/docker/Dockerfile` built from the release binaries and pushed to `ghcr.io/josepavese/nido` | `GITHUB_TOKEN` (`packages: write`) | none | Every tag publishes `:{version}`, `:{minor}` and `:latest`, bundling QEMU; meant for `/dev/kvm` hosts and MCP stdio use. First publish needs the package made public (`gh api` step in the job). |
 | **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: [`io.github.Josepavese/nido`](https://registry.modelcontextprotocol.io/); every tag adds an immutable version. Runs **after** npm and waits for the npm version to appear (publish-time scanning is asynchronous, so the registry validation otherwise races the publish). |
 | **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: [`nido-mcp`](https://www.npmjs.com/package/nido-mcp) with the `latest` dist-tag; every release publishes with provenance, no token stored (§2.4). |
 | **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | `Josepavese.Nido` 4.8.6 is submitted and **fully validated** ([microsoft/winget-pkgs#460843](https://github.com/microsoft/winget-pkgs/pull/460843): 10/10 checks green, CLA signed, token configured); only community-moderator merge remains. Updates automate once merged. |
 | **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours; the dated verification below records tested versions. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
-| **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | Not configured yet; x86_64 only, `-bin` package. |
-| **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | Not configured yet; stdio artifact, no hosting needed. |
+| **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | **Blocked upstream:** AUR closed new registrations after the June 2026 takeover wave and captchas are still flaky; the job is wired and activates as soon as the three secrets exist. x86_64 only, `-bin` package. |
+| **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | **Deprioritized:** Smithery shuts down its MCP proxy and managed identity on 2026-10-31, so the account/key cost no longer buys durable reach. The job stays wired but is not on the critical path. |
 | **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours; the dated verification below records tested versions. |
-| **Glama** | auto-index + `glama.json` claim | GitHub OAuth, one-time | none | [Nido listing is live](https://glama.ai/mcp/servers/Josepavese/nido); `glama.json` identifies the maintainer. Claiming ownership is a separate manual step. |
+| **Glama** | auto-index + `glama.json` claim | GitHub OAuth, one-time | none | [Nido listing is live](https://glama.ai/mcp/servers/Josepavese/nido); descriptions/categories/README sync from the repo automatically, releases appear after the crawler re-syncs (claiming ownership unlocks a manual re-sync). `glama.json` names the maintainer. |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
 
 Indirectly covered with no work: **PulseMCP** and **MCP Central** ingest the
@@ -90,6 +91,18 @@ GitHub MCP Registry syncs versions after a manual onboarding.
   scheduled workflows.
 - `v4.8.2` stays live on GitHub Releases and npm but has no MCP Registry entry:
   it predates `mcpName`, and npm versions are immutable (§2.4).
+
+### 1.4 Container channel (2026-10-24)
+
+The GHCR image was validated locally before wiring it into the release: the
+Dockerfile was built against the same Linux binaries the release ships, then
+`nido version`, a full `nido doctor` (data dirs, QEMU, `qemu-img`, built-in ISO
+writer, KVM acceleration) and an MCP `initialize` + `tools/list` handshake were
+run inside the container. `doctor` reports `accelerator=kvm cpu=host` only when
+the host passes `/dev/kvm` and the matching group (`--group-add "$(stat -c %g
+/dev/kvm)"`); without them the image falls back to TCG and reports the
+acceleration check as failed. The publish job is part of the release workflow,
+so the image appears on the next tag and `:latest` follows.
 
 ---
 
@@ -221,11 +234,23 @@ every release using the `nido.mcpb` asset.
 | `mcp.so` | repository URL via form | free with review / $39 fast-track |
 | `mcpservers.org` (= wong2 list) | form, include `io.github.Josepavese/nido` in "Official MCP Registry Name" | free 2 weeks / $39 24h |
 | MCP Market (`mcpmarket.com`) | form | free 4–6 weeks / $29 24h |
-| Directory of agent sandboxes lists (`msyvr/awesome-agent-sandboxes`, `sandbaseai/awesome-agent-runtime`) | PR/issue | free |
+| `msyvr/awesome-agent-sandboxes` | PR open: [#79](https://github.com/msyvr/awesome-agent-sandboxes/pull/79) (Standalone / Local Tools, KVM tier; `data/sandboxes.yaml` + regenerated artifacts) | free |
+| `sandbaseai/awesome-agent-runtime` | issue open: [#31](https://github.com/sandbaseai/awesome-agent-runtime/issues/31) (Execution Sandbox category) | free |
 | Product Hunt / DevHunt / TAAFT | launch | free / $19 / free |
 
 Newsletters (Console.dev, Golang Weekly, Ben's Bites) are editorial pitches, not
 automated channels.
+
+### 2.9 Container image (GHCR)
+
+Nothing to configure: the publish job in `.github/workflows/release.yml` builds
+`distribution/docker/Dockerfile` from the release binaries and pushes
+`ghcr.io/josepavese/nido` with `GITHUB_TOKEN` (`packages: write`). The first
+publish also needs the package to be made public: the job runs
+`gh api -X PATCH /user/packages/container/nido -f visibility=public` with
+`continue-on-error`, so a permission hiccup cannot fail the release – check
+<https://github.com/Josepavese?tab=packages> after the first tag and flip the
+visibility by hand if the API call was skipped.
 
 ---
 
@@ -239,10 +264,10 @@ automated channels.
 | Snap Store | `classic` confinement needs an uncertain human review; packaging QEMU inside the snap is heavy. |
 | Nixpkgs | one PR + weeks of review; automatic bumps only after merge. A flake in-repo (`nix run github:Josepavese/nido`) is a cheaper alternative. |
 | APT/RPM repositories on GitHub Pages | viable and zero-account (nfpm + `gh-pages`), but Pages is disabled and it needs an indexing/signing pass. Planned follow-up. |
-| Docker MCP Catalog | needs a Dockerfile + image; a KVM manager cannot run meaningfully in the catalog's container model. |
+| Docker MCP Catalog | the catalog runs servers without host `/dev/kvm`, which a VM manager needs; the GHCR image is for self-hosting instead. |
 | Anthropic Claude directory | paid Claude plan; MCPB desktop extensions are no longer accepted (plugin bundles only). |
 | OpenAI plugin directory | local/desktop path is limited to allowlisted partners. |
-| Docker Hub | GHCR would be the zero-credential alternative; image value is limited for a host-level VM manager. |
+| Docker Hub | GHCR already covers the zero-credential case; a Docker Hub mirror would need an account for little extra reach. |
 | LobeHub / Cursor Directory / mcp.so / MCP Market / mcpservers.org | browser-only submission or review; listing is one-shot, version updates are not supported via CI. |
 
 ---
