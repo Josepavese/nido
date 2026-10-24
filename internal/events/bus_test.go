@@ -122,7 +122,7 @@ func TestContractRejectsUnknownAndSensitivePayloadShapes(t *testing.T) {
 			t.Fatalf("accepted out-of-contract event: %+v", e)
 		}
 	}
-	for _, uri := range []string{"nido://vm", "nido://vm/", "nido://vm/../escape", "nido://vm/%2fetc", "nido://system/doctor", "nido://vm/x?all=true"} {
+	for _, uri := range []string{"nido://vm", "nido://vm/", "nido://vm/../escape", "nido://vm/%2fetc", "nido://system/doctor", "nido://vm/x?all=true", "nido://vm/%61"} {
 		if Subscribable(uri) {
 			t.Fatalf("accepted resource: %s", uri)
 		}

@@ -185,3 +185,5 @@ identity even if background data removes or reorders that object.
 VM resource parsing and portable storage identity validation have one owner
 (`events.ParseVMResource` and `pkg/identifier`), shared by providers, publishers,
 subscriptions and reads. Event transport does not introduce a second name grammar.
+VM URIs use the canonical ASCII identity advertised by Nido; alternate escaped
+spellings are rejected rather than accepted as subscriptions that never match.

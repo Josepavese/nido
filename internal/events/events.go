@@ -134,6 +134,9 @@ func ParseVMResource(uri string) (string, error) {
 	if err := identifier.Validate(name); err != nil {
 		return "", err
 	}
+	if VMResource(name) != uri {
+		return "", fmt.Errorf("non-canonical VM resource URI; use the URI advertised by Nido")
+	}
 	return name, nil
 }
 
