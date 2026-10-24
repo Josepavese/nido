@@ -1,86 +1,106 @@
-# Nido Installers 🪺
+# Install Nido
 
-This directory contains installation scripts for end users.
+[Documentation](../docs/README.md) · [Distribution channel status](../docs/DISTRIBUTION.md)
 
-## Quick Install (Recommended)
+The binary installer is the simplest starting point. It requires no repository
+clone or Go toolchain. QEMU is a separate runtime dependency.
 
-Download and install the pre-compiled binary. **No Git or build tools required.**
+## Binary installers
 
-### Linux & macOS
+Linux / macOS:
 
 ```bash
-{ curl -fsSL https://github.com/Josepavese/nido/releases/latest/download/install.sh || curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.sh; } | bash
+curl -fsSL https://github.com/Josepavese/nido/releases/latest/download/install.sh | bash
 ```
 
-### Windows (PowerShell)
+Windows PowerShell:
 
 ```powershell
-try { irm https://github.com/Josepavese/nido/releases/latest/download/install.ps1 | iex } catch { irm https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.ps1 | iex }
+irm https://github.com/Josepavese/nido/releases/latest/download/install.ps1 | iex
 ```
 
-## Build from Source (Lightweight)
-
-Want the latest code without cloning the whole nest? This script downloads the GitHub source archive and builds locally.
-
-**Prerequisites:** Go 1.26.5+
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/build-from-source.sh | bash
-```
-
-> **🐣 Why this option?** Perfect for tinkerers who want bleeding-edge features or need to customize the build, but don't want to download flavours, docs, and other non-essential files.
-
-## Developer Install (Full Repository)
-
-For contributors who want to build from source:
-
-```bash
-git clone https://github.com/Josepavese/nido
-cd nido
-bash bin/install-from-source.sh
-```
-
----
-
-## What Each Script Does
-
-| Script | Purpose | Prerequisites | Target Users |
-|--------|---------|---------------|--------------|
-| `quick-install.sh` | Downloads pre-compiled binary from GitHub Releases, checks QEMU | `curl` | End users (Linux/macOS) |
-| `quick-install.ps1` | Downloads pre-compiled binary from GitHub Releases, checks QEMU/WHPX | PowerShell 5.1+ | End users (Windows) |
-| `build-from-source.sh` | Downloads only source files and builds locally | Go 1.26.5+, `curl` | Tinkerers & power users |
-| `../bin/install-from-source.sh` | Full repository clone and build | Go 1.26.5+, Git | Contributors & developers |
-
----
-
-## Post-Installation
-
-After installation, verify your setup:
+Open a new terminal so PATH changes take effect:
 
 ```bash
 nido version
 nido doctor
 ```
 
-The quick installers check runtime dependencies. On Windows, `quick-install.ps1` can register/install winget when needed, install QEMU via winget, and offer to enable Windows Hypervisor Platform for WHPX acceleration. Enabling WHPX requires administrator approval and a Windows restart.
+The installers place the release in your user-level `.nido` directory and install
+the bundled registry. They check QEMU prerequisites and offer installation where
+supported. On Windows the installer can register/install winget, install QEMU
+and offer to enable Windows Hypervisor Platform. Enabling WHPX requires local
+administrator approval and a Windows restart. See [Windows support](../docs/windows.md).
 
-Windows support is smoke-tested on a real Windows VM for installer parsing, diagnostics, catalog/blueprint listing, and basic VM lifecycle. It is usable for core workflows, but still needs heavier long-running validation.
+If you prefer to inspect the installer first, download `install.sh` or
+`install.ps1` from the [release assets](https://github.com/Josepavese/nido/releases/latest),
+review it, then execute the saved file.
 
-If you prefer manual dependency installation:
+## Package managers
+
+| Channel | Command |
+| --- | --- |
+| Homebrew, macOS / Linux | `brew install Josepavese/nido/nido` |
+| Scoop, Windows | Add `https://github.com/Josepavese/scoop-nido` as bucket `nido`, then `scoop install nido` |
+| npm launcher | `npm install -g nido-mcp` |
+| npm without global install | `npx -y nido-mcp mcp` |
+| Go toolchain | `go install github.com/Josepavese/nido/v4/cmd/nido@latest` |
+
+The npm launcher downloads the matching binary on first use and verifies it
+against release `SHA256SUMS`. Go install builds from source and does not install
+QEMU. Companion package channels can lag a new GitHub release; availability and
+credential-dependent channels are tracked in [distribution](../docs/DISTRIBUTION.md).
+
+## Host prerequisites
+
+- `qemu-system-*` and `qemu-img` appropriate for the host and guest architecture.
+- An SSH client for guest connections.
+- Enough disk space for base downloads, transfer staging and growing VM disks;
+  enough RAM for the host and every running guest.
+
+Linux can use KVM when available and accessible; macOS can use HVF; Windows can
+use WHPX. Unsupported or unavailable acceleration falls back to software
+emulation where applicable. `nido doctor` reports the effective capability.
+Hardware acceleration is not guaranteed inside another VM or a hosted CI runner.
+ARM Linux / Termux setups need compatible QEMU packages; do not assume that a
+binary for the CPU alone establishes guest or Android runtime compatibility.
+
+Example QEMU installation commands:
 
 ```bash
-# Linux (Debian/Ubuntu)
+# Debian / Ubuntu
 sudo apt install qemu-system-x86 qemu-utils
 
 # macOS
 brew install qemu
-
-# Windows
-winget install --id SoftwareFreedomConservancy.QEMU -e --source winget --scope machine --accept-package-agreements --accept-source-agreements
 ```
 
-QEMU's official download page also links Windows alternatives, including Stefan Weil's installers and MSYS2 packages: <https://www.qemu.org/download/#windows>.
+For Windows, use the quick installer's supported setup or the options linked
+from [QEMU downloads](https://www.qemu.org/download/#windows).
 
----
+## Source builds
 
-**"It's not a VM, it's a lifestyle."** 🪺
+The canonical Go toolchain line is in [`.go-version`](../.go-version); use its
+current secure patch release. The lightweight source installer downloads a source
+archive instead of cloning the repository:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/build-from-source.sh | bash
+```
+
+Contributors can follow [Contributing](../CONTRIBUTING.md) for builds outside the
+checkout. `bin/install-from-source.sh` is the full source-install path; inspect
+its dependency and installation behavior before running it.
+
+## Upgrades and existing data
+
+Use the package manager that installed Nido, or `nido update` for the standalone
+binary updater. Do not uninstall first: uninstall removes Nido data.
+Read the [changelog](../CHANGELOG.md) for upgrade notes, especially host PCI
+recovery records. Reconnect MCP clients after an executable upgrade so they
+load the current process and schemas.
+
+`nido config --json` shows effective storage locations. Moving binaries or changing
+storage settings does not migrate existing VM disks. Preserve useful disks,
+templates, configuration and recovery records; do not treat them as installer
+scratch. See [operations and storage](../docs/usage.md#isolation-and-storage).

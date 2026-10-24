@@ -1,145 +1,68 @@
-# Beta Testing Guide for Nido v4.3.0
+# Test Nido
 
-Thank you for helping test Nido's cross-platform support! This guide will help you test Nido on macOS and Windows.
+[Contributing](CONTRIBUTING.md) · [Architecture and qualification](docs/ARCHITECTURE.md)
 
-## Prerequisites
+Choose the smallest check that can establish the changed contract. Documentation
+changes need link/example consistency and visual inspection. Runtime changes
+need relevant regressions plus the required cross-platform CI. A device-less
+test cannot qualify physical hardware.
 
-### macOS
+## Go checks
 
-- macOS 10.13 (High Sierra) or later
-- Homebrew installed
-- At least 4GB free RAM
-
-### Windows
-
-- Windows 10/11 (64-bit)
-- Administrator privileges
-- At least 4GB free RAM
-
-## Installation
-
-### macOS
+Use the toolchain line in [`.go-version`](.go-version), existing module caches
+and temporary build output outside the checkout:
 
 ```bash
-# Install QEMU via Homebrew
-brew install qemu
-
-# Download Nido binary (replace with actual release URL)
-curl -L https://github.com/Josepavese/nido/releases/download/v3.0.0/nido-darwin-amd64 -o nido
-chmod +x nido
-sudo mv nido /usr/local/bin/
-
-# Verify installation
-nido version
-nido doctor
+go test ./...
+go vet ./...
 ```
 
-### Windows
+CI also checks formatting, staticcheck, govulncheck, shell scripts, Windows
+installer parsing, Linux VM smoke behavior and release packaging. The workflow
+in [`.github/workflows/cross-platform.yml`](.github/workflows/cross-platform.yml)
+owns the current matrix.
 
-```powershell
-# Install QEMU via Windows Package Manager
-winget install --id SoftwareFreedomConservancy.QEMU -e --scope machine --accept-package-agreements --accept-source-agreements
+## Isolated CLI and MCP contracts
 
-# If WinGet is not available, use the Windows options linked by QEMU:
-# https://www.qemu.org/download/#windows
+On Linux, the existing Python harnesses use bubblewrap with a private home,
+private VM state and controlled host fixtures. They do not expose existing VMs.
+Build once, reuse that binary for both suites, then retire the scratch:
 
-# Download Nido binary (replace with actual release URL)
-# Download from GitHub releases page
-# Move to C:\Program Files\nido\nido.exe
-
-# Add to PATH
-$env:Path += ";C:\Program Files\nido"
-
-# Verify installation
-nido version
-nido doctor
+```bash
+# Pick a filesystem with enough free space. Keep build output out of the repo.
+scratch=$(mktemp -d /path/to/scratch/nido-tests.XXXXXX)
+trap 'rm -rf "$scratch"' EXIT
+go build -o "$scratch/nido" ./cmd/nido
+NIDO_TEST_BINARY="$scratch/nido" NIDO_TEST_STORAGE="$scratch" python3 tests/catalog_surfaces.py
+NIDO_TEST_BINARY="$scratch/nido" NIDO_TEST_STORAGE="$scratch" python3 tests/cli_mcp_safety.py
 ```
 
-## Testing Checklist
+`catalog_surfaces.py` verifies catalog versions/aliases/integrity across CLI,
+MCP tools and resources, plus fixture-based accelerator parity.
+`cli_mcp_safety.py` verifies persistence, path/process boundaries, backing-chain
+protection and configuration semantics, including raw QEMU replacement, omission
+and explicit clearing. Inspect harness prerequisites before executing them.
 
-Please test the following commands and report any issues:
+## End-to-end VM validation
 
-### ✅ Basic Commands (All Platforms)
+`nido-validator` exercises CLI and MCP using shared YAML workflows. It can pull
+images, boot guests and create temporary disks; budget disk/RAM first and use a
+disposable test environment. Ownership checks limit its cleanup, but they are
+not a reason to expose valuable user state to a qualification run.
 
-- [ ] `nido version` - Shows version info
-- [ ] `nido doctor` - System diagnostics
-- [ ] `nido config` - Shows configuration
-- [ ] `nido template list` - Lists templates (may be empty)
-- [ ] `nido ls` - Lists VMs (may be empty)
-- [ ] `nido help` - See guidance directly in the terminal
+See the [validator guide](cmd/nido-validator/README.md) for flags, output,
+timeouts and cleanup behavior. Build `nido` and `nido-validator` into the same
+external scratch and reuse them throughout the run. Archive only useful bounded
+evidence; remove owned artifacts after their final consumer exits.
 
-### ✅ VM Lifecycle (If you have a template)
+## Platform and hardware evidence
 
-- [ ] `nido spawn test-vm` - Create and start a VM
-- [ ] `nido ls` - Verify VM appears
-- [ ] `nido info test-vm` - Get VM details
-- [ ] `nido ssh test-vm` - SSH connection string
-- [ ] `nido stop test-vm` - Stop the VM
-- [ ] `nido start test-vm` - Restart the VM
-- [ ] `nido delete test-vm` - Remove the VM
+- Cross-platform compilation/unit tests establish the tested software contracts.
+- A real VM smoke test establishes the lifecycle on that host/guest combination.
+- Native PCI qualification establishes attachment/restoration only for the
+  explicitly selected device and scenario. A skipped test is not a pass.
 
-- [ ] Test MCP server with Claude/Antigravity
-
-### ✅ Image & Cache Operations (New!)
-
-- [ ] `nido images list` - Browse the registry
-- [ ] `nido images pull cirros:0.6.3` - Pull a small test image
-- [ ] `nido cache ls` - Verify image is in cache
-- [ ] `nido spawn test-img --image cirros:0.6.3` - Spawn from cloud image
-- [ ] `nido cache prune --unused` - Verify "Smart Protection" (active image should stay)
-- [ ] `nido config set LINKED_CLONES false` - Test Full Copy mode
-
-## Known Limitations
-
-### macOS
-
-- **Hypervisor Framework (HVF)** requires macOS 10.13+
-- First VM start may be slow (QEMU initialization)
-- No GUI tools like virt-manager
-
-### Windows
-
-- **WHPX** requires Windows 10 build 19041+ with Hyper-V enabled
-- May conflict with other hypervisors (VirtualBox, VMware)
-- QMP uses TCP instead of Unix sockets
-
-### All Platforms
-
-- VMs use **localhost port forwarding** instead of direct IP
-- SSH via `ssh -p <port> user@localhost` (port shown in `nido info`)
-- No nested virtualization support on GitHub Actions runners
-
-## Reporting Issues
-
-Please report issues on GitHub with:
-
-1. **Platform**: macOS/Windows version
-2. **QEMU version**: Output of `qemu-system-x86_64 --version`
-3. **Command**: Exact command that failed
-4. **Error**: Full error message
-5. **Logs**: Output of `nido doctor`
-
-Example issue:
-
-```
-Platform: macOS 14.2 (Sonoma)
-QEMU: 8.1.0
-Command: nido spawn test-vm
-Error: "qemu-system-x86_64: -accel hvf: invalid accelerator hvf"
-Doctor output: [paste here]
-```
-
-## Success Criteria
-
-For a successful beta test, we need:
-
-- ✅ `nido doctor` passes on your platform
-- ✅ At least one successful VM spawn/start/stop cycle
-- ✅ SSH connection works (even if you can't login)
-
-## Getting Help
-
-- GitHub Issues: <https://github.com/Josepavese/nido/issues>
-- Discussions: <https://github.com/Josepavese/nido/discussions>
-
-Thank you for testing! 🚀
+The opt-in [native PCI fixture and cutover procedure](docs/ARCHITECTURE.md#opt-in-native-pci-qualification)
+protect the primary display, require a suitable empty controller and retain
+failed recovery state. Do not use existing VMs or a user's active peripherals
+as disposable test fixtures.

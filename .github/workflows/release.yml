@@ -19,12 +19,8 @@ jobs:
       actions: write
       checks: read
       contents: write
-      id-token: write
       pull-requests: read
-    env:
-      MCP_PUBLISHER_VERSION: 'v1.7.8'
-      MCP_PUBLISHER_SHA256: '48230dbec85bd88a0d42977ef533cddda23235f0db4331b9263ce53b432cb75c'
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -328,6 +324,46 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Upload MCP server manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: mcp-server-json
+          path: dist/server.json
+          if-no-files-found: error
+          retention-days: 3
+
+  # Kept out of the release job: the check dispatches upstream-dependent
+  # scheduled workflows (image catalog refreshes), so a transient upstream
+  # failure must never block release artifacts or distribution channels.
+  # The registry validates that the npm version advertised in server.json
+  # exists, so this runs after the npm publish job. If npm publishing is
+  # disabled (trusted publisher variable absent), the manifest is published
+  # without the npm entry instead of failing the release.
+  publish-mcp-registry:
+    name: Publish to MCP Registry
+    needs: [release, publish-npm]
+    if: always() && needs.release.result == 'success' && needs.publish-npm.result != 'failure' && needs.publish-npm.result != 'cancelled'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      MCP_PUBLISHER_VERSION: 'v1.7.8'
+      MCP_PUBLISHER_SHA256: '48230dbec85bd88a0d42977ef533cddda23235f0db4331b9263ce53b432cb75c'
+    steps:
+      - name: Download MCP server manifest
+        uses: actions/download-artifact@v7
+        with:
+          name: mcp-server-json
+
+      - name: Drop npm package entry when npm publishing is disabled
+        if: needs.publish-npm.result == 'skipped'
+        run: |
+          echo "npm publishing disabled: publishing server.json without the npm package entry."
+          jq '.packages |= map(select(.registryType != "npm"))' server.json > server.tmp.json
+          mv server.tmp.json server.json
+          jq -r '.packages[].registryType' server.json
+
       - name: Install mcp-publisher
         run: |
           echo "📥 Installing mcp-publisher..."
@@ -341,19 +377,9 @@ jobs:
       - name: Publish to MCP Registry
         run: |
           echo "🚀 Publishing to MCP Registry..."
-          
-          # Prepare server.json in CWD
-          cp dist/server.json .
-          
-          # Login via OIDC
           mcp-publisher login github-oidc
-          
-          # Publish to Official Registry
           mcp-publisher publish --yes
 
-  # Kept out of the release job: the check dispatches upstream-dependent
-  # scheduled workflows (image catalog refreshes), so a transient upstream
-  # failure must never block release artifacts or distribution channels.
   verify_scheduled:
     name: Verify scheduled automation
     needs: release

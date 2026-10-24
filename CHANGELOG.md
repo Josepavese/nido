@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Ubuntu Cloud Images discovery falls back to the release codename directory when the numeric directory is denied, so the scheduled registry refresh succeeds again for `26.10` instead of failing the whole catalog update.
+- MCP Registry publication now runs after the npm publish job: the registry validates that the advertised npm version exists, so releases no longer fail while the version is still in flight. When npm publishing is disabled, the manifest is published without the npm package entry.
 
 ## [4.8.1] - 2026-10-23 "Steady Nest"
 
