@@ -82,8 +82,9 @@ non-root user can open `/dev/kvm`.
 [availability and commands](installers/README.md#winget-windows).
 
 For MCP clients, use `npx -y nido-mcp mcp`, discover
-`io.github.Josepavese/nido` in the **Official MCP Registry**, browse **Glama**,
-or import the **MCPB bundle**. [MCP catalogs and client installation](installers/README.md#mcp-catalogs-and-client-installation).
+`io.github.Josepavese/nido` in the **Official MCP Registry**, browse the **Glama**
+directory for local installation instructions, or import the **MCPB bundle**.
+[MCP catalogs and client installation](installers/README.md#mcp-catalogs-and-client-installation).
 
 [All install options](installers/README.md) · [Distribution channel status](docs/DISTRIBUTION.md)
 

@@ -26,7 +26,7 @@ incremental.
 | **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | **Blocked upstream:** AUR closed new registrations after the June 2026 takeover wave and captchas are still flaky; the job is wired and activates as soon as the three secrets exist. x86_64 only, `-bin` package. |
 | **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | **Deprioritized:** Smithery shuts down its MCP proxy and managed identity on 2026-10-31, so the account/key cost no longer buys durable reach. The job stays wired but is not on the critical path. |
 | **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours; the dated verification below records tested versions. |
-| **Glama** | auto-index + verified container release | GitHub OAuth, one-time | none | [Nido listing](https://glama.ai/mcp/servers/Josepavese/nido) is claimed; Glama release 4.8.7 is published after a successful build/introspection test. GitHub metadata sync and Glama releases are separate. Auto-release is enabled with the tested build spec (§1.5). |
+| **Glama** | directory indexing | GitHub OAuth, one-time | auto-release off | [Nido listing](https://glama.ai/mcp/servers/Josepavese/nido) provides discovery and local installation instructions. Hosted deployment is outside this channel's intended use; withdrawal of the previously published Glama release remains pending (§1.5). |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
 
 Indirectly covered with no work: **PulseMCP** and **MCP Central** ingest the
@@ -106,28 +106,34 @@ so the image appears on the next tag and `:latest` follows.
 
 ---
 
-### 1.5 Glama release (2026-10-25)
+### 1.5 Glama directory and local MCP (2026-10-25)
 
-Ownership and `glama.json` are verified. The initial Glama configuration had
-empty build steps and no MCP startup command; GitHub releases alone did not
-produce a Glama release. After configuring the runtime, [build test
-01a16ffd](https://glama.ai/mcp/servers/Josepavese/nido/admin/dockerfile/tests/01a16ffd-743a-72cd-b578-93ac3147b537)
-passed and Glama release **4.8.7** was published. Glama discovered all six tools,
-eleven resources and the task-router prompt, including event subscriptions.
+Glama is a discovery channel for Nido. Ownership through `glama.json` remains
+verified, and the listing description directs users to install Nido and QEMU
+on their own computer, then configure their MCP client to launch `nido mcp`
+over stdio. Alternatively, the client can launch `npx -y nido-mcp@latest mcp`.
+See the [installation guide](../installers/README.md) and the exact
+[client configuration](mcp.md#configure-a-client).
 
-The build spec is maintained in [Glama's Dockerfile admin](https://glama.ai/mcp/servers/Josepavese/nido/admin/dockerfile),
-with QEMU/SSH runtime prerequisites and `nido mcp` as the command behind Glama's
-proxy. For subsequent auto-releases it resolves the matching `vX.Y.Z` Git tag
-and reuses `npm/lib/install.js` to download and verify that release's native
-archive before installing the executable. The binary is prepared during build,
-so startup needs no download. There is no fixed old commit/version and no race
-with the separate npm publication job. A missing tag, asset or checksum fails
-the build instead of substituting another version.
+**Auto-release is disabled**, verified after reloading the
+[Glama release settings](https://glama.ai/mcp/servers/Josepavese/nido/admin/releases).
+Keep it off when publishing future Nido releases. Repository indexing and
+ownership do not require maintaining a hosted runtime. `glama.json` declares
+maintainers; it has no hosting-disable setting.
 
-These checks qualify container startup and MCP discovery, not a guest workload
-or KVM availability on Glama. The deployment manages its own environment;
-connect a locally running Nido MCP server to manage workstation VMs. No host VM
-directories or credentials were supplied during this qualification.
+**Hosted withdrawal is pending:** Glama release 4.8.7, published during earlier
+container qualification, still appears in the release list. The inspected
+Releases, Dockerfile and Listing admin pages expose no withdrawal or hosting
+disable control. Glama support must confirm how to retire that release and
+disable hosted deployment while preserving the directory entry. Disabling
+auto-release alone does not withdraw an existing release. Glama's generated
+usage FAQ still suggests hosted deployment and also needs correction.
+
+No persistent hosted instance was deployed during qualification, and no local
+VM directories or credentials were supplied. A Glama-hosted process would
+manage its own environment and could not access the user's local VM inventory.
+Use the local stdio configuration to manage workstation VMs. The separate GHCR
+image remains available for user-managed hosts (§1.4).
 
 ## 2. One-time setup checklist
 
@@ -138,8 +144,8 @@ directories or credentials were supplied during this qualification.
   virtualization, provisioning and development/testing. Keep the GitHub About
   settings and channel metadata focused on these capabilities; avoid generic
   buzzwords and unqualified performance or security claims.
-- `glama.json` at root - in repo; Glama ownership is verified. Keep repository
-  sync and the tested Glama release/build spec current (§1.5).
+- `glama.json` at root - in repo; Glama ownership is verified. Keep the listing
+  and local installation instructions current, with auto-release off (§1.5).
 - `.mcp.json` at root - Open Plugins detection (Cursor Directory and friends).
 
 ### 2.2 Homebrew tap - live, zero secrets
@@ -338,7 +344,7 @@ URL must contain `mcp` - both registry requirements.
 - npm malware scanning / dual-use: <https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/>
 - Smithery publish: <https://smithery.ai/docs/build/publish>, <https://smithery.ai/docs/api-reference/servers/publish-a-server>
 - Glama claim: <https://glama.ai/blog/2025-07-08-what-is-glamajson>
-- Glama container releases: <https://glama.ai/blog/2026-03-15-how-to-make-a-release>
+- Glama metadata schema: <https://glama.ai/mcp/schemas/server.json>
 - awesome-mcp-servers agent fast-track: <https://github.com/punkpeye/awesome-mcp-servers/blob/main/CONTRIBUTING.md>
 - WinGet manifests / validation: <https://github.com/microsoft/winget-pkgs/blob/master/doc/manifest/schema/1.10.0/installer.md>, <https://github.com/microsoft/winget-pkgs/blob/master/doc/Validation.md>
 - winget-releaser: <https://github.com/vedantmgoyal9/winget-releaser>
