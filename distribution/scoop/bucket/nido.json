@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/scoop-app-manifest.json",
   "version": "4.7.0",
-  "description": "MCP-native VM manager for AI agents: fast local QEMU/KVM VM sandboxes",
+  "description": "Local VM manager for AI agents, with CLI, TUI and native MCP",
   "homepage": "https://github.com/Josepavese/nido",
   "license": "MIT",
   "architecture": {

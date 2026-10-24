@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Josepavese/nido",
-  "title": "Nido — MCP-native VM Manager for AI Agents (QEMU/KVM)",
-  "description": "Create, boot, control and destroy local QEMU/KVM VM sandboxes over MCP.",
+  "title": "Nido - VM Manager for AI Agents",
+  "description": "Manage local QEMU virtual machines for AI agents through native MCP: images, provisioning, templates and VM lifecycle.",
   "version": "0.0.0-dev",
   "websiteUrl": "https://github.com/Josepavese/nido",
   "repository": {

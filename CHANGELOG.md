@@ -5,6 +5,15 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.8.4] - 2026-10-24 "Field Guide"
+
+### Changed
+
+- Refresh the README, documentation, wiki navigation and visual identity with the current CLI/MCP behavior, a new cover and workflow infographic, and smaller image assets.
+- Rewrite the npm package description and README around MCP setup, first-use downloads, host requirements and current operational guides.
+- Align GitHub About, search topics, MCP Registry and distribution descriptions around Nido as a local VM manager for AI agents.
+- Retire superseded marketing images, orphan screenshots and duplicate operational documentation. Preserve installer and registry icon paths.
+
 ## [4.8.3] - 2026-10-24 "Nest Repair"
 
 ### Fixed
