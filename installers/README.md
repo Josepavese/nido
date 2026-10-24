@@ -46,6 +46,8 @@ review it, then execute the saved file.
 | Homebrew, macOS / Linux | `brew install Josepavese/nido/nido` |
 | Scoop, Windows | Add `https://github.com/Josepavese/scoop-nido` as bucket `nido`, then `scoop install nido` |
 | WinGet, Windows | `Josepavese.Nido`; [check availability below](#winget-windows) while Microsoft reviews the initial package |
+| APT, Debian / Ubuntu | [Nido APT repository](#apt-debian--ubuntu) → `sudo apt-get install nido` |
+| DNF, Fedora / RHEL | [Nido DNF repository](#dnf-fedora--rhel) → `sudo dnf install nido` |
 | Container, Docker / Podman | `docker run -i --rm --device /dev/kvm --group-add "$(stat -c %g /dev/kvm)" -v nido-home:/home/nido/.nido ghcr.io/josepavese/nido mcp` |
 | Go toolchain | `go install github.com/Josepavese/nido/v4/cmd/nido@latest` |
 
@@ -70,6 +72,38 @@ docker run -i --rm --device /dev/kvm \
 Without `--device /dev/kvm` and the matching group id the container falls back
 to emulation or fails `nido doctor`; the image runs as the non-root `nido` user
 with `/home/nido/.nido` as its data volume.
+
+### APT (Debian / Ubuntu)
+
+The release workflow publishes an APT repository on GitHub Pages, rebuilt from
+the release binaries on every tag:
+
+```bash
+echo "deb [trusted=yes] https://josepavese.github.io/nido/apt/ stable main" \
+  | sudo tee /etc/apt/sources.list.d/nido.list
+sudo apt-get update
+sudo apt-get install nido
+```
+
+Packages exist for `amd64` and `arm64`. QEMU is a host prerequisite and is not
+pulled in by the package: `sudo apt-get install qemu-system-x86 qemu-utils`,
+then `nido doctor`. The repository is **unsigned**, hence `[trusted=yes]`; when
+the repository is signed (a `PACKAGES_GPG_KEY` secret), download
+`https://josepavese.github.io/nido/nido-archive-keyring.asc` into
+`/etc/apt/keyrings/` and replace `[trusted=yes]` with
+`[signed-by=/etc/apt/keyrings/nido.asc]`.
+
+### DNF (Fedora / RHEL)
+
+```bash
+sudo curl -fsSL https://josepavese.github.io/nido/rpm/nido.repo \
+  -o /etc/yum.repos.d/nido.repo
+sudo dnf install nido
+```
+
+Packages exist for `x86_64` and `aarch64`. The repository is unsigned
+(`gpgcheck=0` in `nido.repo`); install QEMU first (`sudo dnf install qemu-kvm
+qemu-img`) and run `nido doctor` afterwards.
 
 ### WinGet (Windows)
 
