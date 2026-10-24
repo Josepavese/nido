@@ -1,6 +1,6 @@
 # nido-mcp
 
-npm launcher for [Nido](https://github.com/Josepavese/nido) — fast, local
+npm launcher for [Nido](https://github.com/Josepavese/nido) - fast, local
 QEMU/KVM VM sandboxes for AI agents, with a native MCP server. Ideal for
 running the MCP server from clients that only know how to launch `npx`:
 

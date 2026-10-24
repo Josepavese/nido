@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the **stable JSON output** format for Nido CLI commands used by automation and the future GUI.
+This document defines the **stable JSON output** format for Nido CLI commands used by automation and agent clients.
 Human output remains unchanged unless `--json` is passed.
 
 ## Activation
@@ -88,6 +88,7 @@ The following commands support `--json`:
 - `cache ls|info|rm|prune`
 - `version`
 - `doctor`
+- `accel list`
 - `config`
 - `register`
 
@@ -144,7 +145,9 @@ The following commands support `--json`:
 
 ### `config`
 
-`data.config_path`, `data.backup_dir`, `data.default_tpl`, `data.ssh_user`, `data.linked_clones`
+`data.config_path`: configuration file path.
+`data.config`: `backup_dir`, `ssh_user`, `image_dir`, `linked_clones`, `theme`,
+`port_range_start`, `port_range_end`, and the `tui` layout object.
 
 ### `register`
 

@@ -45,16 +45,18 @@ shell user-data, not the full cloud-config feature set.
 ```bash
 nido spawn web-lab --image ubuntu:lts --port app:8080/tcp
 nido info web-lab --json
-nido port list web-lab
 ```
+
+CLI `config --port` replaces the saved service-forwarding list; include every
+rule you still need. MCP also exposes individual `port_forward`, `port_unforward`
+and `port_list` actions.
 
 Automatic host ports are selected from the configured port range. Read back the
 assigned endpoint instead of assuming a number. For a fixed mapping:
 
 ```bash
-nido port forward web-lab app:8080:33000/tcp
-nido port list web-lab
-nido port unforward web-lab app
+nido config web-lab --port app:8080:33000/tcp --json
+nido info web-lab --json
 ```
 
 QEMU user-mode forwarding binds to host loopback. Inside a guest, `127.0.0.1`
@@ -155,8 +157,9 @@ Do not manually delete backing files used by VM disks or templates.
 ## Isolation and storage
 
 The default state root is `~/.nido` (Windows: `%USERPROFILE%\.nido`). Inspect
-`nido config --json` before changing paths. `BACKUP_DIR` is the provider's disk
-and template storage location; its name does not imply a second recovery copy.
+`nido config --json` before changing paths. `BACKUP_DIR` stores compressed disk
+templates; active VM disks remain under `~/.nido/vms`. Its name does not imply
+a second recovery copy of every VM.
 `IMAGE_DIR` owns the downloaded image cache. Changing a path does not migrate
 existing files. See [configuration](../config/README.md).
 
