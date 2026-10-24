@@ -19,7 +19,7 @@ incremental.
 | **GitHub Releases** | tarballs, `nido.mcpb`, `server.json`, `SHA256SUMS`, installers | `GITHUB_TOKEN` | none | Asset names are a contract for every other channel. |
 | **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: [`io.github.Josepavese/nido`](https://registry.modelcontextprotocol.io/); every tag adds an immutable version. Runs **after** npm and waits for the npm version to appear (publish-time scanning is asynchronous, so the registry validation otherwise races the publish). |
 | **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: [`nido-mcp`](https://www.npmjs.com/package/nido-mcp) with the `latest` dist-tag; every release publishes with provenance, no token stored (§2.4). |
-| **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | Manifest PR open for `Josepavese.Nido` 4.8.6: [microsoft/winget-pkgs#460549](https://github.com/microsoft/winget-pkgs/pull/460549) (only the Microsoft CLA is missing). Updates automate once merged + token exists. |
+| **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | `Josepavese.Nido` 4.8.6 is submitted and **fully validated** ([microsoft/winget-pkgs#460843](https://github.com/microsoft/winget-pkgs/pull/460843): 10/10 checks green, CLA signed, token configured); only community-moderator merge remains. Updates automate once merged. |
 | **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours; the dated verification below records tested versions. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
 | **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | Not configured yet; x86_64 only, `-bin` package. |
 | **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | Not configured yet; stdio artifact, no hosting needed. |
@@ -46,7 +46,7 @@ GitHub MCP Registry syncs versions after a manual onboarding.
 - Credential-gated jobs (npm, WinGet, Scoop push, AUR, Smithery) were reported
   as **skipped**, never failed.
 - Open submissions: [awesome-mcp-servers#17428](https://github.com/punkpeye/awesome-mcp-servers/pull/17428),
-  [winget-pkgs#460549](https://github.com/microsoft/winget-pkgs/pull/460549),
+  [winget-pkgs#460843](https://github.com/microsoft/winget-pkgs/pull/460843) (validated),
   [github-mcp-server#3572](https://github.com/github/github-mcp-server/issues/3572)
   (GitHub MCP Registry curation request).
 
@@ -169,14 +169,18 @@ own secret here.
 
 ### 2.5 WinGet
 
-1. The fork `Josepavese/winget-pkgs` exists and the manifest PR is open:
-   [microsoft/winget-pkgs#460549](https://github.com/microsoft/winget-pkgs/pull/460549)
-   (`Josepavese.Nido` 4.8.6, validated against the 1.10.0 schemas). **Sign the
-   Microsoft CLA once:** reply with `@microsoft-github-policy-service agree` on
-   the PR; then the `license/cla` check turns green. Merge times for a new
-   portable package can be days (community moderators review them).
-2. Create a **classic** PAT with `public_repo` (fine-grained tokens are not
-   supported by the tooling) and store it as `WINGET_TOKEN`.
+1. The fork `Josepavese/winget-pkgs` exists and the manifest PR carries
+   `Josepavese.Nido` 4.8.6 with the **1.12.0** manifest schema:
+   [microsoft/winget-pkgs#460843](https://github.com/microsoft/winget-pkgs/pull/460843).
+   The Microsoft CLA is signed and all ten validation checks are green
+   (`Validation-Completed`, `Azure-Pipeline-Passed`); only community-moderator
+   approval remains, which can take days for a new portable package. An earlier
+   submission ([#460549](https://github.com/microsoft/winget-pkgs/pull/460549))
+   was closed as empty after a bad rebase and is superseded.
+2. `WINGET_TOKEN` is configured: a **classic** PAT with `public_repo`
+   (fine-grained tokens are not supported by the tooling) that lets
+   `winget-releaser` push the fork branch and open the update PR on every
+   release. Rotate it before it expires.
 
 After the first version is merged, `winget upgrade Josepavese.Nido` follows every
 release automatically. The in-repo template lives under
