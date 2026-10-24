@@ -84,7 +84,6 @@ type Fleet struct {
 	// Data
 	items         []FleetItem
 	detail        FleetDetail
-	latestList    time.Time
 	latestDetail  time.Time
 	runtimeStates map[string]string
 	transitioning map[string]bool // New: track active fast operations
@@ -274,10 +273,6 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 
 	// Data Updates
 	case ops.VMListMsg:
-		if msg.RequestedAt.Before(f.latestList) {
-			return f, nil
-		}
-		f.latestList = msg.RequestedAt
 		if len(msg.Items) == 0 && msg.Err == nil {
 			f.detail = FleetDetail{}
 			f.DetailView.UpdateDetail(f.detail)

@@ -118,7 +118,8 @@ Examples:
   shortened and verified with the canonical release checker.
 - The final UI/MCP follow-up preserves drafts during live source updates, pins
   deletion confirmations to their original identities, keeps data updates flowing
-  behind page modals, and notifies opted-in stream health subscribers once on
+  behind page modals, rejects stale fleet results before they reach any page,
+  timestamps local connection failures, and notifies opted-in stream health subscribers once on
   observation loss. Targeted race/vet tests and the extended two-PTY draft proof pass.
 - The [PR](https://github.com/Josepavese/nido/pull/322) owns the latest automated
   candidate status. The [wiki](https://github.com/Josepavese/nido/wiki) now links

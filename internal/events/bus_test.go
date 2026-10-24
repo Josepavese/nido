@@ -156,3 +156,20 @@ func TestLateSubscriberReceivesCurrentRuntimeObservation(t *testing.T) {
 	cancel()
 	drain(t, stream)
 }
+
+func TestUnavailableConnectionHasLocalObservationTimestamp(t *testing.T) {
+	root := eventRoot(t)
+	// A fixture file at the directory path prevents both dialing and election.
+	if err := os.WriteFile(filepath.Join(root, "events"), []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stream := NewClient(root, nil).Watch(ctx)
+	event := receive(t, stream, Unavailable)
+	if event.Time.IsZero() || event.Epoch != "" {
+		t.Fatal("unavailable local observation has invalid identity/time", event)
+	}
+	cancel()
+	drain(t, stream)
+}

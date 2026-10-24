@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Josepavese/nido/v4/internal/events"
 	"strings"
+	"time"
 
 	// Added import
 	"github.com/Josepavese/nido/v4/internal/config" // Global config
@@ -31,16 +32,17 @@ import (
 // NidoApp wraps the generic Kit App to handle domain-specific logic.
 type NidoApp struct {
 	*app.App
-	prov          provider.VMProvider
-	eventContext  context.Context
-	eventStream   <-chan events.Event
-	configPath    string
-	Fleet         *fleet.Fleet
-	Hatchery      *hatchery.Hatchery // Keep reference for background updates
-	Registry      *registry.Registry // Keep reference for background updates
-	Config        *configpage.Config // Keep reference for background updates
-	activeActions map[string]string  // Map OpName -> ActionID
-	ErrorModal    *widget.Modal      // Global alert modal
+	prov            provider.VMProvider
+	eventContext    context.Context
+	eventStream     <-chan events.Event
+	configPath      string
+	latestFleetRead time.Time
+	Fleet           *fleet.Fleet
+	Hatchery        *hatchery.Hatchery // Keep reference for background updates
+	Registry        *registry.Registry // Keep reference for background updates
+	Config          *configpage.Config // Keep reference for background updates
+	activeActions   map[string]string  // Map OpName -> ActionID
+	ErrorModal      *widget.Modal      // Global alert modal
 }
 
 func (n *NidoApp) Init() tea.Cmd {
@@ -97,6 +99,12 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return n, tea.Batch(cmds...)
 	}
 	// Feed fleet data even when another route is active or a modal is open.
+	if list, ok := msg.(ops.VMListMsg); ok {
+		if list.RequestedAt.Before(n.latestFleetRead) {
+			return n, nil
+		}
+		n.latestFleetRead = list.RequestedAt
+	}
 	if isFleetData(msg) && n.Fleet != nil {
 		_, cmd := n.Fleet.Update(msg)
 		if _, ok := msg.(ops.VMListMsg); !ok {

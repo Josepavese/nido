@@ -118,7 +118,7 @@ func (c *Client) Watch(ctx context.Context) <-chan Event {
 				}
 			}
 			select {
-			case out <- Event{Version: Version, Source: Service, Kind: Unavailable}:
+			case out <- Event{Version: Version, Time: time.Now().UTC(), Source: Service, Kind: Unavailable}:
 			default:
 			}
 			select {

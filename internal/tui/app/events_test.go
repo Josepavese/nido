@@ -11,6 +11,7 @@ import (
 	"github.com/Josepavese/nido/v4/internal/provider"
 	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
 	"github.com/Josepavese/nido/v4/internal/tui/app/pages/fleet"
+	"github.com/Josepavese/nido/v4/internal/tui/app/pages/hatchery"
 	kit "github.com/Josepavese/nido/v4/internal/tui/kit/app"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 )
@@ -18,8 +19,10 @@ import (
 func TestEventFlowContinuesBehindGlobalAndFleetModals(t *testing.T) {
 	p := provider.NewQemuProvider(t.TempDir(), &config.Config{}, hardware.New())
 	f := fleet.NewFleet(p)
-	model := &NidoApp{App: kit.NewApp(), prov: p, Fleet: f, eventContext: context.Background(), ErrorModal: widget.NewAlertModal("fixture", "", nil)}
+	h := hatchery.NewHatchery(p)
+	model := &NidoApp{App: kit.NewApp(), prov: p, Fleet: f, Hatchery: h, eventContext: context.Background(), ErrorModal: widget.NewAlertModal("fixture", "", nil)}
 	model.ErrorModal.Show()
+	h.ConfirmDelete.Show()
 	f.ErrorModal.Show()
 	requested := time.Now()
 	if _, cmd := model.Update(ops.EventBatchMsg{Events: []events.Event{{Source: events.Filesystem, Kind: events.Changed, Resources: []string{events.Fleet}}}}); cmd == nil {
@@ -32,6 +35,9 @@ func TestEventFlowContinuesBehindGlobalAndFleetModals(t *testing.T) {
 	model.Update(ops.VMListMsg{RequestedAt: requested.Add(-time.Second)})
 	if f.Sidebar.SelectedItem() == nil {
 		t.Fatal("stale response overwrote current fleet")
+	}
+	if !h.ExistingVMs["new-vm"] {
+		t.Fatal("stale response overwrote hatchery VM validation")
 	}
 	model.Update(ops.VMListMsg{RequestedAt: requested.Add(time.Second)})
 	if f.Sidebar.SelectedItem() != nil {
