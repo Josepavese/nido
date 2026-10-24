@@ -1,0 +1,23 @@
+# nfpm configuration template for the APT/DNF repositories.
+# Rendered by bin/publish-packages.sh: __VERSION__, __ARCH__, __BIN_DIR__.
+name: nido
+arch: __ARCH__
+platform: linux
+version: __VERSION__
+section: utils
+priority: optional
+maintainer: Josepavese <pvsjso@gmail.com>
+vendor: Josepavese
+homepage: https://github.com/Josepavese/nido
+license: MIT
+description: |
+  Nido is a local VM manager for AI agents. It creates, boots and controls
+  QEMU/KVM virtual machines through a CLI, a TUI and a native Model Context
+  Protocol (MCP) server, with linked clones, cloud images, templates, SSH and
+  port forwarding. QEMU must be installed separately on the host; run
+  `nido doctor` after installation to check the prerequisites.
+contents:
+  - src: __BIN_DIR__/nido
+    dst: /usr/bin/nido
+  - src: __BIN_DIR__/nido-validator
+    dst: /usr/bin/nido-validator

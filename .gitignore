@@ -15,6 +15,7 @@ config/config.env
 /registry-builder
 /registry-validator
 /dist/
+/build/
 bin/nido
 bin/nido-validator
 bin/nido.exe

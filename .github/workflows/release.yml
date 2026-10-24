@@ -709,3 +709,64 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh api -X PATCH /user/packages/container/nido -f visibility=public
+
+  # Zero-credential distro repositories: the workflow token can push the
+  # gh-pages branch, and GitHub Pages serves APT (Debian/Ubuntu) and DNF
+  # (Fedora/RHEL) metadata rebuilt from the release binaries. Packages are
+  # unsigned unless a PACKAGES_GPG_KEY secret is present, which is documented
+  # in installers/README.md.
+  publish-packages:
+    name: Publish APT/DNF repositories
+    needs: [release]
+    if: needs.release.result == 'success'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+      NFPM_VERSION: v2.48.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: .go-version
+          check-latest: true
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends apt-utils createrepo-c
+          go install "github.com/goreleaser/nfpm/v2/cmd/nfpm@${NFPM_VERSION}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Build the repositories
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGES_GPG_KEY: ${{ secrets.PACKAGES_GPG_KEY }}
+        run: bin/publish-packages.sh "$VERSION"
+
+      - name: Publish to the gh-pages branch
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin gh-pages
+          git worktree add packages-site origin/gh-pages
+          rsync -a --delete --exclude .git build/packages-site/ packages-site/
+          if [ -z "$(git -C packages-site status --porcelain)" ]; then
+            echo "Packages are already up to date"
+            exit 0
+          fi
+          git -C packages-site add -A
+          git -C packages-site commit -m "Packages $VERSION"
+          git -C packages-site push origin HEAD:gh-pages
+
+      - name: Ensure GitHub Pages serves the branch
+        continue-on-error: true
+        run: |
+          printf '%s' '{"source":{"branch":"gh-pages","path":"/"}}' \
+            | gh api -X POST "repos/${GITHUB_REPOSITORY}/pages" --input - >/dev/null
