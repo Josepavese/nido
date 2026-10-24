@@ -40,7 +40,14 @@ The `nido-vm-testing` skill teaches an agent to:
 - parse dynamically assigned SSH and service ports;
 - run tests without polluting the host;
 - convert slow setup into reusable templates;
-- isolate multiple AI agents in separate VMs while connecting them through explicit ports.
+- isolate multiple AI agents in separate VMs while connecting them through explicit ports;
+- observe shared state changes with `nido events` and opt-in MCP subscriptions,
+  mute controls and resource re-reads, without treating process events as guest readiness.
+
+Event guidance requires Nido v4.8.7 or later. Updating the executable does not
+update a copied skill: refresh `nido-vm-testing` from this repository and restart
+the agent client to load its instructions. The skill is distributed separately
+from the release binaries.
 
 ## Example: Ephemeral VM Test
 

@@ -1,133 +1,113 @@
 # Nido VM Testing Patterns
 
-Use this reference when the task needs more detail than the core skill body.
+Read the sections relevant to the current test. Values below are examples;
+select images, resources and commands for the actual workload.
 
-## Ephemeral Test VM
-
-Goal: create a faithful OS test environment without mutating the developer host.
-
-Pattern:
-
-1. Create a user-data provisioning script.
-2. Spawn a VM from a pinned image.
-3. Parse `nido info --json` for SSH and service ports.
-4. Copy the project into `/tmp` or `/opt`.
-5. Run tests.
-6. Copy artifacts out if needed.
-7. Delete the VM in a trap.
-
-Use auto host ports to keep CI parallel:
+## Provisioning and readiness
 
 ```bash
-nido spawn ci-$RUN_ID --image ubuntu:24.04 --port app:8080/tcp --json
-nido info ci-$RUN_ID --json
-```
-
-Do not assume host port `50022` for SSH or a fixed application port. Nido chooses free ports and reports them.
-
-## Provisioning
-
-Prefer `--user-data` for first-boot setup:
-
-```bash
-cat > provision.sh <<'EOF'
+cat > provision.sh <<'SETUP'
 #!/bin/sh
-set -eux
+set -eu
+export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y ca-certificates curl git make build-essential
-EOF
+apt-get install -y ca-certificates curl git make
+SETUP
 
-nido spawn ci-base --image ubuntu:24.04 --user-data provision.sh
+nido spawn "ci-$RUN_ID" --image ubuntu:24.04 --user-data provision.sh \
+  --memory 4096 --cpus 2 --port app:8080/tcp --json
+nido info "ci-$RUN_ID" --json
 ```
 
-For cloud images, Nido adds its SSH key and combines the user-data with the base cloud-init payload. Keep provisioning non-interactive.
+For cloud images, Nido supplies its SSH key alongside the user-data. Discover the
+SSH user/port from `data.vm`, wait for SSH with a deadline, then check
+`sudo cloud-init status --wait` with a bounded timeout and verify the service or
+command the test actually needs. A successful spawn or `vm.running` describes
+host/process progress, not completed provisioning. Collect guest logs such as
+`/var/log/cloud-init-output.log`, service journals and test results before deleting
+the owned VM.
 
-## Template Acceleration
+The bundled helper accepts `NIDO_USER_DATA`, `NIDO_PROJECT_DIR`,
+`NIDO_REMOTE_DIR`, `NIDO_TEST_CMD`, resource overrides and `NIDO_KEEP_VM`;
+run it with `--help` for its current defaults. Its default provisioning uses
+Debian/Ubuntu packages. Adapt it for other guests; choose a disposable remote
+project directory and a local payload without unintended secrets or large caches.
 
-Use templates when test prerequisites are slow and stable. Once the template exists, linked-clone test VMs usually spawn in milliseconds on a warm cache:
+## Reusable templates
+
+Prepare and verify stable prerequisites once, then shut down the guest cleanly:
 
 ```bash
-nido spawn app-base --image ubuntu:24.04 --user-data provision.sh --memory 4096 --cpus 2
-nido ssh app-base "command -v node && command -v npm"
-nido stop app-base
-nido template create app-base app-ci-node20
+nido spawn app-base --image ubuntu:24.04 --user-data provision.sh
+# After SSH, cloud-init and prerequisite checks pass:
+nido ssh app-base sudo poweroff
+nido info app-base --json
+# After confirming the managed process is stopped:
+nido template create app-base app-ci-base
 nido delete app-base
 
-nido spawn app-test-$RUN_ID app-ci-node20 --port app:3000/tcp
+nido spawn "app-test-$RUN_ID" app-ci-base --port app:8080/tcp
 ```
 
-Keep templates free of:
+Template commands are explicit mutations: use names owned by the workflow and
+retain the template while clones depend on it. Reusing prepared storage saves
+setup work; guest boot and readiness still take time. Do not preserve changing
+source trees, environment-specific configuration or long-lived credentials in a
+shared base. Upload current inputs after spawning each clone.
 
-- application source trees that change often;
-- long-lived credentials;
-- stale package caches if disk size matters;
-- environment-specific hostnames or tokens.
+## Ports and multiple agents
 
-Copy the current software into each linked clone after spawn.
+Nido forwards host loopback ports into the guest:
 
-## Port Design
+- `--port api:8000/tcp`: automatic host port for guest TCP 8000.
+- `--port api:8000:33000/tcp`: fixed host port 33000.
+- `--port dns:53:32053/udp`: UDP forwarding.
 
-Nido port mappings are host-facing contracts:
+Prefer automatic ports for parallel jobs. Read labeled `data.vm.forwarding`
+entries and `ssh_port` from `info`; never infer a port from list position.
+Only change the global port range when the task calls for host configuration.
 
-- SSH is always host `127.0.0.1:<ssh_port>` to guest `:22`.
-- `--port api:8000/tcp` exposes guest `:8000` on an auto-selected host port.
-- `--port api:8000:33000/tcp` exposes guest `:8000` on fixed host `:33000`.
+For multi-agent labs, create one VM per required agent and pass only the peer
+endpoints it needs. The controller owns the discovered host URLs. Inside a guest,
+`127.0.0.1` is the guest itself: host loopback forwarding is not automatically
+reachable by another VM. Use a host broker or verify a guest-reachable host
+endpoint before advertising it; do not assume a gateway address works.
 
-Read ports from:
+## Low-noise event observation
 
-```bash
-nido info vm-name --json
+These are MCP request bodies; the client supplies normal JSON-RPC framing and IDs:
+
+```json
+{"method":"tools/call","params":{"name":"nido_events","arguments":{"action":"subscribe","uri":"nido://vm/build-box","kinds":["operation.failed","vm.stopped","vm.panic"]}}}
+{"method":"tools/call","params":{"name":"nido_events","arguments":{"action":"mute","uri":"nido://vm/build-box"}}}
+{"method":"tools/call","params":{"name":"nido_events","arguments":{"action":"unmute","uri":"nido://vm/build-box"}}}
+{"method":"resources/read","params":{"uri":"nido://vm/build-box"}}
+{"method":"tools/call","params":{"name":"nido_events","arguments":{"action":"unsubscribe","uri":"nido://vm/build-box"}}}
 ```
 
-Configure the automatic host port range when the default `30000-32767` range overlaps with other services or when CI workers need predictable allocation zones:
+Choose filters for the operation: this example observes failures and shutdown;
+it deliberately does not report successful start completion. Add the needed kinds
+or omit the filter for all core changes on that VM. Standard
+`resources/subscribe` and `resources/unsubscribe` take the same URI, without kind
+filters. Subscribe and read the initial state before performing the operation.
 
-```bash
-nido config set PORT_RANGE_START 33000
-nido config set PORT_RANGE_END 33999
-nido config
-```
+Mute retains filters and suppresses notifications; unmute invalidates once so the
+client can recover missed changes. Subscriptions vanish when the MCP session
+closes. Read health with `nido_events` action `status`; `connected` and
+`observer_available` are distinct, and `resync_required` records a session gap.
+A notification means re-read, not that the projected state already refreshed.
 
-Use labels (`api`, `web`, `db`, `metrics`) so orchestration scripts can find the right forwarded port without relying on list order.
+For CLI controllers, `nido events --json` starts with `stream.resync`; re-read the
+resources of interest. Runtime snapshot frames may describe an earlier
+observation. QMP shutdown is not process exit; confirm stopped state before disk
+template or cleanup work. Running VMs gain the additional QMP monitor at their
+next ordinary start, while filesystem/process observation works immediately.
 
-## Multi-Agent Labs
+## Failure recovery and cleanup
 
-For multiple AI agents:
-
-1. Spawn one VM per agent.
-2. Give each VM only the service ports it needs.
-3. Parse all `nido info --json` payloads.
-4. Generate a small peer config for each agent.
-5. Start agents through SSH.
-6. Keep a host-side controller or broker as the source of truth for peer addresses.
-
-Example:
-
-```bash
-nido spawn planner --image ubuntu:24.04 --port api:8000/tcp
-nido spawn worker-a --image ubuntu:24.04 --port api:8000/tcp
-nido spawn worker-b --image ubuntu:24.04 --port api:8000/tcp
-```
-
-From the host, call each service through `127.0.0.1:<host_port>`.
-
-From inside a guest, `127.0.0.1` is the guest itself. If a guest must call another VM through host forwarding, inject the discovered peer endpoint and test the host gateway route, commonly `10.0.2.2:<host_port>` under QEMU user networking. Prefer a host broker when portability matters.
-
-## Cleanup Rules
-
-Use exact VM names:
-
-```bash
-nido delete ci-$RUN_ID --json
-```
-
-Avoid `nido prune` in shared environments unless the user explicitly wants every stopped VM removed. For CI, delete the VMs the job created.
-
-## Failure Handling
-
-If a test fails:
-
-- keep the VM with `NIDO_KEEP_VM=1`;
-- run `nido info <name> --json`;
-- connect with `nido ssh <name>`;
-- collect logs from `/var/log/cloud-init.log`, `/var/log/cloud-init-output.log`, systemd journals, app logs, and test artifacts;
-- delete the VM after diagnosis.
+On failure, inspect `nido info <name> --json` and the direct CLI/MCP result,
+export evidence and reconcile partial effects before retrying. Use
+`NIDO_KEEP_VM=1` with the helper if the VM must survive for diagnosis. Record the
+retained resource and its next consumer; delete it by exact name after diagnosis.
+Avoid broad prune/cleanup on shared hosts. A missing advisory event or an empty
+recent-event window proves neither success nor absence of an operation.
