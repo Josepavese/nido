@@ -1,141 +1,60 @@
 ---
 name: nido-vm-testing
-description: Use when designing, writing, or running Nido-backed VM tests, disposable production-like QA environments, template-accelerated test labs, or isolated multi-agent AI sandboxes. Provides workflows for Nido CLI spawn/provision/upload/test/delete automation, port forwarding, templates, cleanup hygiene, and VM isolation best practices.
+description: Design or run disposable Nido VM tests, reusable template labs and isolated agent environments through CLI or MCP, with scoped event subscriptions and cleanup of owned resources.
 ---
 
 # Nido VM Testing
 
-Use Nido as a disposable VM lab for tests and agent workloads. Prefer real VMs when the result depends on system packages, init behavior, kernel isolation, networking, filesystem layout, OS services, or production-like assumptions that containers do not faithfully model.
+Use Nido for VM-backed tests when the result depends on a guest OS, kernel,
+services or networking. Follow the requested test scope; inspect host readiness
+with `nido doctor` when needed and select an available image with `nido images list`.
 
-## Quick Start
+## Disposable test workflow
 
-Run the host preflight first:
+1. Choose an image or a prepared template, explicit CPU/memory and a unique VM
+   name. Check storage before downloads or VM creation; linked clones retain
+   dependencies on their base images. Keep existing VMs, templates and caches.
+2. Provision prerequisites with `--user-data`. Keep setup non-interactive and
+   idempotent, and separate stable template prerequisites from changing code.
+3. Spawn with automatic host ports, then read `nido info <name> --json`.
+   Its VM object is `data.vm`; discover `ssh_port`, `ssh_user` and labeled
+   `forwarding` entries there instead of guessing ports or users.
+4. Wait for SSH with a bounded deadline, then check cloud-init and the actual
+   service/test readiness. Process-running events do not prove guest readiness.
+5. Transfer only the intended test inputs, run the test and export useful logs
+   and artifacts before cleanup. Keep secrets out of reusable templates.
+6. Delete only the exact resources created by this run, using a trap or CI
+   cleanup. Reconcile a failed spawn's partial effects before retrying or deleting;
+   preserve unrelated resources and retained debugging evidence.
 
-```bash
-nido doctor
-nido images list
-```
+For a complete shell workflow, inspect or adapt
+[scripts/nido-ephemeral-test.sh](scripts/nido-ephemeral-test.sh). It waits separately
+for SSH and cloud-init, uploads `NIDO_PROJECT_DIR` and deletes its successful spawn
+on exit. `NIDO_KEEP_VM=1` retains the VM on exit, including after test failure.
 
-Minimal lifecycle:
+## Observe through CLI or MCP
 
-```bash
-cat > provision.sh <<'EOF'
-#!/bin/sh
-set -eux
-apt-get update
-apt-get install -y ca-certificates curl git make
-EOF
+With Nido v4.8.7 or later, use events for shared state changes across independent
+CLI, TUI and MCP sessions. TUI synchronization is automatic. Existing clients
+must reconnect/reopen to load an upgraded executable; do not restart user VMs
+just to activate observation.
 
-nido spawn app-test --image ubuntu:24.04 --user-data provision.sh --port app:8080/tcp --memory 4096 --cpus 2 --json
-nido info app-test --json
-nido ssh app-test "echo ready"
-nido delete app-test --json
-```
+- CLI: `nido events --json` emits one response envelope per line; the event is in
+  `data`. Cancel and join the owned listener when the workflow ends.
+- MCP: read resources for state and use `nido_events` or standard
+  `resources/subscribe` for session-local subscriptions. Prefer the owned VM's
+  `nido://vm/<name>` URI and relevant outcome kinds over a fleet-wide feed.
+- Subscribe before the operation being observed. Notifications are silent by
+  default, coalesced and URI-only: re-read the affected resource when notified.
+  Do not forward every event into agent conversation or treat notifications as
+  tool results. Unsubscribe when observation is no longer needed.
+- Events are advisory, with no replay or exactly-once guarantee. Re-read after
+  reconnect, resync or an observation gap; inspect `nido_events` status or
+  `nido://system/events` for health. Keep bounded readiness/deadline checks so
+  missing events cannot stall a job. A failed operation can leave partial state.
 
-For a ready automation example, run or adapt [scripts/nido-ephemeral-test.sh](scripts/nido-ephemeral-test.sh).
-
-## Standard Workflow
-
-1. Choose an image or template.
-   Use cloud images for clean OS tests. Use templates when prerequisites are expensive and stable.
-2. Write provisioning as a `--user-data` script.
-   Install OS packages, users, services, certificates, language runtimes, and test dependencies here.
-3. Spawn with explicit resources and port rules.
-   Use `--memory`, `--cpus`, and `--port label:guest/tcp`; let Nido allocate host ports unless a fixed port is required.
-4. Wait for SSH using `nido info --json`.
-   Parse `ssh_port` and `ssh_user`; do not assume fixed ports.
-5. Upload or fetch the software under test.
-   Use direct `ssh`/`scp` with the port from `nido info`, or clone from an internal repository.
-6. Run tests inside the VM.
-   Keep commands non-interactive and capture logs/artifacts before cleanup.
-7. Delete the VM.
-   Use shell traps or CI cleanup steps. Avoid leaving stopped VMs unless debugging.
-
-## Best Practices
-
-- Use unique names such as `nido-ci-$RUN_ID` and delete by exact name.
-- Always parse `nido info --json`; ports are runtime allocations.
-- Prefer auto host ports: `--port api:8000/tcp`. Fixed host ports are for human workflows, not parallel CI.
-- Keep provisioning idempotent. A script should be safe if cloud-init retries it.
-- Put slow, stable prerequisites into a template. Put changing app code into the ephemeral VM at test time.
-- Pin OS images, package versions, and test commands for reproducibility.
-- Keep secrets out of templates. Inject short-lived secrets at runtime and scrub logs.
-- Use `nido delete <name>` for test cleanup. Avoid broad `nido prune` on shared developer machines.
-- For Windows blueprints, use `--gui` on the first boot when diagnosing OOBE/post-install state.
-
-## Ports
-
-Nido uses localhost forwarding. Each VM gets an SSH host port and any custom forwarded service ports.
-
-Examples:
-
-```bash
-nido spawn api-1 --image ubuntu:24.04 --port api:8000/tcp
-nido spawn web-1 --image ubuntu:24.04 --port web:3000:33000/tcp
-nido info api-1 --json
-```
-
-Port forms:
-
-- `8000` forwards an auto-selected host port to guest `8000/tcp`.
-- `api:8000/tcp` adds label `api` and auto-selects the host port.
-- `api:8000:33000/tcp` maps host `127.0.0.1:33000` to guest `8000`.
-- `dns:53:32053/udp` maps UDP.
-
-Nido allocates automatic service ports from its configured range, normally `30000-32767`. For dense CI or multi-agent hosts, reserve a dedicated range:
-
-```bash
-nido config set PORT_RANGE_START 33000
-nido config set PORT_RANGE_END 33999
-nido config
-```
-
-Treat host ports as the public contract between the controller and VMs. For VM-to-VM agent communication, prefer a host-side broker/controller that knows each forwarded port. If a guest must call another guest through host forwarding, inject the discovered peer endpoint and verify whether the guest can reach the host gateway, commonly `10.0.2.2:<host_port>` under QEMU user networking.
-
-## Use Cases
-
-### Ephemeral Production-Like Tests
-
-Create a clean VM, install prerequisites through cloud-init, upload the current project, run the tests, collect output, then delete the VM. This avoids polluting the developer host and catches OS-level integration bugs.
-
-Use the bundled script:
-
-```bash
-NIDO_TEST_IMAGE=ubuntu:24.04 \
-NIDO_PROVISION_PACKAGES="ca-certificates curl git make build-essential" \
-NIDO_TEST_CMD="make test" \
-extras/skills/nido-vm-testing/scripts/nido-ephemeral-test.sh
-```
-
-### Template-Accelerated Tests
-
-When provisioning takes minutes, build a base VM once and save it as a template:
-
-```bash
-nido spawn app-base --image ubuntu:24.04 --user-data provision.sh --memory 4096 --cpus 2
-# wait for provisioning, verify prerequisites
-nido stop app-base
-nido template create app-base app-ci-base
-nido delete app-base
-
-nido spawn app-test-001 app-ci-base --port app:8080/tcp
-```
-
-Template spawns are fast, typically milliseconds on a warm cache, because each VM is a linked clone. Keep the template generic; copy the changing code into each test VM.
-
-### Multi-Agent AI Labs
-
-Run each agent in its own VM and connect them through explicit ports:
-
-```bash
-nido spawn agent-a --image ubuntu:24.04 --port api:8000/tcp
-nido spawn agent-b --image ubuntu:24.04 --port api:8000/tcp
-nido info agent-a --json
-nido info agent-b --json
-```
-
-The host/controller should parse both `info` payloads, assign peer URLs, and start each agent with only the ports it needs. This preserves filesystem/process isolation while still allowing controlled communication.
-
-## References
-
-Read [references/patterns.md](references/patterns.md) for more complete workflow notes, CI guidance, and multi-agent port patterns.
+Read [references/patterns.md](references/patterns.md) for provisioning/templates,
+port routing, guest readiness, subscription examples and failure recovery.
+The authoritative [event contract](https://github.com/Josepavese/nido/blob/main/docs/events.md)
+and [MCP guide](https://github.com/Josepavese/nido/blob/main/docs/mcp.md) cover the
+full catalog and protocol; use the installed server's tool schema for arguments.
