@@ -1,5 +1,6 @@
 {
   "name": "nido-mcp",
+  "mcpName": "io.github.Josepavese/nido",
   "version": "4.8.1",
   "description": "MCP server and CLI to create, boot and destroy local QEMU/KVM VM sandboxes for AI agents.",
   "keywords": [
