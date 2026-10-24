@@ -17,13 +17,13 @@ incremental.
 | Channel | Mechanism | Auth | Secret / setting | Notes |
 | --- | --- | --- | --- | --- |
 | **GitHub Releases** | tarballs, `nido.mcpb`, `server.json`, `SHA256SUMS`, installers | `GITHUB_TOKEN` | none | Asset names are a contract for every other channel. |
-| **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: `io.github.Josepavese/nido` through `4.8.1`; every tag adds an immutable version. Runs **after** npm (the registry validates that the advertised npm version exists). |
-| **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: `nido-mcp@4.8.1` published 2026-10-24 (staged → promoted). Every tag publishes once the OIDC switch is on (§2.4). |
+| **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: `io.github.Josepavese/nido`; every tag adds an immutable version. Dated qualification is recorded below. Runs **after** npm (the registry validates that the advertised npm version exists). |
+| **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: [`nido-mcp`](https://www.npmjs.com/package/nido-mcp). Every tag publishes once the OIDC switch is on (§2.4); inspect npm for the current version. |
 | **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | First manifest PR open: [microsoft/winget-pkgs#460549](https://github.com/microsoft/winget-pkgs/pull/460549) (needs the Microsoft CLA). Updates automate once merged + token exists. |
-| **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours, verified updating to `4.8.1`. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
+| **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours; dated verification below. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
 | **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | Not configured yet; x86_64 only, `-bin` package. |
 | **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | Not configured yet; stdio artifact, no hosting needed. |
-| **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours, verified updating to `4.8.1`. |
+| **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours; dated verification below. |
 | **Glama** | auto-index + `glama.json` claim | GitHub OAuth, one-time | none | `glama.json` is in the repo root. The claim is manual once. |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
 
@@ -64,6 +64,14 @@ GitHub MCP Registry syncs versions after a manual onboarding.
   describe Nido as an MCP-native VM manager.
 
 ---
+
+### 1.3 npm registry read-back on 2026-10-24
+
+The public registry reports `nido-mcp@4.8.2`, with the expected Nido repository,
+published integrity value and provenance metadata. This is a registry read-back,
+not a new full platform qualification. Version-specific proof remains dated;
+the channel table links to current publication surfaces instead of keeping a
+copied latest-version number.
 
 ## 2. One-time setup checklist
 
