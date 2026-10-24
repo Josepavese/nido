@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"github.com/Josepavese/nido/v4/internal/events"
 	"os"
 	"path/filepath"
 
@@ -15,7 +16,7 @@ type RequestUninstallMsg struct{}
 // UninstallCmd executes the uninstallation.
 // If successful, it sends tea.Quit() because the binary is gone/going.
 // Returns an error msg if it fails.
-func UninstallCmd() tea.Cmd {
+func UninstallCmd(publish events.Publisher) tea.Cmd {
 	return func() tea.Msg {
 		// Calculate paths similar to CLI
 		home, _ := sysutil.UserHome()
@@ -27,7 +28,7 @@ func UninstallCmd() tea.Cmd {
 			return OpResultMsg{Op: "uninstall", Err: err}
 		}
 
-		if err := lifecycle.Uninstall(nidoDir, exe); err != nil {
+		if err := lifecycle.Uninstall(nidoDir, exe, publish); err != nil {
 			return OpResultMsg{Op: "uninstall", Err: err}
 		}
 

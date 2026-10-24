@@ -6,10 +6,12 @@ package ops
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/Josepavese/nido/v4/internal/build"
 	"github.com/Josepavese/nido/v4/internal/builder"
@@ -25,8 +27,9 @@ import (
 
 // VMListMsg contains the refreshed list of VMs.
 type VMListMsg struct {
-	Items []VMItem
-	Err   error
+	RequestedAt time.Time
+	Items       []VMItem
+	Err         error
 }
 
 // VMItem represents a VM in the fleet list.
@@ -41,9 +44,10 @@ type VMItem struct {
 
 // VMDetailMsg contains detailed VM information.
 type VMDetailMsg struct {
-	Name   string
-	Detail provider.VMDetail
-	Err    error
+	RequestedAt time.Time
+	Name        string
+	Detail      provider.VMDetail
+	Err         error
 }
 
 // TemplateListMsg contains the list of existing templates.
@@ -75,10 +79,10 @@ type UpdateCheckMsg struct {
 	Err     error
 }
 
-// ConfigSavedMsg confirms a config value was saved.
+// ConfigSavedMsg transfers a new configuration to the UI owner thread.
 type ConfigSavedMsg struct {
-	Key   string
-	Value string
+	Config config.Config
+	Err    error
 }
 
 // VMDetailRequestMsg requests details for a VM.
@@ -103,10 +107,11 @@ type RequestOpMsg struct {
 
 // RefreshFleet fetches the current VM list from the provider.
 func RefreshFleet(prov provider.VMProvider) tea.Cmd {
+	requestedAt := time.Now()
 	return func() tea.Msg {
 		vms, err := prov.List()
 		if err != nil {
-			return VMListMsg{Err: err}
+			return VMListMsg{RequestedAt: requestedAt, Err: err}
 		}
 
 		// Sort VMs alphabetically by Name
@@ -125,15 +130,16 @@ func RefreshFleet(prov provider.VMProvider) tea.Cmd {
 				SSHUser: v.SSHUser,
 			})
 		}
-		return VMListMsg{Items: items}
+		return VMListMsg{RequestedAt: requestedAt, Items: items}
 	}
 }
 
 // FetchVMInfo retrieves detailed information about a VM.
 func FetchVMInfo(prov provider.VMProvider, name string) tea.Cmd {
+	requestedAt := time.Now()
 	return func() tea.Msg {
 		detail, err := prov.Info(name)
-		return VMDetailMsg{Name: name, Detail: detail, Err: err}
+		return VMDetailMsg{RequestedAt: requestedAt, Name: name, Detail: detail, Err: err}
 	}
 }
 
@@ -181,6 +187,7 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 						filepath.Join(nidoDir, "tmp"),
 						imgDir,
 						prov.Virtualization(),
+						builder.WithEvents(prov.EventPublisher()),
 						builder.WithReporter(tuiBuildReporter{ch: ch, opName: opName}),
 					)
 					if err := eng.Build(bp); err != nil {
@@ -332,7 +339,7 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 					},
 				}
 
-				downloader := image.NewTransfer(image.TransferOptions{OnProgress: func(current, total int64) {
+				downloader := image.NewTransfer(image.TransferOptions{Events: prov.EventPublisher(), OnProgress: func(current, total int64) {
 					ratio := 0.0
 					if total > 0 {
 						ratio = float64(current) / float64(total)
@@ -613,59 +620,17 @@ func RunDoctor() tea.Cmd {
 	}
 }
 
-// Config Request Messages
-type SaveConfigMsg struct{ Key, Value string }
-
-// REMOVED DUPLICATE ConfigSavedMsg HERE
-
-type ConfigBatchSavedMsg struct {
-	Updates map[string]string
-}
-
-// SaveConfig updates a config value and reloads the config.
-func SaveConfig(cfg *config.Config, key, value string) tea.Cmd {
+// SaveConfigMany writes a snapshot of inputs without mutating presentation state.
+func SaveConfigMany(cfg *config.Config, updates map[string]string, publish events.Publisher) tea.Cmd {
+	path := cfg.SourcePath()
 	return func() tea.Msg {
-		// Find config file path
-		home, _ := sysutil.UserHome()
-		path := filepath.Join(home, ".nido", "config.env")
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			cwd, _ := os.Getwd()
-			path = filepath.Join(cwd, "config", "config.env")
+		if err := config.UpdateConfigMany(path, updates, publish); err != nil {
+			return ConfigSavedMsg{Err: err}
 		}
-
-		err := config.UpdateConfig(path, key, value)
+		current, err := config.LoadConfig(path)
 		if err != nil {
-			return nil
+			return ConfigSavedMsg{Err: err}
 		}
-
-		// Reload config into memory
-		newCfg, _ := config.LoadConfig(path)
-		*cfg = *newCfg
-
-		return ConfigSavedMsg{Key: key, Value: value}
-	}
-}
-
-// SaveConfigMany updates multiple config values and reloads the config.
-func SaveConfigMany(cfg *config.Config, updates map[string]string) tea.Cmd {
-	return func() tea.Msg {
-		// Find config file path
-		home, _ := sysutil.UserHome()
-		path := filepath.Join(home, ".nido", "config.env")
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			cwd, _ := os.Getwd()
-			path = filepath.Join(cwd, "config", "config.env")
-		}
-
-		err := config.UpdateConfigMany(path, updates)
-		if err != nil {
-			return nil
-		}
-
-		// Reload config into memory
-		newCfg, _ := config.LoadConfig(path)
-		*cfg = *newCfg
-
-		return ConfigBatchSavedMsg{Updates: updates}
+		return ConfigSavedMsg{Config: *current}
 	}
 }

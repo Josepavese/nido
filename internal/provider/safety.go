@@ -16,20 +16,6 @@ import (
 
 const vmStopTimeout = 5 * time.Second
 
-// Identifiers are single path components on every supported host, including
-// Windows when validation runs on Unix. No caller may substitute a path.
-func validateIdentifier(name string) error {
-	if name == "" || name == "." || name == ".." {
-		return fmt.Errorf("invalid identifier %q", name)
-	}
-	for _, c := range name {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.') {
-			return fmt.Errorf("invalid identifier %q: use letters, digits, dots, hyphens or underscores", name)
-		}
-	}
-	return nil
-}
-
 // Like lifecycle/config mutations, reload is confined to the provider owner
 // thread. Existing consumers share the canonical config pointer.
 func (p *QemuProvider) ReloadConfig(path string) error {
@@ -37,15 +23,14 @@ func (p *QemuProvider) ReloadConfig(path string) error {
 	if err != nil {
 		return err
 	}
-	if p.Config == nil {
-		p.Config = cfg
-	} else {
-		*p.Config = *cfg
-	}
+	p.configMu.Lock()
+	p.Config = cfg
+	p.configMu.Unlock()
 	return nil
 }
 
 func (p *QemuProvider) resolveForwarding(input []PortForward, sshPort, vncPort int) ([]PortForward, error) {
+	cfg := p.configSnapshot()
 	result := append([]PortForward(nil), input...)
 	reserved := p.getReservedPorts()
 	reserved[sshPort], reserved[vncPort] = true, true
@@ -58,12 +43,12 @@ func (p *QemuProvider) resolveForwarding(input []PortForward, sshPort, vncPort i
 		}
 	}
 	start, end := config.DefaultPortRangeStart, config.DefaultPortRangeEnd
-	if p.Config != nil {
-		if p.Config.PortRangeStart != 0 {
-			start = p.Config.PortRangeStart
+	if cfg != nil {
+		if cfg.PortRangeStart != 0 {
+			start = cfg.PortRangeStart
 		}
-		if p.Config.PortRangeEnd != 0 {
-			end = p.Config.PortRangeEnd
+		if cfg.PortRangeEnd != 0 {
+			end = cfg.PortRangeEnd
 		}
 	}
 	for i := range result {
@@ -82,10 +67,11 @@ func (p *QemuProvider) resolveForwarding(input []PortForward, sshPort, vncPort i
 // usedBackingFiles resolves the full graph before any destructive action.
 // An unreadable/corrupt chain is an error, never proof that an image is unused.
 func (p *QemuProvider) usedBackingFiles() ([]string, error) {
+	cfg := p.configSnapshot()
 	used := map[string]bool{}
 	dirs := []string{filepath.Join(p.RootDir, "vms")}
-	if p.Config != nil && p.Config.BackupDir != "" {
-		dirs = append(dirs, p.Config.BackupDir)
+	if cfg != nil && cfg.BackupDir != "" {
+		dirs = append(dirs, cfg.BackupDir)
 	}
 	for _, dir := range dirs {
 		entries, err := os.ReadDir(dir)

@@ -252,7 +252,7 @@ func actionImagesList(app *appContext) func(cmd *cobra.Command, args []string) {
 
 func actionImagesPull(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		cmdImagePull(app.Cwd, app.ImageDir(), args, jsonEnabled(cmd))
+		cmdImagePull(app.Cwd, app.ImageDir(), args, jsonEnabled(cmd), app.Provider.EventPublisher())
 	}
 }
 
@@ -270,7 +270,7 @@ func actionImagesRemove(app *appContext) func(cmd *cobra.Command, args []string)
 
 func actionImagesUpdate(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		cmdImageUpdate(app.ImageDir(), args, jsonEnabled(cmd))
+		cmdImageUpdate(app.ImageDir(), args, jsonEnabled(cmd), app.Provider.EventPublisher())
 	}
 }
 
@@ -278,7 +278,7 @@ func actionBuild(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		jsonOut := jsonEnabled(cmd)
 		ensureBundledRegistryCurrent("build", app.NidoDir, jsonOut)
-		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), app.Provider.Virtualization(), args, jsonOut, "build")
+		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), app.Provider.Virtualization(), args, jsonOut, "build", app.Provider.EventPublisher())
 	}
 }
 

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"strconv"
 	"strings"
 
@@ -137,6 +138,7 @@ type CacheInfoResult struct {
 // VMProvider defines the contract for OS-specific hypervisor management.
 // Implementations handle VM lifecycle, storage, and connectivity operations.
 type VMProvider interface {
+	EventPublisher() events.Publisher
 	Virtualization() hardware.Virtualization
 
 	// Lifecycle operations

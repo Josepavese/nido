@@ -1,7 +1,10 @@
 package image
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"os"
 	"path/filepath"
 	"testing"
@@ -139,5 +142,26 @@ func TestFindImageCaseSensitive(t *testing.T) {
 	_, _, err := catalog.FindImage("Ubuntu", "24.04")
 	if err == nil {
 		t.Error("expected error for case mismatch, got nil")
+	}
+}
+
+func TestExplicitCatalogRefreshPreservesBytesAndReportsFailedEvent(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, CatalogCacheFile)
+	before := []byte("useful previous catalog bytes")
+	if err := os.WriteFile(path, before, 0600); err != nil {
+		t.Fatal(err)
+	}
+	got := []events.Event{}
+	_, err := refreshCatalog(root, func(e events.Event) { got = append(got, e) }, func(string) (*Catalog, error) { return nil, errors.New("fixture upstream failure") })
+	if err == nil {
+		t.Fatal("explicit refresh hid upstream failure")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatal("previous cache was removed")
+	}
+	if len(got) != 2 || got[0].Kind != events.Started || got[1].Kind != events.Failed || got[0].OperationID != got[1].OperationID {
+		t.Fatalf("missing failed refresh outcome: %+v", got)
 	}
 }

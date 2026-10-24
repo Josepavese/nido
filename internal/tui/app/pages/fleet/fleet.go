@@ -2,7 +2,9 @@ package fleet
 
 import (
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"strings"
+	"time"
 
 	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"github.com/Josepavese/nido/v4/internal/provider"
@@ -50,6 +52,7 @@ func (i FleetItem) IsAction() bool { return false }
 
 // FleetDetail holds the state for the detailed view logic
 type FleetDetail struct {
+	QEMUState      string
 	Name           string
 	State          string
 	PID            int
@@ -81,11 +84,14 @@ type Fleet struct {
 	// Data
 	items         []FleetItem
 	detail        FleetDetail
+	latestDetail  time.Time
+	runtimeStates map[string]string
 	transitioning map[string]bool // New: track active fast operations
 	spinner       spinner.Model   // New: local spinner for sidebar
 
 	// Local State
 	existingTemplates []string
+	pendingDeleteVM   string
 	pendingTemplateVM string
 	TemplateModal     *CreateTemplateModal
 	ConfirmDelete     *widget.Modal
@@ -107,6 +113,7 @@ func NewFleet(prov provider.VMProvider) *Fleet {
 		provider:      prov,
 		detail:        FleetDetail{},
 		transitioning: make(map[string]bool),
+		runtimeStates: make(map[string]string),
 		spinner:       s,
 		TemplateModal: NewCreateTemplateModal(),
 	}
@@ -116,9 +123,10 @@ func NewFleet(prov provider.VMProvider) *Fleet {
 		"Delete VM",
 		"Are you sure?",
 		func() tea.Cmd {
-			if f.detail.Name != "" {
+			if f.pendingDeleteVM != "" {
+				name := f.pendingDeleteVM
 				return func() tea.Msg {
-					return ops.RequestOpMsg{Op: ops.OpDelete, Name: f.detail.Name}
+					return ops.RequestOpMsg{Op: ops.OpDelete, Name: name}
 				}
 			}
 			return nil
@@ -233,20 +241,21 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	// Modal Interception: Page-level modals block everything
-	if f.ConfirmDelete.IsActive() {
+	uiInput := view.IsInputMessage(msg)
+	if uiInput && f.ConfirmDelete.IsActive() {
 		newModal, cmd := f.ConfirmDelete.Update(msg)
 		f.ConfirmDelete = newModal
 		return f, cmd
 	}
-	if f.ErrorModal.IsActive() {
+	if uiInput && f.ErrorModal.IsActive() {
 		newModal, cmd := f.ErrorModal.Update(msg)
 		f.ErrorModal = newModal
 		return f, cmd
 	}
-	if f.TemplateModal.IsActive() {
+	if uiInput && f.TemplateModal.IsActive() {
 		return f, f.TemplateModal.Update(msg)
 	}
-	if f.ModalAccel.IsActive() {
+	if uiInput && f.ModalAccel.IsActive() {
 		_, cmd := f.ModalAccel.Update(msg)
 		return f, cmd
 	}
@@ -264,6 +273,15 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 
 	// Data Updates
 	case ops.VMListMsg:
+		if len(msg.Items) == 0 && msg.Err == nil {
+			f.detail = FleetDetail{}
+			f.DetailView.UpdateDetail(f.detail)
+		}
+		for _, v := range msg.Items {
+			if v.State != "running" {
+				delete(f.runtimeStates, v.Name)
+			}
+		}
 		if msg.Err == nil {
 			// 1. Capture current selection to restore it
 			var targetName string
@@ -315,9 +333,17 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 		}
 
 	case ops.VMDetailMsg:
+		if msg.RequestedAt.Before(f.latestDetail) {
+			return f, nil
+		}
+		if item, ok := f.Sidebar.SelectedItem().(FleetItem); !ok || item.Name != msg.Name {
+			return f, nil
+		}
+		f.latestDetail = msg.RequestedAt
 		if msg.Err == nil {
 			f.detail = FleetDetail{
 				Name:           msg.Detail.Name,
+				QEMUState:      f.runtimeStates[msg.Detail.Name],
 				State:          msg.Detail.State,
 				PID:            msg.Detail.PID,
 				IP:             msg.Detail.IP,
@@ -477,8 +503,12 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 				}
 			}
 		case "backspace", "delete":
-			// Delete Shortcut - show confirmation modal
-			f.ConfirmDelete.Show()
+			// Capture the identity shown by the confirmation before background data changes.
+			if f.detail.Name != "" {
+				f.pendingDeleteVM = f.detail.Name
+				f.ConfirmDelete.Message = fmt.Sprintf("Delete VM %q?", f.pendingDeleteVM)
+				f.ConfirmDelete.Show()
+			}
 		}
 	}
 
@@ -740,6 +770,9 @@ func (c *ComponentsDetail) UpdateDetail(d FleetDetail) {
 		icon = theme.IconBird
 	}
 	status := strings.ToUpper(d.State)
+	if d.QEMUState != "" && d.State == "running" {
+		status += " / QEMU " + strings.ToUpper(d.QEMUState)
+	}
 	c.header.Icon = icon
 	c.header.Title = d.Name
 	c.header.Subtitle = status
@@ -946,4 +979,27 @@ func (f *Fleet) mapError(err error) (string, string) {
 type FleetActionMsg struct {
 	Action string // "start", "stop", "toggle", "delete"
 	Name   string
+}
+
+// ObserveEvent updates advisory runtime detail without changing process lifecycle
+// semantics used by start/stop actions. Resync clears observations from old owners.
+func (f *Fleet) ObserveEvent(e events.Event) {
+	if e.Kind == events.Resync {
+		clear(f.runtimeStates)
+		f.detail.QEMUState = ""
+		f.DetailView.UpdateDetail(f.detail)
+		return
+	}
+	if e.Source == events.Runtime {
+		switch e.Kind {
+		case events.VMPaused, events.VMSuspended, events.VMShutdown, events.VMPanic, events.VMIOError, events.VMWatchdog, events.VMReset:
+			f.runtimeStates[e.VM] = strings.TrimPrefix(e.Kind, "vm.")
+		case events.VMRunning, events.VMResumed, events.VMWakeup, events.VMStopped:
+			delete(f.runtimeStates, e.VM)
+		}
+		if f.detail.Name == e.VM {
+			f.detail.QEMUState = f.runtimeStates[e.VM]
+			f.DetailView.UpdateDetail(f.detail)
+		}
+	}
 }

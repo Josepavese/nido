@@ -3,6 +3,7 @@ package image
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"io"
 	"net/http"
 	"os"
@@ -325,4 +326,22 @@ func FormatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// RefreshCatalog explicitly refreshes and atomically publishes the catalog.
+// Unlike a cache-first read, failure is reported and preserves the prior bytes.
+func RefreshCatalog(cacheDir string, publish events.Publisher) (*Catalog, error) {
+	return refreshCatalog(cacheDir, publish, fetchRemote)
+}
+func refreshCatalog(cacheDir string, publish events.Publisher, fetch func(string) (*Catalog, error)) (result *Catalog, resultErr error) {
+	finish := events.Begin(publish, events.CatalogRefresh, "")
+	defer func() { finish(resultErr) }()
+	result, resultErr = fetch(CatalogURL)
+	if resultErr != nil {
+		return nil, resultErr
+	}
+	if err := saveToFile(result, filepath.Join(cacheDir, CatalogCacheFile)); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

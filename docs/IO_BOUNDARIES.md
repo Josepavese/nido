@@ -15,6 +15,7 @@ All other layers must be silent by default.
 In particular, these packages must not write directly to user I/O streams:
 
 - `internal/provider`
+- `internal/events`
 - `internal/pkg/sysutil`
 - `internal/image`
 - `internal/builder`
@@ -57,3 +58,7 @@ The repository contains a test that fails if forbidden direct I/O is introduced 
 - `internal/architecture/io_policy_test.go`
 
 If you need new runtime feedback from a low-level component, add an injected callback/reporter instead of printing directly.
+
+The local event socket is a non-user protocol stream. Only the event transport
+writes its frames; domain publishers use injected callbacks, and MCP keeps all
+notifications serialized with its JSON-RPC responses.

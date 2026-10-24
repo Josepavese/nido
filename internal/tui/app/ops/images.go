@@ -95,7 +95,7 @@ func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, for
 					_ = image.SaveRegistryToCache(catalog, catalogDir)
 				}
 			} else if forceRemote {
-				catalog, catErr = image.LoadCatalog(catalogDir, 0)
+				catalog, catErr = image.RefreshCatalog(catalogDir, prov.EventPublisher())
 			} else {
 				catalog, catErr = image.LoadCatalog(catalogDir, image.DefaultCacheTTL)
 			}
@@ -203,16 +203,17 @@ func FetchRegistryImages(prov provider.VMProvider, forceRemote bool) tea.Cmd {
 		localRegistry := filepath.Join(cwd, "registry", "images.json")
 
 		ttl := image.DefaultCacheTTL
-		if forceRemote {
-			ttl = 0
-		}
 
 		var catalog *image.Catalog
 		var err error
 		if _, statErr := os.Stat(localRegistry); statErr == nil {
 			catalog, err = image.LoadCatalogFromFile(localRegistry)
 		} else {
-			catalog, err = image.LoadCatalog(catalogDir, ttl)
+			if forceRemote {
+				catalog, err = image.RefreshCatalog(catalogDir, prov.EventPublisher())
+			} else {
+				catalog, err = image.LoadCatalog(catalogDir, ttl)
+			}
 		}
 
 		if err != nil {
@@ -289,7 +290,7 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 			// --- 1. Download Main Image ---
 			destPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
 			if _, err := os.Stat(destPath); os.IsNotExist(err) {
-				downloader := image.NewTransfer(image.TransferOptions{OnProgress: func(current, total int64) {
+				downloader := image.NewTransfer(image.TransferOptions{Events: prov.EventPublisher(), OnProgress: func(current, total int64) {
 					ratio := 0.0
 					if total > 0 {
 						ratio = float64(current) / float64(total)
@@ -339,7 +340,7 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 			if ver.KernelURL != "" {
 				kernelPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.kernel", img.Name, ver.Version))
 				if _, err := os.Stat(kernelPath); os.IsNotExist(err) {
-					downloader := image.NewTransfer(image.TransferOptions{OnProgress: func(current, total int64) {
+					downloader := image.NewTransfer(image.TransferOptions{Events: prov.EventPublisher(), OnProgress: func(current, total int64) {
 						ratio := 0.0
 						if total > 0 {
 							ratio = float64(current) / float64(total)
@@ -371,7 +372,7 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 			if ver.InitrdURL != "" {
 				initrdPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.initrd", img.Name, ver.Version))
 				if _, err := os.Stat(initrdPath); os.IsNotExist(err) {
-					downloader := image.NewTransfer(image.TransferOptions{OnProgress: func(current, total int64) {
+					downloader := image.NewTransfer(image.TransferOptions{Events: prov.EventPublisher(), OnProgress: func(current, total int64) {
 						ratio := 0.0
 						if total > 0 {
 							ratio = float64(current) / float64(total)

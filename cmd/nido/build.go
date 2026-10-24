@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,7 +35,7 @@ func actionBlueprintBuild(app *appContext) func(cmd *cobra.Command, args []strin
 	return func(cmd *cobra.Command, args []string) {
 		jsonOut := jsonEnabled(cmd)
 		ensureBundledRegistryCurrent("blueprint build", app.NidoDir, jsonOut)
-		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), app.Provider.Virtualization(), args, jsonOut, "blueprint build")
+		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), app.Provider.Virtualization(), args, jsonOut, "blueprint build", app.Provider.EventPublisher())
 	}
 }
 
@@ -129,7 +130,7 @@ func blueprintDisplayName(info builder.BlueprintInfo) string {
 	return info.Name
 }
 
-func cmdBuild(cwd, nidoDir, imageDir string, acceleration hardware.Virtualization, args []string, jsonOut bool, command string) {
+func cmdBuild(cwd, nidoDir, imageDir string, acceleration hardware.Virtualization, args []string, jsonOut bool, command string, publish events.Publisher) {
 	if len(args) < 1 {
 		ui.Error("Usage: nido build <blueprint>")
 		ui.Info("Example: nido build windows-11-eval")
@@ -179,7 +180,7 @@ func cmdBuild(cwd, nidoDir, imageDir string, acceleration hardware.Virtualizatio
 		return
 	}
 
-	opts := []builder.EngineOption{}
+	opts := []builder.EngineOption{builder.WithEvents(publish)}
 	if !jsonOut {
 		opts = append(opts, builder.WithReporter(cliBuildReporter{}))
 	}

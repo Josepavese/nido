@@ -1,13 +1,16 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"io"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Josepavese/nido/v4/internal/build"
@@ -60,17 +63,33 @@ type PromptGetParams struct {
 // Server handles MCP protocol over stdio.
 // It exposes a compact MCP surface tuned for agentic use.
 type Server struct {
-	Provider provider.VMProvider
+	Provider          provider.VMProvider
+	Events            events.Source
+	ConfigFile        string
+	output            io.Writer
+	outputMu          sync.Mutex
+	eventMu           sync.Mutex
+	subscriptions     map[string]eventSubscription
+	pending           map[string]bool
+	recent            []events.Event
+	initialized       bool
+	connected         bool
+	resyncRequired    bool
+	eventEpoch        string
+	eventSequence     uint64
+	configDirty       bool
+	observerAvailable bool
 }
 
 // NewServer creates a new MCP server with the given VM provider.
 func NewServer(p provider.VMProvider) *Server {
-	return &Server{Provider: p}
+	return &Server{Provider: p, subscriptions: map[string]eventSubscription{}, pending: map[string]bool{}}
 }
 
 // ToolsCatalog returns the compact MCP tool catalog.
 func ToolsCatalog() []map[string]interface{} {
 	return []map[string]interface{}{
+		eventToolCatalog(),
 		{
 			"name":        "nido_vm",
 			"description": "Operate the VM fleet through a single high-power tool. Use actions such as list, info, create, start, stop, delete, ssh, prune, config_update, port_forward, port_unforward, and port_list. Prefer resources like nido://fleet/vms or nido://vm/{name} for inspection when your client supports resources; use this tool for mutations or as a universal fallback.",
@@ -163,14 +182,15 @@ func ToolsCatalog() []map[string]interface{} {
 // ResourcesCatalog returns fixed read-only resources.
 func ResourcesCatalog() []map[string]interface{} {
 	return []map[string]interface{}{
-		{"name": "Fleet VMs", "uri": "nido://fleet/vms", "mimeType": "application/json", "description": "Compact fleet summary for all known VMs."},
-		{"name": "Fleet Templates", "uri": "nido://fleet/templates", "mimeType": "application/json", "description": "Template names available for cloning."},
-		{"name": "Image Catalog", "uri": "nido://catalog/images", "mimeType": "application/json", "description": "Compact image catalog summary optimized for agent browsing."},
-		{"name": "Blueprint Catalog", "uri": "nido://catalog/blueprints", "mimeType": "application/json", "description": "Buildable image blueprint summaries, including output cache state."},
-		{"name": "Cache Summary", "uri": "nido://storage/cache", "mimeType": "application/json", "description": "Cache stats plus cached image entries."},
-		{"name": "System Config", "uri": "nido://system/config", "mimeType": "application/json", "description": "Current provider configuration."},
+		{"name": "Event stream", "uri": events.Stream, "mimeType": "application/json", "description": "Session event subscriptions, stream health and bounded recent core events."},
+		{"name": "Fleet VMs", "uri": events.Fleet, "mimeType": "application/json", "description": "Compact fleet summary for all known VMs."},
+		{"name": "Fleet Templates", "uri": events.Templates, "mimeType": "application/json", "description": "Template names available for cloning."},
+		{"name": "Image Catalog", "uri": events.Images, "mimeType": "application/json", "description": "Compact image catalog summary optimized for agent browsing."},
+		{"name": "Blueprint Catalog", "uri": events.Blueprints, "mimeType": "application/json", "description": "Buildable image blueprint summaries, including output cache state."},
+		{"name": "Cache Summary", "uri": events.Cache, "mimeType": "application/json", "description": "Cache stats plus cached image entries."},
+		{"name": "System Config", "uri": events.Config, "mimeType": "application/json", "description": "Current provider configuration."},
 		{"name": "System Doctor", "uri": "nido://system/doctor", "mimeType": "application/json", "description": "Diagnostic report for the local environment."},
-		{"name": "System Version", "uri": "nido://system/version", "mimeType": "application/json", "description": "Current Nido version and protocol."},
+		{"name": "System Version", "uri": events.VersionResource, "mimeType": "application/json", "description": "Current Nido version and protocol."},
 		{"name": "System Accelerators", "uri": "nido://system/accelerators", "mimeType": "application/json", "description": "PCI accelerator candidates."},
 		{"name": "MCP Registration", "uri": "nido://system/mcp-registration", "mimeType": "application/json", "description": "MCP client registration block."},
 	}
@@ -179,7 +199,7 @@ func ResourcesCatalog() []map[string]interface{} {
 // ResourceTemplatesCatalog returns parameterized resources for targeted inspection.
 func ResourceTemplatesCatalog() []map[string]interface{} {
 	return []map[string]interface{}{
-		{"name": "VM Detail", "uriTemplate": "nido://vm/{name}", "mimeType": "application/json", "description": "Detailed state for one VM."},
+		{"name": "VM Detail", "uriTemplate": events.VMResourcePrefix + "{name}", "mimeType": "application/json", "description": "Detailed state for one VM."},
 		{"name": "Image Detail", "uriTemplate": "nido://image/{tag}", "mimeType": "application/json", "description": "Detailed catalog metadata for one image tag."},
 		{"name": "Blueprint Detail", "uriTemplate": "nido://blueprint/{name}", "mimeType": "application/json", "description": "Detailed metadata for one image blueprint."},
 	}
@@ -223,13 +243,14 @@ func HelpPayload() map[string]interface{} {
 			"Use nido_system for system operations: doctor, version, update_check, update, config_get, config_set, accel_list, register, completion, build_image, and guarded uninstall.",
 			"Use nido_system update, config_set, and uninstall only when the user explicitly asked for those mutations.",
 			"Every high-power tool requires an action field.",
+			"Use nido_events subscribe for opt-in core resource changes, mute/unmute to suppress and resume, and unsubscribe when finished. No notifications are sent by default.",
 		},
 		"examples": []map[string]interface{}{
 			{
 				"goal": "List VMs cheaply",
 				"call": map[string]interface{}{
 					"method": "resources/read",
-					"params": map[string]interface{}{"uri": "nido://fleet/vms"},
+					"params": map[string]interface{}{"uri": events.Fleet},
 				},
 			},
 			{
@@ -284,7 +305,18 @@ func HelpPayload() map[string]interface{} {
 // Serve starts the MCP server loop, reading JSON-RPC requests from stdin
 // and writing responses to stdout. Runs until EOF or a fatal error.
 func (s *Server) Serve() {
-	decoder := json.NewDecoder(os.Stdin)
+	s.ServeIO(context.Background(), os.Stdin, os.Stdout)
+}
+
+// ServeIO owns protocol output and its event worker until EOF/cancellation.
+// The caller owns the input and must unblock its reader on cancellation.
+func (s *Server) ServeIO(ctx context.Context, input io.Reader, output io.Writer) {
+	ctx, cancel := context.WithCancel(ctx)
+	s.output = output
+	done := make(chan struct{})
+	go s.runEvents(ctx, done)
+	defer func() { cancel(); <-done }()
+	decoder := json.NewDecoder(input)
 	for {
 		var req JSONRPCRequest
 		if err := decoder.Decode(&req); err != nil {
@@ -299,13 +331,28 @@ func (s *Server) Serve() {
 }
 
 func (s *Server) handleRequest(req JSONRPCRequest) {
+	if s.ConfigFile != "" && req.ID != nil {
+		s.eventMu.Lock()
+		dirty := s.configDirty
+		s.configDirty = false
+		s.eventMu.Unlock()
+		if dirty {
+			if err := s.Provider.ReloadConfig(s.ConfigFile); err != nil {
+				s.eventMu.Lock()
+				s.configDirty = true
+				s.eventMu.Unlock()
+				s.sendError(req.ID, -32603, "Cannot reload Nido configuration")
+				return
+			}
+		}
+	}
 	switch req.Method {
 	case "initialize":
 		s.sendResponse(req.ID, map[string]interface{}{
 			"protocolVersion": "2024-11-05",
 			"capabilities": map[string]interface{}{
 				"tools":     map[string]interface{}{},
-				"resources": map[string]interface{}{},
+				"resources": map[string]interface{}{"subscribe": true},
 				"prompts":   map[string]interface{}{},
 			},
 			"serverInfo": map[string]string{
@@ -314,7 +361,12 @@ func (s *Server) handleRequest(req JSONRPCRequest) {
 			},
 		})
 	case "notifications/initialized":
+		s.eventMu.Lock()
+		s.initialized = true
+		s.eventMu.Unlock()
 		return
+	case "resources/subscribe", "resources/unsubscribe":
+		s.handleSubscription(req)
 	case "tools/list":
 		s.sendResponse(req.ID, map[string]interface{}{"tools": ToolsCatalog()})
 	case "tools/call":
@@ -347,6 +399,8 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 	)
 
 	switch params.Name {
+	case "nido_events":
+		payload, err = s.callEventsTool(params.Arguments)
 	case "nido_vm":
 		payload, err = s.callVMTool(params.Arguments)
 	case "nido_template":
@@ -637,9 +691,11 @@ func (s *Server) callImageTool(raw json.RawMessage) (interface{}, error) {
 		}
 		return map[string]interface{}{"action": "remove", "image": fmt.Sprintf("%s:%s", name, ver), "status": "removed"}, nil
 	case "refresh_catalog":
-		cachePath := filepath.Join(s.imageDir(), image.CatalogCacheFile)
-		_ = os.Remove(cachePath)
-		summaries, err := s.imageCatalogSummaryWithTTL(0)
+		_, err := image.RefreshCatalog(s.imageDir(), s.Provider.EventPublisher())
+		if err != nil {
+			return nil, err
+		}
+		summaries, err := s.imageCatalogSummary()
 		if err != nil {
 			return nil, err
 		}
@@ -762,7 +818,7 @@ func (s *Server) callSystemTool(raw json.RawMessage) (interface{}, error) {
 		if !supportedConfigKey(key) {
 			return nil, fmt.Errorf("invalid config key %q", key)
 		}
-		if err := config.UpdateConfig(s.configPath(), key, args.Value); err != nil {
+		if err := config.UpdateConfig(s.configPath(), key, args.Value, s.Provider.EventPublisher()); err != nil {
 			return nil, err
 		}
 		if err := s.Provider.ReloadConfig(s.configPath()); err != nil {
@@ -798,7 +854,7 @@ func (s *Server) callSystemTool(raw json.RawMessage) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := lifecycle.Uninstall(s.nidoDir(), exe); err != nil {
+		if err := lifecycle.Uninstall(s.nidoDir(), exe, s.Provider.EventPublisher()); err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"action": "uninstall", "status": "uninstalled"}, nil
@@ -830,32 +886,35 @@ func (s *Server) handleResourceRead(req JSONRPCRequest) {
 }
 
 func (s *Server) readResource(uri string) (interface{}, error) {
+	if uri == events.Stream {
+		return s.eventStatus(), nil
+	}
 	switch uri {
-	case "nido://fleet/vms":
+	case events.Fleet:
 		vms, err := s.Provider.List()
 		if err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"vms": vms}, nil
-	case "nido://fleet/templates":
+	case events.Templates:
 		tpls, err := s.Provider.ListTemplates()
 		if err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"templates": tpls}, nil
-	case "nido://catalog/images":
+	case events.Images:
 		summaries, err := s.imageCatalogSummary()
 		if err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"images": summaries}, nil
-	case "nido://catalog/blueprints":
+	case events.Blueprints:
 		blueprints, err := s.blueprintCatalog()
 		if err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"blueprints": blueprints}, nil
-	case "nido://storage/cache":
+	case events.Cache:
 		catalog, err := s.loadCatalog(image.DefaultCacheTTL)
 		if err != nil {
 			return nil, err
@@ -869,11 +928,11 @@ func (s *Server) readResource(uri string) (interface{}, error) {
 			return nil, err
 		}
 		return map[string]interface{}{"stats": stats, "entries": entries}, nil
-	case "nido://system/config":
+	case events.Config:
 		return map[string]interface{}{"config_path": s.configPath(), "config": s.Provider.GetConfig()}, nil
 	case "nido://system/doctor":
 		return map[string]interface{}{"reports": s.Provider.Doctor()}, nil
-	case "nido://system/version":
+	case events.VersionResource:
 		return map[string]interface{}{"version": build.Version, "state": "Evolved", "protocol": "v3.0"}, nil
 	case "nido://system/accelerators":
 		devs, err := s.Provider.ListAccelerators()
@@ -884,8 +943,8 @@ func (s *Server) readResource(uri string) (interface{}, error) {
 	case "nido://system/mcp-registration":
 		return s.registrationPayload(), nil
 	default:
-		if strings.HasPrefix(uri, "nido://vm/") {
-			name, err := url.PathUnescape(strings.TrimPrefix(uri, "nido://vm/"))
+		if strings.HasPrefix(uri, events.VMResourcePrefix) {
+			name, err := events.ParseVMResource(uri)
 			if err != nil {
 				return nil, err
 			}
@@ -939,7 +998,7 @@ func (s *Server) handlePromptGet(req JSONRPCRequest) {
 				"role": "user",
 				"content": map[string]interface{}{
 					"type": "text",
-					"text": "Use resources first for inspection: nido://fleet/vms, nido://vm/{name}, nido://catalog/images, nido://image/{tag}, nido://catalog/blueprints, nido://blueprint/{name}, nido://storage/cache, nido://system/config, nido://system/doctor, nido://system/version, nido://system/accelerators, and nido://system/mcp-registration. Use tools only when you need to mutate state or when your client cannot read resources. Prefer the compact actions on nido_vm, nido_template, nido_image, nido_blueprint, and nido_system instead of planning around many micro-tools.",
+					"text": "Use resources first for inspection: nido://fleet/vms, nido://vm/{name}, nido://catalog/images, nido://image/{tag}, nido://catalog/blueprints, nido://blueprint/{name}, nido://storage/cache, nido://system/config, nido://system/doctor, nido://system/version, nido://system/accelerators, and nido://system/mcp-registration. Use tools only when you need to mutate state or when your client cannot read resources. Prefer the compact actions on nido_vm, nido_template, nido_image, nido_blueprint, and nido_system instead of planning around many micro-tools. Use nido_events to subscribe, mute or unsubscribe to core resource events. Notifications are opt-in and contain only an invalidated resource URI.",
 				},
 			},
 		},
@@ -952,9 +1011,7 @@ func (s *Server) sendResponse(id interface{}, result interface{}) {
 		ID:      id,
 		Result:  result,
 	}
-	data, _ := json.Marshal(resp)
-	os.Stdout.Write(data)
-	os.Stdout.Write([]byte("\n"))
+	s.writeFrame(resp)
 }
 
 func (s *Server) sendError(id interface{}, code int, message string) {
@@ -966,9 +1023,7 @@ func (s *Server) sendError(id interface{}, code int, message string) {
 			Message: message,
 		},
 	}
-	data, _ := json.Marshal(resp)
-	os.Stdout.Write(data)
-	os.Stdout.Write([]byte("\n"))
+	s.writeFrame(resp)
 }
 
 func (s *Server) loadCatalog(ttl time.Duration) (*image.Catalog, error) {
@@ -1047,7 +1102,7 @@ func (s *Server) buildBlueprint(name string) (builder.BlueprintInfo, string, err
 	if info.Built {
 		return info, "ready", nil
 	}
-	eng := builder.NewEngine(filepath.Join(s.nidoDir(), "cache"), filepath.Join(s.nidoDir(), "tmp"), s.imageDir(), s.Provider.Virtualization())
+	eng := builder.NewEngine(filepath.Join(s.nidoDir(), "cache"), filepath.Join(s.nidoDir(), "tmp"), s.imageDir(), s.Provider.Virtualization(), builder.WithEvents(s.Provider.EventPublisher()))
 	if err := eng.Build(bp); err != nil {
 		return builder.BlueprintInfo{}, "", err
 	}
@@ -1091,7 +1146,7 @@ func (s *Server) resolveCreateImage(tag string) (createImageResolution, error) {
 
 	imgPath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
 	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
-		downloader := image.NewTransfer(image.TransferOptions{OnProgress: nil})
+		downloader := image.NewTransfer(image.TransferOptions{Events: s.Provider.EventPublisher(), OnProgress: nil})
 		if err := downloader.Prepare(*ver, imgPath); err != nil {
 			return createImageResolution{}, err
 		}
@@ -1144,7 +1199,7 @@ func (s *Server) resolveImagePath(tag string) (string, error) {
 		return imgPath, nil
 	}
 
-	downloader := image.NewTransfer(image.TransferOptions{OnProgress: nil})
+	downloader := image.NewTransfer(image.TransferOptions{Events: s.Provider.EventPublisher(), OnProgress: nil})
 	if err := downloader.Prepare(*version, imgPath); err != nil {
 		return "", err
 	}
@@ -1152,6 +1207,9 @@ func (s *Server) resolveImagePath(tag string) (string, error) {
 }
 
 func (s *Server) configPath() string {
+	if s.ConfigFile != "" {
+		return s.ConfigFile
+	}
 	return filepath.Join(s.nidoDir(), "config.env")
 }
 
@@ -1274,4 +1332,22 @@ func (s *Server) imageDir() string {
 func (s *Server) nidoDir() string {
 	home, _ := sysutil.UserHome()
 	return filepath.Join(home, ".nido")
+}
+
+func (s *Server) writeFrame(frame interface{}) {
+	s.outputMu.Lock()
+	defer s.outputMu.Unlock()
+	s.encodeFrame(frame)
+}
+
+func (s *Server) encodeFrame(frame interface{}) error {
+	out := s.output
+	if out == nil {
+		out = os.Stdout
+	}
+	if deadline, ok := out.(interface{ SetWriteDeadline(time.Time) error }); ok {
+		_ = deadline.SetWriteDeadline(time.Now().Add(events.IOTimeout))
+		defer deadline.SetWriteDeadline(time.Time{})
+	}
+	return json.NewEncoder(out).Encode(frame)
 }

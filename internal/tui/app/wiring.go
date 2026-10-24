@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"strings"
+	"time"
 
 	// Added import
 	"github.com/Josepavese/nido/v4/internal/config" // Global config
@@ -13,6 +15,7 @@ import (
 	"github.com/Josepavese/nido/v4/internal/tui/kit/app"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/shell"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 
 	"github.com/Josepavese/nido/v4/internal/tui/app/ops" // Was services
@@ -29,22 +32,92 @@ import (
 // NidoApp wraps the generic Kit App to handle domain-specific logic.
 type NidoApp struct {
 	*app.App
-	prov          provider.VMProvider
-	Hatchery      *hatchery.Hatchery // Keep reference for background updates
-	Registry      *registry.Registry // Keep reference for background updates
-	Config        *configpage.Config // Keep reference for background updates
-	activeActions map[string]string  // Map OpName -> ActionID
-	ErrorModal    *widget.Modal      // Global alert modal
+	prov            provider.VMProvider
+	eventContext    context.Context
+	eventStream     <-chan events.Event
+	configPath      string
+	latestFleetRead time.Time
+	Fleet           *fleet.Fleet
+	Hatchery        *hatchery.Hatchery // Keep reference for background updates
+	Registry        *registry.Registry // Keep reference for background updates
+	Config          *configpage.Config // Keep reference for background updates
+	activeActions   map[string]string  // Map OpName -> ActionID
+	ErrorModal      *widget.Modal      // Global alert modal
 }
 
 func (n *NidoApp) Init() tea.Cmd {
-	return tea.Batch(n.App.Init(), ops.RefreshFleet(n.prov))
+	return tea.Batch(n.App.Init(), ops.RefreshFleet(n.prov), ops.WaitEvents(n.eventContext, n.eventStream))
 }
 
 // Update intercepts messages to handle Nido domain logic.
 func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Background invalidations must flow even while a modal owns keyboard input.
+	if batch, ok := msg.(ops.EventBatchMsg); ok {
+		resources := map[string]bool{}
+		for _, e := range batch.Events {
+			if n.Fleet != nil {
+				n.Fleet.ObserveEvent(e)
+			}
+			if e.Kind == events.Unavailable {
+				if e.Epoch == "" {
+					n.Shell.SetStatus(false, "Event stream reconnecting", 0)
+				} else {
+					n.Shell.SetStatus(false, "Event observation unavailable", 0)
+				}
+				continue
+			}
+			if e.Kind == events.Resync {
+				n.Shell.SetStatus(false, "Event stream connected", 0)
+				for _, uri := range []string{events.Fleet, events.Templates, events.Images, events.Cache, events.Config} {
+					resources[uri] = true
+				}
+			}
+			if e.Kind != events.Started {
+				for _, uri := range e.Resources {
+					resources[uri] = true
+				}
+			}
+		}
+		cmds := []tea.Cmd{ops.WaitEvents(n.eventContext, n.eventStream)}
+		if resources[events.Config] {
+			if err := n.prov.ReloadConfig(n.configPath); err != nil {
+				n.Shell.SetStatus(false, fmt.Sprintf("Config refresh: %v", err), 0)
+			} else if n.Config != nil {
+				n.Config.ApplyConfig(n.prov.GetConfig())
+			}
+		}
+		if resources[events.Fleet] {
+			cmds = append(cmds, ops.RefreshFleet(n.prov))
+		}
+		if resources[events.Templates] || resources[events.Images] || resources[events.Cache] || resources[events.Config] {
+			cmds = append(cmds, ops.FetchSources(n.prov, ops.SourceActionSpawn, false, true), ops.FetchRegistryImages(n.prov, false), ops.FetchCacheStats(n.prov))
+			if n.Registry != nil {
+				_, cmd := n.Registry.Update(ops.CachePruneMsg{})
+				cmds = append(cmds, cmd)
+			}
+		}
+		return n, tea.Batch(cmds...)
+	}
+	// Feed fleet data even when another route is active or a modal is open.
+	if list, ok := msg.(ops.VMListMsg); ok {
+		if list.RequestedAt.Before(n.latestFleetRead) {
+			return n, nil
+		}
+		n.latestFleetRead = list.RequestedAt
+	}
+	if isFleetData(msg) && n.Fleet != nil {
+		_, cmd := n.Fleet.Update(msg)
+		if _, ok := msg.(ops.VMListMsg); !ok {
+			return n, cmd
+		}
+		if n.Hatchery != nil {
+			_, hcmd := n.Hatchery.Update(msg)
+			return n, tea.Batch(cmd, hcmd)
+		}
+		return n, cmd
+	}
 	// 0. Modal Interception
-	if n.ErrorModal.IsActive() {
+	if n.ErrorModal.IsActive() && view.IsInputMessage(msg) {
 		newModal, cmd := n.ErrorModal.Update(msg)
 		n.ErrorModal = newModal
 		return n, cmd
@@ -53,6 +126,16 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case ops.ConfigSavedMsg:
+		if msg.Err != nil {
+			n.Shell.SetStatus(false, fmt.Sprintf("Config save: %v", msg.Err), 0)
+		} else {
+			if err := n.prov.ReloadConfig(n.configPath); err != nil {
+				n.Shell.SetStatus(false, err.Error(), 0)
+			} else if n.Config != nil {
+				n.Config.ApplyConfig(msg.Config)
+			}
+		}
 	case ops.SourcesLoadedMsg, ops.VMListMsg:
 		// Broadcast to Hatchery even if not active
 		if n.Hatchery != nil {
@@ -154,7 +237,7 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// We don't really need a long running action tracker because
 		// if it works, we die immediately.
 		n.Shell.Operation = "uninstall"
-		return n, ops.UninstallCmd()
+		return n, ops.UninstallCmd(n.prov.EventPublisher())
 
 	case ops.ProgressMsg:
 		if msg.Result != nil {
@@ -230,9 +313,7 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// But we don't have global loading anymore.
 			// Just log warning if needed, or ignore.
 		}
-		cmds = append(cmds, ops.RefreshFleet(n.prov))
-		// We moved FetchSources to the heuristic block below for more targeted refresh
-		// but keeping it here for general safety if needed. Actually let's keep it consistent.
+		// Fleet data refresh is driven by the shared event stream.
 
 		// 4. Handle Errors
 		if msg.Err != nil {
@@ -247,21 +328,9 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			n.Shell.SetStatus(false, fmt.Sprintf("SUCCESS: %s completed", msg.Op), 0)
 		}
 
-		// 5. Heuristic-based Refreshes
-		// If it's a destructive or acquisition op, refresh the registry/sources
+		// Local feedback and selection; data invalidations come from events.
 		_, blueprintSpawn := msg.Data.(ops.BlueprintSpawnResult)
 		if msg.Op == "prune" || strings.HasPrefix(msg.Op, "delete") || strings.HasPrefix(msg.Op, "pull") || blueprintSpawn {
-			// Refresh Sources (Dropdowns in Hatchery/Spawn)
-			cmds = append(cmds, ops.FetchSources(n.prov, ops.SourceActionSpawn, false, true))
-
-			// Refresh Registry (Image list in Registry)
-			if n.Registry != nil {
-				cmds = append(cmds, ops.FetchRegistryImages(n.prov, false))
-				// Also refresh local cache list
-				_, cmd := n.Registry.Update(ops.CachePruneMsg{})
-				cmds = append(cmds, cmd)
-			}
-
 			// UX: If this was a pull, auto-select the new image in Hatchery
 			if strings.HasPrefix(msg.Op, "pull ") && n.Hatchery != nil {
 				imgName := strings.TrimPrefix(msg.Op, "pull ")
@@ -313,7 +382,13 @@ func (n *NidoApp) View() string {
 }
 
 // Run starts the Nido TUI.
-func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) error {
+func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config, source events.Source, configPath string) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var stream <-chan events.Event
+	if source != nil {
+		stream = source.Watch(ctx)
+	}
 	// 1. Initialize Theme
 	if cfg.Theme != "" {
 		theme.SetTheme(cfg.Theme)
@@ -342,7 +417,7 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) erro
 	// 3. Initialize Pages
 	fView := fleet.NewFleet(prov) // Fleet needs provider
 	hView := hatchery.NewHatchery(prov)
-	cView := configpage.NewConfig(cfg)
+	cView := configpage.NewConfig(cfg, prov.EventPublisher())
 	rView := registry.NewRegistry(prov)
 
 	// 5. Register Routes
@@ -358,6 +433,10 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) erro
 	nidoApp := &NidoApp{
 		App:           kitApp,
 		prov:          prov,
+		eventContext:  ctx,
+		eventStream:   stream,
+		configPath:    configPath,
+		Fleet:         fView,
 		Hatchery:      hView,
 		Registry:      rView,
 		Config:        cView,
@@ -370,5 +449,18 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config) erro
 	// 8. Run
 	p := tea.NewProgram(nidoApp, tea.WithContext(ctx), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	_, err := p.Run()
+	cancel()
+	if stream != nil {
+		for range stream {
+		}
+	}
 	return err
+}
+
+func isFleetData(msg tea.Msg) bool {
+	switch msg.(type) {
+	case ops.VMListMsg, ops.VMDetailMsg, ops.TemplateListMsg:
+		return true
+	}
+	return false
 }

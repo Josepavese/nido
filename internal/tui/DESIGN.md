@@ -133,3 +133,13 @@ The footer dynamically updates based on the active Viewlet:
 2. **Revamp Hatchery**: Move to Wizard layout.
 3. **Build Registry**: Consolidate Images/Cache.
 4. **Build System**: Dashboard for miscellaneous ops.
+
+## Shared events (current behavior)
+
+The application composition receives `events.Source`. `ops.WaitEvents` batches
+stream invalidations; the app refreshes the relevant domain data and routes
+fleet results even behind inactive pages or modals. Older asynchronous responses
+do not overwrite newer fleet/detail results. Runtime QMP observations enrich
+the header without changing process-state start/stop semantics. Reconnect clears
+old observations and requests resync; no fleet polling timer runs per TUI.
+See [event contract](../../docs/events.md) for producer ownership and lifecycle.

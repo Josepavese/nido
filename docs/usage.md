@@ -172,3 +172,16 @@ PCI passthrough intentionally connect guest and host resources. Treat those
 connections as explicit grants. PCI support varies by host and device; primary
 display protection and IOMMU checks do not qualify every GPU or peripheral.
 See [hardware contracts and qualification limits](ARCHITECTURE.md#qualification-and-cutover-limits).
+
+## Follow core changes
+
+```bash
+nido events
+nido events --json
+```
+
+Each JSON line is a normal CLI response envelope with one event in `data`.
+Ctrl+C closes the stream. Multiple TUI sessions refresh from the same broker,
+including changes made by CLI, MCP or external metadata publication. Runtime
+QMP detail is advisory; process termination and guest readiness are separate
+observations. See [events](events.md) and [MCP subscriptions](mcp.md).

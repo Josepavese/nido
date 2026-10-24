@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"github.com/Josepavese/nido/v4/internal/hardware"
 	"os"
 	"path/filepath"
@@ -444,3 +445,5 @@ func writeCatalogFixture(t *testing.T, cwd string) {
 func (fakeProvider) Virtualization() hardware.Virtualization {
 	return hardware.Virtualization{CPU: "qemu64"}
 }
+
+func (fakeProvider) EventPublisher() events.Publisher { return nil }

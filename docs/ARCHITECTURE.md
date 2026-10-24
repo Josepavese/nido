@@ -124,3 +124,19 @@ effective accelerator. The historical `i915` record was verified as already
 restored and unclaimed, preserved outside the runtime, and retired with old
 writers drained. Existing VM metadata remained unchanged. This proves the
 shared PCI lifecycle on that device, not GPU-specific guest functionality.
+
+## Shared event boundary
+
+`internal/events` owns the event vocabulary, resource scopes and bounded local
+broker/client protocol. `sysutil` owns private socket paths, OS-released election
+locks, filesystem notifications and native process-exit waits. The composition
+root injects a publisher into domain owners and an event source into TUI/MCP.
+The elected session alone owns independent read-only provider/QMP observers;
+UI configuration snapshots are never shared mutable state with those workers.
+
+TUI batches invalidations and preserves background refresh while modals/routes
+are active. MCP serializes responses and opt-in resource notifications on stdout,
+with session-local subscriptions and mute/filter state. Slow consumers reconnect
+through a resync barrier; VM state files remain authoritative. No permanent
+service, per-consumer fleet polling or durable event log is installed. See
+[events](events.md) for the catalog, safety semantics and qualification scope.

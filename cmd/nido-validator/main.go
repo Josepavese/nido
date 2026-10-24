@@ -88,6 +88,7 @@ func main() {
 		scenario.VMSpawnResources(),
 		scenario.WorkflowExec(),
 		scenario.MCPProtocol(),
+		scenario.EventStream(),
 		scenario.Auxiliary(),
 		scenario.Cleanup(),
 	}

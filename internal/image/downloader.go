@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"io"
 	"net/http"
@@ -21,11 +22,13 @@ type Transfer interface {
 	Decompress(string, string) error
 }
 type TransferOptions struct {
+	Events     events.Publisher
 	OnProgress func(current, total int64)
 	Client     sysutil.HTTPClient
 	Context    context.Context
 }
 type downloader struct {
+	events     events.Publisher
 	OnProgress func(current, total int64)
 	client     sysutil.HTTPClient
 	ctx        context.Context
@@ -40,7 +43,7 @@ func NewTransfer(options TransferOptions) Transfer {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return &downloader{OnProgress: options.OnProgress, client: client, ctx: ctx}
+	return &downloader{events: options.Events, OnProgress: options.OnProgress, client: client, ctx: ctx}
 }
 
 // Download downloads a file from url to dest.
@@ -222,7 +225,9 @@ func (d *downloader) downloadMultiPart(urls []string, dest string, expectedTotal
 // Prepare downloads, verifies, and decompresses a catalog version into dest.
 // Locally supplied images may omit a checksum; any provided
 // checksum is enforced before the image is made available.
-func (d *downloader) Prepare(ver Version, dest string) error {
+func (d *downloader) Prepare(ver Version, dest string) (resultErr error) {
+	finish := events.Begin(d.events, events.ImageAcquire, "")
+	defer func() { finish(resultErr) }()
 	downloadPath := dest
 	isTarXz := strings.HasSuffix(ver.URL, ".tar.xz")
 	isZst := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")

@@ -5,6 +5,16 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- Add a shared local core event stream with portable broker election, native
+  filesystem/process observers, isolated QMP monitoring and `nido events`.
+- Keep multiple TUI sessions synchronized, including hidden pages and modals.
+- Add opt-in MCP resource subscriptions and session filters/mute controls;
+  coalesce URI-only notifications and expose bounded event health/history.
+- Preserve the prior catalog on explicit refresh failure and publish correlated
+  core operation outcomes without arguments, logs or credentials.
+
 ## [4.8.6] - 2026-10-24 "Shared Nest"
 
 ### Fixed

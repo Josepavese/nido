@@ -137,7 +137,7 @@ func actionConfigSet(app *appContext) func(cmd *cobra.Command, args []string) {
 			os.Exit(1)
 		}
 
-		if err := config.UpdateConfig(app.ConfigPath, key, val); err != nil {
+		if err := config.UpdateConfig(app.ConfigPath, key, val, app.Provider.EventPublisher()); err != nil {
 			if jsonOut {
 				_ = clijson.PrintJSON(clijson.NewResponseError("config set", "ERR_IO", "Update failed", err.Error(), "Check permissions.", nil))
 			} else {
@@ -211,7 +211,7 @@ func actionVersion(app *appContext) func(cmd *cobra.Command, args []string) {
 func actionUpdate(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		ui.Header("Nido Update")
-		result, err := app.Updater.Update(cmd.Context(), lifecycle.UpdateRequest{CurrentVersion: build.Version, NidoDir: app.NidoDir})
+		result, err := app.Updater.Update(cmd.Context(), lifecycle.UpdateRequest{Events: app.Provider.EventPublisher(), CurrentVersion: build.Version, NidoDir: app.NidoDir})
 		if err != nil {
 			ui.Error("Update failed: %v", err)
 			os.Exit(1)
@@ -271,7 +271,7 @@ func actionUninstall(app *appContext) func(cmd *cobra.Command, args []string) {
 			ui.Step("Removing Nido installation...")
 		}
 
-		if err := lifecycle.Uninstall(app.NidoDir, exe); err != nil {
+		if err := lifecycle.Uninstall(app.NidoDir, exe, app.Provider.EventPublisher()); err != nil {
 			if jsonOut {
 				_ = clijson.PrintJSON(clijson.NewResponseError("uninstall", "ERR_INTERNAL", "Uninstall failed", err.Error(), "Check permissions and try again.", nil))
 			} else {
@@ -305,7 +305,10 @@ func actionMCPHelp(app *appContext) func(cmd *cobra.Command, args []string) {
 
 func actionMCP(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		mcp.NewServer(app.Provider).Serve()
+		server := mcp.NewServer(app.Provider)
+		server.Events = app.Events
+		server.ConfigFile = app.ConfigPath
+		server.Serve()
 	}
 }
 

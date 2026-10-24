@@ -35,10 +35,16 @@ func mcpProtocolStep(ctx *Context) report.StepResult {
 		StartedAt: time.Now(),
 	}
 
+	// Opt-in event controls must be present without starting notifications.
+	eventsResponse, eventsErr := client.CallTool("nido_events", map[string]interface{}{"action": "status"})
+	addAssertion(&res, "events_status", eventsErr == nil && eventsResponse["isError"] != true, errDetails(eventsErr))
+	badSubscription, badErr := client.CallTool("nido_events", map[string]interface{}{"action": "subscribe", "uri": "file:///outside-nido"})
+	addAssertion(&res, "events_reject_non_core", badErr == nil && badSubscription["isError"] == true, errDetails(badErr))
 	// tools/list
 	toolsResp, err := client.CallMethod("tools/list", nil, 10*time.Second)
 	addAssertion(&res, "tools_list", err == nil, errDetails(err))
 	expected := map[string]bool{
+		"nido_events":    true,
 		"nido_vm":        true,
 		"nido_template":  true,
 		"nido_image":     true,

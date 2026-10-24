@@ -64,7 +64,7 @@ func NewConfigPageGlobalForm(parent *Config) *ConfigPageGlobalForm {
 				"LINKED_CLONES": fmt.Sprint(p.ToggleLinkedClones.Checked),
 			}
 			return tea.Batch(
-				ops.SaveConfigMany(parent.cfg, updates),
+				ops.SaveConfigMany(parent.cfg, updates, parent.publish),
 				func() tea.Msg { return FocusSidebarMsg{} },
 			)
 		},
@@ -792,7 +792,7 @@ func NewConfigPageAppearance(parent *Config) *ConfigPageAppearance {
 				"TUI_GAP_SCALE":          p.InputGapScale.Value(),
 			}
 			return tea.Batch(
-				ops.SaveConfigMany(parent.cfg, updates),
+				ops.SaveConfigMany(parent.cfg, updates, parent.publish),
 				func() tea.Msg { return FocusSidebarMsg{} },
 			)
 		},

@@ -515,3 +515,14 @@ commands:
       - "nido mcp --help"
       - "nido mcp-help"
     action: system.mcp
+
+  - id: system.events
+    use: events
+    group: system
+    short: "Watch shared Nido core events until interrupted"
+    long: "Stream advisory operation, runtime and resource events. Each connection starts with a resync barrier. With --json, write one standard response envelope per line (NDJSON). Stop with Ctrl+C."
+    args:
+      max: 0
+    flags:
+      - name: json
+    action: system.events

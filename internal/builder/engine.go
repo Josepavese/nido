@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"io"
 	"net/url"
 	"os"
@@ -24,6 +25,7 @@ const defaultBuildTimeout = 2 * time.Hour
 
 // Engine orchestrates the image building process.
 type Engine struct {
+	Events        events.Publisher
 	CacheDir      string // Where ISOs and Drivers are cached
 	WorkDir       string // Where temporary build files go
 	ImageDir      string // Where the final output qcow2 goes
@@ -89,7 +91,9 @@ func LoadBlueprint(path string) (*image.Blueprint, error) {
 }
 
 // Build executes the blueprint instructions.
-func (e *Engine) Build(bp *image.Blueprint) error {
+func (e *Engine) Build(bp *image.Blueprint) (resultErr error) {
+	finish := events.Begin(e.Events, events.BlueprintBuild, "")
+	defer func() { finish(resultErr) }()
 	// 1. Prepare Environments
 	if err := os.MkdirAll(e.CacheDir, 0755); err != nil {
 		return fmt.Errorf("failed to create cache dir: %w", err)

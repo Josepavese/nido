@@ -23,9 +23,10 @@ to your terminal and your MCP client. Each VM has its own guest kernel.
 | You want to... | Nido gives you... |
 | --- | --- |
 | Test code away from your host | Disposable QEMU VMs with SSH access and cloud-init provisioning |
-| Let an agent manage its own environment | A built-in stdio MCP server with five tools and read-only resources |
+| Let an agent manage its own environment | A built-in stdio MCP server with compact tools, read-only resources and opt-in event subscriptions |
 | Reuse an expensive setup | Templates and QCOW2 linked clones, with one shared base and a writable disk per VM |
 | Switch between automation and hands-on work | Structured CLI JSON, shell completion and an interactive terminal dashboard |
+| Keep multiple dashboards and agents in sync | [Shared local events](docs/events.md), live TUI updates and selective MCP notifications |
 | Choose the right starting point | An automatically refreshed cloud-image catalog, local templates and buildable blueprints |
 
 ## Press start
@@ -98,6 +99,10 @@ nido delete agent-lab
 poweroff for a clean OS shutdown. VM data persists until you delete it.
 
 [Provisioning, ports, templates and cleanup](docs/usage.md)
+
+Watch core changes in another terminal with `nido events` or `nido events --json`.
+TUI sessions update from the shared stream; agents explicitly subscribe only to
+the resources they need. See [event delivery and mute controls](docs/events.md).
 
 ## Connect your agent
 

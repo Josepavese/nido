@@ -2,6 +2,7 @@ package config
 
 import (
 	"bufio"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,6 +19,7 @@ const (
 // Config defines the DNA of a Nido nest. It controls where life is archived,
 // default hatching species, and how disk cloning should evolve.
 type Config struct {
+	sourcePath     string
 	BackupDir      string
 	SSHUser        string
 	ImageDir       string // Directory for downloaded images (default: ~/.nido/images)
@@ -73,6 +75,7 @@ func LoadConfig(path string) (*Config, error) {
 
 	// Initialize with defaults
 	cfg := &Config{
+		sourcePath:     path,
 		BackupDir:      filepath.Join(home, ".nido", "backups"),
 		SSHUser:        "vmuser",
 		ImageDir:       filepath.Join(home, ".nido", "images"),
@@ -197,47 +200,17 @@ func (c *Config) ApplyEnvOverrides() {
 
 // UpdateConfig modifies a single genetic sequence in the configuration file.
 // It performs an atomic-like update by reading the whole genome (file) first.
-func UpdateConfig(path, key, value string) error {
-	// 1. Read all lines
-	var lines []string
-	if _, err := os.Stat(path); err == nil {
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		lines = strings.Split(string(content), "\n")
-	}
-
-	// 2. Update or Append
-	found := false
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, key+"=") {
-			lines[i] = key + "=" + value
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		if len(lines) > 0 && lines[len(lines)-1] != "" {
-			lines = append(lines, "")
-		}
-		lines = append(lines, key+"="+value)
-	}
-
-	// 3. Write back
-	output := strings.Join(lines, "\n")
-	// Ensure newline at end
-	if !strings.HasSuffix(output, "\n") {
-		output += "\n"
-	}
-
-	return sysutil.WriteFile(path, []byte(output), 0644)
+func UpdateConfig(path, key, value string, publish events.Publisher) error {
+	return UpdateConfigMany(path, map[string]string{key: value}, publish)
 }
 
+// SourcePath identifies the authoritative file resolved by the composition root.
+func (c Config) SourcePath() string { return c.sourcePath }
+
 // UpdateConfigMany modifies multiple settings atomically.
-func UpdateConfigMany(path string, updates map[string]string) error {
+func UpdateConfigMany(path string, updates map[string]string, publish events.Publisher) (resultErr error) {
+	finish := events.Begin(publish, events.ConfigSet, "")
+	defer func() { finish(resultErr) }()
 	// 1. Read all lines
 	var lines []string
 	if _, err := os.Stat(path); err == nil {

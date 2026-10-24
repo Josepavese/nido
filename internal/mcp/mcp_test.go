@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"github.com/Josepavese/nido/v4/internal/hardware"
 	"io"
 	"os"
@@ -95,8 +96,8 @@ func TestToolsCatalogIncludesExpectedToolsAndOmitsPassword(t *testing.T) {
 }
 
 func TestResourceAndPromptCatalogsExposeCompactSurface(t *testing.T) {
-	if len(ResourcesCatalog()) != 10 {
-		t.Fatalf("ResourcesCatalog() count = %d, want 10", len(ResourcesCatalog()))
+	if len(ResourcesCatalog()) != 11 {
+		t.Fatalf("ResourcesCatalog() count = %d, want 11", len(ResourcesCatalog()))
 	}
 	if len(ResourceTemplatesCatalog()) != 3 {
 		t.Fatalf("ResourceTemplatesCatalog() count = %d, want 3", len(ResourceTemplatesCatalog()))
@@ -163,6 +164,7 @@ func TestMCPActionsCoverCLIManifest(t *testing.T) {
 		"blueprint.info":               {"nido_blueprint", "info"},
 		"blueprint.build":              {"nido_blueprint", "build"},
 		"build":                        {"nido_blueprint", "build"},
+		"system.events":                {"nido_events", "subscribe"},
 		"system.doctor":                {"nido_system", "doctor"},
 		"system.accel.list":            {"nido_system", "accel_list"},
 		"system.config":                {"nido_system", "config_get"},
@@ -469,3 +471,5 @@ func TestSSHResponsePreservesStructuredArguments(t *testing.T) {
 		t.Fatalf("unsafe command rendering: %s", data)
 	}
 }
+
+func (m *mockProvider) EventPublisher() events.Publisher { return nil }
