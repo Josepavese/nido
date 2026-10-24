@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 840" role="img" aria-labelledby="title desc">
+  <title id="title">One engine, separate VM disks</title>
+  <desc id="desc">CLI, TUI and MCP use the Nido QEMU engine. A shared cached base backs three independent writable VM disks. Provision, run, save results and delete only the VM you own.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0b1424"/><stop offset="1" stop-color="#17233b"/></linearGradient>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M1 1 6 4 1 7" fill="none" stroke="#7edbe3" stroke-width="1.5"/></marker>
+  </defs>
+  <rect width="840" height="840" rx="24" fill="url(#bg)"/>
+  <g font-family="system-ui, sans-serif" text-anchor="middle">
+    <text x="420" y="64" font-size="30" font-weight="700" fill="#fff0da">One engine. Your choice of controls.</text>
+    <g fill="#142e43" stroke="#65cad5" stroke-width="2">
+      <rect x="105" y="102" width="180" height="65" rx="14"/>
+      <rect x="330" y="102" width="180" height="65" rx="14"/>
+      <rect x="555" y="102" width="180" height="65" rx="14"/>
+    </g>
+    <g fill="#9aebef" font-size="28" font-weight="700"><text x="195" y="144">CLI</text><text x="420" y="144">TUI</text><text x="645" y="144">MCP</text></g>
+    <path d="M195 169V197H420M645 169V197H420M420 169V225" fill="none" stroke="#7edbe3" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <rect x="180" y="242" width="480" height="94" rx="18" fill="#23394d" stroke="#7edbe3" stroke-width="2"/>
+    <text x="420" y="282" fill="#fff0da" font-size="30" font-weight="700">Nido VM engine</text>
+    <text x="420" y="315" fill="#b7c8dc" font-size="23">QEMU + host capabilities</text>
+    <text x="420" y="396" fill="#fff0da" font-size="30" font-weight="700">Share the base. Keep writes separate.</text>
+    <rect x="210" y="425" width="420" height="64" rx="14" fill="#25334d" stroke="#a2a2ef" stroke-width="2"/>
+    <text x="420" y="466" fill="#d3d1ff" font-size="26">Cached base image</text>
+    <path d="M420 490V522H165V548M420 522V548M420 522H675V548" fill="none" stroke="#7edbe3" stroke-width="2.5"/>
+    <g stroke-width="2">
+      <rect x="60" y="551" width="210" height="111" rx="16" fill="#123343" stroke="#65cad5"/>
+      <rect x="315" y="551" width="210" height="111" rx="16" fill="#382d38" stroke="#edaa82"/>
+      <rect x="570" y="551" width="210" height="111" rx="16" fill="#2b2d4d" stroke="#a2a2ef"/>
+    </g>
+    <g font-size="28" font-weight="700"><text x="165" y="591" fill="#9aebef">VM A</text><text x="420" y="591" fill="#ffbd94">VM B</text><text x="675" y="591" fill="#d3d1ff">VM C</text></g>
+    <g fill="#d5dfea" font-size="23"><text x="165" y="631">Own disk writes</text><text x="420" y="631">Own disk writes</text><text x="675" y="631">Own disk writes</text></g>
+    <path d="M60 702H780" stroke="#35445a"/>
+    <text x="420" y="752" font-size="27" fill="#fff0da" font-weight="600">Provision → Run → Save results → Delete</text>
+    <text x="420" y="796" font-size="23" fill="#b7c8dc">Delete only your VM. Keep useful data and shared bases.</text>
+  </g>
+</svg>

@@ -6,10 +6,10 @@ This document outlines the tools and processes for managing the Nido repository,
 
 ## 📂 Repository Layout (Admin View)
 
-- `/bin`: Administrative shell scripts.
-- `/cmd`: Source code for registry tools.
-- `/flavours`: Cloud-init configurations for custom Nido images.
-- `/registry`: The official image catalog and source definitions.
+- `bin/`: Administrative shell scripts.
+- `cmd/`: Source code for registry tools.
+- `flavours/`: Cloud-init configurations for custom Nido images.
+- `registry/`: The official image catalog and source definitions.
 - `.github/workflows`: CI/CD automation logic.
 
 ---
@@ -25,7 +25,7 @@ Nido uses an automated system to keep its image catalog fresh.
 - **Usage**:
 
     ```bash
-    go run cmd/registry-builder/main.go --sources registry/sources.yaml --output registry/images.json
+    go run ./cmd/registry-builder --sources registry/sources.yaml --output registry/images.json
     ```
 
 - **Automation**: Runs daily via GitHub Actions (`update-registry.yml`).
@@ -55,7 +55,7 @@ Flavours are pre-configured environments optimized for Nido.
 
 ### 🍱 Build Scripts
 
-- **Path**: `/flavours`
+- **Path**: `flavours/`
 - **Format**: Cloud-init YAML files (e.g., `ubuntu-24.04-lubuntu.yaml`).
 
 ### 🧩 Publishing Tool

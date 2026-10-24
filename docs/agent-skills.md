@@ -47,7 +47,7 @@ The `nido-vm-testing` skill teaches an agent to:
 The bundled script implements the full loop:
 
 ```bash
-NIDO_TEST_IMAGE=ubuntu:24.04 \
+NIDO_TEST_IMAGE=ubuntu:lts \
 NIDO_PROVISION_PACKAGES="ca-certificates curl git make build-essential" \
 NIDO_TEST_CMD="make test" \
 extras/skills/nido-vm-testing/scripts/nido-ephemeral-test.sh
@@ -69,9 +69,11 @@ Set `NIDO_KEEP_VM=1` to keep the VM for debugging after a failure.
 If provisioning is slow, build a base VM once:
 
 ```bash
-nido spawn app-base --image ubuntu:24.04 --user-data provision.sh --memory 4096 --cpus 2
+nido spawn app-base --image ubuntu:lts --user-data provision.sh --memory 4096 --cpus 2
 nido ssh app-base "command -v make && command -v git"
-nido stop app-base
+nido ssh app-base sudo poweroff
+nido info app-base
+# After the guest has exited:
 nido template create app-base app-ci-base
 nido delete app-base
 ```
@@ -82,16 +84,17 @@ Then each test can start from the template:
 nido spawn app-test-001 app-ci-base --port app:8080/tcp
 ```
 
-This keeps tests fast, typically milliseconds on a warm cache, while preserving VM isolation.
+This reuses the prepared disk environment. Guest boot and SSH readiness still
+take time and depend on the host and image.
 
 ## Example: Multi-Agent Isolation
 
 Each AI agent can run in its own VM:
 
 ```bash
-nido spawn planner --image ubuntu:24.04 --port api:8000/tcp
-nido spawn worker-a --image ubuntu:24.04 --port api:8000/tcp
-nido spawn worker-b --image ubuntu:24.04 --port api:8000/tcp
+nido spawn planner --image ubuntu:lts --port api:8000/tcp
+nido spawn worker-a --image ubuntu:lts --port api:8000/tcp
+nido spawn worker-b --image ubuntu:lts --port api:8000/tcp
 ```
 
 Use `nido info <vm> --json` to discover each host port. A host-side controller should pass only the required peer endpoints to each agent.

@@ -10,7 +10,9 @@ Overview
 - Outputs: NDJSON log at `logs/cli-validate-<ts>.ndjson` plus human summary `.summary.txt`. Each step records command, args, exit code, duration, stdout/stderr, assertions, and result (PASS/FAIL/SKIP).
 
 Running
-- From repo root: `go run ./cmd/nido-validator` (defaults to `nido` in PATH, auto-builds if missing).
+- Build once outside the checkout, then run from a disposable test environment.
+  Pass `--nido-bin` explicitly to avoid an implicit build and `--log-dir` to keep
+  logs outside the repository. See [Testing](../../TESTING.md).
 - Optional flags/env:
   - `--nido-bin` / `NIDO_BIN`: path to `nido` binary.
   - `--template` / `NIDO_TPL`: base template for spawn.
@@ -25,7 +27,7 @@ Workflows (single source of truth)
 - Default YAML `internal/validator/workflows/default.yaml` contains:
   - Template flow: spawn → template create → spawn from template (cache-hit expectation) → delete spawned VMs → delete template.
   - Image pool flow: pull a configured image, verify cache entry, spawn from image, delete VM, prune cache entry.
-- CLI executor runs these steps via CLI; MCP executor starts `nido mcp` and replays with the compact MCP surface (`nido_vm`, `nido_template`, `nido_image`, `nido_system`) plus resources for inspection.
+- CLI executor runs these steps via CLI; MCP executor starts `nido mcp` and replays with the compact MCP surface (`nido_vm`, `nido_template`, `nido_image`, `nido_blueprint`, `nido_system`) plus resources for inspection.
 - Cache-hit expectation uses backing state and tolerant timing; logs allow further inspection if needed.
 
 What it validates (high level)
@@ -40,5 +42,6 @@ What it validates (high level)
 - Cleanup: validator-owned VMs/templates and temp files removed unless `--keep-artifacts`.
 
 Notes and gaps
-- GUI/update remain opt-in; provide `NIDO_UPDATE_URL`/`NIDO_RELEASE_API` stubs for safe runs.
+- GUI/update remain opt-in. Keep updater tests pointed at injected fixtures; do
+  not enable real updates during a VM lifecycle qualification.
 - Forwarding dial and cloud-init checks depend on guest capabilities; enable only if image supports SSH and Python (for dummy server).

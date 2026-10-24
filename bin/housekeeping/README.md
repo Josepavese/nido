@@ -2,9 +2,9 @@
 
 Quick cleaners for build and temporary artifacts.
 
-- `clean-nido.sh` — wipes Go build outputs and release bundles (`dist/`, `nido`, `bin/nido`, `registry-builder`, `registry-validator`) and compacts git history.
-- `clean-all.sh` — runs `clean-nido.sh` and the GUI cleaner to reclaim space in one shot.
-- `dev.sh` — (Dev Only) Builds the current `cmd/nido` and replaces the active `nido` binary in your `$PATH`.
+- `clean-nido.sh` - wipes Go build outputs and release bundles (`dist/`, `nido`, `bin/nido`, `registry-builder`, `registry-validator`) and compacts git history.
+- `clean-all.sh` - runs `clean-nido.sh` and the GUI cleaner to reclaim space in one shot.
+- `dev.sh` - (Dev Only) Builds the current `cmd/nido` and replaces the active `nido` binary in your `$PATH`.
 
 Usage:
 
