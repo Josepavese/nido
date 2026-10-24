@@ -40,7 +40,7 @@ func TestDeviceAndAdapterBoundaries(t *testing.T) {
 				if value == "github.com/fsnotify/fsnotify" && !strings.HasPrefix(rel, "internal/pkg/sysutil/") {
 					t.Errorf("native watcher outside PAL: %s", rel)
 				}
-				if strings.HasPrefix(rel, "internal/events/") && strings.HasPrefix(value, "github.com/Josepavese/nido/v4/internal/") && value != "github.com/Josepavese/nido/v4/internal/pkg/sysutil" {
+				if strings.HasPrefix(rel, "internal/events/") && strings.HasPrefix(value, "github.com/Josepavese/nido/v4/internal/") && value != "github.com/Josepavese/nido/v4/internal/pkg/sysutil" && value != "github.com/Josepavese/nido/v4/internal/pkg/identifier" {
 					t.Errorf("event contract depends on domain adapter: %s", rel)
 				}
 				if value == "os/exec" && (strings.HasPrefix(rel, "cmd/nido/") || strings.HasPrefix(rel, "internal/mcp/") || strings.HasPrefix(rel, "internal/tui/") || strings.HasPrefix(rel, "internal/builder/") || strings.HasPrefix(rel, "internal/image/")) {

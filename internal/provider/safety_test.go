@@ -3,6 +3,7 @@ package provider
 import (
 	"errors"
 	"github.com/Josepavese/nido/v4/internal/hardware"
+	"github.com/Josepavese/nido/v4/internal/pkg/identifier"
 	"os"
 	"path/filepath"
 	"testing"
@@ -38,7 +39,7 @@ func TestIdentifierRejectsPathsBeforeEffects(t *testing.T) {
 		t.Fatalf("invalid operations changed root: %v %v", entries, err)
 	}
 	for _, valid := range []string{"fixture", "a.b-1_2", "ubuntu-24.04"} {
-		if err := validateIdentifier(valid); err != nil {
+		if err := identifier.Validate(valid); err != nil {
 			t.Fatal(err)
 		}
 	}

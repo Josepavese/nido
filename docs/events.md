@@ -181,3 +181,7 @@ local feedback and intentional selection, not a second refresh policy. Source
 reordering preserves draft values and input focus; a removed source disables
 submission without erasing the draft. Confirmation dialogs keep their target
 identity even if background data removes or reorders that object.
+
+VM resource parsing and portable storage identity validation have one owner
+(`events.ParseVMResource` and `pkg/identifier`), shared by providers, publishers,
+subscriptions and reads. Event transport does not introduce a second name grammar.

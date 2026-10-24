@@ -5,8 +5,10 @@ package events
 import (
 	"context"
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/pkg/identifier"
 	"net/url"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -67,6 +69,7 @@ const (
 	SystemUninstall   = "system.uninstall"
 	VersionResource   = "nido://system/version"
 	VMRemoved         = "vm.removed"
+	VMResourcePrefix  = "nido://vm/"
 )
 
 type Event struct {
@@ -91,7 +94,7 @@ type Source interface {
 	Watch(context.Context) <-chan Event
 }
 
-func VMResource(name string) string { return "nido://vm/" + url.PathEscape(name) }
+func VMResource(name string) string { return VMResourcePrefix + url.PathEscape(name) }
 func Resources(action, name string) []string {
 	switch action {
 	case VMCreate, VMStart, VMStop, VMDelete, VMConfigure, VMPortForward, VMPortUnforward, DiskCreate:
@@ -115,24 +118,25 @@ func Subscribable(uri string) bool {
 	if slices.Contains([]string{Fleet, Templates, Images, Blueprints, Cache, Config, Stream, VersionResource}, uri) {
 		return true
 	}
-	u, err := url.Parse(uri)
-	if err != nil || u.Scheme != "nido" || u.Host != "vm" || u.RawQuery != "" || u.Fragment != "" || len(u.EscapedPath()) < 2 {
-		return false
-	}
-	name, err := url.PathUnescape(u.EscapedPath()[1:])
-	return err == nil && ValidName(name)
+	_, err := ParseVMResource(uri)
+	return err == nil
 }
-func ValidName(name string) bool {
-	if name == "" || name == "." || name == ".." {
-		return false
+
+// ParseVMResource is shared by subscription validation and resource reads.
+func ParseVMResource(uri string) (string, error) {
+	if !strings.HasPrefix(uri, VMResourcePrefix) {
+		return "", fmt.Errorf("not a VM resource URI")
 	}
-	for _, c := range name {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == '.') {
-			return false
-		}
+	name, err := url.PathUnescape(strings.TrimPrefix(uri, VMResourcePrefix))
+	if err != nil {
+		return "", err
 	}
-	return true
+	if err := identifier.Validate(name); err != nil {
+		return "", err
+	}
+	return name, nil
 }
+
 func RuntimeKinds() []string {
 	return []string{VMRunning, VMStopped, VMPaused, VMResumed, VMReset, VMShutdown, VMPanic, VMIOError, VMWatchdog, VMSuspended, VMWakeup}
 }
@@ -157,7 +161,7 @@ func Begin(publish Publisher, action, name string) func(error) {
 }
 
 func Validate(e Event) error {
-	if e.VM != "" && !ValidName(e.VM) {
+	if e.VM != "" && identifier.Validate(e.VM) != nil {
 		return fmt.Errorf("invalid VM identity")
 	}
 	switch e.Source {

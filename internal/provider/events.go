@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"github.com/Josepavese/nido/v4/internal/pkg/identifier"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -207,7 +208,7 @@ func (p *QemuProvider) changedResources(change sysutil.FileChange, configPath st
 	case filepath.Join(p.RootDir, "run"):
 		if strings.HasSuffix(base, ".json") || strings.HasSuffix(base, ".pid") {
 			name := strings.TrimSuffix(base, filepath.Ext(base))
-			if events.ValidName(name) {
+			if identifier.Validate(name) == nil {
 				return events.Resources(events.VMConfigure, name)
 			}
 		}

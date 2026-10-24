@@ -943,8 +943,8 @@ func (s *Server) readResource(uri string) (interface{}, error) {
 	case "nido://system/mcp-registration":
 		return s.registrationPayload(), nil
 	default:
-		if strings.HasPrefix(uri, "nido://vm/") {
-			name, err := url.PathUnescape(strings.TrimPrefix(uri, "nido://vm/"))
+		if strings.HasPrefix(uri, events.VMResourcePrefix) {
+			name, err := events.ParseVMResource(uri)
 			if err != nil {
 				return nil, err
 			}

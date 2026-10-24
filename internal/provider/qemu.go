@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/pkg/identifier"
 	"net"
 	"os"
 	"path/filepath"
@@ -51,7 +52,7 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) (resultErr error) {
 	cfg := p.configSnapshot()
 	finish := p.operation(events.VMCreate, name)
 	defer func() { finish(resultErr) }()
-	if err := validateIdentifier(name); err != nil {
+	if err := identifier.Validate(name); err != nil {
 		return err
 	}
 	// 0. Validate input
@@ -248,7 +249,7 @@ func (p *QemuProvider) Start(name string, opts VMOptions) (resultErr error) {
 	cfg := p.configSnapshot()
 	finish := p.operation(events.VMStart, name)
 	defer func() { finish(resultErr) }()
-	if err := validateIdentifier(name); err != nil {
+	if err := identifier.Validate(name); err != nil {
 		return err
 	}
 	// 0. Check if already running
@@ -555,7 +556,7 @@ func (p *QemuProvider) List() ([]VMStatus, error) {
 // Info dives deep into a VM's neural links, returning detailed state,
 // networking information, and disk health (including backing file integrity).
 func (p *QemuProvider) Info(name string) (VMDetail, error) {
-	if err := validateIdentifier(name); err != nil {
+	if err := identifier.Validate(name); err != nil {
 		return VMDetail{}, err
 	}
 	state, err := p.loadState(name)
@@ -658,7 +659,7 @@ func backingInfo(diskPath string) (string, bool) {
 func (p *QemuProvider) Stop(name string) (resultErr error) {
 	finish := p.operation(events.VMStop, name)
 	defer func() { finish(resultErr) }()
-	if err := validateIdentifier(name); err != nil {
+	if err := identifier.Validate(name); err != nil {
 		return err
 	}
 	runDir := filepath.Join(p.RootDir, "run")
@@ -705,7 +706,7 @@ func (p *QemuProvider) Stop(name string) (resultErr error) {
 func (p *QemuProvider) Delete(name string) (resultErr error) {
 	finish := p.operation(events.VMDelete, name)
 	defer func() { finish(resultErr) }()
-	if err := validateIdentifier(name); err != nil {
+	if err := identifier.Validate(name); err != nil {
 		return err
 	}
 	if err := p.Stop(name); err != nil {
@@ -728,10 +729,10 @@ func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (resul
 	cfg := p.configSnapshot()
 	finish := p.operation(events.TemplateCreate, "")
 	defer func() { finish(resultErr) }()
-	if err := validateIdentifier(vmName); err != nil {
+	if err := identifier.Validate(vmName); err != nil {
 		return "", err
 	}
-	if err := validateIdentifier(templateName); err != nil {
+	if err := identifier.Validate(templateName); err != nil {
 		return "", err
 	}
 	// 1. Ensure VM is stopped
@@ -767,7 +768,7 @@ func (p *QemuProvider) DeleteTemplate(name string, force bool) (resultErr error)
 	cfg := p.configSnapshot()
 	finish := p.operation(events.TemplateDelete, "")
 	defer func() { finish(resultErr) }()
-	if err := validateIdentifier(name); err != nil {
+	if err := identifier.Validate(name); err != nil {
 		return err
 	}
 	templatePath := filepath.Join(cfg.BackupDir, name+".compact.qcow2")
@@ -805,7 +806,7 @@ func (p *QemuProvider) CreateDisk(name, size, tpl string) (resultErr error) {
 	cfg := p.configSnapshot()
 	finish := p.operation(events.DiskCreate, name)
 	defer func() { finish(resultErr) }()
-	if err := validateIdentifier(name); err != nil {
+	if err := identifier.Validate(name); err != nil {
 		return err
 	}
 	vmsDir := filepath.Join(p.RootDir, "vms")
@@ -964,7 +965,7 @@ func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int,
 func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) (resultErr error) {
 	finish := p.operation(events.VMConfigure, name)
 	defer func() { finish(resultErr) }()
-	if err := validateIdentifier(name); err != nil {
+	if err := identifier.Validate(name); err != nil {
 		return err
 	}
 	// 1. Load existing state
@@ -1030,7 +1031,7 @@ func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) (resul
 }
 
 func (p *QemuProvider) loadState(name string) (VMState, error) {
-	if err := validateIdentifier(name); err != nil {
+	if err := identifier.Validate(name); err != nil {
 		return VMState{}, err
 	}
 	var state VMState
@@ -1394,11 +1395,11 @@ func (p *QemuProvider) CacheRemove(name, version string) (resultErr error) {
 	cfg := p.configSnapshot()
 	finish := p.operation(events.CacheRemove, "")
 	defer func() { finish(resultErr) }()
-	if err := validateIdentifier(name); err != nil {
+	if err := identifier.Validate(name); err != nil {
 		return err
 	}
 	if version != "" {
-		if err := validateIdentifier(version); err != nil {
+		if err := identifier.Validate(version); err != nil {
 			return err
 		}
 	}
@@ -1444,7 +1445,7 @@ func (p *QemuProvider) CacheRemove(name, version string) (resultErr error) {
 func (p *QemuProvider) PortForward(name string, pf PortForward) (result PortForward, resultErr error) {
 	finish := p.operation(events.VMPortForward, name)
 	defer func() { finish(resultErr) }()
-	if err := validateIdentifier(name); err != nil {
+	if err := identifier.Validate(name); err != nil {
 		return pf, err
 	}
 	state, err := p.loadState(name)
@@ -1483,7 +1484,7 @@ func (p *QemuProvider) PortForward(name string, pf PortForward) (result PortForw
 func (p *QemuProvider) PortUnforward(name string, guestPort int, protocol string) (resultErr error) {
 	finish := p.operation(events.VMPortUnforward, name)
 	defer func() { finish(resultErr) }()
-	if err := validateIdentifier(name); err != nil {
+	if err := identifier.Validate(name); err != nil {
 		return err
 	}
 	if err := validatePort(guestPort, false, "guest port"); err != nil {

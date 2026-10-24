@@ -16,20 +16,6 @@ import (
 
 const vmStopTimeout = 5 * time.Second
 
-// Identifiers are single path components on every supported host, including
-// Windows when validation runs on Unix. No caller may substitute a path.
-func validateIdentifier(name string) error {
-	if name == "" || name == "." || name == ".." {
-		return fmt.Errorf("invalid identifier %q", name)
-	}
-	for _, c := range name {
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.') {
-			return fmt.Errorf("invalid identifier %q: use letters, digits, dots, hyphens or underscores", name)
-		}
-	}
-	return nil
-}
-
 // Like lifecycle/config mutations, reload is confined to the provider owner
 // thread. Existing consumers share the canonical config pointer.
 func (p *QemuProvider) ReloadConfig(path string) error {
