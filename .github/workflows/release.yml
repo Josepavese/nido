@@ -486,6 +486,16 @@ jobs:
       - name: Sync package version with the release tag
         run: npm version "${VERSION#v}" --no-git-tag-version --allow-same-version
 
+      - name: Check the MCP Registry identity
+        run: |
+          expected=$(jq -r '.name' ../server.json)
+          actual=$(jq -r '.mcpName // empty' package.json)
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::npm/package.json mcpName ('$actual') must match server.json name ('$expected'); the MCP Registry rejects npm packages without it."
+            exit 1
+          fi
+          echo "✓ mcpName matches $expected"
+
       - name: Publish (OIDC, no long-lived token)
         run: npm publish --access public
 

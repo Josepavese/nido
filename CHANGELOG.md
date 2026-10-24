@@ -5,10 +5,11 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.8.3] - 2026-10-24 "Nest Repair"
 
 ### Fixed
 
+- The npm package declares `mcpName: io.github.Josepavese/nido`: the MCP Registry requires it before it will register a server whose `server.json` advertises an npm package. v4.8.2 could not be registered because npm versions are immutable.
 - MCP Registry publication waits (bounded, 15 minutes) for the npm version to appear before registering it, because npm now processes new releases asynchronously with publish-time scanning; the publish call also retries a few times. This removes the "version was not found (status: 404)" race seen on v4.8.2.
 
 ## [4.8.2] - 2026-10-24 "Wide Nest"
