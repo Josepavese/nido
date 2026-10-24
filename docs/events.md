@@ -121,11 +121,18 @@ Examples:
   behind page modals, rejects stale fleet results before they reach any page,
   timestamps local connection failures, and notifies opted-in stream health subscribers once on
   observation loss. Targeted race/vet tests and the extended two-PTY draft proof pass.
-- The [PR](https://github.com/Josepavese/nido/pull/322) owns the latest automated
-  candidate status. The [wiki](https://github.com/Josepavese/nido/wiki) now links
-  this development preview (wiki commit `e31af42142a903f5397411a8c48ee35fd966c691`).
-- Next consumer after validation: review PR #322, then the ordinary release
-  workflow. Existing user VMs/data were not used as fixtures.
+- [PR #322](https://github.com/Josepavese/nido/pull/322) was merged after all
+  five jobs in [CI run 40114994707](https://github.com/Josepavese/nido/actions/runs/40114994707)
+  passed on the current base, including native Linux/macOS/Windows tests, the
+  isolated guest smoke and all release archive builds.
+- Release: [v4.8.7](https://github.com/Josepavese/nido/releases/tag/v4.8.7).
+  Upgrade through `nido update`, then reopen existing TUI/MCP sessions to load
+  the new executable. Existing VM processes and data do not need restarting or
+  migration. QMP monitor coverage begins at the VM's next ordinary start;
+  filesystem/process observation is available immediately.
+- Installation qualification uses the published Linux archive and the isolated
+  two-PTY/MCP harness, with before/after inventories of existing host resources.
+  Existing user VMs/data are never used as fixtures.
 - The initial QEMU attempt missed `prelaunch`; the corrected runtime mapping
   passed. PTY observer assertions were corrected against the actual MCP `vm`
   envelope, nullable empty fleet and rendered route text; these were harness

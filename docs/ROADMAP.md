@@ -18,16 +18,14 @@ capabilities from candidate work; it does not promise delivery dates.
   standalone updater.
 - Release archives, an MCP bundle, npm launcher and automated distribution
   channels. See [channel status](DISTRIBUTION.md) for what is actually live.
+- Shared local core events with an elected broker, native observers, live TUI
+  refresh and opt-in MCP resource subscription/mute, shipped in v4.8.7.
+  See [event qualification](events.md).
 
 Host support and qualification are different claims. Linux, macOS and Windows
 have native backends and cross-platform CI. Physical PCI qualification has a
 specific device scope; Windows host smoke testing does not prove every intensive
 workload. See [architecture](ARCHITECTURE.md) and [Windows](windows.md).
-
-## Implemented, awaiting release
-
-- Shared local core events with an elected broker, native observers, live TUI
-  refresh and opt-in MCP resource subscription/mute. See [event qualification](events.md).
 
 ## Candidate work
 
