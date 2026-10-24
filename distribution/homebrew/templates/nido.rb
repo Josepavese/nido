@@ -1,5 +1,5 @@
 class Nido < Formula
-  desc "MCP-native VM manager for AI agents: fast local QEMU/KVM VM sandboxes"
+  desc "Local VM manager for AI agents, with CLI, TUI and native MCP"
   homepage "https://github.com/Josepavese/nido"
   version "__VERSION__"
   license "MIT"

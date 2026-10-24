@@ -2,7 +2,7 @@
 pkgname=nido-bin
 pkgver=__PKGVER__
 pkgrel=1
-pkgdesc="Fast, local QEMU/KVM VM sandboxes for AI agents, with a native MCP server"
+pkgdesc="Local VM manager for AI agents, with CLI, TUI and native MCP"
 arch=('x86_64')
 url="https://github.com/Josepavese/nido"
 license=('MIT')

@@ -17,13 +17,13 @@ incremental.
 | Channel | Mechanism | Auth | Secret / setting | Notes |
 | --- | --- | --- | --- | --- |
 | **GitHub Releases** | tarballs, `nido.mcpb`, `server.json`, `SHA256SUMS`, installers | `GITHUB_TOKEN` | none | Asset names are a contract for every other channel. |
-| **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: `io.github.Josepavese/nido`, latest `4.8.3`; every tag adds an immutable version. Runs **after** npm and waits for the npm version to appear (publish-time scanning is asynchronous, so the registry validation otherwise races the publish). |
-| **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: `nido-mcp@4.8.3` (OIDC validated, `latest`); every tag publishes with provenance, no token stored (§2.4). |
+| **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: [`io.github.Josepavese/nido`](https://registry.modelcontextprotocol.io/); every tag adds an immutable version. Runs **after** npm and waits for the npm version to appear (publish-time scanning is asynchronous, so the registry validation otherwise races the publish). |
+| **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: [`nido-mcp`](https://www.npmjs.com/package/nido-mcp) with the `latest` dist-tag; every release publishes with provenance, no token stored (§2.4). |
 | **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | First manifest PR open: [microsoft/winget-pkgs#460549](https://github.com/microsoft/winget-pkgs/pull/460549) (needs the Microsoft CLA). Updates automate once merged + token exists. |
-| **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours, verified updating to `4.8.3` with the new description. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
+| **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours; the dated verification below records tested versions. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
 | **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | Not configured yet; x86_64 only, `-bin` package. |
 | **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | Not configured yet; stdio artifact, no hosting needed. |
-| **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours, verified updating to `4.8.3` with the new description. |
+| **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours; the dated verification below records tested versions. |
 | **Glama** | auto-index + `glama.json` claim | GitHub OAuth, one-time | none | `glama.json` is in the repo root. The claim is manual once. |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
 
@@ -96,15 +96,16 @@ GitHub MCP Registry syncs versions after a manual onboarding.
 
 ### 2.1 GitHub repository (already partly done)
 
-- Topics: `mcp`, `mcp-server`, `model-context-protocol`, `vm`, `vm-manager`,
-  `virtual-machine`, `virtualization`, `qemu`, `kvm`, `sandbox`, `agent-sandbox`,
-  `ai`, `ai-agents`, `agentic-workflows`, `llm`, `cli`, `tui`, `golang`, `linux`,
-  `local-development` — set (20 topics, the GitHub maximum).
-- `glama.json` at root — in repo; open the Glama server page and use **Claim**
+- About: local VM manager for AI agents, accessible through CLI, TUI and native MCP.
+- Topics cover the actual product: VM management, AI agents, MCP, QEMU,
+  virtualization, provisioning and development/testing. Keep the GitHub About
+  settings and channel metadata focused on these capabilities; avoid generic
+  buzzwords and unqualified performance or security claims.
+- `glama.json` at root - in repo; open the Glama server page and use **Claim**
   (GitHub OAuth) once.
-- `.mcp.json` at root — Open Plugins detection (Cursor Directory and friends).
+- `.mcp.json` at root - Open Plugins detection (Cursor Directory and friends).
 
-### 2.2 Homebrew tap — live, zero secrets
+### 2.2 Homebrew tap - live, zero secrets
 
 [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) exists
 with `Formula/nido.rb`, `templates/nido.rb` and
@@ -120,7 +121,7 @@ brew install Josepavese/nido/nido
 `homebrew-core` is **not** viable yet: its acceptance policy requires roughly
 90 forks / 90 watchers / 225 stars for an owner self-submission.
 
-### 2.3 Scoop bucket — live, zero secrets
+### 2.3 Scoop bucket - live, zero secrets
 
 [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) exists with
 `bucket/nido.json` and `.github/workflows/excavator.yml`; the topic
@@ -136,7 +137,7 @@ For immediate updates on release (instead of the 4-hour window), add a
 fine-grained PAT with `contents: write` on the bucket as `SCOOP_BUCKET_TOKEN`;
 the release job then pushes the manifest commit directly.
 
-### 2.4 npm — live and fully automatic since 2026-10-24
+### 2.4 npm - live and fully automatic since 2026-10-24
 
 `nido-mcp` is on npm (`latest`, public, maintained by `josepavese`). The `nido`
 name is taken by an unrelated 2015 package; `nido-mcp` belongs to this project.
@@ -197,7 +198,7 @@ AUR explicitly warns that malfunctioning automated updates can get accounts and
 packages removed; the job is `continue-on-error`, so a failure never blocks a
 release.
 
-### 2.7 Smithery — not configured yet
+### 2.7 Smithery - not configured yet
 
 Log in to Smithery with GitHub, claim the `josepavese` namespace, create an API
 key (Settings → API keys) and store it as `SMITHERY_API_KEY`. Do **not** use
@@ -271,7 +272,7 @@ install.sh                   install.ps1      SHA256SUMS
 `server.json` is generated per release with the real version, asset URL and
 `fileSha256` of `nido.mcpb` (the repository copy keeps `0.0.0-dev` placeholders).
 `description` in `server.json` must stay ≤ 100 characters and the MCPB artifact
-URL must contain `mcp` — both registry requirements.
+URL must contain `mcp` - both registry requirements.
 
 ---
 
