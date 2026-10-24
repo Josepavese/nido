@@ -1,9 +1,24 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Josepavese/nido",
-  "title": "Nido — Fast, Simple VM Sandboxes for AI Agents (Temporary & Persistent)",
-  "description": "Manage temporary or persistent Linux VMs (QEMU/KVM). Designed for AI agents and automation.",
+  "title": "Nido — MCP-native VM Manager for AI Agents (QEMU/KVM)",
+  "description": "Create, boot, control and destroy local QEMU/KVM VM sandboxes over MCP.",
   "version": "0.0.0-dev",
+  "websiteUrl": "https://github.com/Josepavese/nido",
+  "repository": {
+    "url": "https://github.com/Josepavese/nido",
+    "source": "github",
+    "id": "1127791293"
+  },
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/Josepavese/nido/main/resources/nido-icon.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "512x512"
+      ]
+    }
+  ],
   "packages": [
     {
       "registryType": "mcpb",
@@ -25,20 +40,21 @@
         }
       },
       "fileSha256": "SHA256_PLACEHOLDER"
-    }
-  ],
-  "tools": [
-    {
-      "name": "nido_vm"
     },
     {
-      "name": "nido_template"
-    },
-    {
-      "name": "nido_image"
-    },
-    {
-      "name": "nido_system"
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "nido-mcp",
+      "version": "0.0.0-dev",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
     }
   ]
 }

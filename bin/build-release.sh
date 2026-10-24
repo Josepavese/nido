@@ -145,7 +145,9 @@ URL="https://github.com/${REPO}/releases/download/${VERSION}/nido.mcpb"
 
 echo "  Injecting version ($STRICT_VERSION) and SHA into server.json..."
 jq --arg v "${STRICT_VERSION}" --arg s "$SHA" --arg u "$URL" \
-  '.version = $v | .packages[0].version = $v | .packages[0].fileSha256 = $s | .packages[0].identifier = $u' \
+  '.version = $v
+   | (.packages[] | select(.registryType == "mcpb")) |= (.version = $v | .fileSha256 = $s | .identifier = $u)
+   | (.packages[] | select(.registryType == "npm")) |= (.version = $v)' \
   server.json > "${OUTPUT_DIR}/server.json"
 echo "  Created dist/server.json"
 
