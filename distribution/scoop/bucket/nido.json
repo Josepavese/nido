@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/scoop-app-manifest.json",
   "version": "4.7.0",
-  "description": "Fast, local QEMU/KVM VM sandboxes for AI agents, with a native MCP server",
+  "description": "MCP-native VM manager for AI agents: fast local QEMU/KVM VM sandboxes",
   "homepage": "https://github.com/Josepavese/nido",
   "license": "MIT",
   "architecture": {
@@ -12,8 +12,14 @@
   },
   "extract_dir": "nido-windows-amd64",
   "bin": [
-    ["nido.exe", "nido"],
-    ["nido-validator.exe", "nido-validator"]
+    [
+      "nido.exe",
+      "nido"
+    ],
+    [
+      "nido-validator.exe",
+      "nido-validator"
+    ]
   ],
   "checkver": {
     "github": "https://github.com/Josepavese/nido"

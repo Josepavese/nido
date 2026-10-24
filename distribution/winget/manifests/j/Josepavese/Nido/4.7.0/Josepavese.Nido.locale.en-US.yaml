@@ -9,15 +9,20 @@ PackageName: Nido
 PackageUrl: https://github.com/Josepavese/nido
 License: MIT
 LicenseUrl: https://github.com/Josepavese/nido/blob/main/LICENSE
-ShortDescription: Fast, local QEMU/KVM VM sandboxes for AI agents, with a native MCP server
-Description: Nido spawns real QEMU/KVM virtual machines for autonomous AI agents. It ships linked clones, cloud images, templates, SSH/port forwarding and a native Model Context Protocol (MCP) server. QEMU must be installed separately (for example `winget install SoftwareFreedomConservancy.QEMU`).
+ShortDescription: MCP-native VM manager for AI agents: fast local QEMU/KVM VM sandboxes
+Description: Nido is an MCP-native VM manager for AI agents: it spawns real QEMU/KVM virtual machines for autonomous agents. It ships linked clones, cloud images, templates, SSH/port forwarding and a native Model Context Protocol (MCP) server. QEMU must be installed separately (for example `winget install SoftwareFreedomConservancy.QEMU`).
 Tags:
   - vm
+  - vm-manager
+  - virtual-machine
   - qemu
   - kvm
+  - sandbox
   - ai-agents
   - mcp
+  - mcp-server
   - model-context-protocol
+  - cli
   - sandbox
   - cli
 ReleaseNotesUrl: https://github.com/Josepavese/nido/releases/tag/v4.7.0

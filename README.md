@@ -4,10 +4,15 @@
 [![License](https://img.shields.io/github/license/Josepavese/nido?style=flat-square&color=00ffff)](LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/Josepavese/nido/v4.svg)](https://pkg.go.dev/github.com/Josepavese/nido/v4)
 [![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.Josepavese%2Fnido-blue?style=flat-square)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.Josepavese/nido)
+[![npm](https://img.shields.io/npm/v/nido-mcp?style=flat-square&color=cb3837&label=npm)](https://www.npmjs.com/package/nido-mcp)
 
 **Nido** is the retro-futuristic nest for your AI agents. It spawns **real Virtual Machines** in milliseconds, giving your autonomous code a safe place to hatch, grow, and execute.
 
 Containers are cages. Nido is a habitat. 🪺
+
+**Nido is an MCP-native VM manager.** The same lifecycle — create, boot,
+SSH, destroy — is exposed by the CLI *and* by the built-in stdio MCP server,
+so agents manage real, disposable Linux machines over MCP without glue.
 
 Built on QEMU and fueled by 80s nostalgia, Nido feels like a game console for DevOps. It provides a full, unconstrained OS for your agents to explore, break, and rebuild.
 
@@ -74,6 +79,13 @@ scoop bucket add nido https://github.com/Josepavese/scoop-nido
 scoop install nido
 ```
 
+### 📦 npm / npx
+
+```bash
+npm install -g nido-mcp   # launcher: downloads the verified binary on first run
+npx -y nido-mcp mcp       # run the MCP server without a global install
+```
+
 ### 🐹 Go Install (Developers)
 
 If you already live in a Go toolchain, skip the installers:
@@ -82,8 +94,9 @@ If you already live in a Go toolchain, skip the installers:
 go install github.com/Josepavese/nido/v4/cmd/nido@latest
 ```
 
-WinGet, AUR and npm channels are wired into the release workflow and activate
-once their credentials are configured; status and setup are tracked in
+WinGet and AUR channels are wired into the release workflow and activate once
+their credentials are configured; npm (`nido-mcp`) is published on every
+release. Status and setup are tracked in
 [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
 
 ### 🪄 Cheat Codes (Auto-Complete)
@@ -152,7 +165,7 @@ nido mcp --help  # Human-readable MCP guide
 nido mcp-help    # Machine-readable MCP guide for agents
 ```
 
-Nido is published on the [Official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.Josepavese/nido). For clients that only know how to launch `npx`, the `nido-mcp` launcher (enabled once the npm package is bootstrapped — see [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md)) downloads and checksum-verifies the release binary:
+Nido is published on the [Official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.Josepavese/nido). For clients that only know how to launch `npx`, the [`nido-mcp` package on npm](https://www.npmjs.com/package/nido-mcp) downloads and checksum-verifies the release binary lazily:
 
 ```bash
 npx -y nido-mcp mcp

@@ -18,7 +18,7 @@ incremental.
 | --- | --- | --- | --- | --- |
 | **GitHub Releases** | tarballs, `nido.mcpb`, `server.json`, `SHA256SUMS`, installers | `GITHUB_TOKEN` | none | Asset names are a contract for every other channel. |
 | **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: `io.github.Josepavese/nido` through `4.8.1`; every tag adds an immutable version. |
-| **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + one npm account | Not configured yet: needs the one-time npm bootstrap (§2.4). |
+| **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: `nido-mcp@4.8.1` published 2026-10-24 (staged → promoted). Every tag publishes once the OIDC switch is on (§2.4). |
 | **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | First manifest PR open: [microsoft/winget-pkgs#460549](https://github.com/microsoft/winget-pkgs/pull/460549) (needs the Microsoft CLA). Updates automate once merged + token exists. |
 | **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours, verified updating to `4.8.1`. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
 | **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | Not configured yet; x86_64 only, `-bin` package. |
@@ -50,14 +50,29 @@ GitHub MCP Registry syncs versions after a manual onboarding.
   [github-mcp-server#3572](https://github.com/github/github-mcp-server/issues/3572)
   (GitHub MCP Registry curation request).
 
+### 1.2 Verified on 2026-10-24 (npm channel + MCP metadata)
+
+- `nido-mcp@4.8.1` live on npm: first version created through staged publishing
+  and promoted on npmjs.com; installing the tarball and running `nido version`
+  inside it reports `v4.8.1` (the launcher downloads and SHA-256-verifies the
+  release binary).
+- Scheduled **Update Registry** fixed: Ubuntu numeric directories that answer 403
+  now fall back to the codename directory; the workflow is green and its catalog
+  PR auto-merged with `ubuntu: 26.10`.
+- Metadata positioning: GitHub repository description + 20 topics, and
+  `server.json` title/description/repository/icon plus an npm package entry, all
+  describe Nido as an MCP-native VM manager.
+
 ---
 
 ## 2. One-time setup checklist
 
 ### 2.1 GitHub repository (already partly done)
 
-- Topics: `mcp-server`, `mcp`, `model-context-protocol`, `qemu`, `virtual-machine`,
-  `ai-agents`, `golang` — set.
+- Topics: `mcp`, `mcp-server`, `model-context-protocol`, `vm`, `vm-manager`,
+  `virtual-machine`, `virtualization`, `qemu`, `kvm`, `sandbox`, `agent-sandbox`,
+  `ai`, `ai-agents`, `agentic-workflows`, `llm`, `cli`, `tui`, `golang`, `linux`,
+  `local-development` — set (20 topics, the GitHub maximum).
 - `glama.json` at root — in repo; open the Glama server page and use **Claim**
   (GitHub OAuth) once.
 - `.mcp.json` at root — Open Plugins detection (Cursor Directory and friends).
@@ -94,23 +109,25 @@ For immediate updates on release (instead of the 4-hour window), add a
 fine-grained PAT with `contents: write` on the bucket as `SCOOP_BUCKET_TOKEN`;
 the release job then pushes the manifest commit directly.
 
-### 2.4 npm (one account, one bootstrap, then OIDC) — not configured yet
+### 2.4 npm — live since 2026-10-24
 
-The release job is skipped green until the repository variable exists.
+`nido-mcp@4.8.1` is on npm (`latest`, public, maintained by `josepavese`). The
+`nido` name is taken by an unrelated 2015 package; `nido-mcp` belongs to this
+project. The first version was created with `npm stage publish` (no 2FA needed)
+and promoted on npmjs.com with security-key 2FA; a later `npm publish` uses
+OIDC, so no npm token is stored anywhere.
 
-1. Create an npm account (verify the username is available) and enable 2FA.
-2. Publish the first version of `nido-mcp` (the `nido` name is taken by an
-   unrelated 2015 package; `nido-mcp`, `nido-cli` and `@josepavese/nido` are free).
-   Either `npm publish` manually from `npm/`, or `npm stage publish` + 2FA
-   promotion.
-3. On npmjs.com → package → Settings → Trusted publishing add:
-   owner `Josepavese`, repository `nido`, workflow filename `release.yml`,
-   and enable **Allow npm publish** (new configurations are stage-only by default).
-4. Set the repository variable `NPM_TRUSTED_PUBLISHER=true`.
+Remaining one-time switch to fully automatic publishes (~2 minutes):
 
-Note: unvalidated trusted-publisher configurations expire after ~2 days, so
-complete one publish shortly after configuring. Trusted publishing requires the
-GitHub-hosted runner and `id-token: write` (already set in the workflow).
+1. On npmjs.com → `nido-mcp` → Settings → **Trusted Publisher** → GitHub
+   Actions: owner `Josepavese`, repository `nido`, workflow filename
+   `release.yml`, and enable **Allow npm publish** (new configurations default
+   to stage-only).
+2. Set the repository variable `NPM_TRUSTED_PUBLISHER=true`.
+
+From then on every `v*` tag publishes `nido-mcp` at the tag version with
+provenance. Unvalidated trusted-publisher configurations expire after ~2 days,
+so validate with the next release.
 
 **No token is stored anywhere:** trusted publishing uses GitHub OIDC, so the
 only npm-related setting in GitHub is the repository variable. GitHub Actions

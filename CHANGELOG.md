@@ -5,7 +5,13 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.8.2] - 2026-10-24 "Wide Nest"
+
+### Added
+
+- npm distribution channel: `nido-mcp` is live on npm and publishes automatically from the release workflow through OIDC trusted publishing, with no stored token.
+- MCP Registry metadata now advertises the npm package next to the MCPB bundle, with title, website, repository, icon and an MCP-native VM manager description.
+- Repository, Homebrew, Scoop and WinGet metadata now describe Nido as an MCP-native VM manager for AI agents.
 
 ### Fixed
 
