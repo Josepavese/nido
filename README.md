@@ -65,6 +65,19 @@ scoop bucket add nido https://github.com/Josepavese/scoop-nido
 scoop install nido
 ```
 
+**Container** (Docker/Podman, bundles QEMU; needs a KVM-capable host):
+
+```bash
+docker run -i --rm --device /dev/kvm \
+  --group-add "$(stat -c %g /dev/kvm)" \
+  -v nido-home:/home/nido/.nido \
+  ghcr.io/josepavese/nido mcp
+```
+
+Images are rebuilt on every release at `ghcr.io/josepavese/nido` (`:{version}`,
+`:{minor}`, `:latest`) and speak MCP on stdio; pass `--group-add` so the
+non-root user can open `/dev/kvm`.
+
 **WinGet**: `Josepavese.Nido` is awaiting Microsoft review. See
 [availability and commands](installers/README.md#winget-windows).
 

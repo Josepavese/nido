@@ -46,12 +46,30 @@ review it, then execute the saved file.
 | Homebrew, macOS / Linux | `brew install Josepavese/nido/nido` |
 | Scoop, Windows | Add `https://github.com/Josepavese/scoop-nido` as bucket `nido`, then `scoop install nido` |
 | WinGet, Windows | `Josepavese.Nido`; [check availability below](#winget-windows) while Microsoft reviews the initial package |
+| Container, Docker / Podman | `docker run -i --rm --device /dev/kvm --group-add "$(stat -c %g /dev/kvm)" -v nido-home:/home/nido/.nido ghcr.io/josepavese/nido mcp` |
 | Go toolchain | `go install github.com/Josepavese/nido/v4/cmd/nido@latest` |
 
 The npm launcher downloads the matching binary on first use and verifies it
 against release `SHA256SUMS`. Go install builds from source and does not install
 QEMU. Companion package channels can lag a new GitHub release; availability and
 credential-dependent channels are tracked in [distribution](../docs/DISTRIBUTION.md).
+
+### Container image
+
+`ghcr.io/josepavese/nido` is published from the release assets on every tag and
+bundles QEMU. It is the quickest way to hand a disposable VM manager to an agent
+that already runs in a container:
+
+```bash
+docker run -i --rm --device /dev/kvm \
+  --group-add "$(stat -c %g /dev/kvm)" \
+  -v nido-home:/home/nido/.nido \
+  ghcr.io/josepavese/nido mcp
+```
+
+Without `--device /dev/kvm` and the matching group id the container falls back
+to emulation or fails `nido doctor`; the image runs as the non-root `nido` user
+with `/home/nido/.nido` as its data volume.
 
 ### WinGet (Windows)
 
