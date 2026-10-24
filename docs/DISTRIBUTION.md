@@ -112,6 +112,12 @@ Note: unvalidated trusted-publisher configurations expire after ~2 days, so
 complete one publish shortly after configuring. Trusted publishing requires the
 GitHub-hosted runner and `id-token: write` (already set in the workflow).
 
+**No token is stored anywhere:** trusted publishing uses GitHub OIDC, so the
+only npm-related setting in GitHub is the repository variable. GitHub Actions
+secrets are scoped to a single repository (a personal account has no
+organization-wide secrets), which is why every credential-gated channel gets its
+own secret here.
+
 ### 2.5 WinGet
 
 1. The fork `Josepavese/winget-pkgs` exists and the first manifest PR is open:
