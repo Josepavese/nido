@@ -1,9 +1,9 @@
 # Distribution & visibility
 
 How Nido reaches users and AI-agent tooling, and what runs automatically on
-every release. Research verified on **2026-10-23**; the whole pipeline was then
-validated end-to-end on the `v4.8.1` tag (see §1.1). Account/token requirements
-are listed per channel.
+every release. Research verified on **2026-10-24**; the whole pipeline was then
+validated end-to-end on the `v4.8.1` tag (§1.1) and again on `v4.8.3` (§1.3).
+Account/token requirements are listed per channel.
 
 The release workflow (`.github/workflows/release.yml`) builds the assets, creates
 the GitHub Release, and then publishes to the channels below. A channel without
@@ -17,13 +17,13 @@ incremental.
 | Channel | Mechanism | Auth | Secret / setting | Notes |
 | --- | --- | --- | --- | --- |
 | **GitHub Releases** | tarballs, `nido.mcpb`, `server.json`, `SHA256SUMS`, installers | `GITHUB_TOKEN` | none | Asset names are a contract for every other channel. |
-| **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: `io.github.Josepavese/nido`; every tag adds an immutable version. Runs **after** npm and waits for the version to appear (npm publish-time scanning is asynchronous, so the registry validation otherwise races the publish). |
-| **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: `nido-mcp@4.8.2` (OIDC validated); every tag publishes with provenance, no token stored (§2.4). |
+| **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: `io.github.Josepavese/nido`, latest `4.8.3`; every tag adds an immutable version. Runs **after** npm and waits for the npm version to appear (publish-time scanning is asynchronous, so the registry validation otherwise races the publish). |
+| **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: `nido-mcp@4.8.3` (OIDC validated, `latest`); every tag publishes with provenance, no token stored (§2.4). |
 | **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | First manifest PR open: [microsoft/winget-pkgs#460549](https://github.com/microsoft/winget-pkgs/pull/460549) (needs the Microsoft CLA). Updates automate once merged + token exists. |
-| **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours, verified updating to `4.8.1`. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
+| **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours, verified updating to `4.8.3` with the new description. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
 | **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | Not configured yet; x86_64 only, `-bin` package. |
 | **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | Not configured yet; stdio artifact, no hosting needed. |
-| **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours, verified updating to `4.8.1`. |
+| **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours, verified updating to `4.8.3` with the new description. |
 | **Glama** | auto-index + `glama.json` claim | GitHub OAuth, one-time | none | `glama.json` is in the repo root. The claim is manual once. |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
 
@@ -69,6 +69,26 @@ GitHub MCP Registry syncs versions after a manual onboarding.
 - Metadata positioning: GitHub repository description + 20 topics, and
   `server.json` title/description/repository/icon plus an npm package entry, all
   describe Nido as an MCP-native VM manager.
+
+### 1.3 Verified on v4.8.3 (2026-10-24)
+
+- Release workflow green end-to-end: GitHub release with all 10 assets, npm,
+  MCP Registry and distribution gate; credential-gated channels skipped green.
+- `nido-mcp@4.8.3` was published **by the workflow through OIDC** with
+  provenance (no stored token), declares `mcpName:
+  io.github.Josepavese/nido`, is `latest` on npm, and
+  `npx -y nido-mcp@4.8.3 version` reports `Version v4.8.3`.
+- `io.github.Josepavese/nido` `4.8.3` is `isLatest` in the MCP Registry with the
+  new title, description, `websiteUrl`, repository and icon, plus both the
+  `mcpb` and `npm` packages.
+- Registry ordering fixed: the registry job now waits for the npm version to
+  appear (`3-attempt` publish retry) instead of racing npm's asynchronous
+  publish-time processing.
+- Homebrew tap and Scoop bucket re-rendered to `4.8.3` (tap hashes match
+  `SHA256SUMS`) with the new MCP-native description, via their own zero-secret
+  scheduled workflows.
+- `v4.8.2` stays live on GitHub Releases and npm but has no MCP Registry entry:
+  it predates `mcpName`, and npm versions are immutable (§2.4).
 
 ---
 
