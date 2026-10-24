@@ -160,6 +160,9 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 		name := args[0]
 
 		tpl := ""
+		// Only a template downloaded for this spawn is temporary: cached images
+		// and user-provided disk paths may back other VMs, so they stay.
+		tplTemporary := false
 		if len(args) > 1 {
 			tpl = args[1]
 		}
@@ -269,6 +272,7 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 					if !jsonOut {
 						ui.Success("Image prepared successfully.")
 					}
+					tplTemporary = true
 				}
 
 				tpl = imgPath
@@ -332,7 +336,7 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 		if customSshPassword != "" {
 			ui.Info("Initial SSH password: %s", customSshPassword)
 		}
-		if !app.Config.LinkedClones && imageTag != "" && tpl != "" {
+		if shouldRemoveSpawnTemplate(app.Config.LinkedClones, tpl, tplTemporary) {
 			if err := os.Remove(tpl); err != nil {
 				ui.Error("Failed to cleanup image cache: %v", err)
 			} else {
@@ -340,6 +344,14 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 			}
 		}
 	}
+}
+
+// shouldRemoveSpawnTemplate reports whether the template backing image should be
+// removed after a successful spawn. Only an image downloaded by this spawn is
+// temporary; a cached image or a user-provided disk path must be preserved,
+// because other VMs may reference it as their backing file (linked clones).
+func shouldRemoveSpawnTemplate(linkedClones bool, tpl string, downloaded bool) bool {
+	return !linkedClones && tpl != "" && downloaded
 }
 
 func applyBlueprintImageMetadata(app *appContext, imageTag string, sshUser, sshPassword *string, seedFiles *map[string]string) {
