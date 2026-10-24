@@ -1,46 +1,49 @@
-# 🎮 Contributing to Nido
+# Contribute to Nido
 
-**Insert Coin to Join the Party.** 🪙
+Help make the nest useful: report reproducible bugs, improve a guide, or bring a
+focused change with a clear user outcome.
 
-Nido is an open-source project built by nerds, for nerds (and their AI agents). We welcome all players, from Level 1 Novices to Level 99 Wizards.
+## Report a problem
 
-## 🕹️ How to Play
+Open a [GitHub issue](https://github.com/Josepavese/nido/issues) with the command or
+MCP action, expected/observed behavior, Nido version, host OS and QEMU version.
+Include relevant `nido doctor` output and reproduction steps. Remove secrets,
+private paths and customer data from logs before sharing them.
 
-### 1. Report a Bug (Glitch)
+## Make a change
 
-Found a glitch in the matrix?
+1. Fork or create a focused branch from current `main`.
+2. Read the existing owner of the behavior: the
+   [CLI manifest](internal/cli/commands.yaml), MCP catalog, provider contract or
+   relevant backend. See [architecture](docs/ARCHITECTURE.md).
+3. Update connected public surfaces and guides together. Keep CLI, TUI and MCP
+   semantics consistent; preserve data and explicit ownership boundaries.
+4. Run the checks appropriate to the change. [Testing](TESTING.md) describes
+   isolated CLI/MCP validation and the limits of hardware qualification.
+5. Open a PR describing the problem, resulting behavior and evidence. Required
+   CI must pass before merge. Keep unrelated work separate.
 
-* Open an **Issue**.
-* Describe how to reproduce it (the "Konami Code" to trigger the crash).
-* Attach logs (screenshots are bonus points).
+Use the Go toolchain line in [`.go-version`](.go-version). Build outside the
+checkout, using an existing shared module cache:
 
-### 2. Request a Feature (DLC)
+```bash
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT
+go build -o "$scratch/nido" ./cmd/nido
+go test ./...
+go vet ./...
+```
 
-Want new weapons or abilities?
+Check disk capacity before large builds or guest downloads. Preserve existing
+VMs, disks, templates, cache dependencies, pending recovery records and other
+contributors' work. Use private test storage; never run a destructive test against
+your normal VM home.
 
-* Open an **Issue** with the `enhancement` label.
-* Describe *why* you need it. "It would be cool" is a valid reason, but "It solves X" is better.
+## Writing and visuals
 
-### 3. Submit Code (Patch)
-
-Ready to hack the mainframe?
-
-1. **Fork** the repo.
-2. Create your branch (`git checkout -b feature/super-laser`).
-3. Write code. Run tests (`go test ./...`).
-4. Commit with style (see `docs/.tone_of_voice.md`).
-5. Open a **Pull Request**.
-
-## 🧬 Code Style
-
-* We use **Go**. Keep it strict, keep it fast.
-* Comments should be helpful and slightly distinct (see Tone of Voice).
-* No spaghetti code. We prefer ravioli (encapsulated).
-
-## 🎁 Rewards
-
-* Contributors get their name in the `AUTHORS` file (The High Score Table).
-* Eternal glory in the git history.
-
----
-*Press Start to Continue...*
+Lead with the supported behavior, then add a little arcade personality.
+Avoid timing promises without measurements, invented CLI output and claims
+that simulated tests qualify physical hardware. Prefer `-` for prose separators.
+The [tone guide](docs/.tone_of_voice.md) and [visual assets](resources/README.md)
+describe the current identity. Historical assets remain recoverable from Git;
+superseded operational instructions should not remain in the active guides.

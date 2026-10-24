@@ -1,300 +1,185 @@
-> **"Hatch your agents. Let them fly."** 🐣💾
+# Nido
 
-[![Release](https://img.shields.io/github/v/release/Josepavese/nido?style=flat-square&color=ff00ff)](https://github.com/Josepavese/nido/releases)
-[![License](https://img.shields.io/github/license/Josepavese/nido?style=flat-square&color=00ffff)](LICENSE)
-[![Go Reference](https://pkg.go.dev/badge/github.com/Josepavese/nido/v4.svg)](https://pkg.go.dev/github.com/Josepavese/nido/v4)
-[![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.Josepavese%2Fnido-blue?style=flat-square)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.Josepavese/nido)
-[![npm](https://img.shields.io/npm/v/nido-mcp?style=flat-square&color=cb3837&label=npm)](https://www.npmjs.com/package/nido-mcp)
+![Nido: a luminous egg in a retro workstation. Real VMs. Agent-ready.](resources/nido-hero.webp)
 
-**Nido** is the retro-futuristic nest for your AI agents. It spawns **real Virtual Machines** in milliseconds, giving your autonomous code a safe place to hatch, grow, and execute.
+**Real virtual machines for AI agents. One local engine, three ways to drive it: CLI, TUI and MCP.**
 
-Containers are cages. Nido is a habitat. 🪺
+[![Release](https://img.shields.io/github/v/release/Josepavese/nido?style=flat-square&color=08bdbd)](https://github.com/Josepavese/nido/releases/latest)
+[![CI](https://github.com/Josepavese/nido/actions/workflows/cross-platform.yml/badge.svg)](https://github.com/Josepavese/nido/actions/workflows/cross-platform.yml)
+[![npm](https://img.shields.io/npm/v/nido-mcp?style=flat-square&label=nido-mcp)](https://www.npmjs.com/package/nido-mcp)
+[![MCP Registry](https://img.shields.io/badge/MCP-Registry-7777cc?style=flat-square)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.Josepavese/nido)
+[![License: MIT](https://img.shields.io/badge/license-MIT-ea946a?style=flat-square)](LICENSE)
 
-**Nido is an MCP-native VM manager.** The same lifecycle — create, boot,
-SSH, destroy — is exposed by the CLI *and* by the built-in stdio MCP server,
-so agents manage real, disposable Linux machines over MCP without glue.
+Give an agent a machine it can provision, use and delete. Nido runs QEMU locally,
+clones cached images with copy-on-write disks, and exposes the same VM lifecycle
+to your terminal and your MCP client. Each VM has its own guest kernel.
 
-Built on QEMU and fueled by 80s nostalgia, Nido feels like a game console for DevOps. It provides a full, unconstrained OS for your agents to explore, break, and rebuild.
+**Hatch your agents. Let them fly.** Retro shell, practical machinery.
 
----
+[Get started](#press-start) · [Connect an agent](#connect-your-agent) · [Documentation](docs/README.md) · [Wiki](https://github.com/Josepavese/nido/wiki)
 
-## 🕹️ The Game Loop: Spawn -> Execute -> Destroy
+## Why Nido?
 
-![The Lifecycle](resources/nido_diagram_hatch.png)
+| You want to... | Nido gives you... |
+| --- | --- |
+| Test code away from your host | Disposable QEMU VMs with SSH access and cloud-init provisioning |
+| Let an agent manage its own environment | A built-in stdio MCP server with five tools and read-only resources |
+| Reuse an expensive setup | Templates and QCOW2 linked clones, with one shared base and a writable disk per VM |
+| Switch between automation and hands-on work | Structured CLI JSON, shell completion and an interactive terminal dashboard |
+| Choose the right starting point | An automatically refreshed cloud-image catalog, local templates and buildable blueprints |
 
-1. **INSERT COIN (Spawn)**: An agent needs a body. Nido "hatches" a VM from a cached genetic sequence (Image) instantly using **Linked Clones** technology.
-2. **PLAY (Execute)**: The VM is alive. The agent connects via SSH (Neural Link) and has full `root` access. No shared kernels. No rules.
-3. **GAME OVER (Destroy)**: The mission is complete. The VM is vaporized. The nest remains pristine for the next player.
+## Press start
 
----
+QEMU is required to run VMs. Nido supports Linux, macOS and Windows hosts;
+hardware acceleration depends on what the host actually exposes. Start with
+`nido doctor`. See [installation and host requirements](installers/README.md).
 
-## ⚡ Loading... (Installation)
+### Install
 
-> **SYSTEM REQUIREMENTS:** Linux, macOS, Android (Termux), or Windows (WSL2/PowerShell). QEMU is required to run VMs; the quick installers check for it and offer to install it where supported. On Windows, the installer can also register/install winget and enable Windows Hypervisor Platform for WHPX acceleration.
-
-> **WINDOWS STATUS:** Windows host support is now smoke-tested on a real Windows VM: online installer parsing, `nido doctor`, catalog/blueprint listing, and basic VM lifecycle passed. Treat it as usable for core workflows, but still young compared with Linux/macOS; it needs heavier long-running and workload-specific testing.
-
-### 💾 Quick Install (Web)
-
-Run this command in your terminal. Do not turn off the console while saving.
-
-**Linux & macOS:**
+**Linux / macOS**
 
 ```bash
-{ curl -fsSL https://github.com/Josepavese/nido/releases/latest/download/install.sh || curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.sh; } | bash
-# Restart your terminal or source your config to initialize the matrix
-source ~/.bashrc  # or ~/.zshrc, power up the path
-nido version         # Check checksum
+curl -fsSL https://github.com/Josepavese/nido/releases/latest/download/install.sh | bash
 ```
 
-**Windows (PowerShell):**
+**Windows PowerShell**
 
 ```powershell
-try { irm https://github.com/Josepavese/nido/releases/latest/download/install.ps1 | iex } catch { irm https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.ps1 | iex }
-# Restart your terminal to initialize the matrix
-nido version
+irm https://github.com/Josepavese/nido/releases/latest/download/install.ps1 | iex
 ```
 
-**ARM Linux SBCs:**
+Open a new terminal, then check `nido version` and `nido doctor`. The quick
+installers check prerequisites and offer QEMU setup where supported.
 
-Run this inside your favorite ARM-based Linux distro (Raspberry Pi, Pine64, etc). Android/Termux users should prefer the source installer when Android-specific packages are needed.
+Prefer a package manager?
 
 ```bash
-{ curl -fsSL https://github.com/Josepavese/nido/releases/latest/download/install.sh || curl -fsSL https://raw.githubusercontent.com/Josepavese/nido/main/installers/quick-install.sh; } | bash
-# Reload your config
-source ~/.bashrc
-nido version
+brew install Josepavese/nido/nido       # macOS / Linux
+npm install -g nido-mcp                # verified binary launcher
+go install github.com/Josepavese/nido/v4/cmd/nido@latest
 ```
-
-### 🍺 Homebrew (macOS & Linux)
-
-```bash
-brew install Josepavese/nido/nido
-```
-
-### 🥄 Scoop (Windows)
 
 ```powershell
 scoop bucket add nido https://github.com/Josepavese/scoop-nido
 scoop install nido
 ```
 
-### 📦 npm / npx
+[All install options](installers/README.md) · [Distribution channel status](docs/DISTRIBUTION.md)
+
+### Hatch your first VM
 
 ```bash
-npm install -g nido-mcp   # launcher: downloads the verified binary on first run
-npx -y nido-mcp mcp       # run the MCP server without a global install
+nido images update
+nido images info ubuntu:lts
+nido images pull ubuntu:lts
+nido spawn agent-lab --image ubuntu:lts --memory 2048 --cpus 2
+nido info agent-lab --json
+
+# Once the guest has finished booting and SSH is ready:
+nido ssh agent-lab
 ```
 
-### 🐹 Go Install (Developers)
+The first pull downloads the base image. Later VMs can reuse it. `ubuntu:lts`
+follows the catalog's supported LTS selection; use a numbered tag from
+`nido images list` when you need a specific OS release. Guest boot and cloud-init
+take additional time; creating the overlay is only one part of startup.
 
-If you already live in a Go toolchain, skip the installers:
+When you have saved the work you need, shut down inside the guest and remove
+**only your disposable VM**:
 
 ```bash
-go install github.com/Josepavese/nido/v4/cmd/nido@latest
+nido ssh agent-lab sudo poweroff
+# After shutdown, confirm its state:
+nido info agent-lab
+nido delete agent-lab
 ```
 
-WinGet and AUR channels are wired into the release workflow and activate once
-their credentials are configured; npm (`nido-mcp`) is published on every
-release. Status and setup are tracked in
-[`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
+`nido stop` terminates the managed QEMU process and waits for exit. Use guest
+poweroff for a clean OS shutdown. VM data persists until you delete it.
 
-### 🪄 Cheat Codes (Auto-Complete)
+[Provisioning, ports, templates and cleanup](docs/usage.md)
 
-Tab-completion is enabled by default. If it's missing, equip it manually:
+## Connect your agent
 
-```bash
-# Add to ~/.bashrc or ~/.zshrc
-source <(nido completion bash)  # or zsh / fish / powershell
+Nido's MCP server runs locally over **stdio**. No separate service is required.
+Use an installed binary:
+
+```json
+{
+  "mcpServers": {
+    "nido": {
+      "command": "nido",
+      "args": ["mcp"]
+    }
+  }
+}
 ```
 
----
+Use the absolute executable path if your client does not inherit your terminal's
+PATH. `nido register` prints a registration block; your client owns where it is
+saved. Clients that launch npm packages can instead use `command: "npx"` with
+`args: ["-y", "nido-mcp", "mcp"]`.
 
-## 🦄 Select Your Flavour
+| Tool | Responsibility |
+| --- | --- |
+| `nido_vm` | Create, inspect, configure, connect and remove VMs; manage forwarded ports |
+| `nido_image` | Browse and refresh the catalog; pull and manage cached images |
+| `nido_template` | Save and manage reusable disk templates |
+| `nido_blueprint` | Inspect and build image recipes |
+| `nido_system` | Diagnostics, configuration, accelerators and installation operations |
 
-![Select Flavour](resources/nido_flavours_select.png)
+Read-only resources include `nido://fleet/vms`, `nido://catalog/images` and
+`nido://system/config`. Use `nido mcp-help` for the machine-readable tool/action
+guide, or `nido mcp --help` in your terminal.
 
-Nido supports a wide roster of "fighters" (Cloud Images). Ubuntu, Debian, Alpine, Arch, choose your pixelated champion.
+An example task for your agent:
 
-### Windows Blueprints
+> Create a disposable Ubuntu LTS VM named `test-lab`, provision the dependencies,
+> run my tests and save their output. Delete only that VM when finished. Preserve
+> other VMs and shared images.
 
-Windows images are available as buildable blueprints because Microsoft distributes installer media rather than ready-to-run qcow2 cloud images. The current official-name entries are:
+MCP grants access to local VM and installation operations, including destructive
+ones. Connect clients you trust. [MCP guide](docs/mcp.md) · [Optional VM-testing skill](docs/agent-skills.md)
 
-- `windows-11-eval` - Windows 11 Enterprise Evaluation
-- `windows-11-iot-ltsc-eval` - Windows 11 IoT Enterprise LTSC 2024 Evaluation
-- `windows-server-2022-core-eval` - Windows Server 2022 Evaluation (Server Core)
+## One base. Separate machines.
 
-```bash
-nido blueprint list
-nido blueprint build windows-11-eval
-nido spawn my-win --image windows-11-eval --gui
-```
+![Nido workflow: CLI, TUI and MCP use one VM engine. A cached base feeds separate writable VM disks; save useful output before deleting a VM.](resources/nido-workflow.svg)
 
-The first boot may continue Windows OOBE/post-install work after the blueprint build reports ready. Use `--gui` for that first boot so the setup state is visible.
+With linked clones enabled, the cached base stays shared while each VM records
+its own disk changes. Space usage grows with those writes, logs and templates;
+it is not constant as you add VMs. Nido checks backing-image dependencies before
+cache removal. Keep bases in place while dependent VM disks exist.
 
-### 🎮 Real World Example (Combo Move)
+VMs provide a separate guest kernel, but host mounts, forwarded ports and PCI
+passthrough deliberately cross that boundary. Nido is not a complete security
+policy for arbitrary untrusted workloads. See [operations and isolation](docs/usage.md#isolation-and-storage).
 
-Let's hatch a **Ubuntu 24.04** bird named `agent-01`, attach a graphical interface (GUI), and log in immediately.
+## Pick your starting point
 
-```bash
-# 1. DOWNLOAD ROM (Pull Image)
-nido images pull ubuntu:24.04
+- **Cloud image**: pull from the catalog and provision through cloud-init.
+  Ubuntu, Debian, Alpine, Kali, CirrOS and openSUSE discovery follows the policies
+  in `registry/sources.yaml`. [Catalog and integrity](docs/images.md)
+- **Template**: save a prepared VM disk and reuse it for repeated tasks.
+  [Template workflow](docs/usage.md#reuse-a-prepared-environment)
+- **Blueprint**: build an image from a recipe and installer media, including
+  Windows evaluation editions. [Windows guide](docs/windows.md)
 
-# 2. START GAME (Spawn VM with GUI and custom resources)
-nido spawn agent-01 --image ubuntu:24.04 --gui --memory 4096 --cpus 4
+The scheduled catalog job discovers new supported upstream releases. Refresh
+your local copy with `nido images update`; it does not update an existing guest OS.
 
-# 3. LINK CABLE (SSH Connection)
-nido ssh agent-01
-```
+Prefer hands-on control? Run **`nido gui`** for the Fleet, Hatchery, Registry and
+System views. Use **`--gui` on spawn/start** when you want the VM's display;
+that flag and the terminal dashboard are separate features.
 
-*Result:* A fresh VM boots in <2 seconds. A VNC window opens. You are root.
+## Go further
 
----
+| Task | Guide |
+| --- | --- |
+| Provision a guest, forward ports, adjust resources, share files | [Everyday workflows](docs/usage.md) |
+| Write scripts against Nido | [CLI JSON contract](docs/CLI_JSON_SPEC.md) |
+| Install, upgrade or choose a package channel | [Installers](installers/README.md) · [Distribution](docs/DISTRIBUTION.md) |
+| Change the terminal palette | [Themes](docs/customization.md) |
+| Understand runtime and hardware boundaries | [Architecture](docs/ARCHITECTURE.md) |
+| Contribute or validate a change | [Contributing](CONTRIBUTING.md) · [Testing](TESTING.md) |
 
-## 🦾 Neural Interface (For AI Agents)
-
-Nido is designed to be driven by **Large Language Models** (Claude, GPT-4, Gemini).
-
-### 🤖 Model Context Protocol (MCP)
-
-Nido speaks native MCP. The server now exposes a compact agent-facing surface: a few high-power tools (`nido_vm`, `nido_template`, `nido_image`, `nido_blueprint`, `nido_system`) plus read-only resources like `nido://fleet/vms`, `nido://catalog/blueprints`, and `nido://system/config`. This reduces tool-selection ambiguity, lowers token overhead, and makes agent planning simpler than a flood of one-action tools.
-
-```bash
-nido register  # Generates the config for your AI client
-nido mcp --help  # Human-readable MCP guide
-nido mcp-help    # Machine-readable MCP guide for agents
-```
-
-Nido is published on the [Official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.Josepavese/nido). For clients that only know how to launch `npx`, the [`nido-mcp` package on npm](https://www.npmjs.com/package/nido-mcp) downloads and checksum-verifies the release binary lazily:
-
-```bash
-npx -y nido-mcp mcp
-```
-
-### 🧩 Agent Skill
-
-Nido also ships an optional Codex-compatible skill for developers who want agents to use Nido as a standard VM test and isolation layer.
-
-```bash
-mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
-cp -R extras/skills/nido-vm-testing "${CODEX_HOME:-$HOME/.codex}/skills/"
-```
-
-The skill teaches agents how to spawn disposable VMs, provision prerequisites with `--user-data`, upload software under test, parse dynamic ports, run tests, remove the VM, and speed repeated runs with templates. See `docs/agent-skills.md`.
-
-### 🧠 JSON Mode
-
-Every command supports `--json`. Perfect for scripts and robot eyes.
-
-```bash
-nido ls --json
-# Output: {"vms": [{"name": "agent-01", "state": "running", "ip": "10.0.2.15"}]}
-```
-
----
-
-## 🕹️ Control Deck (Command List)
-
-Here is the full move list for the Nido console.
-
-### 🐣 Life Cycle (The Game Loop)
-
-| Command                               | Action                  | Arcade Analog               |
-| :------------------------------------ | :---------------------- | :-------------------------- |
-| `nido spawn <name> [--image <tag>] [--accel <id>\|auto] ...` | Create and hatch a new VM (Defaults: min(2048MB, 50% Host RAM), 1 vCPU) | **INSERT COIN** |
-| `nido start <name> [--gui] [--cmdline <args>]`     | Revive a stopped VM     | **CONTINUE? 10..9..** |
-| `nido stop <name>`                  | ACPI Shutdown signal    | **PAUSE**             |
-| `nido delete <name>`                | Destroy VM permanently  | **GAME OVER**         |
-| `nido prune`                        | Delete ALL stopped VMs  | **CLEAR HIGH SCORES** |
-
-### 🔍 Observability (HUD)
-
-| Command              | Action                    | Arcade Analog           |
-| :------------------- | :------------------------ | :---------------------- |
-| `nido ls`          | List all VMs              | **PLAYER SELECT** |
-| `nido info <name>` | Show IP, Ports, PID       | **STATS SCREEN**  |
-| `nido gui`         | Interactive TUI Dashboard | **ARCADE MODE**   |
-| `nido doctor`      | Diagnose system health    | **TEST MENU**     |
-
-### 🔌 Connectivity (Link Cable)
-
-| Command             | Action      | Arcade Analog        |
-| :------------------ | :---------- | :------------------- |
-| `nido ssh <name>` | SSH into VM | **LINK CABLE** |
-
-### 🧬 Genetic Engineering (Images & Templates)
-
-| Command                              | Action                    | Arcade Analog              |
-| :----------------------------------- | :------------------------ | :------------------------- |
-| `nido images list`                 | Browse cloud images       | **CHARACTER ROSTER** |
-| `nido images pull <tag>`           | Download image            | **LOAD ROM**         |
-| `nido cache ls`                    | View local cache          | **MEMORY CARD**      |
-| `nido cache prune`                 | Clear unused images       | **DELETE SAVE**      |
-| `nido template list`               | List custom templates     | **USER SKINS**       |
-| `nido template create <vm> <name>` | Save VM state as template | **SAVE STATE**       |
-| `nido template delete <name>`      | Delete template           | **ERASE**            |
-| `nido blueprint list`              | Browse image recipes      | **SCHEMATICS**       |
-| `nido blueprint info <name>`       | Inspect a build recipe    | **BLUEPRINT VIEWER** |
-| `nido blueprint build <name>`      | Build VM image from recipe| **CRAFTING**         |
-| `nido build <blueprint>`           | Compatibility alias       | **CRAFTING**         |
-
-### ⚙️ System (Options Menu)
-
-| Command            | Action                  | Arcade Analog               |
-| :----------------- | :---------------------- | :-------------------------- |
-| `nido config <vm> [--memory MB] [--cpu N] [--accel <id>] [--qemu-arg "-flag"] ...` | Modify existing VM resources | **PLAYER STATS** |
-| `nido config set <key> <val>`  | Update global Nido settings | **OPTIONS**           |
-| `nido register`  | Setup MCP integration   | **CONTROLLER CONFIG** |
-| `nido update`    | Self-update from GitHub | **OTA PATCH**         |
-| `nido uninstall` | Nuclear cleanup         | **SELF DESTRUCT**     |
-| `nido version`   | Show version info       | **CREDITS**           |
-| `nido help`      | Show usage guide        | **TUTORIAL**          |
-
-VM raw QEMU arguments are replaced as an ordered list, preserved when omitted,
-and applied on the next start. Use the explicit clear flag to remove them:
-
-```bash
-nido config agent-01 --qemu-arg=-fw_cfg --qemu-arg='name=opt/example,string=hello world' --json
-nido config agent-01 --cpus 2 --json       # preserves raw arguments
-nido config agent-01 --clear-qemu-args --json
-```
-
-`--clear-qemu-args` and `--qemu-arg` cannot be combined. An empty argument
-(`--qemu-arg=`) is a literal empty argument, not a request to clear the list.
-These commands persist configuration; they do not hot-plug devices or restart a VM.
-
----
-
-## 🧬 Killer Feature: Linked Clones
-
-Why download 2GB every time? Nido downloads the generic "Common ROM" (Base Image) **once**.
-
-Every VM you spawn is just a **diff layer** (mutation) on top of that ROM.
-
-- **Base Image:** Read-Only. Safe.
-- **VM Disk:** Read-Write. Ephemeral.
-
-**Result:** Spawn 100 VMs, use disk space for 1. 🚀
-
----
-
-## 🤝 Contributing
-
-**Insert Coin to Join.**
-
-1. Fork the repo.
-2. `go run ./cmd/nido gui` to test the Arcade UI.
-3. Run `go run ./cmd/nido-validator` to insure your code withstands the pressure.
-4. Submit a PR.
-5. High Scores are recorded in `AUTHORS`.
-
-## 📜 License
-
-[MIT License](LICENSE). Free as in "Free Play".
-
----
-
-<p align="center">
-  <i>Made with 💜 and ☕ by digital artisans.</i><br>
-  <i>EST. 2025 • "The Grid. A digital frontier."</i>
-</p>
+[Documentation index](docs/README.md) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/Josepavese/nido/issues) · [MIT license](LICENSE)

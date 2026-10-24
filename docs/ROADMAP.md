@@ -1,98 +1,43 @@
-# Nido Roadmap 🪺
+# Nido roadmap
 
-Nido is **AI-centric and automation-first**: a focused execution surface for agentic workflows. It is *not* a generic VM manager. This roadmap keeps us aligned, intentional, and fast.
+Nido focuses on local, agent-driven VM environments. This page separates shipped
+capabilities from candidate work; it does not promise delivery dates.
 
-## North Star
+## Available today
 
-- **Agent-ready by default**: zero-friction automation through MCP + CLI parity.
-- **Reproducible environments**: fast, deterministic VM spawning from templates and images.
-- **Local-first, cloud-friendly**: works on developer machines and CI without heavyweight stacks.
-- **Small and sharp**: minimal moving parts, maximum leverage.
+- QEMU VM lifecycle through CLI, TUI and a built-in stdio MCP server.
+- SSH connection support, loopback port forwarding and optional guest display.
+- Persistent VM resource configuration, raw QEMU argument replacement/clearing
+  and supported host PCI passthrough behind HAL safety and ownership checks.
+- Cloud-init seed generation and custom user-data.
+- Cached cloud images, disk templates, QCOW2 linked clones and dependency-aware
+  cache protection.
+- Automated discovery of supported upstream cloud releases, checksum validation
+  and buildable image blueprints, including Windows evaluation guests.
+- Structured CLI JSON, generated help/completion, diagnostics and a verified
+  standalone updater.
+- Release archives, an MCP bundle, npm launcher and automated distribution
+  channels. See [channel status](DISTRIBUTION.md) for what is actually live.
 
-## Current State (Now)
+Host support and qualification are different claims. Linux, macOS and Windows
+have native backends and cross-platform CI. Physical PCI qualification has a
+specific device scope; Windows host smoke testing does not prove every intensive
+workload. See [architecture](ARCHITECTURE.md) and [Windows](windows.md).
 
-### Core VM Engine
+## Candidate work
 
-- Cross-platform QEMU lifecycle: spawn/start/stop/delete/list/info/prune.
-- Compressed templates (`.compact.qcow2`) and fast cloning.
-- SSH access + VNC toggle for GUI sessions.
-- Linked Clones (QCOW2 backing files) for instant spawning and space savings. 🧬
-- Smart Cache Protection against accidental base image deletion. 🛡️
-- Built-in diagnostics (`nido doctor`).
+These directions need design and acceptance criteria before implementation:
 
-### Agentic Interface (MCP)
+| Direction | Gap to resolve |
+| --- | --- |
+| First-boot feedback | Make guest readiness and provisioning failures easier to observe |
+| Remote agent transport | Authentication, permissions and lifecycle for an HTTP/SSE service; current MCP is stdio only |
+| Stronger long-run qualification | Repeated lifecycle loops, GUI sessions and workload-specific host testing |
+| Flavour publishing experience | Keep recipes, large-asset distribution and reproducible builds easy to maintain |
+| Snapshot / restore workflows | A defined state and data model beyond current disk templates |
+| Fleet integrations | Concrete batch/CI consumers without adding a parallel VM engine |
 
-- MCP server with full VM lifecycle coverage.
-- Image tools: list/pull/update and cache inspection/pruning.
-- Template tools + config lookup.
-- AI-friendly defaults and consistent responses.
-
-### Image Registry
-
-- Catalog-based image system with cache + checksum verification.
-- Registry sources already structured (`registry/sources.yaml`).
-- Registry builder logic implemented (strategy-based fetching).
-- Buildable blueprints are integrated into CLI, TUI, MCP, cache visibility, and installer docs.
-- Windows evaluation blueprints are available for Windows 11 Enterprise Evaluation, Windows 11 IoT Enterprise LTSC 2024 Evaluation, and Windows Server 2022 Evaluation (Server Core).
-- Windows host support has passed smoke testing for install parsing, diagnostics, catalog/blueprint discovery, and basic VM lifecycle; it still needs heavier long-running validation.
-
-### Flavours
-
-- Community-friendly flavours concept (compressed, split distribution).
-- Early support for desktop flavours via images and VNC.
-
-## Next Up
-
-### 1) Image Registry: Finish the Loop ✅
-
-- CLI parity for image management: `image info`, `image remove`, cache commands (`ls`, `info`, `prune`).
-- Registry automation: ship `registry-builder` CLI + GitHub Action updates.
-- Expand catalog coverage (Tier 1 official + Tier 2 conversion).
-
-### 2) Cloud-Init & First Boot UX
-
-- Standardize cloud-init behavior for image-based spawn.
-- Make user-data injection first-class in CLI + MCP.
-- Tighten docs + defaults so agents can log in without guessing.
-
-### 3) Flavours Pipeline
-
-- Define minimal “agent-ready” flavours (headless GUI, lightweight desktop).
-- cloud-init bootstrap for zero-touch GUI sessions.
-- Add flavour entries to registry with split distribution support.
-
-### 4) MCP Polish
-
-- HTTP/SSE transport for remote agents.
-- Tool annotations for safety and confirmations.
-- Better structured outputs (typed JSON over raw text).
-
-## Later
-
-### Automation & Orchestration
-
-- REST API + webhooks.
-- CI/CD integrations (GitHub Actions, GitLab).
-- Fleet operations (batch spawn/stop/prune).
-
-### VM Superpowers
-
-- Snapshots (create/restore/list).
-- Advanced networking (custom NAT, port rules).
-- Template marketplace and sharing flow.
-
-### DX & Reliability
-
-- Interactive TUI (Fleet View + Hatchery). ✅
-- Self-healing + auto-recovery.
-- Hardening and long-run stability testing.
-
-## How to Use This Roadmap
-
-- This is the **single source of truth** for planned work.
-- `.improvements/` is the nest’s sketchbook: keep ideas there, but graduate only what makes the cut.
-- If a task isn’t here, it’s not on the flight plan (yet).
-
----
-
-If you want to move a feature forward, open a PR that adds it here first. Let’s keep the flock in formation. 🐦
+Open a focused [issue](https://github.com/Josepavese/nido/issues) with the intended
+user outcome and proof of success. Keep shipped behavior in the guides and
+release history in the [changelog](../CHANGELOG.md), rather than leaving completed
+features in a future-work list.
