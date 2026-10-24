@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-10-24T08:55:38.253993274Z",
+  "updated_at": "2026-10-24T17:23:45.988244583Z",
   "images": [
     {
       "name": "ubuntu",
@@ -102,19 +102,19 @@
       "homepage": "https://www.kali.org/",
       "versions": [
         {
-          "version": "2026.2",
+          "version": "2026.3",
           "aliases": [
             "latest"
           ],
           "arch": "amd64",
-          "url": "https://kali.download/cloud-images/kali-2026.2/kali-linux-2026.2-cloud-genericcloud-amd64.tar.xz",
+          "url": "https://kali.download/cloud-images/kali-2026.3/kali-linux-2026.3-cloud-genericcloud-amd64.tar.xz",
           "checksum_type": "sha256",
-          "checksum": "3f4ca86ae1eca0dc2bf2092f065a959508e186c6b44f85758813a8e9a0604f3e",
-          "size_bytes": 234114644,
-          "size": "223.3 MB",
+          "checksum": "087a9c43b6082b0a6aae666debe26c9edf6e3960a90952fc94720e755d628e58",
+          "size_bytes": 252325828,
+          "size": "240.6 MB",
           "format": "raw",
-          "checksum_url": "https://kali.download/cloud-images/kali-2026.2/SHA256SUMS",
-          "checksum_regex": "kali-linux-2026.2-cloud-genericcloud-amd64.tar.xz"
+          "checksum_url": "https://kali.download/cloud-images/kali-2026.3/SHA256SUMS",
+          "checksum_regex": "kali-linux-2026.3-cloud-genericcloud-amd64.tar.xz"
         }
       ]
     },
