@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [4.8.7] - 2026-10-24 "Live Nest"
+
+### Added
+
 - Add a shared local core event stream with portable broker election, native
   filesystem/process observers, isolated QMP monitoring and `nido events`.
 - Keep multiple TUI sessions synchronized, including hidden pages and modals.
