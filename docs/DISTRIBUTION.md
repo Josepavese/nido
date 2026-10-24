@@ -19,7 +19,7 @@ incremental.
 | **GitHub Releases** | tarballs, `nido.mcpb`, `server.json`, `SHA256SUMS`, installers | `GITHUB_TOKEN` | none | Asset names are a contract for every other channel. |
 | **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: [`io.github.Josepavese/nido`](https://registry.modelcontextprotocol.io/); every tag adds an immutable version. Runs **after** npm and waits for the npm version to appear (publish-time scanning is asynchronous, so the registry validation otherwise races the publish). |
 | **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: [`nido-mcp`](https://www.npmjs.com/package/nido-mcp) with the `latest` dist-tag; every release publishes with provenance, no token stored (§2.4). |
-| **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | First manifest PR open: [microsoft/winget-pkgs#460549](https://github.com/microsoft/winget-pkgs/pull/460549) (needs the Microsoft CLA). Updates automate once merged + token exists. |
+| **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | Manifest PR open for `Josepavese.Nido` 4.8.6: [microsoft/winget-pkgs#460549](https://github.com/microsoft/winget-pkgs/pull/460549) (only the Microsoft CLA is missing). Updates automate once merged + token exists. |
 | **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours; the dated verification below records tested versions. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
 | **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | Not configured yet; x86_64 only, `-bin` package. |
 | **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | Not configured yet; stdio artifact, no hosting needed. |
@@ -169,17 +169,18 @@ own secret here.
 
 ### 2.5 WinGet
 
-1. The fork `Josepavese/winget-pkgs` exists and the first manifest PR is open:
+1. The fork `Josepavese/winget-pkgs` exists and the manifest PR is open:
    [microsoft/winget-pkgs#460549](https://github.com/microsoft/winget-pkgs/pull/460549)
-   (`Josepavese.Nido` 4.8.1, validated against the 1.10.0 schemas). Sign the
-   Microsoft CLA through the bot comment to unblock CI; merge times for a new
-   portable package can be days.
+   (`Josepavese.Nido` 4.8.6, validated against the 1.10.0 schemas). **Sign the
+   Microsoft CLA once:** reply with `@microsoft-github-policy-service agree` on
+   the PR; then the `license/cla` check turns green. Merge times for a new
+   portable package can be days (community moderators review them).
 2. Create a **classic** PAT with `public_repo` (fine-grained tokens are not
    supported by the tooling) and store it as `WINGET_TOKEN`.
 
 After the first version is merged, `winget upgrade Josepavese.Nido` follows every
 release automatically. The in-repo template lives under
-`distribution/winget/manifests/j/Josepavese/Nido/`.
+`distribution/winget/manifests/j/Josepavese/Nido/4.8.6/`.
 
 ### 2.6 AUR
 
