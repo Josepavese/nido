@@ -19,6 +19,7 @@ incremental.
 | --- | --- | --- | --- | --- |
 | **GitHub Releases** | tarballs, `nido.mcpb`, `server.json`, `SHA256SUMS`, installers | `GITHUB_TOKEN` | none | Asset names are a contract for every other channel. |
 | **Container image** (GHCR) | `distribution/docker/Dockerfile` built from the release binaries and pushed to `ghcr.io/josepavese/nido` | `GITHUB_TOKEN` (`packages: write`) | none | Every tag publishes `:{version}`, `:{minor}` and `:latest`, bundling QEMU; meant for `/dev/kvm` hosts and MCP stdio use. First publish needs the package made public (`gh api` step in the job). |
+| **APT / DNF repositories** (GitHub Pages) | `bin/publish-packages.sh` builds `.deb`/`.rpm` with nfpm, signs and indexes them; `publish-packages` pushes `gh-pages` | `GITHUB_TOKEN` (`contents: write`) | `PACKAGES_GPG_KEY` (stored in repo secrets) | Live: <https://josepavese.github.io/nido/> — signed APT `Release`/`InRelease`, signed RPM packages and DNF `repomd.xml`; keyring at `/nido-archive-keyring.asc`; both architectures per format. |
 | **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: [`io.github.Josepavese/nido`](https://registry.modelcontextprotocol.io/); every tag adds an immutable version. Runs **after** npm and waits for the npm version to appear (publish-time scanning is asynchronous, so the registry validation otherwise races the publish). |
 | **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: [`nido-mcp`](https://www.npmjs.com/package/nido-mcp) with the `latest` dist-tag; every release publishes with provenance, no token stored (§2.4). |
 | **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | `Josepavese.Nido` 4.8.6 is submitted and **fully validated** ([microsoft/winget-pkgs#460843](https://github.com/microsoft/winget-pkgs/pull/460843): 10/10 checks green, CLA signed, token configured); only community-moderator merge remains. Updates automate once merged. |
@@ -103,6 +104,24 @@ the host passes `/dev/kvm` and the matching group (`--group-add "$(stat -c %g
 /dev/kvm)"`); without them the image falls back to TCG and reports the
 acceleration check as failed. The publish job is part of the release workflow,
 so the image appears on the next tag and `:latest` follows.
+
+### 1.5 Verified on 2026-10-24 (APT/DNF repositories)
+
+The `gh-pages` branch serves APT and DNF repositories built from the `v4.8.7`
+release binaries with nfpm (`nido_4.8.7_amd64.deb`, `nido_4.8.7_arm64.deb`,
+`nido-4.8.7-1.x86_64.rpm`, `nido-4.8.7-1.aarch64.rpm`). Both were installed
+end-to-end from the **live Pages URLs** in throwaway containers:
+`apt-get install nido` on `debian:bookworm-slim` and `dnf install nido` on
+`fedora:latest`, each then reporting `nido version v4.8.7`; the APT `Release`
+file indexes `amd64` and `arm64`, and `createrepo_c` produced the DNF
+`repodata`/`nido.repo`. The same build was replayed locally before publishing.
+
+On 2026-10-25 the repositories were **signed** with the Nido package archive key
+`DBB87CB63A94ABA50B33C7B919C6A95C9D280B64` (expires 2029-10-24): GPG verified
+`Release.gpg`, `InRelease`, the RPM package signatures and `repomd.xml.asc`,
+and signed installs were exercised in clean containers (APT via `signed-by`,
+DNF with `gpgcheck=1` + `repo_gpgcheck=1`, key fetched from the published
+keyring and imported automatically).
 
 ---
 
@@ -281,6 +300,30 @@ publish also needs the package to be made public: the job runs
 <https://github.com/Josepavese?tab=packages> after the first tag and flip the
 visibility by hand if the API call was skipped.
 
+### 2.10 APT / DNF repositories (GitHub Pages)
+
+Pages serves the `gh-pages` branch at <https://josepavese.github.io/nido/> and
+the `publish-packages` job rebuilds the repositories on every tag with the
+workflow token (`contents: write`). It rewrites `gh-pages` as a single commit so
+the package history does not grow the repository, keeps the last
+`KEEP_VERSIONS` (default 5) releases in the pools, and tolerates "already
+enabled" when ensuring Pages.
+
+Signing uses the **`PACKAGES_GPG_KEY`** repository secret (ASCII-armored private
+key, no passphrase, 4096-bit RSA, expires 2029-10-24). The public half is
+committed at `distribution/packages/nido-archive-keyring.asc` and served as
+`/nido-archive-keyring.asc`; clients trust it through `signed-by=` (APT) or the
+`gpgkey=` line in `nido.repo` (DNF). The workflow signs the APT
+`Release`/`InRelease`, every RPM package (`rpmsign`) and the DNF
+`repomd.xml.asc`. **Rotation:** generate a new key, publish it under a new
+keyring file name (e.g. `nido-archive-keyring-2029.asc`), update `signed-by=`/
+`gpgkey=` and the `PACKAGES_GPG_KEY` secret together, and keep the old keyring
+published for one release cycle so existing clients can upgrade.
+
+Without the secret the script falls back to unsigned repositories
+(`trusted=yes` / `gpgcheck=0`), which keeps local builds and forks working; see
+[installers](../installers/README.md#apt-debian--ubuntu).
+
 ---
 
 ## 3. Intentionally not automated
@@ -292,7 +335,6 @@ visibility by hand if the API call was skipped.
 | Chocolatey | every version is human-moderated until the package becomes "trusted"; not worth it early. |
 | Snap Store | `classic` confinement needs an uncertain human review; packaging QEMU inside the snap is heavy. |
 | Nixpkgs | one PR + weeks of review; automatic bumps only after merge. A flake in-repo (`nix run github:Josepavese/nido`) is a cheaper alternative. |
-| APT/RPM repositories on GitHub Pages | viable and zero-account (nfpm + `gh-pages`), but Pages is disabled and it needs an indexing/signing pass. Planned follow-up. |
 | Docker MCP Catalog | the catalog runs servers without host `/dev/kvm`, which a VM manager needs; the GHCR image is for self-hosting instead. |
 | Anthropic Claude directory | paid Claude plan; MCPB desktop extensions are no longer accepted (plugin bundles only). |
 | OpenAI plugin directory | local/desktop path is limited to allowlisted partners. |
