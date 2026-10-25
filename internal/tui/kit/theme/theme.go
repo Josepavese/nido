@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
 
 	"github.com/charmbracelet/lipgloss"
 )

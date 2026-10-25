@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Josepavese/nido/v4/internal/config"
-	"github.com/Josepavese/nido/v4/internal/hardware"
+	"github.com/Josepavese/nido/v5/internal/config"
+	"github.com/Josepavese/nido/v5/internal/hardware"
 )
 
 // TestBuildQemuArgs_CrossPlatform tests QEMU argument generation for all platforms

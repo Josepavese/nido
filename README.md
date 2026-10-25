@@ -61,7 +61,7 @@ Prefer a package manager? npm works on Linux, macOS and Windows:
 ```bash
 npm install -g nido-mcp                # Linux / macOS / Windows launcher
 brew install Josepavese/nido/nido       # macOS / Linux
-go install github.com/Josepavese/nido/v4/cmd/nido@latest
+go install github.com/Josepavese/nido/v5/cmd/nido@latest
 ```
 
 ```powershell

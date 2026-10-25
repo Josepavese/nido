@@ -2,13 +2,13 @@ package config
 
 import (
 	"bufio"
-	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v5/internal/events"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
 )
 
 const (

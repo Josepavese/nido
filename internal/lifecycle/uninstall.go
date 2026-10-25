@@ -2,12 +2,12 @@ package lifecycle
 
 import (
 	"fmt"
-	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v5/internal/events"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
 )
 
 // Uninstall performs the destructive removal of Nido's data and binary.

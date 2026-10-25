@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Josepavese/nido/v4/internal/events"
-	"github.com/Josepavese/nido/v4/internal/machine"
+	"github.com/Josepavese/nido/v5/internal/events"
+	"github.com/Josepavese/nido/v5/internal/machine"
 	"io"
 	"net/url"
 	"os"
@@ -14,13 +14,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/build"
-	"github.com/Josepavese/nido/v4/internal/builder"
-	"github.com/Josepavese/nido/v4/internal/config"
-	"github.com/Josepavese/nido/v4/internal/image"
-	"github.com/Josepavese/nido/v4/internal/lifecycle"
-	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
-	"github.com/Josepavese/nido/v4/internal/provider"
+	"github.com/Josepavese/nido/v5/internal/build"
+	"github.com/Josepavese/nido/v5/internal/builder"
+	"github.com/Josepavese/nido/v5/internal/config"
+	"github.com/Josepavese/nido/v5/internal/image"
+	"github.com/Josepavese/nido/v5/internal/lifecycle"
+	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v5/internal/provider"
 )
 
 // JSONRPCRequest represents a standard JSON-RPC 2.0 request.

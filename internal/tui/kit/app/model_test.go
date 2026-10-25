@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
-	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
+	"github.com/Josepavese/nido/v5/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/v5/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"strings"

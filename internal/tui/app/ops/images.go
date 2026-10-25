@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/builder"
-	"github.com/Josepavese/nido/v4/internal/image"
-	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
-	"github.com/Josepavese/nido/v4/internal/provider"
-	view "github.com/Josepavese/nido/v4/internal/tui/kit/view"
+	"github.com/Josepavese/nido/v5/internal/builder"
+	"github.com/Josepavese/nido/v5/internal/image"
+	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v5/internal/provider"
+	view "github.com/Josepavese/nido/v5/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

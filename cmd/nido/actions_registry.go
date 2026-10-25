@@ -1,7 +1,7 @@
 package main
 
 import (
-	climeta "github.com/Josepavese/nido/v4/internal/cli"
+	climeta "github.com/Josepavese/nido/v5/internal/cli"
 	"github.com/spf13/cobra"
 )
 

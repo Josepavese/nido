@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v5/internal/events"
 	"net/http"
 	"os"
 	"path/filepath"
 
-	"github.com/Josepavese/nido/v4/internal/build"
-	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v5/internal/build"
+	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
 )
 
 type UpdateRequest struct {

@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/Josepavese/nido/v4/internal/machine"
+	"github.com/Josepavese/nido/v5/internal/machine"
 	"io"
 	"net/http"
 	"os"
@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/image"
-	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v5/internal/image"
+	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
 )
 
 type UpstreamFetcher struct {

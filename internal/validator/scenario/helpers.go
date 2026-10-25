@@ -6,8 +6,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/validator/report"
-	"github.com/Josepavese/nido/v4/internal/validator/runner"
+	"github.com/Josepavese/nido/v5/internal/validator/report"
+	"github.com/Josepavese/nido/v5/internal/validator/runner"
 )
 
 func runNido(ctx *Context, name string, args []string, timeout time.Duration) report.StepResult {

@@ -10,12 +10,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/validator/config"
-	"github.com/Josepavese/nido/v4/internal/validator/report"
-	"github.com/Josepavese/nido/v4/internal/validator/runner"
-	"github.com/Josepavese/nido/v4/internal/validator/scenario"
-	"github.com/Josepavese/nido/v4/internal/validator/state"
-	"github.com/Josepavese/nido/v4/internal/validator/util"
+	"github.com/Josepavese/nido/v5/internal/validator/config"
+	"github.com/Josepavese/nido/v5/internal/validator/report"
+	"github.com/Josepavese/nido/v5/internal/validator/runner"
+	"github.com/Josepavese/nido/v5/internal/validator/scenario"
+	"github.com/Josepavese/nido/v5/internal/validator/state"
+	"github.com/Josepavese/nido/v5/internal/validator/util"
 )
 
 func main() {

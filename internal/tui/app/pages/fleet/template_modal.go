@@ -3,8 +3,8 @@ package fleet
 import (
 	"fmt"
 
-	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
-	widget "github.com/Josepavese/nido/v4/internal/tui/kit/widget"
+	"github.com/Josepavese/nido/v5/internal/tui/app/ops"
+	widget "github.com/Josepavese/nido/v5/internal/tui/kit/widget"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

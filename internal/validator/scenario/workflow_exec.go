@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/validator/mcpclient"
-	"github.com/Josepavese/nido/v4/internal/validator/report"
-	"github.com/Josepavese/nido/v4/internal/validator/workflows"
+	"github.com/Josepavese/nido/v5/internal/validator/mcpclient"
+	"github.com/Josepavese/nido/v5/internal/validator/report"
+	"github.com/Josepavese/nido/v5/internal/validator/workflows"
 )
 
 // WorkflowExec runs shared workflows via CLI and MCP.

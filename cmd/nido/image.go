@@ -2,17 +2,17 @@ package main
 
 import (
 	"fmt"
-	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v5/internal/events"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/builder"
-	clijson "github.com/Josepavese/nido/v4/internal/cli"
-	"github.com/Josepavese/nido/v4/internal/image"
-	"github.com/Josepavese/nido/v4/internal/provider"
-	"github.com/Josepavese/nido/v4/internal/ui"
+	"github.com/Josepavese/nido/v5/internal/builder"
+	clijson "github.com/Josepavese/nido/v5/internal/cli"
+	"github.com/Josepavese/nido/v5/internal/image"
+	"github.com/Josepavese/nido/v5/internal/provider"
+	"github.com/Josepavese/nido/v5/internal/ui"
 )
 
 // cmdImageList identifies all species currently documented in the catalog

@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
-	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
-	viewlet "github.com/Josepavese/nido/v4/internal/tui/kit/view"
-	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
+	"github.com/Josepavese/nido/v5/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/v5/internal/tui/kit/theme"
+	viewlet "github.com/Josepavese/nido/v5/internal/tui/kit/view"
+	"github.com/Josepavese/nido/v5/internal/tui/kit/widget"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )

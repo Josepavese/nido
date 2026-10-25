@@ -2,7 +2,7 @@ package provider
 
 import (
 	"context"
-	"github.com/Josepavese/nido/v4/internal/pkg/identifier"
+	"github.com/Josepavese/nido/v5/internal/pkg/identifier"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/config"
-	"github.com/Josepavese/nido/v4/internal/events"
-	"github.com/Josepavese/nido/v4/internal/hardware"
-	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v5/internal/config"
+	"github.com/Josepavese/nido/v5/internal/events"
+	"github.com/Josepavese/nido/v5/internal/hardware"
+	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
 )
 
 const observerWakeQueueSize = 1

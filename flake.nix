@@ -32,7 +32,7 @@
         ldflags = [
           "-s"
           "-w"
-          "-X github.com/Josepavese/nido/v4/internal/build.Version=v${version}"
+          "-X github.com/Josepavese/nido/v5/internal/build.Version=v${version}"
         ];
         nativeBuildInputs = [ pkgs.makeWrapper ];
         # QEMU is a runtime dependency, not a build one; wrapping keeps

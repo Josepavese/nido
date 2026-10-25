@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v5/internal/events"
 )
 
 func TestSubscriptionsAreOptInScopedFilteredMutedAndCoalesced(t *testing.T) {

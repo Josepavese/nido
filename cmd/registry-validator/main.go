@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/hardware"
-	"github.com/Josepavese/nido/v4/internal/image"
+	"github.com/Josepavese/nido/v5/internal/hardware"
+	"github.com/Josepavese/nido/v5/internal/image"
 )
 
 // Config

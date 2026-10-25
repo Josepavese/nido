@@ -2,13 +2,13 @@ package provider
 
 import (
 	"errors"
-	"github.com/Josepavese/nido/v4/internal/hardware"
-	"github.com/Josepavese/nido/v4/internal/pkg/identifier"
+	"github.com/Josepavese/nido/v5/internal/hardware"
+	"github.com/Josepavese/nido/v5/internal/pkg/identifier"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v5/internal/config"
 )
 
 func TestIdentifierRejectsPathsBeforeEffects(t *testing.T) {

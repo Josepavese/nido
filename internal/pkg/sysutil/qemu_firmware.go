@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Josepavese/nido/v4/internal/machine"
+	"github.com/Josepavese/nido/v5/internal/machine"
 )
 
 // QEMUFirmware pairs matching immutable code and an initial variables image.

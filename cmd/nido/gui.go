@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	app "github.com/Josepavese/nido/v4/internal/tui/app"
+	app "github.com/Josepavese/nido/v5/internal/tui/app"
 )
 
 // cmdGUI launches the new Bubble Tea GUI for Nido.

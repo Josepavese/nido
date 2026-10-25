@@ -5,7 +5,7 @@ package events
 import (
 	"context"
 	"fmt"
-	"github.com/Josepavese/nido/v4/internal/pkg/identifier"
+	"github.com/Josepavese/nido/v5/internal/pkg/identifier"
 	"net/url"
 	"slices"
 	"strings"

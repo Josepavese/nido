@@ -3,19 +3,19 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/Josepavese/nido/v4/internal/build"
-	clijson "github.com/Josepavese/nido/v4/internal/cli"
-	"github.com/Josepavese/nido/v4/internal/config"
-	"github.com/Josepavese/nido/v4/internal/lifecycle"
-	"github.com/Josepavese/nido/v4/internal/mcp"
-	"github.com/Josepavese/nido/v4/internal/provider"
-	"github.com/Josepavese/nido/v4/internal/ui"
+	"github.com/Josepavese/nido/v5/internal/build"
+	clijson "github.com/Josepavese/nido/v5/internal/cli"
+	"github.com/Josepavese/nido/v5/internal/config"
+	"github.com/Josepavese/nido/v5/internal/lifecycle"
+	"github.com/Josepavese/nido/v5/internal/mcp"
+	"github.com/Josepavese/nido/v5/internal/provider"
+	"github.com/Josepavese/nido/v5/internal/ui"
 	"github.com/spf13/cobra"
 )
 

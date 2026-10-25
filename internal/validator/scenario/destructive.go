@@ -3,7 +3,7 @@ package scenario
 import (
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/validator/report"
+	"github.com/Josepavese/nido/v5/internal/validator/report"
 )
 
 func runDeleteValidatorVM(ctx *Context, name string, timeout time.Duration) report.StepResult {

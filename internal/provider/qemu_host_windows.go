@@ -3,7 +3,7 @@ package provider
 import (
 	"bytes"
 	"fmt"
-	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
 	"os/exec"
 	"slices"
 	"time"

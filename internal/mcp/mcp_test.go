@@ -2,17 +2,17 @@ package mcp
 
 import (
 	"encoding/json"
-	"github.com/Josepavese/nido/v4/internal/events"
-	"github.com/Josepavese/nido/v4/internal/hardware"
+	"github.com/Josepavese/nido/v5/internal/events"
+	"github.com/Josepavese/nido/v5/internal/hardware"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	climeta "github.com/Josepavese/nido/v4/internal/cli"
-	"github.com/Josepavese/nido/v4/internal/config"
-	"github.com/Josepavese/nido/v4/internal/provider"
+	climeta "github.com/Josepavese/nido/v5/internal/cli"
+	"github.com/Josepavese/nido/v5/internal/config"
+	"github.com/Josepavese/nido/v5/internal/provider"
 )
 
 type mockProvider struct {

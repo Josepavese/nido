@@ -8,15 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/config"
-	"github.com/Josepavese/nido/v4/internal/events"
-	"github.com/Josepavese/nido/v4/internal/hardware"
-	"github.com/Josepavese/nido/v4/internal/provider"
-	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
-	"github.com/Josepavese/nido/v4/internal/tui/app/pages/fleet"
-	"github.com/Josepavese/nido/v4/internal/tui/app/pages/hatchery"
-	kit "github.com/Josepavese/nido/v4/internal/tui/kit/app"
-	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
+	"github.com/Josepavese/nido/v5/internal/config"
+	"github.com/Josepavese/nido/v5/internal/events"
+	"github.com/Josepavese/nido/v5/internal/hardware"
+	"github.com/Josepavese/nido/v5/internal/provider"
+	"github.com/Josepavese/nido/v5/internal/tui/app/ops"
+	"github.com/Josepavese/nido/v5/internal/tui/app/pages/fleet"
+	"github.com/Josepavese/nido/v5/internal/tui/app/pages/hatchery"
+	kit "github.com/Josepavese/nido/v5/internal/tui/kit/app"
+	"github.com/Josepavese/nido/v5/internal/tui/kit/widget"
 )
 
 func TestEventFlowContinuesBehindGlobalAndFleetModals(t *testing.T) {

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [5.0.0] - 2026-10-25 "Native Wings"
+
 ### Added
 
 - Support native AMD64/ARM64 guest selection and explicit CLI, MCP and TUI
@@ -17,7 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add an explicit, resumable `nido migrate` conversion for the previous AMD64-only
   state. Original metadata, disks and backing paths are preserved. Run migration
   before reopening existing VM inventories with the new binary.
+### Changed
 
+- Require explicit architecture metadata for stored VMs and imported disks.
+  Run `nido migrate` once after stopping old clients and VMs. The Go module
+  moves to `github.com/Josepavese/nido/v5` for this major release.
 
 ## [4.9.0] - 2026-10-25 "Room to Roost"
 
@@ -110,7 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Report the version embedded by the Go toolchain when built with `go install github.com/Josepavese/nido/v4/cmd/nido@vX.Y.Z`, instead of a stale compile-time constant; release builds still stamp the tag with `-ldflags`.
+- Report the version embedded by the Go toolchain when built with `go install github.com/Josepavese/nido/v5/cmd/nido@vX.Y.Z`, instead of a stale compile-time constant; release builds still stamp the tag with `-ldflags`.
 - Move the scheduled-automation verification out of the release job and make it non-blocking, so a transient upstream image-catalog failure cannot skip the distribution channels at release time.
 
 ## [4.8.0] - 2026-10-23 "Wider Nest"
@@ -124,12 +130,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Rename the Go module to `github.com/Josepavese/nido/v4` so `go install github.com/Josepavese/nido/v4/cmd/nido@latest` and pkg.go.dev resolve the v4 releases; internal import paths updated.
+- Rename the Go module to `github.com/Josepavese/nido/v5` so `go install github.com/Josepavese/nido/v5/cmd/nido@latest` and pkg.go.dev resolve the v4 releases; internal import paths updated.
 - Replace the retired Go Report Card badge with pkg.go.dev and MCP Registry badges.
 
 ### Upgrade notes
 
-- Go importers of the old module path must switch to `github.com/Josepavese/nido/v4` (the CLI and released binaries are unaffected).
+- Go importers of the old module path must switch to `github.com/Josepavese/nido/v5` (the CLI and released binaries are unaffected).
 - Release channels that need credentials stay disabled until their repository secret exists; see `docs/DISTRIBUTION.md`.
 
 ## [4.7.0] - 2026-10-21 "Owned Feathers"

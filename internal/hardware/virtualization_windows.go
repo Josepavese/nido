@@ -1,7 +1,7 @@
 package hardware
 
 import (
-	"github.com/Josepavese/nido/v4/internal/machine"
+	"github.com/Josepavese/nido/v5/internal/machine"
 	"golang.org/x/sys/windows"
 	"unsafe"
 )

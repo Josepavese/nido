@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/validator/report"
-	"github.com/Josepavese/nido/v4/internal/validator/runner"
+	"github.com/Josepavese/nido/v5/internal/validator/report"
+	"github.com/Josepavese/nido/v5/internal/validator/runner"
 )
 
 // VMMutableConfig covers the 'nido config' command and the MCP VM action surface.

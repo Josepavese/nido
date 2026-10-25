@@ -23,7 +23,7 @@ while IFS=$'\t' read -r target_os target_arch archive_ext; do
     pkg_dir="$STAGING_DIR/$name"
     mkdir -p "$pkg_dir"
     for command_name in nido nido-validator; do
-        GOOS="$target_os" GOARCH="$target_arch" go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$pkg_dir/$command_name$suffix" "./cmd/$command_name"
+        GOOS="$target_os" GOARCH="$target_arch" go build -ldflags "-X github.com/Josepavese/nido/v5/internal/build.Version=$VERSION" -o "$pkg_dir/$command_name$suffix" "./cmd/$command_name"
     done
     # Flat executable names remain unique in the MCP bundle.
     bundle_binary="$name$suffix"

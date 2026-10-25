@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/Josepavese/nido/v4/internal/image"
+	"github.com/Josepavese/nido/v5/internal/image"
 )
 
 // Build constructs a complete catalog before the command may replace the published file.

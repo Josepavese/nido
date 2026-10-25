@@ -1,7 +1,7 @@
 package ops
 
 import (
-	"github.com/Josepavese/nido/v4/internal/provider"
+	"github.com/Josepavese/nido/v5/internal/provider"
 	"github.com/charmbracelet/bubbles/list"
 )
 

@@ -3,15 +3,15 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/Josepavese/nido/v4/internal/events"
-	"github.com/Josepavese/nido/v4/internal/hardware"
+	"github.com/Josepavese/nido/v5/internal/events"
+	"github.com/Josepavese/nido/v5/internal/hardware"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/Josepavese/nido/v4/internal/config"
-	"github.com/Josepavese/nido/v4/internal/provider"
+	"github.com/Josepavese/nido/v5/internal/config"
+	"github.com/Josepavese/nido/v5/internal/provider"
 )
 
 func TestJSONCommandsProduceSingleJSONAndNoStderr(t *testing.T) {

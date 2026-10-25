@@ -3,7 +3,7 @@ package hatchery
 import (
 	"testing"
 
-	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
+	"github.com/Josepavese/nido/v5/internal/tui/app/ops"
 )
 
 func TestBackgroundRefreshPreservesDraftAndPinsTemplateConfirmation(t *testing.T) {

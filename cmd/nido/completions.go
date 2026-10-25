@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/Josepavese/nido/v4/internal/machine"
+	"github.com/Josepavese/nido/v5/internal/machine"
 	"strings"
 
-	"github.com/Josepavese/nido/v4/internal/builder"
-	climeta "github.com/Josepavese/nido/v4/internal/cli"
+	"github.com/Josepavese/nido/v5/internal/builder"
+	climeta "github.com/Josepavese/nido/v5/internal/cli"
 	"github.com/spf13/cobra"
 )
 

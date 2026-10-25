@@ -2,12 +2,12 @@ package provider
 
 import (
 	"fmt"
-	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v5/internal/events"
 	"strconv"
 	"strings"
 
-	"github.com/Josepavese/nido/v4/internal/config"
-	"github.com/Josepavese/nido/v4/internal/hardware"
+	"github.com/Josepavese/nido/v5/internal/config"
+	"github.com/Josepavese/nido/v5/internal/hardware"
 )
 
 // ParseInt is a helper to parse integers from strings, trimming whitespace.
