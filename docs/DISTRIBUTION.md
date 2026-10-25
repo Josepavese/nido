@@ -29,7 +29,7 @@ incremental.
 | **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours; the dated verification below records tested versions. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
 | **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | **Blocked upstream:** AUR closed new registrations after the June 2026 takeover wave and captchas are still flaky; the job is wired and activates as soon as the three secrets exist. x86_64 only, `-bin` package. |
 | **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours; the dated verification below records tested versions. |
-| **Glama** | auto-index + `glama.json` claim | GitHub OAuth, one-time | none | [Nido listing is live](https://glama.ai/mcp/servers/Josepavese/nido); descriptions/categories/README sync from the repo automatically, releases appear after the crawler re-syncs (claiming ownership unlocks a manual re-sync). `glama.json` names the maintainer. Nido is local-only, so Glama is used for **promotion/discovery only**, never to host or proxy the MCP server. |
+| **Glama** | directory indexing | GitHub OAuth, one-time | auto-release off | [Nido listing](https://glama.ai/mcp/servers/Josepavese/nido) provides discovery and local installation instructions. Hosted deployment is outside this channel's intended use; withdrawal of the previously published Glama release remains pending (§1.6). |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
 
 Indirectly covered with no work: **PulseMCP** and **MCP Central** ingest the
@@ -127,6 +127,35 @@ keyring and imported automatically).
 
 ---
 
+### 1.6 Glama directory and local MCP (2026-10-25)
+
+Glama is a discovery channel for Nido. Ownership through `glama.json` remains
+verified, and the listing description directs users to install Nido and QEMU
+on their own computer, then configure their MCP client to launch `nido mcp`
+over stdio. Alternatively, the client can launch `npx -y nido-mcp@latest mcp`.
+See the [installation guide](../installers/README.md) and the exact
+[client configuration](mcp.md#configure-a-client).
+
+**Auto-release is disabled**, verified after reloading the
+[Glama release settings](https://glama.ai/mcp/servers/Josepavese/nido/admin/releases).
+Keep it off when publishing future Nido releases. Repository indexing and
+ownership do not require maintaining a hosted runtime. `glama.json` declares
+maintainers; it has no hosting-disable setting.
+
+**Hosted withdrawal is pending:** Glama release 4.8.7, published during earlier
+container qualification, still appears in the release list. The inspected
+Releases, Dockerfile and Listing admin pages expose no withdrawal or hosting
+disable control. Glama support must confirm how to retire that release and
+disable hosted deployment while preserving the directory entry. Disabling
+auto-release alone does not withdraw an existing release. Glama's generated
+usage FAQ still suggests hosted deployment and also needs correction.
+
+No persistent hosted instance was deployed during qualification, and no local
+VM directories or credentials were supplied. A Glama-hosted process would
+manage its own environment and could not access the user's local VM inventory.
+Use the local stdio configuration to manage workstation VMs. The separate GHCR
+image remains available for user-managed hosts (§1.4).
+
 ## 2. One-time setup checklist
 
 ### 2.1 GitHub repository (already partly done)
@@ -136,8 +165,8 @@ keyring and imported automatically).
   virtualization, provisioning and development/testing. Keep the GitHub About
   settings and channel metadata focused on these capabilities; avoid generic
   buzzwords and unqualified performance or security claims.
-- `glama.json` at root - in repo; open the Glama server page and use **Claim**
-  (GitHub OAuth) once.
+- `glama.json` at root - in repo; Glama ownership is verified. Keep the listing
+  and local installation instructions current, with auto-release off (§1.6).
 - `.mcp.json` at root - Open Plugins detection (Cursor Directory and friends).
 
 ### 2.2 Homebrew tap - live, zero secrets
@@ -240,9 +269,8 @@ release.
 
 ### 2.7 Smithery - removed
 
-The `SMITHERY_API_KEY` channel was dropped: Smithery shut down its MCP proxy and
-managed identity on 2026-10-31, so the account and key no longer bought durable
-reach. The release job, the gate output and the secret entry are gone; no action
+The Smithery integration was retired from the supported distribution map.
+The release job and its credential gate are gone; no publication or setup action
 is required from maintainers. Nido remains discoverable through the Official
 MCP Registry and the directories listed in §2.8.
 
@@ -359,6 +387,7 @@ URL must contain `mcp` - both registry requirements.
 - npm trusted publishing: <https://docs.npmjs.com/trusted-publishers>; staged publishing: <https://github.blog/changelog/2026-10-02-npm-staged-publishing-now-supports-creating-new-packages/>
 - npm malware scanning / dual-use: <https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/>
 - Glama claim: <https://glama.ai/blog/2025-07-08-what-is-glamajson>
+- Glama metadata schema: <https://glama.ai/mcp/schemas/server.json>
 - awesome-mcp-servers agent fast-track: <https://github.com/punkpeye/awesome-mcp-servers/blob/main/CONTRIBUTING.md>
 - WinGet manifests / validation: <https://github.com/microsoft/winget-pkgs/blob/master/doc/manifest/schema/1.10.0/installer.md>, <https://github.com/microsoft/winget-pkgs/blob/master/doc/Validation.md>
 - winget-releaser: <https://github.com/vedantmgoyal9/winget-releaser>

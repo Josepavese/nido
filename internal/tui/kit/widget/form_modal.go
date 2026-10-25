@@ -3,8 +3,10 @@ package widget
 import (
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // ValidatorFunc returns an error if the input is invalid.
@@ -38,9 +40,10 @@ type FormModal struct {
 	buttons *Row      // The action buttons row
 
 	// State
-	active bool
-	width  int
-	err    error
+	active   bool
+	width    int
+	err      error
+	formRect layout.Rect
 }
 
 // NewFormModal creates a new form modal.
@@ -49,7 +52,7 @@ func NewFormModal(title string, onConfirm func(map[string]string) tea.Cmd, onCan
 		Title:     title,
 		OnConfirm: onConfirm,
 		OnCancel:  onCancel,
-		width:     74,
+		width:     layout.FormModalWidth,
 		inputs:    make(map[string]*Input),
 	}
 
@@ -197,11 +200,6 @@ func (m *FormModal) Update(msg tea.Msg) (*FormModal, tea.Cmd) {
 		switch msg.String() {
 		case "esc":
 			return m, m.cancel()
-		case "q":
-			// Quit app if not typing
-			if !m.form.HasActiveTextInput() {
-				return m, tea.Quit
-			}
 		}
 	}
 
@@ -221,36 +219,33 @@ func (m *FormModal) View(parentWidth, parentHeight int) string {
 	if !m.active {
 		return ""
 	}
-
 	t := theme.Current()
-
-	// 1. Content Rendering
-	var content []string
-
-	// Title
-	titleStyle := t.Styles.Title.Foreground(t.Palette.Accent)
-	content = append(content, titleStyle.Render(m.Title), "")
-
-	// Description
+	d := measureDialog(parentWidth, parentHeight, m.width, parentHeight)
+	naturalH := lipgloss.Height(m.form.View(d.inner.Width)) + layout.DialogHeadingHeight + layout.DialogBorder + layout.DialogPaddingY*2
 	if m.Description != "" {
-		content = append(content, t.Styles.TextDim.Render(m.Description), "")
+		naturalH += layout.DialogHeadingHeight
 	}
+	d = measureDialog(parentWidth, parentHeight, m.width, naturalH)
+	heading := t.Styles.Title.Render(m.Title)
+	if m.Description != "" && d.inner.Height >= 2*layout.DialogHeadingHeight+layout.TaskCardHeight+layout.ScrollHintHeight {
+		heading += "\n" + t.Styles.TextDim.Render(ansi.Truncate(m.Description, d.inner.Width, "…"))
+	}
+	heading = layout.Fit(d.inner.Width, lipgloss.Height(heading), heading)
+	formHeight := max(0, d.inner.Height-lipgloss.Height(heading))
+	m.formRect = layout.NewRect(d.inner.X, d.inner.Y+lipgloss.Height(heading), d.inner.Width, formHeight)
+	form := m.form.Viewport(d.inner.Width, formHeight)
+	return d.render(parentWidth, parentHeight, heading+"\n"+form, t.Palette.Accent)
+}
+func (m *FormModal) HandleMouse(x, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
+	if !m.active {
+		return nil, false
+	}
+	if m.formRect.Contains(x, y) {
+		return m.form.HandleMouse(x-m.formRect.X, y-m.formRect.Y, msg)
+	}
+	return nil, true
+}
 
-	// Form
-	// Constrain width inside modal
-	formWidth := m.width - 4 // Padding
-	content = append(content, m.form.View(formWidth))
-
-	// Frame
-	inner := lipgloss.JoinVertical(lipgloss.Center, content...)
-
-	dialogStyle := t.Styles.Border.
-		BorderForeground(t.Palette.Accent).
-		Padding(1, 2).
-		Width(m.width).
-		Align(lipgloss.Center)
-
-	dialog := dialogStyle.Render(inner)
-
-	return layout.PlaceOverlay(parentWidth, parentHeight, dialog)
+func (m *FormModal) Shortcuts() []view.Shortcut {
+	return []view.Shortcut{{Key: "tab", Label: "next"}, {Key: "esc", Label: "cancel"}, {Key: "enter", Label: "action"}}
 }

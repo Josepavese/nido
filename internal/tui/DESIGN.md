@@ -52,8 +52,8 @@ The entire UI is "Touch-First" compatible:
 
 The footer dynamically updates based on the active Viewlet:
 
-- **Global**: `Tab` (Next Page), `Ctrl+C` (Exit).
-- **Global**: `Tab` (Next Page), `Ctrl+C` (Exit).
+- **Global**: `Left/Right` (Next Page), `Ctrl+C` (Exit).
+- **Global**: `Left/Right` (Next Page), `Ctrl+C` (Exit).
 - **Fleet**: `↑/↓` (Nav), `Enter` (Power Toggle), `s` (SSH), `v` (VNC), `x` (Stop), `Del` (Destroy).
 - **Hatchery**: `Tab` (Next Field), `Space` (Select), `Enter` (Hatch).
 - **Registry**: `Tab` (Switch Remote/Local), `p` (Pull/Prune).
@@ -133,6 +133,31 @@ The footer dynamically updates based on the active Viewlet:
 2. **Revamp Hatchery**: Move to Wizard layout.
 3. **Build Registry**: Consolidate Images/Cache.
 4. **Build System**: Dashboard for miscellaneous ops.
+
+## Responsive behavior (current)
+
+The kit is the SSOT for graphics and interaction geometry. All application forms
+use its viewport and canonical width resolver. Wide terminals retain the cockpit
+layout and rounded tabs; short or narrow terminals use a compact route bar.
+When both panes cannot fit, Enter/Tab opens the detail and Esc returns to its
+list. In compact Fleet, Enter opens detail and Space toggles power.
+
+The supported interactive minimum is 40 columns by 10 rows. Smaller terminals
+show a playful resting state with the current and required size. Drafts, focus
+and selection survive resizing; hidden keys and mouse clicks cannot activate an
+action. Background events continue. Ctrl+C/Ctrl+Q always exit.
+
+Rows stack when their columns would become unusable. Form focus follows the
+visible field, including nested rows; PgUp/PgDn and the wheel reveal long content.
+Dialogs share a frame resolver, retain confirmation/cancellation controls and
+scroll long messages. Route clicks use the exact rendered tab rectangles.
+Left/Right changes routes unless a text input owns the caret; Ctrl+Left/Right
+provides explicit route navigation. Tab moves through form fields.
+
+Visual acceptance uses the actual PTY output, including overlays and resizing
+back to the original layout. Keep the bird/arcade character and readable theme
+contrast while composing reusable kit elements. See the kit README and the
+native resize journey in TESTING.md.
 
 ## Shared events (current behavior)
 

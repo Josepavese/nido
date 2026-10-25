@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // HStack joins items horizontally with the specified gap between them.
@@ -72,5 +73,25 @@ func Right(w int, content string) string {
 // PlaceOverlay centers content both vertically and horizontally within the given dimensions.
 // It is useful for modal dialogs and overlays.
 func PlaceOverlay(w, h int, content string) string {
-	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, content)
+	return Fit(w, h, lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, crop(w, h, content)))
+}
+
+// Fit is the final cell-safe boundary for a rendered rectangle, not a substitute
+// for responsive composition. Truncation preserves ANSI and Unicode graphemes.
+func crop(w, h int, content string) string {
+	if w <= 0 || h <= 0 {
+		return ""
+	}
+	lines := strings.Split(content, "\n")
+	lines = lines[:min(h, len(lines))]
+	for i := range lines {
+		lines[i] = ansi.Truncate(lines[i], w, "")
+	}
+	return strings.Join(lines, "\n")
+}
+func Fit(w, h int, content string) string {
+	if w <= 0 || h <= 0 {
+		return ""
+	}
+	return lipgloss.NewStyle().Width(w).Height(h).Render(crop(w, h, content))
 }

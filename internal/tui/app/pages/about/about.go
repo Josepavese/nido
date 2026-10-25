@@ -8,12 +8,18 @@ import (
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
 	view "github.com/Josepavese/nido/v4/internal/tui/kit/view"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 const (
-	blinkInterval = 800 * time.Millisecond
+	blinkInterval        = 800 * time.Millisecond
+	aboutMaxContentWidth = 80
+	rankColumnWidth      = 5
+	scoreColumnWidth     = 8
+	scoreTableMaxWidth   = 35
 )
 
 type tickMsg time.Time
@@ -22,6 +28,7 @@ type tickMsg time.Time
 type About struct {
 	view.BaseViewlet
 	blinkState bool
+	viewport   widget.ScrollView
 }
 
 func NewAbout() *About {
@@ -41,6 +48,18 @@ func (a *About) tick() tea.Cmd {
 }
 
 func (a *About) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
+	if k, ok := msg.(tea.KeyMsg); ok {
+		switch k.String() {
+		case "up":
+			a.viewport.Scroll(-1)
+		case "down":
+			a.viewport.Scroll(1)
+		case "pgup":
+			a.viewport.Scroll(-a.Height())
+		case "pgdown":
+			a.viewport.Scroll(a.Height())
+		}
+	}
 	switch msg.(type) {
 	case tickMsg:
 		a.blinkState = !a.blinkState
@@ -59,10 +78,8 @@ func (a *About) View() string {
 	}
 
 	// Dynamic Widths based on viewport
-	contentWidth := w - 4 // Padding for borders
-	if contentWidth > 80 {
-		contentWidth = 80
-	}
+	contentWidth := w - layout.DialogBorder - layout.DialogPaddingX*2 // Padding for borders
+	contentWidth = min(contentWidth, aboutMaxContentWidth)
 
 	// --- STYLES ---
 
@@ -76,7 +93,7 @@ func (a *About) View() string {
 		Border(lipgloss.DoubleBorder()).
 		BorderForeground(colorP1).
 		Padding(1, 2).
-		Width(contentWidth).
+		Width(contentWidth + layout.DialogPaddingX*2).
 		Align(lipgloss.Center)
 
 	// --- COMPACT STYLES ---
@@ -137,9 +154,9 @@ func (a *About) View() string {
 
 	// 2. MISSION BRIEFING (Description)
 	missionHeader := subtitleStyle.Render("/// MISSION BRIEFING ///")
-	missionText := textStyle.Render(`Nido is a professional, nerdy, and playful VM manager.
+	missionText := textStyle.Width(contentWidth).Render(`Nido is a professional, nerdy, and playful VM manager.
 While built AI-first, we've graciously included this TUI for our 
-human friends—who, due to biological limitations, still require 
+human friends - who, due to biological limitations, still require
 primitive visual interfaces and "typing" to feel in control.`)
 
 	mission := lipgloss.JoinVertical(lipgloss.Center,
@@ -165,7 +182,8 @@ primitive visual interfaces and "typing" to feel in control.`)
 		}
 		// Manually spacing for "Table" look without complex table widget overhead for 3 lines
 		// Rank: 5 chars, Name: 20 chars, Score: 10 chars
-		return s.Render(padRight(rank, 5) + padRight(name, 20) + padLeft(score, 10))
+		tableWidth := min(contentWidth, scoreTableMaxWidth)
+		return s.Render(padRight(rank, rankColumnWidth) + padRight(ansi.Truncate(name, max(0, tableWidth-rankColumnWidth-scoreColumnWidth), "…"), max(0, tableWidth-rankColumnWidth-scoreColumnWidth)) + padLeft(score, scoreColumnWidth))
 	}
 
 	scores := lipgloss.JoinVertical(lipgloss.Center,
@@ -181,7 +199,7 @@ primitive visual interfaces and "typing" to feel in control.`)
 	)
 
 	// 4. FOOTER (Version)
-	ver := t.Styles.TextMuted.Render("VER " + build.Version + " [EXP]")
+	ver := t.Styles.TextMuted.Render(ansi.Truncate("VER "+build.Version+" [EXP]", contentWidth, "…"))
 
 	// --- ASSEMBLY ---
 	// Join all parts vertically - COMPRESSED (Minimal vertical gaps)
@@ -194,7 +212,7 @@ primitive visual interfaces and "typing" to feel in control.`)
 
 	// Wrap in borders and place in center of screen
 	bo := borderStyle.Render(innerContent)
-	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, bo)
+	return a.viewport.Render(w, h, lipgloss.PlaceHorizontal(w, lipgloss.Center, bo), layout.Rect{})
 }
 
 func (a *About) Resize(rect layout.Rect) {
@@ -202,11 +220,19 @@ func (a *About) Resize(rect layout.Rect) {
 }
 
 func (a *About) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, tea.Cmd, bool) {
-	return a, nil, false
+	switch msg.Button {
+	case tea.MouseButtonWheelUp:
+		a.viewport.Scroll(-1)
+	case tea.MouseButtonWheelDown:
+		a.viewport.Scroll(1)
+	default:
+		return a, nil, false
+	}
+	return a, nil, true
 }
 
 func (a *About) Shortcuts() []view.Shortcut {
-	return nil
+	return []view.Shortcut{{Key: "↑/↓", Label: "scroll"}}
 }
 
 func (a *About) IsModalActive() bool {

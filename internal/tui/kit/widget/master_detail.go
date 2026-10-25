@@ -69,55 +69,33 @@ func (m *MasterDetail) Update(msg tea.Msg) (viewlet.Viewlet, tea.Cmd) {
 		}
 	}
 
-	// Delegation to SplitView
-	newSplit, cmd := m.Split.Update(msg)
-	m.Split = newSplit.(*SplitView)
-	cmds = append(cmds, cmd)
-
-	// Focus Management via keyboard
-	if kmsg, ok := msg.(tea.KeyMsg); ok && !m.IsModalActive() {
-		switch kmsg.String() {
-		case "tab", "right":
-			// Only switch focus if the active pane doesn't need the tab (i.e. no inputs)
-			// OR if we are in sidebar (no inputs usually)
-			shouldSwitch := true
-			if m.ActiveFocus == FocusDetail {
-				if m.Pages.HasActiveTextInput() {
-					shouldSwitch = false
-				}
-			}
-
-			if shouldSwitch && m.ActiveFocus == FocusSidebar && m.Pages.Focusable() {
-				cmds = append(cmds, m.SetFocus(FocusDetail))
-			}
-		case "shift+tab", "left", "esc":
-			// Escape always goes back.
-			// Left always goes back.
-			// Shift+Tab go back ONLY if no input active?
-			// Actually Shift+Tab usually cycles backwards in form.
-			shouldSwitch := true
-			if kmsg.String() == "shift+tab" && m.ActiveFocus == FocusDetail {
-				if m.Pages.HasActiveTextInput() {
-					shouldSwitch = false
-				}
-			}
-
-			if shouldSwitch && m.ActiveFocus == FocusDetail {
-				cmds = append(cmds, m.SetFocus(FocusSidebar))
+	if k, ok := msg.(tea.KeyMsg); ok && !m.IsModalActive() {
+		switch k.String() {
+		case "tab":
+			if m.ActiveFocus == FocusSidebar {
+				return m, m.SetFocus(FocusDetail)
 			}
 		case "enter":
-			if m.ActiveFocus == FocusSidebar {
-				// Optionally jump to detail on select
-				// cmds = append(cmds, m.SetFocus(FocusDetail))
+			if m.ActiveFocus == FocusSidebar && (m.Pages.Focusable() || m.Split.SinglePane()) {
+				return m, tea.Batch(append(cmds, m.SetFocus(FocusDetail))...)
+			}
+		case "esc":
+			if m.ActiveFocus == FocusDetail {
+				return m, tea.Batch(append(cmds, m.SetFocus(FocusSidebar))...)
+			}
+		case "shift+tab":
+			if m.ActiveFocus == FocusDetail && !m.Pages.HasActiveTextInput() {
+				return m, tea.Batch(append(cmds, m.SetFocus(FocusSidebar))...)
 			}
 		}
 	}
-
-	return m, tea.Batch(cmds...)
+	_, cmd := m.Split.Update(msg)
+	return m, tea.Batch(append(cmds, cmd)...)
 }
 
 func (m *MasterDetail) SetFocus(side int) tea.Cmd {
 	m.ActiveFocus = side
+	m.Split.ShowMain = side == FocusDetail
 	if side == FocusSidebar {
 		m.Pages.Blur()
 		return m.Sidebar.Focus()
@@ -140,29 +118,30 @@ func (m *MasterDetail) Resize(r layout.Rect) {
 
 // HandleMouse delegates.
 func (m *MasterDetail) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, tea.Cmd, bool) {
-	// Mouse click might change focus.
-	// SplitView HandleMouse calls HandleMouse on children.
-	// We rely on children to set their own focus internal flags?
-	// But MasterDetail needs to know ActiveFocus for Shortcuts().
-	// We should intercept results.
-	// But SplitView doesn't return which child handled it easily without tracking.
-	// Simplified: Let SplitView handle it, and we might be out of sync on ActiveFocus
-	// unless we check Focused() status of children.
-
-	v, cmd, handled := m.Split.HandleMouse(x, y, msg)
-	if handled {
-		// Update ActiveFocus based on who claims focus
-		if m.Sidebar.Focused() {
-			m.ActiveFocus = FocusSidebar
-		} else if m.Pages.Focused() {
-			m.ActiveFocus = FocusDetail
+	if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+		side := FocusSidebar
+		if m.Split.MainAt(x) {
+			side = FocusDetail
 		}
+		focusCmd := m.SetFocus(side)
+		_, cmd, handled := m.Split.HandleMouse(x, y, msg)
+		return m, tea.Batch(focusCmd, cmd), handled
 	}
-	return v, cmd, handled
+	_, cmd, handled := m.Split.HandleMouse(x, y, msg)
+	return m, cmd, handled
 }
 
 // Shortcuts delegates to active pane.
 func (m *MasterDetail) Shortcuts() []viewlet.Shortcut {
+	if m.IsModalActive() {
+		return m.Pages.Shortcuts()
+	}
+	if m.Split.SinglePane() {
+		if m.ActiveFocus == FocusSidebar {
+			return append([]viewlet.Shortcut{{Key: "enter", Label: "open"}}, m.Sidebar.Shortcuts()...)
+		}
+		return append([]viewlet.Shortcut{{Key: "esc", Label: "list"}}, m.Pages.Shortcuts()...)
+	}
 	if m.ActiveFocus == FocusSidebar {
 		return m.Sidebar.Shortcuts()
 	}
@@ -192,6 +171,6 @@ func (m *MasterDetail) HasActiveTextInput() bool {
 }
 
 func (m *MasterDetail) HasActiveFocus() bool {
-	res := (m.Sidebar != nil && m.Sidebar.HasActiveFocus()) || (m.Pages != nil && m.Pages.HasActiveFocus())
+	res := m.ActiveFocus == FocusDetail || (m.Sidebar != nil && m.Sidebar.HasActiveFocus()) || (m.Pages != nil && m.Pages.HasActiveFocus())
 	return res
 }

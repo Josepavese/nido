@@ -1,31 +1,50 @@
 package layout
 
-// Breakpoint represents terminal width categories for responsive layouts.
+// Breakpoint describes the horizontal density of the terminal.
 type Breakpoint int
 
 const (
-	// Narrow is for terminals < 100 columns.
-	// Sidebar may be hidden or stacked vertically.
 	Narrow Breakpoint = iota
-
-	// Regular is for terminals 100-140 columns.
-	// Standard two-column layout with sidebar.
 	Regular
-
-	// Wide is for terminals > 140 columns.
-	// Extended sidebar, optional additional panels.
 	Wide
 )
 
-// Thresholds for breakpoint detection.
+// Cell dimensions owned by the kit. Theme preferences may change sidebar widths,
+// but cannot force a pane or a form beyond the available rectangle.
 const (
-	NarrowMax  = 99  // < 100 cols
-	RegularMax = 140 // 100-140 cols
+	NarrowMax        = 99
+	RegularMax       = 140
+	MinWidth         = 40
+	MinHeight        = 10
+	CompactHeight    = 20
+	FormMaxWidth     = 60
+	DetailMinWidth   = 40
+	PaneDividerWidth = 1
+	RowGap           = 1
+	FieldFrameWidth  = 4 // two borders and one padding cell per side
+	FieldMinWidth    = 24
+	DialogMargin     = 2
+	DialogPaddingX   = 2
+	DialogPaddingY   = 1
+	DialogBorder     = 2
 )
 
-// Detect returns the appropriate breakpoint for the given terminal width.
+const (
+	FieldLabelGap        = 1
+	InputCursorWidth     = 1
+	DialogButtonGap      = 3
+	DialogHeadingHeight  = 1
+	DialogControlsHeight = 1
+	ModalWidth           = 50
+	AlertWidth           = 60
+	ModalHeight          = 10
+	FormModalWidth       = 74
+	ScrollHintHeight     = 1
+	TaskCardHeight       = 3
+)
+
 func Detect(width int) Breakpoint {
-	if width < 100 {
+	if width <= NarrowMax {
 		return Narrow
 	}
 	if width <= RegularMax {
@@ -33,8 +52,6 @@ func Detect(width int) Breakpoint {
 	}
 	return Wide
 }
-
-// String returns a human-readable name for the breakpoint.
 func (b Breakpoint) String() string {
 	switch b {
 	case Narrow:
@@ -43,80 +60,26 @@ func (b Breakpoint) String() string {
 		return "Regular"
 	case Wide:
 		return "Wide"
-	default:
-		return "Unknown"
 	}
+	return "Unknown"
 }
 
-// Dimensions holds the current terminal dimensions and derived layout values.
-type Dimensions struct {
-	// Raw terminal size
-	Width  int
-	Height int
+func IsViable(width, height int) bool { return width >= MinWidth && height >= MinHeight }
 
-	// Derived values
-	Breakpoint   Breakpoint
-	SidebarWidth int
-	ContentWidth int
-	BodyHeight   int
+// FormWidth resolves the single form measure used by every page. In cramped
+// panes the decorative inset gives way to the content.
+func FormWidth(available, inset int) int {
+	return max(0, min(FormMaxWidth, max(min(available, DetailMinWidth), available-inset)))
 }
 
-// SpacingOverhead is the total vertical space used by fixed elements.
-// Matches grid.go definitions: Header(3) + SubHeader(2) + Footer(1) = 6.
-const SpacingOverhead = HeaderHeight + SubHeaderHeight + FooterHeight
-
-// Calculate computes layout dimensions based on terminal size and sidebar preferences.
-// It is pure and does not depend on global themes.
-func Calculate(width, height int, narrowSidebarW, regularSidebarW, wideSidebarW int) Dimensions {
-	bp := Detect(width)
-
-	// Calculate sidebar width based on breakpoint
-	var sidebarW int
-	switch bp {
-	case Narrow:
-		sidebarW = narrowSidebarW
-	case Regular:
-		sidebarW = regularSidebarW
-	case Wide:
-		sidebarW = wideSidebarW
+func SidebarWidth(width, preferred, regular, wide int) int {
+	if preferred <= 0 {
+		preferred = regular
+		if Detect(width) == Wide {
+			preferred = wide
+		}
 	}
-
-	// Calculate body height (available for viewlet content)
-	bodyHeight := height - SpacingOverhead
-	if bodyHeight < 1 {
-		bodyHeight = 1
-	}
-
-	// Calculate content width (Width - Sidebar - Borders/Gap logic).
-	// This logic was "Terminal - sidebar - 3" in legacy.
-	// We will preserve that simple heuristic here.
-	contentW := width - sidebarW - 3
-	if contentW < 0 {
-		contentW = 0
-	}
-
-	return Dimensions{
-		Width:        width,
-		Height:       height,
-		Breakpoint:   bp,
-		SidebarWidth: sidebarW,
-		ContentWidth: contentW,
-		BodyHeight:   bodyHeight,
-	}
+	return max(0, preferred)
 }
 
-// MinWidth is the minimum supported terminal width.
-const MinWidth = 60
-
-// MinHeight is the minimum supported terminal height.
-const MinHeight = 15
-
-// IsViable returns true if the terminal is large enough for the TUI.
-func (d Dimensions) IsViable() bool {
-	return d.Width >= MinWidth && d.Height >= MinHeight
-}
-
-// TooSmallMessage returns a message to display when terminal is too small.
-func TooSmallMessage(width, height int) string {
-	return "🪺 Terminal too small. Need at least 60×15."
-}
+func SinglePane(width, sidebar int) bool { return width < sidebar+PaneDividerWidth+DetailMinWidth }

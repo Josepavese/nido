@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/paginator"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // SidebarItem is the interface that items in the SidebarList must implement.
@@ -72,6 +73,7 @@ func NewSidebarList(items []SidebarItem, width int, styles SidebarStyles, noIcon
 	l.SetSize(width, 10)
 
 	sl := &SidebarList{}
+	sl.height = l.Height()
 	sl.Model = new(list.Model)
 	*sl.Model = l
 	sl.noIconPadding = noIconPadding
@@ -105,87 +107,23 @@ func (d SidebarDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 		return
 	}
 
-	// Logic: Icon + Title
-	// Padding: 0 (Let lipgloss handle any internal margin if needed, but we want flush left for strict grid)
-	// Actually, visually we want: "ICON NAME"
-
-	str := item.Title()
-	icon := item.Icon()
-
-	if icon != "" {
-		// Use centralized RenderIcon for robust alignment (4 chars)
-		// This handles feathers, eggs, and DNA with consistent spacing.
-		str = fmt.Sprintf("%s%s", theme.RenderIcon(icon), str)
-	} else {
-		// Use configurable padding for non-icon items
-		if d.NoIconPadding != "" {
-			str = d.NoIconPadding + str
-		}
+	prefix := d.NoIconPadding
+	if item.Icon() != "" {
+		prefix = theme.RenderIcon(item.Icon())
 	}
-
-	// Truncate to fit width
-	// Use Width-3 for safety against wide emojis pushing the border
-	maxW := m.Width() - 3
-	if maxW > 0 && lipgloss.Width(str) > maxW {
-		str = lipgloss.NewStyle().MaxWidth(maxW).Render(str)
-	}
-
+	style := d.Styles.Normal
 	if index == m.Index() {
-		// Selected State
-		if item.IsAction() {
-			// Full width background for Action items (High Contrast)
-			// Apply width to ensure background fills the line
-			style := d.Styles.Action.Width(m.Width())
-			fmt.Fprint(w, style.Render(str))
-		} else {
-			// Special handling: formatting title before concatenation avoids
-			// reset codes from colored icons killing the selection style.
-			styledTitle := d.Styles.Selected.Render(item.Title())
-			// Truncate styled title if needed (lipgloss handles ANSI width)
-			if maxW > 0 && lipgloss.Width(styledTitle) > maxW {
-				styledTitle = lipgloss.NewStyle().MaxWidth(maxW).Render(styledTitle)
-			}
-
-			// Reconstruct string with styled components
-			finalStr := styledTitle
-			if item.Icon() != "" {
-				finalStr = fmt.Sprintf("%s%s", theme.RenderIcon(item.Icon()), styledTitle)
-			} else if d.NoIconPadding != "" {
-				finalStr = d.NoIconPadding + styledTitle
-			}
-
-			// We still wrap in Selected to catch any edge cases or padding
-			// but since foreground is already applied to title, it should persist.
-			fmt.Fprint(w, d.Styles.Selected.Render(finalStr))
-		}
-	} else {
-		// Unselected State
-		if item.IsAction() {
-			// User wants background even when unselected to signify it's a button.
-			// We'll use a subtle dimmed background.
-			style := d.Styles.Normal.
-				Width(m.Width()).
-				Background(d.Styles.Dim.GetForeground()).   // Use Dim color for subtle background
-				Foreground(d.Styles.Action.GetBackground()) // Contrast text (Background color of selected action)
-			fmt.Fprint(w, style.Render(str))
-		} else {
-			// Apply style specifically to Title to avoid Icon reset codes clearing it
-			styledTitle := d.Styles.Normal.Render(item.Title())
-			// Use same max width logic as Selected state
-			maxW := m.Width() - 3
-			if maxW > 0 && lipgloss.Width(styledTitle) > maxW {
-				styledTitle = lipgloss.NewStyle().MaxWidth(maxW).Render(styledTitle)
-			}
-
-			finalStr := styledTitle
-			if item.Icon() != "" {
-				finalStr = fmt.Sprintf("%s%s", theme.RenderIcon(item.Icon()), styledTitle)
-			} else if d.NoIconPadding != "" {
-				finalStr = d.NoIconPadding + styledTitle
-			}
-			fmt.Fprint(w, finalStr)
+		style = d.Styles.Selected
+	}
+	if item.IsAction() {
+		style = d.Styles.Action
+		if index != m.Index() {
+			style = d.Styles.Normal.Background(d.Styles.Dim.GetForeground()).Foreground(d.Styles.Action.GetBackground())
 		}
 	}
+	text := ansi.Truncate(prefix+style.Render(item.Title()), max(0, m.Width()), "…")
+	fmt.Fprint(w, style.Width(max(0, m.Width())).Render(text))
+
 }
 
 // Helper for type assertion
@@ -248,6 +186,14 @@ func (s *SidebarList) Update(msg tea.Msg) (viewlet.Viewlet, tea.Cmd) {
 	var cmd tea.Cmd
 	newModel, cmd := s.Model.Update(msg)
 	*s.Model = newModel
+	if key, ok := msg.(tea.KeyMsg); ok {
+		backwards := false
+		switch key.String() {
+		case "up", "k", "pgup", "end", "G":
+			backwards = true
+		}
+		s.skipSections(backwards, oldIdx)
+	}
 
 	if s.Index() != oldIdx {
 		// Selection changed!
@@ -259,6 +205,19 @@ func (s *SidebarList) Update(msg tea.Msg) (viewlet.Viewlet, tea.Cmd) {
 }
 
 func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, tea.Cmd, bool) {
+	if msg.Action == tea.MouseActionPress && (msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown) {
+		old := s.Index()
+		if msg.Button == tea.MouseButtonWheelUp {
+			s.Model.CursorUp()
+		} else {
+			s.Model.CursorDown()
+		}
+		s.skipSections(msg.Button == tea.MouseButtonWheelUp, old)
+		if old != s.Index() {
+			return s, func() tea.Msg { return viewlet.SelectionMsg{Index: s.Index(), Item: s.SelectedItem()} }, true
+		}
+		return s, nil, true
+	}
 	// Robust manual hit testing to bypass bubbles/list complexity
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
 		return s, nil, false
@@ -278,7 +237,7 @@ func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, 
 	}
 
 	// Avoid negative coordinates after offset compensation
-	if y < 0 {
+	if y < 0 || y >= s.Model.Paginator.PerPage || x < 0 || x >= s.Model.Width() {
 		return s, nil, false
 	}
 
@@ -288,6 +247,9 @@ func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, 
 	targetIdx := (page * perPage) + y
 
 	if targetIdx >= 0 && targetIdx < len(s.Model.Items()) {
+		if !selectable(s.Model.Items()[targetIdx]) {
+			return s, nil, true
+		}
 		// Auto-Focus on Click
 		s.Focus()
 		s.Model.Select(targetIdx)
@@ -302,13 +264,13 @@ func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, 
 }
 
 // Dummy methods to satisfy Viewlet interface if needed
-func (s *SidebarList) Resize(r layout.Rect) { s.Model.SetSize(r.Width, r.Height) }
+func (s *SidebarList) Resize(r layout.Rect) { s.ListView.Resize(r) }
 func (s *SidebarList) Focus() tea.Cmd       { s.focused = true; return nil }
 func (s *SidebarList) Blur()                { s.focused = false }
 func (s *SidebarList) Focused() bool        { return s.focused }
 func (s *SidebarList) View() string {
 	s.UpdateStyles()
-	return s.Model.View()
+	return s.ListView.View()
 }
 
 func (s *SidebarList) UpdateStyles() {
@@ -329,3 +291,24 @@ func (s *SidebarList) IsModalActive() bool      { return false }
 func (s *SidebarList) HasActiveTextInput() bool { return false }
 func (s *SidebarList) HasActiveFocus() bool     { return s.focused }
 func (s *SidebarList) Focusable() bool          { return true }
+
+// Informational list sections stay visible but do not consume selection.
+func selectable(item list.Item) bool {
+	if item, ok := item.(interface{ Selectable() bool }); ok {
+		return item.Selectable()
+	}
+	return true
+}
+func (s *SidebarList) skipSections(backwards bool, previous int) {
+	for range len(s.Model.Items()) {
+		if item := s.Model.SelectedItem(); item == nil || selectable(item) {
+			return
+		}
+		if backwards {
+			s.Model.CursorUp()
+		} else {
+			s.Model.CursorDown()
+		}
+	}
+	s.Model.Select(previous)
+}

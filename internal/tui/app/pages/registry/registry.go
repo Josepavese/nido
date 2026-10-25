@@ -203,6 +203,15 @@ func (r *Registry) rebuildSidebar() {
 			return
 		}
 	}
+	if selected.Name == "" {
+		for index, item := range items {
+			if candidate, ok := item.(RegistryItem); ok {
+				r.Sidebar.Select(index)
+				r.DetailView.UpdateItem(candidate)
+				return
+			}
+		}
+	}
 	r.DetailView.UpdateItem(RegistryItem{})
 }
 
@@ -228,6 +237,11 @@ func (r *Registry) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "enter":
+			if !r.MasterDetail.Split.SinglePane() && r.MasterDetail.ActiveFocus == widget.FocusSidebar {
+				return r, r.DetailView.pullSelected()
+			}
+
 		case "p":
 			// Prune Action (Global for Cache)
 			// Always allowed if valid? Contextual?
@@ -311,22 +325,19 @@ func (r *Registry) Resize(rect layout.Rect) {
 
 func (r *Registry) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, tea.Cmd, bool) {
 	if r.ConfirmDelete.IsActive() {
-		return r, nil, true // Consume all mouse events if modal active
+		cmd, handled := r.ConfirmDelete.HandleMouse(x, y, msg)
+		return r, cmd, handled
 	}
-	return r.MasterDetail.HandleMouse(x, y, msg)
+	_, cmd, handled := r.MasterDetail.HandleMouse(x, y, msg)
+	return r, cmd, handled
 }
 
 func (r *Registry) Shortcuts() []view.Shortcut {
 	if r.ConfirmDelete.IsActive() {
-		return []view.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
+		return r.ConfirmDelete.Shortcuts()
 	}
 
-	s := []view.Shortcut{
-		{Key: "↑/↓", Label: "glide"},
-	}
+	s := r.MasterDetail.Shortcuts()
 
 	// Contextual Shortcuts
 	if item := r.Sidebar.SelectedItem(); item != nil {
@@ -335,12 +346,14 @@ func (r *Registry) Shortcuts() []view.Shortcut {
 				s = append(s, view.Shortcut{Key: "p", Label: "purge"})
 				s = append(s, view.Shortcut{Key: "delete", Label: "cull"})
 			} else {
-				s = append(s, view.Shortcut{Key: "enter", Label: "pull"})
+				if !r.MasterDetail.Split.SinglePane() || r.MasterDetail.ActiveFocus == widget.FocusDetail {
+					s = append(s, view.Shortcut{Key: "enter", Label: "pull"})
+				}
 			}
 		}
 	}
 
-	if r.MasterDetail.ActiveFocus == widget.FocusDetail {
+	if r.MasterDetail.ActiveFocus == widget.FocusDetail && !r.MasterDetail.Split.SinglePane() {
 		s = append(s, view.Shortcut{Key: "esc", Label: "back"})
 	}
 
@@ -359,6 +372,9 @@ func (r *Registry) HasActiveTextInput() bool {
 }
 
 func (r *Registry) HasActiveFocus() bool {
+	if r.MasterDetail != nil && r.MasterDetail.ActiveFocus == widget.FocusDetail {
+		return true
+	}
 	if r.DetailView != nil {
 		return r.DetailView.HasActiveFocus()
 	}
@@ -435,42 +451,25 @@ func (d *RegistryDetail) UpdateItem(item RegistryItem) {
 func (d *RegistryDetail) Init() tea.Cmd { return nil }
 
 func (d *RegistryDetail) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
-	// Handle Key Input for Actions
-	// Note: Shortcuts are displayed by Parent, but keys are trapped here because Detail has focus (likely)
-	// Actually MasterDetail delegates focus. If Sidebar is focused, Detail gets keys? No.
-	// We rely on standard propagation.
-
-	if kmsg, ok := msg.(tea.KeyMsg); ok {
-		switch kmsg.String() {
-		case "enter":
-			if !d.Item.IsLocal && d.Item.Name != "" {
-				// Trigger Pull
-				ref := fmt.Sprintf("%s:%s", d.Item.Name, d.Item.Version)
-				return d, func() tea.Msg {
-					return ops.RequestPullMsg{Image: ref}
-				}
-			}
-		}
+	if !d.Focused() {
+		return d, nil
 	}
-	return d, nil
+	if k, ok := msg.(tea.KeyMsg); ok && k.String() == "enter" && !d.Item.IsLocal && d.Item.Name != "" {
+		return d, d.pullSelected()
+	}
+	_, cmd := d.Form.Update(msg)
+	return d, cmd
+}
+func (d *RegistryDetail) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, tea.Cmd, bool) {
+	cmd, handled := d.Form.HandleMouse(x, y, msg)
+	return d, cmd, handled
 }
 
 func (d *RegistryDetail) View() string {
-	w := d.Width()
-	// Use consistent constraints (Min 40, Max 60)
-	padding := theme.Current().Layout.ContainerPadding
-	safeWidth := w - (2 * padding)
-
-	if safeWidth > 60 {
-		safeWidth = 60
+	if d.Item.Name == "" {
+		return widget.RenderEmptyState(theme.IconRegistry, "Explore the library", "Select a cached image or a remote image to see its details.", d.Width(), d.Height())
 	}
-	if safeWidth < 40 {
-		safeWidth = 40
-	}
-
-	d.Form.Width = safeWidth
-
-	return d.Form.View(safeWidth)
+	return d.Form.Viewport(layout.FormWidth(d.Width(), theme.Inset.TotalContent), d.Height())
 }
 
 func (d *RegistryDetail) Resize(r layout.Rect) {
@@ -496,3 +495,13 @@ func (d *RegistryDetail) Focusable() bool {
 	}
 	return d.Form.Focusable()
 }
+
+func (d *RegistryDetail) pullSelected() tea.Cmd {
+	if d.Item.IsLocal || d.Item.Name == "" {
+		return nil
+	}
+	ref := fmt.Sprintf("%s:%s", d.Item.Name, d.Item.Version)
+	return func() tea.Msg { return ops.RequestPullMsg{Image: ref} }
+}
+
+func (SectionHeader) Selectable() bool { return false }

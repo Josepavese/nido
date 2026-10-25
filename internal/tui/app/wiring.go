@@ -13,6 +13,7 @@ import (
 	"github.com/Josepavese/nido/v4/internal/provider"
 
 	"github.com/Josepavese/nido/v4/internal/tui/kit/app"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/shell"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
@@ -51,6 +52,14 @@ func (n *NidoApp) Init() tea.Cmd {
 
 // Update intercepts messages to handle Nido domain logic.
 func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if view.IsQuitMessage(msg) {
+		_, cmd := n.App.Update(msg)
+		return n, cmd
+	}
+	if n.Shell.Width > 0 && !layout.IsViable(n.Shell.Width, n.Shell.Height) && view.IsInputMessage(msg) {
+		_, cmd := n.App.Update(msg)
+		return n, cmd
+	}
 	// Background invalidations must flow even while a modal owns keyboard input.
 	if batch, ok := msg.(ops.EventBatchMsg); ok {
 		resources := map[string]bool{}
@@ -118,6 +127,11 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	// 0. Modal Interception
 	if n.ErrorModal.IsActive() && view.IsInputMessage(msg) {
+		if mouse, ok := msg.(tea.MouseMsg); ok {
+			n.Shell.Overlay = n.ErrorModal
+			_, _, _, cmd, _ := n.Shell.HandleMouse(mouse)
+			return n, cmd
+		}
 		newModal, cmd := n.ErrorModal.Update(msg)
 		n.ErrorModal = newModal
 		return n, cmd
@@ -375,9 +389,7 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View delegates to Shell but overlays global modals
 func (n *NidoApp) View() string {
-	if n.ErrorModal.IsActive() {
-		return n.ErrorModal.View(n.Shell.Width, n.Shell.Height)
-	}
+	n.Shell.Overlay = n.ErrorModal
 	return n.App.View()
 }
 
@@ -402,10 +414,7 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config, sour
 	kitApp.Shell.HeaderContent = ""
 	kitApp.Shell.Styles = shell.ShellStyles{
 		// Header: Deep background, subtle bottom border in the same grey palette
-		Header:           lipgloss.NewStyle().Background(t.Palette.Surface).Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(t.Palette.SurfaceSubtle),
-		SubHeaderContext: t.Styles.Label.Bold(true),
-		// SubHeaderNav: subtle grey
-		SubHeaderNav: t.Styles.Label,
+		Header: lipgloss.NewStyle().Background(t.Palette.Surface).Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(t.Palette.SurfaceSubtle),
 		StatusBar: widget.StatusBarStyles{
 			Key:    t.Styles.Label.Bold(true),
 			Label:  t.Styles.Label,
@@ -445,6 +454,7 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config, sour
 
 	// 7. Initialize Global Modal
 	nidoApp.ErrorModal = widget.NewAlertModal("Error", "", nil)
+	nidoApp.Shell.Overlay = nidoApp.ErrorModal
 
 	// 8. Run
 	p := tea.NewProgram(nidoApp, tea.WithContext(ctx), tea.WithAltScreen(), tea.WithMouseCellMotion())

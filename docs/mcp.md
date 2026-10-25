@@ -12,7 +12,9 @@ behind the stdio server; it is not an additional remote MCP transport.
 Install the CLI through npm (`nido-mcp`), Homebrew, Scoop or the binary installers,
 or use `npx -y nido-mcp mcp` directly from your client. Registry-aware clients
 can discover `io.github.Josepavese/nido` in the Official MCP Registry; Nido is
-also listed on Glama and ships an MCPB bundle.
+also listed in Glama's directory with local installation instructions and ships
+an MCPB bundle. A Glama-hosted deployment runs in a separate environment and
+cannot manage your computer's VM inventory; configure the local process below.
 See [installation channels and MCP catalogs](../installers/README.md#mcp-catalogs-and-client-installation),
 including [WinGet availability](../installers/README.md#winget-windows).
 

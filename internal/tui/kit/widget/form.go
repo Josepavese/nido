@@ -6,6 +6,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+	"strings"
 )
 
 // Element is the interface for all form components.
@@ -57,24 +59,10 @@ func (i *Input) Value() string      { return i.InputModel.Value() }
 func (i *Input) SetValue(s string)  { i.InputModel.SetValue(s) }
 func (i *Input) SetCharLimit(n int) { i.InputModel.CharLimit = n }
 func (i *Input) updateInputWidth() {
-	// Sync strictly with RenderBoxedField logic
-	labelWidth := theme.Width.Label
-	if i.width > 0 && i.width < 34 { // Increased threshold slightly for label compatibility
-		labelWidth = 10 // Compact
-	}
+	labelWidth := fieldLabelWidth(i.Label, i.width)
+	validationWidth := lipgloss.Width(fieldValidation(i.Error))
+	i.InputModel.Width = max(1, i.width-layout.FieldFrameWidth-labelWidth-validationWidth-layout.InputCursorWidth)
 
-	// Width - Box(4) - Label - ValidationPadding(1ish)
-	// If Error is present, Validation adds " 🔺" (len 2)
-	validationWidth := 1 // Default safety padding
-	if i.Error != "" {
-		validationWidth = 4 // 3 for " [!]" + 1 safety
-	}
-
-	inner := i.width - 4 - labelWidth - validationWidth
-	if inner < 1 {
-		inner = 1
-	}
-	i.InputModel.Width = inner
 }
 func (i *Input) Update(msg tea.Msg) (Element, tea.Cmd) {
 	if i.Disabled {
@@ -154,7 +142,7 @@ func (i *Input) View(width int) string {
 			Width(labelWidth).
 			PaddingRight(1)
 
-		valueStyle := t.Styles.Value
+		valueStyle := t.Styles.Value.Foreground(t.Palette.Text)
 		if i.Error != "" {
 			valueStyle = valueStyle.Foreground(t.Palette.Error)
 		}
@@ -343,6 +331,7 @@ type Form struct {
 	FocusIndex int
 	Spacing    int
 	Width      int
+	viewport   ScrollView
 }
 
 func (f *Form) HasActiveTextInput() bool {
@@ -532,6 +521,12 @@ func (f *Form) Update(msg tea.Msg) (*Form, tea.Cmd) {
 
 	if kmsg, ok := msg.(tea.KeyMsg); ok {
 		switch kmsg.String() {
+		case "pgup":
+			f.viewport.Scroll(-f.viewport.height)
+			return f, nil
+		case "pgdown":
+			f.viewport.Scroll(f.viewport.height)
+			return f, nil
 		case "up", "shift+tab":
 			cmds = append(cmds, f.PrevField())
 			return f, tea.Batch(cmds...)
@@ -554,26 +549,56 @@ func (f *Form) Update(msg tea.Msg) (*Form, tea.Cmd) {
 }
 
 func (f *Form) View(width int) string {
-	if width == 0 {
+	if width <= 0 {
 		width = f.Width
 	}
+	f.Width = width
 	var views []string
 	for _, el := range f.Elements {
-		if width > 0 {
-			el.SetWidth(width)
-		}
+		el.SetWidth(width)
 		views = append(views, el.View(width))
 	}
 	return layout.VStack(f.Spacing, views...)
 }
 
+// Viewport renders a form with the focused field visible, including children of
+// reflowed rows. Pages supply dimensions, never their own scrolling rules.
+func (f *Form) Viewport(width, height int) string {
+	content := f.View(width)
+	anchor := layout.Rect{}
+	y := 0
+	for _, el := range f.Elements {
+		if el.Focused() {
+			anchor = elementAnchor(el, width)
+			anchor.Y += y
+			break
+		}
+		y += lipgloss.Height(el.View(width)) + f.Spacing
+	}
+	return f.viewport.Render(width, height, content, anchor)
+}
+
 // HandleMouse delegates mouse events to the specific element at the coordinates.
 func (f *Form) HandleMouse(x int, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
+	if msg.Action == tea.MouseActionPress {
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			f.viewport.Scroll(-1)
+			return nil, true
+		case tea.MouseButtonWheelDown:
+			f.viewport.Scroll(1)
+			return nil, true
+		}
+	}
+	if msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
+		return nil, false
+	}
+	if x < 0 || x >= f.Width || y < 0 || (f.viewport.height > 0 && y >= f.viewport.height) {
+		return nil, false
+	}
+	y += f.viewport.offset
 	currentY := 0
 	width := f.Width
-	if width == 0 {
-		width = 80 // Fallback
-	}
 
 	for i, el := range f.Elements {
 		// Calculate height of this element
@@ -614,95 +639,52 @@ func (f *Form) HandleMouse(x int, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
 	return nil, false
 }
 
-// Shared Renderer
-func RenderBoxedField(label, content, errorMsg string, focused bool, width int, align lipgloss.Position, forcedBorderColor lipgloss.TerminalColor, multiline bool) string {
-	t := theme.Current()
-
-	// 1. Determine Label Width
-	labelWidth := theme.Width.Label
+// fieldLabelWidth is shared with the text cursor's available width.
+func fieldLabelWidth(label string, width int) int {
 	if label == "" {
-		labelWidth = 0
-	} else if width > 0 && width < 34 {
-		labelWidth = 14 // Compact label for small boxes (enough for "Linked Clones")
+		return 0
 	}
+	return min(theme.Width.Label, max(0, (width-layout.FieldFrameWidth)/2))
+}
+func fieldValidation(errorMsg string) string {
+	if errorMsg != "" {
+		return " [!]"
+	}
+	return ""
+}
 
-	// 2. Define Styles
-	labelStyle := t.Styles.Label.
-		Width(labelWidth).
-		MaxWidth(labelWidth).
-		Align(lipgloss.Left)
-
-	// Determine Border Color
-	var borderColor lipgloss.TerminalColor = t.Palette.SurfaceHighlight
-	validation := ""
+// RenderBoxedField draws a field in exactly the requested terminal cell width.
+func RenderBoxedField(label, content, errorMsg string, focused bool, width int, align lipgloss.Position, forcedBorderColor lipgloss.TerminalColor, multiline bool) string {
+	if width <= 0 {
+		return ""
+	}
+	t := theme.Current()
+	labelWidth := fieldLabelWidth(label, width)
+	borderColor := lipgloss.TerminalColor(t.Palette.SurfaceHighlight)
+	labelStyle := t.Styles.Label
 	if errorMsg != "" {
 		borderColor = t.Palette.Error
-		validation = lipgloss.NewStyle().Foreground(t.Palette.Error).Render(" [!]")
 	} else if focused {
 		borderColor = t.Palette.Accent
 		labelStyle = labelStyle.Foreground(t.Palette.Accent).Bold(true)
 	}
-
 	if forcedBorderColor != nil {
 		borderColor = forcedBorderColor
 	}
-
-	// 3. Calculate Available Space for Content
-	// Box Overhead: 2 (Borders) + 2 (Padding) = 4
-	innerWidth := width - 4
-	if innerWidth < 0 {
-		innerWidth = 0
-	}
-
-	// 3. Render and Truncate Label
-	renderedLabel := ""
-	if label != "" {
-		if lipgloss.Width(label) > labelWidth {
-			if labelWidth > 1 { // Updated safety
-				label = label[:labelWidth-1] + "…" // Single char ellipsis
-			} else {
-				label = label[:labelWidth]
-			}
-		}
-		renderedLabel = labelStyle.Render(label)
-	}
-
-	valWidth := lipgloss.Width(validation)
-	contentAvail := innerWidth - labelWidth - valWidth
-	if contentAvail < 0 {
-		contentAvail = 0
-	}
-
-	// 4. Content Block (Strict single-line or multi-line)
-	contentStyle := t.Styles.Value
+	validation := fieldValidation(errorMsg)
+	innerWidth := max(0, width-layout.FieldFrameWidth)
+	contentWidth := max(0, innerWidth-labelWidth-lipgloss.Width(validation))
+	labelText := lipgloss.NewStyle().Width(labelWidth).Render(ansi.Truncate(label, max(0, labelWidth-layout.FieldLabelGap), "…"))
+	valueStyle := t.Styles.Value.Foreground(t.Palette.Text)
 	if focused {
-		contentStyle = contentStyle.Foreground(t.Palette.Accent).Bold(true)
+		valueStyle = valueStyle.Foreground(t.Palette.Accent).Bold(true)
 	}
-
 	if !multiline {
-		// MATHEMATICAL FIX: Use MaxHeight(1) to strictly prevent overflow/wrapping
-		// and MaxWidth to ensure it fits in the available space.
-		contentStyle = contentStyle.MaxWidth(contentAvail).MaxHeight(1)
+		content = ansi.Truncate(strings.Split(content, "\n")[0], contentWidth, "…")
+	} else {
+		content = ansi.Wrap(content, contentWidth, "")
 	}
-	displayContent := contentStyle.Render(content)
-
-	middleBlock := lipgloss.PlaceHorizontal(contentAvail, align, displayContent)
-
-	inner := lipgloss.JoinHorizontal(lipgloss.Top,
-		renderedLabel,
-		middleBlock,
-		validation,
-	)
-
-	// 6. Final Box Render
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(borderColor).
-		Padding(0, 1)
-
-	if width > 0 {
-		boxStyle = boxStyle.Width(width - 2)
-	}
-
-	return boxStyle.Render(inner)
+	inner := lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render(labelText), lipgloss.NewStyle().Width(contentWidth).Align(align).Render(valueStyle.Render(content)), t.Styles.Error.Render(validation))
+	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(borderColor).Padding(0, 1).Width(max(0, width-layout.DialogBorder)).Render(inner)
+	return layout.Fit(width, lipgloss.Height(box), box)
 }

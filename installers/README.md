@@ -153,13 +153,15 @@ QEMU remains a host prerequisite, whichever Nido channel you choose.
 | Method | Where to find Nido | How it runs |
 | --- | --- | --- |
 | [Official MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.Josepavese%2Fnido/versions/latest) | Search for `io.github.Josepavese/nido` in a registry-aware client | The registry advertises the `nido-mcp` npm package and MCPB release bundle |
-| [Glama](https://glama.ai/mcp/servers/Josepavese/nido) | Nido / `nido-mcp` by `Josepavese` | Discovery listing with source and tool information |
+| [Glama](https://glama.ai/mcp/servers/Josepavese/nido) | Nido / `nido-mcp` by `Josepavese` | Discovery listing with instructions to install Nido and run MCP locally |
 | [npm](https://www.npmjs.com/package/nido-mcp) | `nido-mcp` | Configure the client to launch `npx -y nido-mcp mcp` |
 | [MCPB bundle](https://github.com/Josepavese/nido/releases/latest/download/nido.mcpb) | `nido.mcpb` in every GitHub release | Import into a client that supports MCPB; QEMU must be available on the same host |
 
 These catalogs help clients discover the server. Nido runs locally over stdio;
 QEMU, VM disks and host permissions belong to the machine running that process.
 Use the [MCP guide](../docs/mcp.md#configure-a-client) for the exact configuration.
+On Glama, follow the local installation instructions. Its hosted Deploy action
+starts a separate environment and cannot manage the VMs on your computer.
 Discovery integrations (Glama promotion, directory listings) have their own activation
 status in the [distribution guide](../docs/DISTRIBUTION.md).
 

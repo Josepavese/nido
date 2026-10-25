@@ -316,26 +316,9 @@ func (i *Incubator) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 func (i *Incubator) View() string {
 	if i.SelectedSource == nil {
-		return layout.Center(i.Width(), "Select a source to begin incubation.")
+		return widget.RenderEmptyState(theme.IconPackage, "Ready to hatch?", "Select a source to begin incubation.", i.Width(), i.Height())
 	}
-
-	w := i.Width()
-	padding := theme.Current().Layout.ContainerPadding
-	safeWidth := w - (2 * padding)
-
-	// Constrain max width (User Request: "fallo piu corto")
-	if safeWidth > 60 {
-		safeWidth = 60
-	}
-	if safeWidth < 40 {
-		safeWidth = 40
-	}
-
-	// Pass width to Declarative Form and ActionStack
-	i.Form.Width = safeWidth
-
-	// Standardized Left Alignment (matches Registry)
-	return i.Form.View(safeWidth)
+	return i.Form.Viewport(layout.FormWidth(i.Width(), theme.Inset.TotalContent), i.Height())
 }
 
 func (i *Incubator) SetSource(item *SourceItem) {
@@ -364,8 +347,8 @@ func (i *Incubator) SetSource(item *SourceItem) {
 
 func (i *Incubator) Shortcuts() []fv.Shortcut {
 	return []fv.Shortcut{
-		{Key: "tab", Label: "glide"},
-		{Key: "enter", Label: "spawn"},
+		{Key: "tab", Label: "next"},
+		{Key: "enter", Label: "action"},
 	}
 }
 
@@ -794,6 +777,7 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 	case tea.KeyMsg:
 		if h.Sidebar.Focused() && msg.String() == "enter" {
 			cmds = append(cmds, h.MasterDetail.SetFocus(widget.FocusDetail))
+			return h, tea.Batch(cmds...)
 		}
 
 		if h.MasterDetail.ActiveFocus == widget.FocusDetail && msg.String() == "esc" {
@@ -826,25 +810,8 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 }
 
 func (h *Hatchery) View() string {
-	if h.ConfirmDelete.IsActive() {
-		return h.ConfirmDelete.View(h.Width(), h.Height())
-	}
-	if h.ConfirmDeletePort.IsActive() {
-		return h.ConfirmDeletePort.View(h.Width(), h.Height())
-	}
-	if h.ModalAddPort.IsActive() {
-		// Render content dim/blurred behind?
-		// For now just plain overlay logic from kit
-		// But MasterDetail should be rendered as "background"
-		// h.MasterDetail.View() // Ideally we render this to buffer if needed for overlay effects
-		return h.ModalAddPort.View(h.Width(), h.Height())
-		// NOTE: Ideally FormModal.View takes a "background" string to overlay properly
-		// if utilizing lipgloss.PlaceOverlay correctly, but here we pass dims.
-		// If FormModal uses PlaceOverlay, it pads with whitespace.
-		// TODO: Advanced Overlay support in Kit.
-	}
-	if h.ModalAccel.IsActive() {
-		return h.ModalAccel.View(h.Width(), h.Height())
+	if overlay := h.activeOverlay(); overlay != nil {
+		return overlay.View(h.Width(), h.Height())
 	}
 	return h.MasterDetail.View()
 }
@@ -855,16 +822,13 @@ func (h *Hatchery) Resize(r layout.Rect) {
 }
 
 func (h *Hatchery) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, tea.Cmd, bool) {
-	if h.ConfirmDelete.IsActive() {
-		return h, nil, true
+	if overlay := h.activeOverlay(); overlay != nil {
+		cmd, handled := overlay.HandleMouse(x, y, msg)
+		return h, cmd, handled
 	}
-	if h.ModalAddPort.IsActive() {
-		return h, nil, true
-	}
-	if h.ModalAccel.IsActive() {
-		return h, nil, true
-	}
-	return h.MasterDetail.HandleMouse(x, y, msg)
+
+	_, cmd, handled := h.MasterDetail.HandleMouse(x, y, msg)
+	return h, cmd, handled
 }
 
 func (h *Hatchery) Focus() tea.Cmd {
@@ -872,37 +836,11 @@ func (h *Hatchery) Focus() tea.Cmd {
 }
 
 func (h *Hatchery) Shortcuts() []fv.Shortcut {
-	if h.ConfirmDelete.IsActive() || h.ConfirmDeletePort.IsActive() {
-		return []fv.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
-	}
-	if h.ModalAddPort.IsActive() {
-		return []fv.Shortcut{
-			{Key: "tab", Label: "next"},
-			{Key: "enter", Label: "add"},
-			{Key: "esc", Label: "cancel"},
-		}
-	}
-	if h.ModalAccel.IsActive() {
-		return []fv.Shortcut{
-			{Key: "↑/↓", Label: "select"},
-			{Key: "enter", Label: "confirm"},
-			{Key: "esc", Label: "cancel"},
-		}
+	if overlay := h.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 
-	shortcuts := []fv.Shortcut{
-		{Key: "↑/↓", Label: "glide"},
-	}
-
-	if h.MasterDetail.ActiveFocus == widget.FocusDetail {
-		shortcuts = append(shortcuts, h.Incubator.Shortcuts()...)
-		shortcuts = append(shortcuts, fv.Shortcut{Key: "esc", Label: "back"})
-	} else {
-		shortcuts = append(shortcuts, fv.Shortcut{Key: "enter", Label: "engage"})
-	}
+	shortcuts := h.MasterDetail.Shortcuts()
 
 	if item := h.Sidebar.SelectedItem(); item != nil {
 		if srcItem, ok := item.(SourceItem); ok && srcItem.Type == "TEMPLATE" {
@@ -934,6 +872,9 @@ func (h *Hatchery) HasActiveTextInput() bool {
 }
 
 func (h *Hatchery) HasActiveFocus() bool {
+	if h.MasterDetail != nil && h.MasterDetail.ActiveFocus == widget.FocusDetail {
+		return true
+	}
 	if h.ConfirmDeletePort != nil && h.ConfirmDeletePort.IsActive() {
 		return true
 	}
@@ -960,4 +901,8 @@ func (i *Incubator) markSourceUnavailable() {
 	i.sourceUnavailable = true
 	i.spawnBtn.Disabled = true
 	i.header.Subtitle = "Source removed; select an available source"
+}
+
+func (h *Hatchery) activeOverlay() widget.Overlay {
+	return widget.ActiveOverlay(h.ConfirmDelete, h.ConfirmDeletePort, h.ModalAddPort, h.ModalAccel)
 }

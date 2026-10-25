@@ -67,8 +67,7 @@ func (m *CreateTemplateModal) Show(vmName string, known []string) tea.Cmd {
 	m.VMName = vmName
 	m.KnownTemplates = known
 	m.Modal.Description = fmt.Sprintf("Create a template from '%s'", vmName)
-	m.Modal.Show()
-	return nil
+	return m.Modal.Show()
 }
 
 // Hide closes the modal.

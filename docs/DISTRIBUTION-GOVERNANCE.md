@@ -25,33 +25,44 @@ repositories' cron jobs.
 | Scoop bucket | full (cron) | 4 h poll | none | none |
 | AUR `nido-bin` | wired, activates with secrets | release | AUR account + SSH key | **one-off:** register when AUR reopens, then add 3 secrets |
 | WinGet | wired (`WINGET_TOKEN`) | after first merge | classic PAT | **one-off:** Microsoft moderator merges [PR #460843](https://github.com/microsoft/winget-pkgs/pull/460843) |
-| Glama | auto-index + crawler | crawler | GitHub OAuth | **one-off:** claim profile; press re-sync when releases lag. Promotion only — Nido is local and Glama never hosts the MCP server |
+| Glama | auto-index + crawler | crawler | GitHub OAuth | Ownership claimed; hosted auto-release stays off. Withdrawal of the prior hosted release is pending; see `DISTRIBUTION.md` §1.6. Discovery and local setup only |
 | mcpdir.dev / MCP Hub / PulseMCP / MCP Central | full (crawl) | crawler | none | none |
 | awesome lists (mcp-servers, agent sandboxes, agent runtime, awesome-go) | submissions opened | – | GitHub account | **one-off:** shepherd the open PRs/issues |
 | Manual directory forms (mcp.so, mcpservers.org, MCP Market, Product Hunt) | none | – | per-site accounts | **one-off:** submit with the content in `installers/README.md` |
-| Smithery | removed | – | – | none (platform shut down 2026-10-31) |
+| Smithery | removed | – | – | none (integration retired; no release publication) |
 
 ## 2. Recurring manual actions
 
 | When | Action | Where the state lives |
 | --- | --- | --- |
-| Once, now | merge the WinGet initial PR; claim Glama; submit awesome-list/directory forms; register AUR when it reopens | links in `DISTRIBUTION.md` §2.7–§2.9 |
-| Every release (2 min, only if something looks off) | glance at the release workflow summary; the container and package jobs smoke-test their own published URLs and log a warning instead of failing the release | Actions run for the tag |
+| Once, now | await the WinGet moderator merge; reconcile the pending Glama hosted withdrawal; submit directory forms if separately authorized; configure AUR when an account is available | links in `DISTRIBUTION.md` §2.7–§2.9 |
+| Every release | inspect per-job results and read the published versions back; container/package smoke checks are non-blocking, so warnings need explicit reconciliation | Actions run for the tag |
 | Quarterly | re-read `DISTRIBUTION.md` §3 (dropped channels), check PAT/secret expiry, confirm Pages and keyring are live, close stale submission PRs | this file + `DISTRIBUTION.md` |
 | Before 2029-10-24 | rotate the package signing key: new key, new keyring file name, update `signed-by=`/`gpgkey=` and `PACKAGES_GPG_KEY`, keep the old keyring published for one cycle | `DISTRIBUTION.md` §2.10 |
-| On GitHub plan changes | confirm Actions minutes/quota still cover macOS/Windows jobs; they are the slowest but not blocking | repo settings |
+| On GitHub plan changes | confirm Actions minutes/quota still cover macOS/Windows jobs; their three OS checks are required by branch protection | repo settings |
 
 ## 3. Release-day contract
 
 Automatic: assets, GitHub Release, npm, MCP Registry, GHCR image, APT/DNF
 repositories, Homebrew and Scoop cron sync, plus post-publish smoke checks.
-The workflow is designed so a third-party hiccup is skipped green or warns; a
-release is never failed by a distribution channel.
+Linux, macOS and Windows checks, the VM lifecycle smoke test and release
+archive checks qualify the candidate before tagging. Nix CI must also pass
+when its flake, Go inputs or changelog version change.
+
+Some publication jobs use `continue-on-error`; a green workflow alone does not
+prove publication. Inspect each configured job and read the published version
+back. A missing credential means unconfigured, not published. A third-party
+review or crawl remains pending until its result is observable.
 
 Manual: only the items in §2. A release is complete when `nido version`,
 `npm view nido-mcp version`, the MCP Registry listing, the container tag and
-`https://josepavese.github.io/nido/apt/dists/stable/Release` all agree on the
-same version. When they do not, fix the channel, not the release.
+the signed [APT package index](https://josepavese.github.io/nido/apt/dists/stable/main/binary-amd64/Packages.gz) all agree on the
+same version. Also verify the Homebrew/Scoop manifests and checksums, the
+signed APT/DNF package metadata, and a local install from the published native
+archive. Visually inspect that installed TUI at wide and compact sizes.
+When a channel disagrees, repair that channel without overwriting immutable
+release assets. Record external pending submissions explicitly in the release
+notes; they do not become a successful publication because CI continued.
 
 ## 4. Change control
 

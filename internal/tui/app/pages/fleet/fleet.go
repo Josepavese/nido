@@ -470,6 +470,9 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter", " ":
+			if msg.String() == "enter" && f.MasterDetail.Split.SinglePane() && f.MasterDetail.ActiveFocus == widget.FocusSidebar {
+				return f, f.MasterDetail.SetFocus(widget.FocusDetail)
+			}
 			// Toggle VM power (start/stop)
 			if selectedItem := f.Sidebar.SelectedItem(); selectedItem != nil {
 				if item, ok := selectedItem.(FleetItem); ok {
@@ -521,18 +524,8 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 }
 
 func (f *Fleet) View() string {
-	// Overlay Modals (Full-screen)
-	if f.ConfirmDelete.IsActive() {
-		return f.ConfirmDelete.View(f.Width(), f.Height())
-	}
-	if f.ErrorModal.IsActive() {
-		return f.ErrorModal.View(f.Width(), f.Height())
-	}
-	if f.TemplateModal.IsActive() {
-		return f.TemplateModal.View(f.Width(), f.Height())
-	}
-	if f.ModalAccel.IsActive() {
-		return f.ModalAccel.View(f.Width(), f.Height())
+	if overlay := f.activeOverlay(); overlay != nil {
+		return overlay.View(f.Width(), f.Height())
 	}
 	return f.MasterDetail.View()
 }
@@ -547,15 +540,17 @@ func (f *Fleet) Focus() tea.Cmd {
 }
 
 func (f *Fleet) Shortcuts() []view.Shortcut {
-	if f.IsModalActive() {
-		return []view.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
+	if overlay := f.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 
-	shortcuts := []view.Shortcut{
-		{Key: "↑/↓", Label: "glide"},
+	shortcuts := []view.Shortcut{{Key: "↑/↓", Label: "glide"}}
+	if f.MasterDetail.Split.SinglePane() {
+		if f.MasterDetail.ActiveFocus == widget.FocusSidebar {
+			shortcuts = append([]view.Shortcut{{Key: "enter", Label: "open"}}, shortcuts...)
+		} else {
+			shortcuts = []view.Shortcut{{Key: "esc", Label: "list"}, {Key: "pgup/pgdn", Label: "scroll"}}
+		}
 	}
 
 	if selectedItem := f.Sidebar.SelectedItem(); selectedItem != nil {
@@ -565,7 +560,11 @@ func (f *Fleet) Shortcuts() []view.Shortcut {
 			if item.State == "running" {
 				toggleLabel = "exhale" // stop
 			}
-			shortcuts = append(shortcuts, view.Shortcut{Key: "enter/space", Label: toggleLabel})
+			toggleKey := "enter/space"
+			if f.MasterDetail.Split.SinglePane() && f.MasterDetail.ActiveFocus == widget.FocusSidebar {
+				toggleKey = "space"
+			}
+			shortcuts = append(shortcuts, view.Shortcut{Key: toggleKey, Label: toggleLabel})
 
 			// Running specific
 			if item.State == "running" {
@@ -582,7 +581,7 @@ func (f *Fleet) Shortcuts() []view.Shortcut {
 		}
 	}
 
-	if f.MasterDetail.ActiveFocus == widget.FocusDetail {
+	if f.MasterDetail.ActiveFocus == widget.FocusDetail && !f.MasterDetail.Split.SinglePane() {
 		shortcuts = append(shortcuts, view.Shortcut{Key: "esc", Label: "back"})
 	}
 
@@ -590,7 +589,13 @@ func (f *Fleet) Shortcuts() []view.Shortcut {
 }
 
 func (f *Fleet) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, tea.Cmd, bool) {
-	return f.MasterDetail.HandleMouse(x, y, msg)
+	if overlay := f.activeOverlay(); overlay != nil {
+		cmd, handled := overlay.HandleMouse(x, y, msg)
+		return f, cmd, handled
+	}
+
+	_, cmd, handled := f.MasterDetail.HandleMouse(x, y, msg)
+	return f, cmd, handled
 }
 
 // IsModalActive allows the App to block global navigation (tabs) when the modal is open.
@@ -876,32 +881,20 @@ func (c *ComponentsDetail) Shortcuts() []view.Shortcut {
 }
 
 func (c *ComponentsDetail) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, tea.Cmd, bool) {
-	return c, nil, false
+	cmd, handled := c.Form.HandleMouse(x, y, msg)
+	return c, cmd, handled
 }
 
 func (c *ComponentsDetail) View() string {
-	w := c.Width()
-	padding := theme.Current().Layout.ContainerPadding
-	safeWidth := w - (2 * padding)
-
-	if safeWidth > 60 {
-		safeWidth = 60
+	if c.Parent.detail.Name == "" {
+		return widget.RenderEmptyState(theme.IconNest, "Room for a new bird", "Select a VM from your fleet, or visit Hatchery to grow the nest.", c.Width(), c.Height())
 	}
-	if safeWidth < 40 {
-		safeWidth = 40
-	}
-
-	// Pass width to Declarative Form and ActionStack
-	c.Form.Width = safeWidth
-
-	// Standardized Left Alignment (matches Registry/Hatchery)
-	// We always render the form, even if empty, to maintain alignment.
-	return c.Form.View(safeWidth)
+	return c.Form.Viewport(layout.FormWidth(c.Width(), theme.Inset.TotalContent), c.Height())
 }
 
 func (c *ComponentsDetail) Focus() tea.Cmd {
 	c.BaseViewlet.Focus()
-	return c.Form.Focus()
+	return nil
 }
 
 func (c *ComponentsDetail) Blur() {
@@ -1002,4 +995,10 @@ func (f *Fleet) ObserveEvent(e events.Event) {
 			f.DetailView.UpdateDetail(f.detail)
 		}
 	}
+}
+
+func (f *Fleet) HasActiveFocus() bool { return f.MasterDetail.HasActiveFocus() }
+
+func (f *Fleet) activeOverlay() widget.Overlay {
+	return widget.ActiveOverlay(f.ConfirmDelete, f.ErrorModal, f.TemplateModal.Modal, f.ModalAccel)
 }

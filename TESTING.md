@@ -93,3 +93,46 @@ The validator's `event-stream` scenario exercises the CLI NDJSON envelope,
 another process's config change and rejected arguments in its own fixture home.
 Use the validator from a disposable environment as documented above; its general
 cleanup scenario is not a permission to sweep an existing user's resources.
+
+## TUI resize and visual inspection
+
+Build the candidate once outside the repository, then run the shared native PTY
+regression on a private fixture home:
+
+```sh
+NIDO_TEST_BINARY="$scratch/nido" NIDO_TEST_STORAGE="$scratch" python3 tests/tui_resize.py
+```
+
+It exercises wide/compact/minimum sizes, the resting state, safe detail opening,
+field traversal, caret editing, mouse routes, modal cancellation and draft
+recovery. Fixture disk, state and configuration hashes must remain unchanged.
+The shared PTY driver also backs `events_integration.py`.
+
+For visual acceptance, install `pyte` into an owned observer scratch if it is not
+already available (it is not a product dependency), then set
+`NIDO_TUI_VISUAL_DIR="$scratch/visual"` for the same command. The resulting
+`index.html` and individual frames contain rendered cells from the real PTY,
+with color and Unicode. Inspect them visually in the browser, including the
+minimum-size form, confirmation, theme picker and expanded recovery. Retain only
+the useful bounded evidence and retire the private home, observer and binaries
+after their last consumer. A passing trace or unit test alone is not visual QA.
+
+The same journey also traverses all six System pages and the template and port
+forwarding forms, including their final actions. It cancels destructive dialogs
+and asserts that no spawn action was activated.
+
+For offline states that would otherwise require provider failures or destructive
+operations, export the real page renderers with deterministic operation results:
+
+```sh
+NIDO_TUI_GALLERY_JSON="$scratch/gallery.json" go test ./internal/tui/app -run TestScreenGallery -count=1
+PYTHONPATH="$observer" python3 -B tests/tui_gallery.py "$scratch/gallery.json" "$scratch/gallery"
+```
+
+Inspect every gallery page: each state includes 120x36, 80x24, 60x15 and 40x10.
+The test also renders the wide recovery and checks geometry and footer contracts.
+The gallery covers all routes, System details, confirmation/form/list dialogs,
+errors, diagnostic/update/cache results, and background progress. It never runs
+operation commands; these offline views complement the actual PTY journey and
+are not evidence that an update, removal or diagnostic operation succeeded.
+`NIDO_THEME=light` with `NIDO_TUI_TEST_THEME=light` exports a light-theme gallery.

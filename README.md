@@ -105,8 +105,9 @@ its own QEMU; see [the installers guide](installers/README.md#nix-flake-from-sou
 [availability and commands](installers/README.md#winget-windows).
 
 For MCP clients, use `npx -y nido-mcp mcp`, discover
-`io.github.Josepavese/nido` in the **Official MCP Registry**, browse **Glama**,
-or import the **MCPB bundle**. [MCP catalogs and client installation](installers/README.md#mcp-catalogs-and-client-installation).
+`io.github.Josepavese/nido` in the **Official MCP Registry**, browse the **Glama**
+directory for local installation instructions, or import the **MCPB bundle**.
+[MCP catalogs and client installation](installers/README.md#mcp-catalogs-and-client-installation).
 
 [All install options](installers/README.md) · [Distribution channel status](docs/DISTRIBUTION.md)
 
@@ -146,6 +147,23 @@ poweroff for a clean OS shutdown. VM data persists until you delete it.
 Watch core changes in another terminal with `nido events` or `nido events --json`.
 TUI sessions update from the shared stream; agents explicitly subscribe only to
 the resources they need. See [event delivery and mute controls](docs/events.md).
+
+## A little room to roost
+
+Run `nido gui` for a keyboard and mouse dashboard. The shared TUI kit adapts
+from a split Fleet view to compact lists and scrollable dialogs, keeping your
+work in place as you resize. Below its usable size, the interface rests until
+you give it more room.
+
+![Nido Fleet at 80x24, with VM details and visible keyboard shortcuts](resources/tui-fleet.png)
+
+Even at 40x10, confirmation and cancellation stay within reach:
+
+![Create Template dialog at 40x10, with Confirm and Cancel visible](resources/tui-compact.png)
+
+These are native terminal captures with private demonstration metadata. No VM
+was started for the screenshots. [Themes](docs/customization.md) ·
+[Reusable TUI kit](internal/tui/kit/README.md)
 
 ## Connect your agent
 

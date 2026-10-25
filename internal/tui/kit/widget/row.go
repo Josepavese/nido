@@ -1,6 +1,7 @@
 package widget
 
 import (
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -127,7 +128,9 @@ func (r *Row) Next() bool {
 	// Try to find next focusable element
 	for i := start + 1; i < len(r.Elements); i++ {
 		if r.Elements[i].Focusable() {
-			r.Elements[r.FocusIndex].Blur()
+			if r.FocusIndex >= 0 && r.FocusIndex < len(r.Elements) {
+				r.Elements[r.FocusIndex].Blur()
+			}
 			r.FocusIndex = i
 			return true
 		}
@@ -145,7 +148,9 @@ func (r *Row) Prev() bool {
 	// Try to find prev focusable element
 	for i := start - 1; i >= 0; i-- {
 		if r.Elements[i].Focusable() {
-			r.Elements[r.FocusIndex].Blur()
+			if r.FocusIndex >= 0 && r.FocusIndex < len(r.Elements) {
+				r.Elements[r.FocusIndex].Blur()
+			}
 			r.FocusIndex = i
 			return true
 		}
@@ -156,24 +161,6 @@ func (r *Row) Prev() bool {
 
 func (r *Row) Update(msg tea.Msg) (Element, tea.Cmd) {
 	var cmd tea.Cmd
-
-	// Horizontal Navigation
-	if kmsg, ok := msg.(tea.KeyMsg); ok {
-		switch kmsg.String() {
-		case "left":
-			if r.FocusIndex > 0 {
-				r.Elements[r.FocusIndex].Blur()
-				r.FocusIndex--
-				return r, r.Elements[r.FocusIndex].Focus()
-			}
-		case "right":
-			if r.FocusIndex < len(r.Elements)-1 {
-				r.Elements[r.FocusIndex].Blur()
-				r.FocusIndex++
-				return r, r.Elements[r.FocusIndex].Focus()
-			}
-		}
-	}
 
 	// Update only the focused element (standard for forms) or all?
 	// Row usually updates all because some might show status?
@@ -195,76 +182,110 @@ func (r *Row) Update(msg tea.Msg) (Element, tea.Cmd) {
 	return r, cmd
 }
 
-func (r *Row) SetWidth(w int) {
-	r.width = w
-	if len(r.Elements) == 0 {
-		return
+// rectangles is shared by drawing, focus following and mouse hit detection.
+func (r *Row) rectangles(width int) []layout.Rect {
+	count := len(r.Elements)
+	if count == 0 {
+		return nil
 	}
-
-	// Calculate spacing: 1 char between each element
-	numGaps := len(r.Elements) - 1
-	totalSpacing := numGaps
-
-	// Available width after accounting for spacing
-	availableWidth := w - totalSpacing
-	if availableWidth < 0 {
-		availableWidth = 0
+	available := max(0, width-(count-1)*layout.RowGap)
+	weights := make([]int, count)
+	total := 0
+	for i := range weights {
+		weights[i] = 1
+		if len(r.Weights) == count && r.Weights[i] > 0 {
+			weights[i] = r.Weights[i]
+		}
+		total += weights[i]
 	}
-
-	// Use weighted distribution if weights are provided
-	if len(r.Weights) == len(r.Elements) {
-		totalWeight := 0
-		for _, weight := range r.Weights {
-			totalWeight += weight
+	widths := make([]int, count)
+	remaining := available
+	stacked := false
+	for i := range widths {
+		widths[i] = available * weights[i] / total
+		if i == count-1 {
+			widths[i] = remaining
 		}
-
-		// Distribute width proportionally and handle rounding
-		remainingWidth := availableWidth
-		for i, el := range r.Elements {
-			if i == len(r.Elements)-1 {
-				// Last element gets all remaining width (handles rounding)
-				el.SetWidth(remainingWidth)
-			} else {
-				elementWidth := (availableWidth * r.Weights[i]) / totalWeight
-				el.SetWidth(elementWidth)
-				remainingWidth -= elementWidth
-			}
+		remaining -= widths[i]
+		stacked = stacked || widths[i] < elementMinWidth(r.Elements[i])
+	}
+	rects := make([]layout.Rect, count)
+	x, y := 0, 0
+	for i, el := range r.Elements {
+		w := widths[i]
+		if stacked {
+			w = width
 		}
-	} else {
-		// Equal distribution with rounding compensation
-		baseWidth := availableWidth / len(r.Elements)
-		remainder := availableWidth % len(r.Elements)
-
-		for i, el := range r.Elements {
-			elementWidth := baseWidth
-			// Distribute remainder across first elements
-			if i < remainder {
-				elementWidth++
-			}
-			el.SetWidth(elementWidth)
+		el.SetWidth(w)
+		h := lipgloss.Height(el.View(w))
+		rects[i] = layout.NewRect(x, y, w, h)
+		if stacked {
+			y += h
+		} else {
+			x += w + layout.RowGap
 		}
 	}
+	return rects
 }
-
+func (r *Row) SetWidth(w int) { r.width = max(0, w); r.rectangles(r.width) }
 func (r *Row) View(width int) string {
 	if width > 0 {
-		r.SetWidth(width)
+		r.width = width
 	}
-
+	rects := r.rectangles(r.width)
 	var views []string
-	for _, el := range r.Elements {
-		views = append(views, el.View(0)) // Width already set via SetWidth
+	for i, el := range r.Elements {
+		views = append(views, el.View(rects[i].Width))
 	}
-
-	// Add spacing between elements
-	spacer := " "
-	var spacedViews []string
-	for i, v := range views {
-		spacedViews = append(spacedViews, v)
-		if i < len(views)-1 {
-			spacedViews = append(spacedViews, spacer)
+	if len(rects) > 1 && rects[1].Y > 0 {
+		return layout.VStack(0, views...)
+	}
+	return layout.HStack(layout.RowGap, views...)
+}
+func (r *Row) HandleMouse(x, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
+	for i, rect := range r.rectangles(r.width) {
+		el := r.Elements[i]
+		if !rect.Contains(x, y) || !el.Focusable() {
+			continue
+		}
+		if r.FocusIndex >= 0 && r.FocusIndex < len(r.Elements) {
+			if r.FocusIndex >= 0 && r.FocusIndex < len(r.Elements) {
+				r.Elements[r.FocusIndex].Blur()
+			}
+		}
+		r.FocusIndex = i
+		cmd := el.Focus()
+		if clickable, ok := el.(interface {
+			HandleMouse(int, int, tea.MouseMsg) (tea.Cmd, bool)
+		}); ok {
+			action, handled := clickable.HandleMouse(x-rect.X, y-rect.Y, msg)
+			return tea.Batch(cmd, action), handled
+		}
+		return cmd, true
+	}
+	return nil, false
+}
+func elementAnchor(el Element, width int) layout.Rect {
+	if !el.Focused() {
+		return layout.Rect{}
+	}
+	if row, ok := el.(*Row); ok {
+		for i, rect := range row.rectangles(width) {
+			if row.Elements[i].Focused() {
+				child := elementAnchor(row.Elements[i], rect.Width)
+				child.X += rect.X
+				child.Y += rect.Y
+				return child
+			}
 		}
 	}
+	return layout.NewRect(0, 0, width, lipgloss.Height(el.View(width)))
+}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, spacedViews...)
+// Buttons need their label and frame, not the editing space of a text field.
+func elementMinWidth(el Element) int {
+	if button, ok := el.(*Button); ok && (button.Centered || button.Role == RoleSubmit) {
+		return min(layout.FieldMinWidth, lipgloss.Width(button.Text)+layout.FieldFrameWidth)
+	}
+	return layout.FieldMinWidth
 }

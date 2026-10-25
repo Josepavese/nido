@@ -137,6 +137,57 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View
 func (m Model) View() string {
-    return m.form.View()
+    return m.form.Viewport(width, height)
 }
 ```
+
+## Responsive contract
+
+The kit owns terminal geometry (`layout`), theme tokens, reflow and hit testing.
+Pages pass their measured rectangle to `Form.Viewport(layout.FormWidth(...), height)`.
+Do not impose a local minimum width or draw a second version of a form row.
+
+- `SplitView` shows one pane when a sidebar and a useful detail no longer fit.
+  `MasterDetail` owns the visible pane, Enter/Tab to open and Esc to return.
+  A resize preserves selection, focus and draft values.
+- `Row` reflows into stacked fields when its weighted columns become too small.
+  Drawing, mouse hits and focus following consume the same rectangles.
+- `ScrollView` keeps a changed focus visible and supports manual scrolling without
+  snapping back. Forms accept PgUp/PgDn and the mouse wheel, including read-only
+  details. Its last line shows the current range when content overflows.
+- `TabBar` returns content and click rectangles together. The compact bar retains
+  all routes. `StatusBar` keeps complete hints and the exit command, prioritizing
+  the current task. Input arrows move the caret; Ctrl+Left/Right changes routes.
+- All overlays use the same measured dialog frame. Confirmation controls remain
+  visible while long messages scroll. Cancel remains the default selection.
+- Below the viable terminal dimensions, `RenderResizeNotice` rests the interface
+  and suspends hidden input. Background messages continue; Ctrl+C still exits.
+  Zero-sized terminals render nothing. The size policy lives in `layout`.
+
+Every TUI change requires visual inspection of actual terminal output at wide,
+compact and minimum dimensions, including a shrink/expand round trip, drafts,
+long/Unicode content and active overlays. Unit geometry checks do not replace
+this inspection. The native PTY journey and optional HTML observer are documented
+in [TESTING.md](../../../TESTING.md#tui-resize-and-visual-inspection).
+
+### Empty states, selections and overlays
+
+`RenderEmptyState(icon, title, message, width, height)` is the shared invitation
+for unselected details. Pages supply domain wording and theme icons; the kit
+measures, wraps and places it. Cards balance their title with secondary text
+using cell-safe truncation. Button rows use the buttons' actual content budget
+before stacking them.
+
+`Overlay` includes its contextual `Shortcuts()`. `ActiveOverlay` resolves a
+page's priority once for drawing, mouse input and hints. `Shell.Overlay` hosts
+application-wide dialogs through the same body geometry and footer. Modal input
+blocks route changes while Ctrl+C/Ctrl+Q remain available. Footers deduplicate
+keys; confirmation defaults to cancellation and normal alerts carry an explicit
+severity. A form modal uses Tab to reach its actions and Esc to cancel.
+
+List viewports own a single numeric pagination row, without the underlying
+list's extra spacer. Items may implement `Selectable() bool` for visible,
+informational sections that keyboard and mouse navigation skip. List dialogs
+shrink to their content and retain their preferred dimensions as upper bounds.
+Theme names have a stable order; live preview is a draft until saved, and
+cancelling the picker restores the selected theme.

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -116,7 +117,7 @@ func (s *ActionStack) Height() int {
 		return 0
 	}
 	// Compact Card: 1 line of content + 2 lines of border = 3 lines.
-	return len(s.Items) * 3
+	return len(s.Items) * layout.TaskCardHeight
 }
 
 // View renders the stack
@@ -213,4 +214,20 @@ func (s *ActionStack) View(width int) string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, rows...)
+}
+
+// Viewport keeps task identity and count visible when boxed cards cannot fit.
+func (s *ActionStack) Viewport(width, height int) string {
+	if len(s.Items) == 0 || width <= 0 || height <= 0 {
+		return ""
+	}
+	if height >= s.Height() {
+		return layout.Fit(width, height, s.View(width))
+	}
+	a := s.Items[0]
+	text := a.Spinner.View() + " " + a.Message
+	if len(s.Items) > 1 {
+		text += fmt.Sprintf(" (+%d)", len(s.Items)-1)
+	}
+	return layout.Fit(width, height, theme.Current().Styles.Accent.Render(text))
 }

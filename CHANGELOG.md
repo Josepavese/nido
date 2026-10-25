@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [4.9.0] - 2026-10-25 "Room to Roost"
+
+### Added
+
+- Make the reusable TUI kit adapt from wide dashboards to compact lists and
+  dialogs, with a resting view below the usable terminal size and draft recovery
+  when the terminal grows again.
+- Add shared empty states, content-sized dialog frames, numeric pagination,
+  overlay shortcuts and consistent focus handling across all TUI screens.
+- Publish signed APT and DNF repositories for amd64 and arm64 from the same
+  GitHub release binaries; retain Homebrew, Scoop, npm, MCP Registry and GHCR.
+- Add a source-based Nix flake with QEMU on PATH and CI qualification tied to
+  the canonical changelog version.
+
+### Fixed
+
+- Keep dialog confirmation and cancellation reachable at 40x10, including
+  template names, port forwarding, theme selection and system forms.
+- Preserve text editing, mouse targets, selected images and modal identity
+  across resize and background updates; prevent hidden controls from acting.
+- Roll back theme previews on cancel, keep Unicode titles within card bounds,
+  and skip informational sections during keyboard navigation.
+- Honor Ctrl+C and Ctrl+Q immediately after Escape, and remove duplicate or
+  blocked route shortcuts from modal footers.
+- Preserve terminal background colors in visual exports; qualify shared kit
+  states at four sizes and exercise the actual binary through a native PTY.
+
+### Changed
+
+- Keep Glama as a directory for local MCP setup, with hosted auto-release off.
+  Withdrawal of the previously hosted Glama version remains an external task.
+- Add real terminal captures to the README and share their canonical assets
+  with the wiki. No CLI/MCP contract or VM data migration is required.
+
 ## [4.8.7] - 2026-10-24 "Live Nest"
 
 ### Added

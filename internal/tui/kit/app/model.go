@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/shell"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
@@ -33,27 +34,28 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	// Check for blocking viewlet (Modal active)
-	blocking := false
-	if v := a.Shell.ActiveViewlet(); v != nil {
-		blocking = v.IsModalActive()
-	}
+	blocking := a.Shell.IsModalActive()
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "ctrl+q":
+		if view.IsQuitMessage(msg) {
 			if a.OnQuit != nil {
 				a.OnQuit()
 			}
 			return a, tea.Quit
+		}
+		if !layout.IsViable(a.Shell.Width, a.Shell.Height) && a.Shell.Width > 0 {
+			return a, nil
+		}
+		switch msg.String() {
 		// GLOBAL NAV: Intercept Arrow Keys for Tab Switching
-		case "right":
-			if !blocking {
+		case "right", "ctrl+right":
+			if !blocking && (msg.String() == "ctrl+right" || a.Shell.ActiveViewlet() == nil || !a.Shell.ActiveViewlet().HasActiveTextInput()) {
 				a.Shell.NextTab()
 				return a, nil
 			}
-		case "left":
-			if !blocking {
+		case "left", "ctrl+left":
+			if !blocking && (msg.String() == "ctrl+left" || a.Shell.ActiveViewlet() == nil || !a.Shell.ActiveViewlet().HasActiveTextInput()) {
 				a.Shell.PrevTab()
 				return a, nil
 			}
@@ -77,6 +79,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, tea.Quit
 		}
+	case tea.MouseMsg:
+		if !layout.IsViable(a.Shell.Width, a.Shell.Height) {
+			return a, nil
+		}
+		_, _, _, mouseCmd, _ := a.Shell.HandleMouse(msg)
+		return a, mouseCmd
 	case tea.WindowSizeMsg:
 		a.Shell.Resize(msg.Width, msg.Height)
 		// We might need to repaint explicitly if View() relies on it,

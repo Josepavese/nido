@@ -45,43 +45,38 @@ func TestRect_Inner(t *testing.T) {
 }
 
 func TestCalculateGrid(t *testing.T) {
-	// Constants validation
-	// Header=2, SubHeader=2, Footer=1. Total Chrome = 5.
-
-	tests := []struct {
-		name        string
-		w, h        int
-		wantBodyH   int
-		wantFooterY int
-	}{
-		{"Standard (84x26)", 84, 26, 21, 25}, // 26 - 5 = 21
-		{"Exact Chrome (80x5)", 80, 5, 0, 4}, // Body is 0
-		{"Too Small (80x4)", 80, 4, 0, 3},    // Footer is at y=3 (last line), Header takes 3, SubHeader takes 1?
-		// Logic trace: H=3 (avail 1), SH=1 (avail 0), F=0? Let's check test result.
-		{"Zero Height", 80, 0, 0, 0},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g := CalculateGrid(tt.w, tt.h, 0)
-
-			if g.Body.Height != tt.wantBodyH {
-				t.Errorf("Body Height mismatch: got %d, want %d", g.Body.Height, tt.wantBodyH)
-			}
-
-			// Footer should always be at the bottom if enough space
-			if tt.h >= 6 {
-				if g.Footer.Y != tt.wantFooterY {
-					t.Errorf("Footer Y mismatch: got %d, want %d", g.Footer.Y, tt.wantFooterY)
+	for _, w := range []int{0, 1, 25, 40, 60, 80, 120, 160} {
+		for h := 0; h <= 50; h++ {
+			for _, tasks := range []int{0, 3, 300} {
+				g := CalculateGrid(w, h, tasks)
+				zones := []Rect{g.Header, g.ActionStack, g.Body, g.Footer}
+				y := 0
+				for _, r := range zones {
+					if r.Y != y || r.Width != w || r.Height < 0 {
+						t.Fatalf("bad rectangle %v at %dx%d", r, w, h)
+					}
+					y += r.Height
+				}
+				if y != h {
+					t.Fatalf("grid uses %d rows, available %d", y, h)
+				}
+				if h > 0 && g.Footer.Height != 1 {
+					t.Fatal("exit hint starved")
+				}
+				if h >= MinHeight && g.Body.Height < 1 {
+					t.Fatal("body starved by tasks")
 				}
 			}
-
-			// Sanity check: Total height usage
-			// Sum of all heights should <= tt.h
-			totalUsed := g.Header.Height + g.SubHeader.Height + g.Body.Height + g.Footer.Height
-			if totalUsed > tt.h {
-				t.Errorf("Grid overflow: usage %d > total %d", totalUsed, tt.h)
+		}
+	}
+}
+func TestFormWidthNeverExceedsPane(t *testing.T) {
+	for w := 0; w <= 200; w++ {
+		for _, inset := range []int{0, 4, 20, 200} {
+			got := FormWidth(w, inset)
+			if got < 0 || got > w || got > FormMaxWidth {
+				t.Fatalf("invalid form width %d from %d", got, w)
 			}
-		})
+		}
 	}
 }

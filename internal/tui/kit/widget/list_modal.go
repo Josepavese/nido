@@ -3,6 +3,7 @@ package widget
 import (
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -19,6 +20,7 @@ type ListModal struct {
 	Width       int
 	Height      int
 	BorderColor lipgloss.TerminalColor // Optional override
+	listRect    layout.Rect
 }
 
 // NewListModal creates a new modal with a list.
@@ -107,9 +109,17 @@ func (m *ListModal) Update(msg tea.Msg) (*ListModal, tea.Cmd) {
 }
 
 func (m *ListModal) HandleMouse(x, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
-	// Mouse support for list not fully implemented in this simple modal wrapper
-	// but could be passed through.
-	return nil, false // Consume click if in bounds?
+	if !m.Active || !m.listRect.Contains(x, y) {
+		return nil, m.Active
+	}
+	previous := m.List.Index()
+	adapter := &SidebarList{ListView: ListView{Model: &m.List}, focused: true}
+	_, _, handled := adapter.HandleMouse(x-m.listRect.X, y-m.listRect.Y, msg)
+	if m.List.Index() != previous && m.OnHighlight != nil {
+		m.OnHighlight(m.List.SelectedItem())
+	}
+	return nil, handled
+
 }
 
 // View replicates the BoxedSidebar layout: Header Card + Styled List Box
@@ -144,68 +154,13 @@ func (m *ListModal) View(parentWidth, parentHeight int) string {
 		borderColor = m.BorderColor
 	}
 
-	// 2.5 Update Paginator Styles (Reactive)
-	m.List.Paginator.ActiveDot = lipgloss.NewStyle().Foreground(t.Palette.Accent).Render("•")
-	m.List.Paginator.InactiveDot = lipgloss.NewStyle().Foreground(t.Palette.SurfaceHighlight).Render("•")
-
-	// Calculate correct dimensions accounting for border and padding
-
-	// ... logic remains same ...
-	styleHeight := m.Height - 4
-	styleWidth := m.Width - 6
-
-	if styleHeight < 1 {
-		styleHeight = 1
-	}
-	if styleWidth < 1 {
-		styleWidth = 1
-	}
-
-	borderStyle := t.Styles.Border.
-		BorderForeground(borderColor).
-		Width(styleWidth).
-		// Height(styleHeight). // Removed to let border wrap content naturally (prevents bottom clipping)
-		Padding(1, 2).
-		Align(lipgloss.Center) // Center align content (User request)
-
-	// 3. Inner Content Layout
-	const titleH = 1
-	const spacerH = 1
-
-	listH := styleHeight - titleH - spacerH
-	listW := styleWidth
-
-	if listH < 1 {
-		listH = 1
-	}
-
-	// 4. Resize List to fit exactly
-	m.List.SetSize(listW, listH)
-
-	// 5. Render Components
-	// Title needs to be cleanly rendered without background
-	titleStyle := t.Styles.Title.
-		Padding(0, 1) // Keep padding but remove background
-
-	// Center title within the box width manually since we are Left aligning the container
-	title := layout.Center(listW, titleStyle.Render(m.Title))
-
-	content := lipgloss.JoinVertical(lipgloss.Center,
-		title,
-		"", // Spacer
-		m.List.View(),
-	)
-
-	dialog := borderStyle.Render(content)
-
-	return layout.PlaceOverlay(parentWidth, parentHeight, dialog)
-}
-
-func (m *ListModal) Resize(w, h int) {
-	// Optional: responsive resize logic
-	// m.Width = w / 2
-	// m.Height = h / 2
-	// m.List.SetSize(m.Width-4, m.Height-4)
+	naturalHeight := max(1, len(m.List.Items())) + layout.DialogHeadingHeight + layout.DialogBorder + 2*layout.DialogPaddingY
+	dbox := measureDialog(parentWidth, parentHeight, m.Width, min(m.Height, naturalHeight))
+	title := layout.Fit(dbox.inner.Width, 1, t.Styles.Title.Render(m.Title))
+	resizeList(&m.List, dbox.inner.Width, max(1, dbox.inner.Height-layout.DialogHeadingHeight))
+	m.listRect = layout.NewRect(dbox.inner.X, dbox.inner.Y+layout.DialogHeadingHeight, dbox.inner.Width, dbox.inner.Height-layout.DialogHeadingHeight)
+	content := title + "\n" + renderList(&m.List, dbox.inner.Width, m.listRect.Height)
+	return dbox.render(parentWidth, parentHeight, content, borderColor)
 }
 
 // SimpleListItem is a helper for simple string lists
@@ -216,3 +171,7 @@ func (i SimpleListItem) Title() string       { return string(i) }
 func (i SimpleListItem) Description() string { return "" }
 func (i SimpleListItem) Icon() string        { return "" }
 func (i SimpleListItem) IsAction() bool      { return false }
+
+func (m *ListModal) Shortcuts() []view.Shortcut {
+	return []view.Shortcut{{Key: "↑/↓", Label: "choose"}, {Key: "enter", Label: "select"}, {Key: "esc", Label: "cancel"}}
+}

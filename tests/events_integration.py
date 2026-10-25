@@ -7,16 +7,13 @@ PTY checks run on Unix; native transport contract tests run on every CI host.
 import json
 import os
 import pathlib
-import pty
 import queue
-import select
-import struct
 import subprocess
 import tempfile
 import threading
 import time
-import fcntl
-import termios
+
+from tui_terminal import TUI
 
 BINARY = str(pathlib.Path(os.environ['NIDO_TEST_BINARY']).resolve())
 STORAGE = os.environ.get('NIDO_TEST_STORAGE', tempfile.gettempdir())
@@ -99,56 +96,6 @@ class MCP:
         self.thread.join(timeout=TIMEOUT)
         assert self.process.returncode == 0, self.process.stderr.read()
 
-
-class TUI:
-    def __init__(self, environment, cwd):
-        self.master, slave = pty.openpty()
-        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 45, 150, 0, 0))
-        self.process = subprocess.Popen([BINARY, 'gui'], env=environment, cwd=cwd,
-                                        stdin=slave, stdout=slave, stderr=slave,
-                                        start_new_session=True)
-        os.close(slave)
-        self.output = bytearray()
-        self.stop = threading.Event()
-        self.thread = threading.Thread(target=self.read, daemon=True)
-        self.thread.start()
-
-    def read(self):
-        while not self.stop.is_set():
-            if select.select([self.master], [], [], .1)[0]:
-                try:
-                    data = os.read(self.master, 65536)
-                except OSError:
-                    return
-                if not data:
-                    return
-                self.output.extend(data)
-                assert len(self.output) < 2 * 1024 * 1024, 'unbounded PTY trace'
-
-    def key(self, key):
-        os.write(self.master, key)
-
-    def text(self, value, after=0):
-        deadline = time.monotonic() + TIMEOUT
-        while time.monotonic() < deadline:
-            if value.encode() in self.output[after:]:
-                return
-            assert self.process.poll() is None, self.output.decode(errors='replace')[-2000:]
-            time.sleep(.025)
-        raise AssertionError(f'TUI did not render {value!r}: ' + self.output.decode(errors='replace')[-4000:])
-
-    def close(self):
-        self.key(b'\x03')
-        try:
-            self.process.wait(timeout=TIMEOUT)
-        finally:
-            if self.process.poll() is None:
-                self.process.kill()
-                self.process.wait()
-            self.stop.set()
-            self.thread.join(timeout=TIMEOUT)
-            os.close(self.master)
-        assert self.process.returncode == 0, self.output.decode(errors='replace')[-2000:]
 
 
 def run():
@@ -250,8 +197,8 @@ def run():
             (home/f'vms/{vm}.qcow2').unlink()
             active.notified(uri)
             assert not active.resource('nido://fleet/vms')['vms']
-            a.text('Select VM', cuts[0])
-            b.text('Select VM', cuts[1])
+            a.text('Room for a new bird', cuts[0])
+            b.text('Room for a new bird', cuts[1])
             print(json.dumps(dict(result='PASS', scope='Linux real PTY and independent processes',
                                   two_tuis=True, background_route=True, draft_preserved=True, cli_to_mcp=True,
                                   no_unsolicited_notifications=True, mute_unmute=True,

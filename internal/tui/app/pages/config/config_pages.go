@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Josepavese/nido/v4/internal/build"
+	"github.com/Josepavese/nido/v4/internal/image"
 	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
@@ -77,8 +78,8 @@ func NewConfigPageGlobalForm(parent *Config) *ConfigPageGlobalForm {
 	})
 
 	p.Form = widget.NewForm(
-		p.InputSSHUser,
-		p.ToggleLinkedClones,
+		p.Header,
+		widget.NewRow(p.InputSSHUser, p.ToggleLinkedClones),
 		p.InputBackupDir,
 		p.InputImageDir,
 		p.SubmitButton,
@@ -109,10 +110,7 @@ func (p *ConfigPageGlobalForm) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 func (p *ConfigPageGlobalForm) View() string {
 	w := p.Width()
-	safeWidth := w - 4
-	if safeWidth > 60 {
-		safeWidth = 60
-	}
+	safeWidth := layout.FormWidth(w, theme.Inset.TotalContent)
 	p.Form.Width = safeWidth
 
 	// Parent handles modal rendering globally
@@ -120,18 +118,7 @@ func (p *ConfigPageGlobalForm) View() string {
 		return ""
 	}
 
-	// Custom Layout: Header + Horizontal Row + Rest
-	rowUser := p.InputSSHUser.View(safeWidth/2 - 1)
-	rowClone := p.ToggleLinkedClones.View(safeWidth/2 - 1)
-	row := layout.HStack(2, rowUser, rowClone)
-
-	return layout.VStack(0,
-		p.Header.View(safeWidth),
-		row,
-		p.InputBackupDir.View(safeWidth),
-		p.InputImageDir.View(safeWidth),
-		p.SubmitButton.View(safeWidth),
-	)
+	return p.Form.Viewport(safeWidth, p.Height())
 }
 func (p *ConfigPageGlobalForm) Focus() tea.Cmd {
 	p.BaseViewlet.Focus()
@@ -146,7 +133,8 @@ func (p *ConfigPageGlobalForm) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewl
 		cmd, handled := p.Modal.HandleMouse(x, y, msg)
 		return p, cmd, handled
 	}
-	return p, nil, false
+	cmd, handled := p.Form.HandleMouse(x, y, msg)
+	return p, cmd, handled
 }
 
 func (p *ConfigPageGlobalForm) IsModalActive() bool {
@@ -169,11 +157,8 @@ func (p *ConfigPageGlobalForm) Focusable() bool {
 }
 
 func (p *ConfigPageGlobalForm) Shortcuts() []fv.Shortcut {
-	if p.IsModalActive() {
-		return []fv.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
+	if overlay := p.Parent.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 	return []fv.Shortcut{
 		{Key: "tab", Label: "glide"},
@@ -256,6 +241,7 @@ func (p *ConfigPageUpdate) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 				"Your Nest is already at the latest evolutionary state.\nNo ascension required.",
 				nil,
 			)
+			p.ResultModal.SetLevel(widget.ModalLevelSuccess)
 			p.ResultModal.Show()
 		} else if msg.Manual && msg.Err != nil {
 			p.ResultModal = widget.NewAlertModal(
@@ -274,14 +260,14 @@ func (p *ConfigPageUpdate) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 				"Nido has been successfully upgraded.\nPlease restart the application to apply changes.",
 				nil,
 			)
-			p.ResultModal.BorderColor = theme.Current().Palette.Success
+			p.ResultModal.SetLevel(widget.ModalLevelSuccess)
 		} else {
 			p.ResultModal = widget.NewAlertModal(
 				"Evolution Failed",
 				fmt.Sprintf("Failed to upgrade Nido:\n%v", msg.Err),
 				nil,
 			)
-			p.ResultModal.BorderColor = theme.Current().Palette.Error
+			p.ResultModal.SetLevel(widget.ModalLevelDanger)
 		}
 		p.ResultModal.Show()
 		return p, nil
@@ -320,12 +306,9 @@ func (p *ConfigPageUpdate) View() string {
 		return "" // Parent handles rendering
 	}
 	w := p.Width()
-	safeWidth := w - 4
-	if safeWidth > 60 {
-		safeWidth = 60
-	}
+	safeWidth := layout.FormWidth(w, theme.Inset.TotalContent)
 	p.Form.Width = safeWidth
-	return p.Form.View(safeWidth)
+	return p.Form.Viewport(safeWidth, p.Height())
 }
 func (p *ConfigPageUpdate) IsModalActive() bool {
 	return (p.ConfirmModal != nil && p.ConfirmModal.IsActive()) || (p.ResultModal != nil && p.ResultModal.IsActive())
@@ -339,7 +322,8 @@ func (p *ConfigPageUpdate) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, 
 		cmd, handled := p.ConfirmModal.HandleMouse(x, y, msg)
 		return p, cmd, handled
 	}
-	return p, nil, false
+	cmd, handled := p.Form.HandleMouse(x, y, msg)
+	return p, cmd, handled
 }
 
 func (p *ConfigPageUpdate) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
@@ -360,11 +344,8 @@ func (p *ConfigPageUpdate) Focusable() bool {
 }
 
 func (p *ConfigPageUpdate) Shortcuts() []fv.Shortcut {
-	if p.IsModalActive() {
-		return []fv.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
+	if overlay := p.Parent.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 	return []fv.Shortcut{
 		{Key: "enter", Label: "engage"},
@@ -411,7 +392,6 @@ func (p *ConfigPageCache) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 	// Handle Prune Result locally to show Modal
 	if res, ok := msg.(ops.OpResultMsg); ok && res.Op == "prune" && res.Err == nil {
-		t := theme.Current()
 		title := "Prune Complete"
 		body := "Cache is clean."
 
@@ -419,29 +399,12 @@ func (p *ConfigPageCache) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 			if stats.Count == 0 {
 				body = "Nothing to prune.\nYour cache is already efficient."
 			} else {
-				// We still need to import "github.com/Josepavese/nido/v4/internal/image" if we want FormatBytes
-				// But we can rely on wiring.go for logging, and just show simple text here?
-				// Or better, let's just show raw numbers or simple format if we don't want to add import.
-				// Wait, "image" package is not imported in this file.
-				// I'll stick to simple formatting to avoid import cycle or mess, or I can add the import.
-				// Actually, `wiring.go` uses `image.FormatBytes`.
-				// Let's assume we can add the import or use a simple string.
-				// Check imports at top of file.
-				// It does NOT import `internal/image`.
-				// I'll add the import in a separate edit if needed, or just format simply.
-				// Since I'm in `ConfigPageCache.Update`, I can't easily add import in this block.
-				// I will use a simple "bytes" suffix or similar.
-				// Wait, I can use `theme.FormatBytes` if it existed? It was removed/didn't exist.
-				// I'll use simple integer division for MB if large enough, or just show bytes.
-				// Or I can add the import. Let's add the import first in a separate step to be clean.
-				// For now, I'll place a placeholder and fix import in next step.
-				mb := float64(stats.Reclaimed) / 1024 / 1024
-				body = fmt.Sprintf("Removed %d images.\nReclaimed %.2f MB.", stats.Count, mb)
+				body = fmt.Sprintf("Removed %d images.\nReclaimed %s.", stats.Count, image.FormatBytes(stats.Reclaimed))
 			}
 		}
 
 		p.ResultModal = widget.NewAlertModal(title, body, nil)
-		p.ResultModal.BorderColor = t.Palette.Success
+		p.ResultModal.SetLevel(widget.ModalLevelSuccess)
 		p.ResultModal.Show()
 		return p, nil
 	}
@@ -464,10 +427,7 @@ func (p *ConfigPageCache) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 func (p *ConfigPageCache) View() string {
 	w := p.Width()
-	safeWidth := w - 4
-	if safeWidth > 60 {
-		safeWidth = 60
-	}
+	safeWidth := layout.FormWidth(w, theme.Inset.TotalContent)
 	p.Form.Width = safeWidth
 
 	if p.ResultModal != nil && p.ResultModal.IsActive() {
@@ -480,7 +440,7 @@ func (p *ConfigPageCache) View() string {
 		return ""
 	}
 
-	return p.Form.View(safeWidth)
+	return p.Form.Viewport(safeWidth, p.Height())
 }
 func (p *ConfigPageCache) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
 func (p *ConfigPageCache) Blur()          { p.BaseViewlet.Blur(); p.Form.Blur() }
@@ -500,11 +460,8 @@ func (p *ConfigPageCache) Focusable() bool {
 }
 
 func (p *ConfigPageCache) Shortcuts() []fv.Shortcut {
-	if p.ResultModal != nil && p.ResultModal.IsActive() {
-		return []fv.Shortcut{
-			{Key: "enter", Label: "ok"},
-			{Key: "esc", Label: "close"},
-		}
+	if overlay := p.Parent.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 	return []fv.Shortcut{
 		{Key: "enter", Label: "purge"},
@@ -522,7 +479,8 @@ func (p *ConfigPageCache) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, t
 		cmd, handled := p.ResultModal.HandleMouse(x, y, msg)
 		return p, cmd, handled
 	}
-	return p, nil, false
+	cmd, handled := p.Form.HandleMouse(x, y, msg)
+	return p, cmd, handled
 }
 
 // --- Doctor Page ---
@@ -545,7 +503,8 @@ func NewConfigPageDoctor(parent *Config) *ConfigPageDoctor {
 		return ops.RunDoctor()
 	})
 
-	p.Form = widget.NewForm(p.RunButton)
+	p.Form = widget.NewForm(widget.NewCard(theme.IconDoctor, "Health", "Keep the nest in good shape."), p.RunButton)
+	p.Form.Spacing = 0
 	return p
 }
 
@@ -565,10 +524,14 @@ func (p *ConfigPageDoctor) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 	case ops.DoctorResultMsg:
 		p.Reports = msg.Reports
 		p.Err = msg.Err
+		if p.Err != nil {
+			p.Modal = widget.NewAlertModal("Diagnostics failed", p.Err.Error(), func() tea.Cmd { return func() tea.Msg { return FocusSidebarMsg{} } })
+			p.Modal.Show()
+			return p, nil
+		}
 
 		if p.Err == nil && len(p.Reports) > 0 {
 			// Create Result Modal
-			t := theme.Current()
 			passed := 0
 			for _, r := range p.Reports {
 				if r.Passed {
@@ -592,9 +555,9 @@ func (p *ConfigPageDoctor) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 			p.Modal = widget.NewAlertModal("System Health Report", summary, func() tea.Cmd {
 				return func() tea.Msg { return FocusSidebarMsg{} }
 			})
-			p.Modal.BorderColor = t.Palette.Success
+			p.Modal.SetLevel(widget.ModalLevelSuccess)
 			if integrity < 100 {
-				p.Modal.BorderColor = t.Palette.Error
+				p.Modal.SetLevel(widget.ModalLevelDanger)
 			}
 			p.Modal.MessageAlign = lipgloss.Left
 			p.Modal.Show()
@@ -611,20 +574,10 @@ func (p *ConfigPageDoctor) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 }
 func (p *ConfigPageDoctor) View() string {
 	w := p.Width()
-	safeWidth := w - 4
-	if safeWidth > 60 {
-		safeWidth = 60
-	}
+	safeWidth := layout.FormWidth(w, theme.Inset.TotalContent)
 	p.Form.Width = safeWidth
 
-	base := p.Form.View(safeWidth)
-
-	if p.Err != nil {
-		errStyle := lipgloss.NewStyle().Foreground(theme.Current().Palette.Error).Padding(1, 2)
-		base = layout.VStack(0, base, errStyle.Render("Critical failure: "+p.Err.Error()))
-	}
-
-	return base
+	return p.Form.Viewport(safeWidth, p.Height())
 }
 func (p *ConfigPageDoctor) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
 func (p *ConfigPageDoctor) Blur()          { p.BaseViewlet.Blur(); p.Form.Blur() }
@@ -644,11 +597,8 @@ func (p *ConfigPageDoctor) Focusable() bool {
 }
 
 func (p *ConfigPageDoctor) Shortcuts() []fv.Shortcut {
-	if p.IsModalActive() {
-		return []fv.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
+	if overlay := p.Parent.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 	return []fv.Shortcut{
 		{Key: "enter", Label: "scan"},
@@ -663,7 +613,8 @@ func (p *ConfigPageDoctor) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, 
 		cmd, handled := p.Modal.HandleMouse(x, y, msg)
 		return p, cmd, handled
 	}
-	return p, nil, false
+	cmd, handled := p.Form.HandleMouse(x, y, msg)
+	return p, cmd, handled
 }
 
 // --- Appearance Page ---
@@ -735,12 +686,10 @@ func NewConfigPageAppearance(parent *Config) *ConfigPageAppearance {
 			// However, to see it, we might want to apply it.
 			theme.SetTheme(name)
 
-			// Also update the parent config field so it gets saved on "SAVE"
-			parent.cfg.Theme = name
-
 			return func() tea.Msg { return FocusSidebarMsg{} } // Return valid command or msg
 		},
 		func() tea.Cmd {
+			theme.SetTheme(p.SelectTheme.Value)
 			return nil
 		},
 	)
@@ -807,10 +756,8 @@ func NewConfigPageAppearance(parent *Config) *ConfigPageAppearance {
 	p.Form = widget.NewForm(
 		p.Header,
 		p.SelectTheme, // Added first
-		p.InputSidebarWidth,
-		p.InputSidebarWideWidth,
-		p.InputTabMinWidth,
-		p.InputGapScale,
+		widget.NewRow(p.InputSidebarWidth, p.InputSidebarWideWidth),
+		widget.NewRow(p.InputTabMinWidth, p.InputGapScale),
 		p.SubmitButton,
 	)
 	p.Form.Spacing = 0
@@ -845,10 +792,7 @@ func (p *ConfigPageAppearance) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 func (p *ConfigPageAppearance) View() string {
 	w := p.Width()
-	safeWidth := w - 4
-	if safeWidth > 60 {
-		safeWidth = 60
-	}
+	safeWidth := layout.FormWidth(w, theme.Inset.TotalContent)
 
 	// Render Modals on top
 	if p.ThemeModal.IsActive() {
@@ -872,25 +816,7 @@ func (p *ConfigPageAppearance) View() string {
 
 	p.Form.Width = safeWidth
 
-	// Custom Layout for Appearance
-	// Row 1: Sidebar W | Wide W
-	rowSidebar := layout.HStack(2,
-		p.InputSidebarWidth.View((safeWidth/2)-1),
-		p.InputSidebarWideWidth.View((safeWidth/2)-1),
-	)
-	// Row 2: Tab Min W | Gap Scale
-	rowOther := layout.HStack(2,
-		p.InputTabMinWidth.View((safeWidth/2)-1),
-		p.InputGapScale.View((safeWidth/2)-1),
-	)
-
-	return layout.VStack(0,
-		p.Header.View(safeWidth),
-		p.SelectTheme.View(safeWidth), // Theme Select full width
-		rowSidebar,
-		rowOther,
-		p.SubmitButton.View(safeWidth),
-	)
+	return p.Form.Viewport(safeWidth, p.Height())
 }
 
 func (p *ConfigPageAppearance) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
@@ -916,19 +842,8 @@ func (p *ConfigPageAppearance) Focusable() bool {
 }
 
 func (p *ConfigPageAppearance) Shortcuts() []fv.Shortcut {
-	if p.IsModalActive() {
-		// If list modal is active, arrow keys are relevant
-		if p.ThemeModal != nil && p.ThemeModal.IsActive() {
-			return []fv.Shortcut{
-				{Key: "↑/↓", Label: "nav"},
-				{Key: "enter", Label: "select"},
-				{Key: "esc", Label: "cancel"},
-			}
-		}
-		return []fv.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
+	if overlay := p.Parent.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 	return []fv.Shortcut{
 		{Key: "tab", Label: "glide"},
@@ -942,16 +857,8 @@ func (p *ConfigPageAppearance) HandleMouse(x int, y int, msg tea.MouseMsg) (fv.V
 		return p, nil, true
 	}
 
-	headerContent := p.Header.View(p.Width() - 4)
-	headerHeight := lipgloss.Height(headerContent)
-
-	if y >= headerHeight {
-		formY := y - headerHeight
-		cmd, handled := p.Form.HandleMouse(x, formY, msg)
-		return p, cmd, handled
-	}
-
-	return p, nil, false
+	cmd, handled := p.Form.HandleMouse(x, y, msg)
+	return p, cmd, handled
 }
 
 // --- Uninstall Page (Danger Zone) ---
@@ -981,7 +888,7 @@ func NewConfigPageUninstall(parent *Config) *ConfigPageUninstall {
 	)
 	p.Modal.SetWidth(60)
 	// Make the modal scary
-	p.Modal.BorderColor = theme.Current().Palette.Error
+	p.Modal.SetLevel(widget.ModalLevelDanger)
 
 	p.UninstallButton = widget.NewSubmitButton("", "UNINSTALL NIDO", func() tea.Cmd {
 		p.Modal.Show()
@@ -1015,17 +922,14 @@ func (p *ConfigPageUninstall) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 func (p *ConfigPageUninstall) View() string {
 	w := p.Width()
-	safeWidth := w - 4
-	if safeWidth > 60 {
-		safeWidth = 60
-	}
+	safeWidth := layout.FormWidth(w, theme.Inset.TotalContent)
 	p.Form.Width = safeWidth
 
 	if p.Modal.IsActive() {
 		return ""
 	}
 
-	return p.Form.View(safeWidth)
+	return p.Form.Viewport(safeWidth, p.Height())
 }
 
 func (p *ConfigPageUninstall) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
@@ -1054,15 +958,13 @@ func (p *ConfigPageUninstall) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewle
 		cmd, handled := p.Modal.HandleMouse(x, y, msg)
 		return p, cmd, handled
 	}
-	return p, nil, false
+	cmd, handled := p.Form.HandleMouse(x, y, msg)
+	return p, cmd, handled
 }
 
 func (p *ConfigPageUninstall) Shortcuts() []fv.Shortcut {
-	if p.IsModalActive() {
-		return []fv.Shortcut{
-			{Key: "enter", Label: "confirm destruction"},
-			{Key: "esc", Label: "abort"},
-		}
+	if overlay := p.Parent.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 	return []fv.Shortcut{
 		{Key: "enter", Label: "initiate"},

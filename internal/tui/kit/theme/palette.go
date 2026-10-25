@@ -50,12 +50,12 @@ var Dark = Palette{
 	Background:       lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0F1216"},
 	Surface:          lipgloss.AdaptiveColor{Light: "#F5F7FA", Dark: "#151A21"},
 	SurfaceSubtle:    lipgloss.AdaptiveColor{Light: "#E8ECF0", Dark: "#1A2028"},
-	SurfaceHighlight: lipgloss.AdaptiveColor{Light: "#DCE0E6", Dark: "#2A323C"}, // Slightly lighter than subtle
+	SurfaceHighlight: lipgloss.AdaptiveColor{Light: "#DCE0E6", Dark: "#3B4654"}, // Slightly lighter than subtle
 
 	// Text hierarchy
 	Text:      lipgloss.AdaptiveColor{Light: "#1A1A1A", Dark: "#E6EBF2"},
-	TextDim:   lipgloss.AdaptiveColor{Light: "#666666", Dark: "#707D8C"},
-	TextMuted: lipgloss.AdaptiveColor{Light: "#999999", Dark: "#4A5568"},
+	TextDim:   lipgloss.AdaptiveColor{Light: "#666666", Dark: "#98A5B5"},
+	TextMuted: lipgloss.AdaptiveColor{Light: "#999999", Dark: "#7B899B"},
 
 	// Accent - Nido blue
 	Accent:       lipgloss.AdaptiveColor{Light: "#3BA3E6", Dark: "#76C7FF"},

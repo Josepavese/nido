@@ -1,10 +1,12 @@
 package widget
 
 import (
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -20,10 +22,8 @@ type Modal struct {
 	active        bool
 	selectedIsYes bool // true = Yes/Confirm, false = No/Cancel
 
-	// Layout state for hit detection
-	lastW, lastH    int
-	yesX, noX, btnY int
-	okX             int
+	confirmHit, cancelHit layout.Rect
+	messageView           ScrollView
 
 	// Configuration
 	SingleButton bool // If true, shows only one button (OK/Close)
@@ -51,8 +51,8 @@ func NewModal(title, message string, onConfirm, onCancel func() tea.Cmd) *Modal 
 		Message:      message,
 		OnConfirm:    onConfirm,
 		OnCancel:     onCancel,
-		width:        50,
-		height:       10,
+		width:        layout.ModalWidth,
+		height:       layout.ModalHeight,
 		MessageAlign: lipgloss.Center,
 		Level:        ModalLevelNormal,
 	}
@@ -64,8 +64,9 @@ func NewAlertModal(title, message string, onDismiss func() tea.Cmd) *Modal {
 		Message:      message,
 		OnConfirm:    onDismiss, // We treat Dismiss as Confirm (OK) behavior
 		SingleButton: true,
-		width:        60, // Slightly wider for error messages
-		height:       10,
+		Level:        ModalLevelDanger,
+		width:        layout.AlertWidth, // Slightly wider for error messages
+		height:       layout.ModalHeight,
 		MessageAlign: lipgloss.Center,
 	}
 }
@@ -76,6 +77,7 @@ func (m *Modal) SetLevel(l ModalLevel) { m.Level = l }
 
 func (m *Modal) Show() {
 	m.active = true
+	m.messageView = ScrollView{}
 	m.selectedIsYes = false // Default to safe option (No/Cancel), unless SingleButton
 	if m.SingleButton {
 		m.selectedIsYes = true // Only one option, so it's selected
@@ -96,8 +98,15 @@ func (m *Modal) Update(msg tea.Msg) (*Modal, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		cmd, _ := m.HandleMouse(msg.X, msg.Y, msg)
+		return m, cmd
 	case tea.KeyMsg:
 		switch msg.String() {
+		case "pgup":
+			m.messageView.Scroll(-m.messageView.height)
+		case "pgdown":
+			m.messageView.Scroll(m.messageView.height)
 		case "left", "right", "h", "l", "tab", "shift+tab":
 			if !m.SingleButton {
 				m.selectedIsYes = !m.selectedIsYes
@@ -140,165 +149,81 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 	if !m.active {
 		return ""
 	}
-
 	t := theme.Current()
-
-	// 1. Content Styling
-	borderColor := m.BorderColor
-	if borderColor == nil {
-		switch m.Level {
-		case ModalLevelDanger:
-			borderColor = t.Palette.Error
-		case ModalLevelSuccess:
-			borderColor = t.Palette.Success
-		default:
-			borderColor = t.Palette.Accent
-		}
-
-		if m.SingleButton && m.Level == ModalLevelNormal {
-			borderColor = t.Palette.Error // Alerts default to error-ish if not specified, legacy compat
-		}
-	}
-
-	horizontalPadding := 4 // 2 left + 2 right
-	horizontalBorder := 2  // 1 left + 1 right
-
-	// Dynamic Width Adjustment (Responsive)
-	// If parent is smaller than desired width, shrink to fit parent - margin
-	effectiveWidth := m.width
-	if parentWidth > 0 && effectiveWidth > parentWidth-2 {
-		effectiveWidth = parentWidth - 2
-		if effectiveWidth < 20 { // Minimum viable width
-			effectiveWidth = 20
-		}
-	}
-
-	contentWidth := effectiveWidth - horizontalPadding - horizontalBorder
-	if contentWidth < 1 {
-		contentWidth = 1
-	}
-
-	dialogStyle := t.Styles.Border.
-		BorderForeground(borderColor).
-		Padding(1, 2).
-		Width(effectiveWidth - horizontalBorder).
-		Align(lipgloss.Center)
-
-	// 2. Buttons
-	buttons := ""
-	if m.SingleButton {
-		okStyle := lipgloss.NewStyle().Foreground(t.Palette.Background).Background(t.Palette.Error).Bold(true).Padding(0, 2)
-		buttons = okStyle.Render("Close")
-		m.btnY = 2 + (strings.Count(m.Message, "\n") + 1) + 1
-		m.okX = (effectiveWidth - lipgloss.Width(buttons)) / 2
-	} else {
-		yesStyle := lipgloss.NewStyle().Foreground(t.Palette.TextDim)
-		noStyle := lipgloss.NewStyle().Foreground(t.Palette.TextDim)
-
-		activeColor := t.Palette.Accent
+	color := m.BorderColor
+	if color == nil {
+		color = t.Palette.Accent
 		if m.Level == ModalLevelDanger {
-			activeColor = t.Palette.Error
-		} else if m.Level == ModalLevelSuccess {
-			activeColor = t.Palette.Success
+			color = t.Palette.Error
 		}
-
-		activeStyle := lipgloss.NewStyle().Foreground(t.Palette.Background).Background(activeColor).Bold(true).Padding(0, 1)
-
-		if m.selectedIsYes {
-			yesStyle = activeStyle
-		} else {
-			noStyle = activeStyle
+		if m.Level == ModalLevelSuccess {
+			color = t.Palette.Success
 		}
-
-		yesLabel := "Yes"
-		noLabel := "No"
-		yesWidth := lipgloss.Width(yesStyle.Render(yesLabel))
-		noWidth := lipgloss.Width(noStyle.Render(noLabel))
-		spacing := 3
-
-		buttons = lipgloss.JoinHorizontal(lipgloss.Center,
-			yesStyle.Render(yesLabel),
-			strings.Repeat(" ", spacing),
-			noStyle.Render(noLabel),
-		)
-
-		// Record relative positions for mouse
-		totalBtnsWidth := yesWidth + spacing + noWidth
-		m.yesX = (effectiveWidth - totalBtnsWidth) / 2
-		m.noX = m.yesX + yesWidth + spacing
-		m.btnY = 2 + (strings.Count(m.Message, "\n") + 1) + 1
 	}
-
-	// 3. Layout
-	titleStyle := t.Styles.Title
-	if m.Level == ModalLevelDanger || (m.SingleButton && m.Level == ModalLevelNormal) {
-		titleStyle = titleStyle.Foreground(t.Palette.Error)
-	} else if m.Level == ModalLevelSuccess {
-		titleStyle = titleStyle.Foreground(t.Palette.Success)
+	// Wrap before measuring; never crop away confirmation/cancellation controls.
+	d := measureDialog(parentWidth, parentHeight, m.width, parentHeight)
+	message := ansi.Wrap(m.Message, max(1, d.inner.Width), "")
+	naturalH := lipgloss.Height(message) + layout.DialogBorder + layout.DialogPaddingY*2 + layout.DialogHeadingHeight + layout.DialogControlsHeight + theme.Space.SM
+	d = measureDialog(parentWidth, parentHeight, m.width, max(m.height, naturalH))
+	title := t.Styles.Title.Foreground(color).Render(ansi.Truncate(m.Title, d.inner.Width, "…"))
+	buttonStyle := lipgloss.NewStyle().Foreground(t.Palette.TextDim).Padding(0, 1)
+	selectedStyle := buttonStyle.Foreground(t.Palette.Background).Background(color).Bold(true)
+	yes, no := buttonStyle, selectedStyle
+	if m.selectedIsYes {
+		yes, no = selectedStyle, buttonStyle
 	}
-
-	content := lipgloss.JoinVertical(lipgloss.Center,
-		titleStyle.Render(m.Title),
-		"",
-		lipgloss.PlaceHorizontal(contentWidth, m.MessageAlign, t.Styles.TextDim.Render(m.Message)),
-		"",
-		buttons,
-	)
-
-	dialog := dialogStyle.Render(content)
-
-	m.lastW = parentWidth
-	m.lastH = parentHeight
-
-	return layout.PlaceOverlay(parentWidth, parentHeight, dialog)
+	var buttons string
+	confirmW, cancelW := 0, 0
+	if m.SingleButton {
+		buttons = selectedStyle.Render("Close")
+		confirmW = lipgloss.Width(buttons)
+	} else {
+		confirm := yes.Render("Yes")
+		cancel := no.Render("No")
+		confirmW, cancelW = lipgloss.Width(confirm), lipgloss.Width(cancel)
+		buttons = confirm + strings.Repeat(" ", layout.DialogButtonGap) + cancel
+	}
+	messageH := max(0, d.inner.Height-layout.DialogHeadingHeight-layout.DialogControlsHeight)
+	body := m.messageView.Render(d.inner.Width, messageH, lipgloss.NewStyle().Width(d.inner.Width).Align(m.MessageAlign).Render(t.Styles.TextDim.Render(message)), layout.Rect{})
+	content := lipgloss.JoinVertical(lipgloss.Center, layout.Center(d.inner.Width, title), body, layout.Center(d.inner.Width, buttons))
+	btnX := d.inner.X + (d.inner.Width-lipgloss.Width(buttons))/2
+	btnY := d.inner.Y + d.inner.Height - 1
+	m.confirmHit = layout.NewRect(btnX, btnY, confirmW, 1)
+	m.cancelHit = layout.NewRect(btnX+confirmW+layout.DialogButtonGap, btnY, cancelW, 1)
+	return d.render(parentWidth, parentHeight, content, color)
 }
-
 func (m *Modal) HandleMouse(x, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
-	if !m.active || (msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress) {
+	if !m.active {
 		return nil, false
 	}
-
-	effectiveWidth := m.width
-	if m.lastW > 0 && effectiveWidth > m.lastW-2 {
-		effectiveWidth = m.lastW - 2
-	}
-
-	dialogX := (m.lastW - effectiveWidth) / 2
-	dialogY := (m.lastH - m.height) / 2
-
-	lx := x - dialogX
-	ly := y - dialogY
-
-	if lx < 0 || ly < 0 || lx >= effectiveWidth || ly >= m.height {
-		return nil, false
-	}
-
-	if ly >= m.btnY-1 && ly <= m.btnY+1 {
-		if m.SingleButton {
-			m.Hide()
-			if m.OnConfirm != nil {
-				return m.OnConfirm(), true
-			}
+	if msg.Action == tea.MouseActionPress {
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			m.messageView.Scroll(-1)
 			return nil, true
-		} else {
-			if lx >= m.yesX-1 && lx <= m.yesX+4 {
-				m.selectedIsYes = true
+		case tea.MouseButtonWheelDown:
+			m.messageView.Scroll(1)
+			return nil, true
+		case tea.MouseButtonLeft:
+			if m.confirmHit.Contains(x, y) {
 				m.Hide()
 				if m.OnConfirm != nil {
 					return m.OnConfirm(), true
 				}
-				return nil, true
-			}
-			if lx >= m.noX-1 && lx <= m.noX+4 {
-				m.selectedIsYes = false
+			} else if m.cancelHit.Contains(x, y) {
 				m.Hide()
 				if m.OnCancel != nil {
 					return m.OnCancel(), true
 				}
-				return nil, true
 			}
 		}
 	}
-
 	return nil, true
+}
+
+func (m *Modal) Shortcuts() []view.Shortcut {
+	if m.SingleButton {
+		return []view.Shortcut{{Key: "enter/esc", Label: "close"}, {Key: "pgup/pgdn", Label: "scroll"}}
+	}
+	return []view.Shortcut{{Key: "tab", Label: "choose"}, {Key: "enter", Label: "select"}, {Key: "esc", Label: "cancel"}, {Key: "pgup/pgdn", Label: "scroll"}}
 }
