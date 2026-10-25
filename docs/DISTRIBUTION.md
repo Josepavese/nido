@@ -269,9 +269,8 @@ release.
 
 ### 2.7 Smithery - removed
 
-The `SMITHERY_API_KEY` channel was dropped: Smithery shut down its MCP proxy and
-managed identity on 2026-10-31, so the account and key no longer bought durable
-reach. The release job, the gate output and the secret entry are gone; no action
+The Smithery integration was retired from the supported distribution map.
+The release job and its credential gate are gone; no publication or setup action
 is required from maintainers. Nido remains discoverable through the Official
 MCP Registry and the directories listed in §2.8.
 

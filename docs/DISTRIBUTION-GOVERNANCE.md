@@ -36,7 +36,7 @@ repositories' cron jobs.
 | When | Action | Where the state lives |
 | --- | --- | --- |
 | Once, now | await the WinGet moderator merge; reconcile the pending Glama hosted withdrawal; submit directory forms if separately authorized; configure AUR when an account is available | links in `DISTRIBUTION.md` §2.7–§2.9 |
-| Every release (2 min, only if something looks off) | glance at the release workflow summary; the container and package jobs smoke-test their own published URLs and log a warning instead of failing the release | Actions run for the tag |
+| Every release | inspect per-job results and read the published versions back; container/package smoke checks are non-blocking, so warnings need explicit reconciliation | Actions run for the tag |
 | Quarterly | re-read `DISTRIBUTION.md` §3 (dropped channels), check PAT/secret expiry, confirm Pages and keyring are live, close stale submission PRs | this file + `DISTRIBUTION.md` |
 | Before 2029-10-24 | rotate the package signing key: new key, new keyring file name, update `signed-by=`/`gpgkey=` and `PACKAGES_GPG_KEY`, keep the old keyring published for one cycle | `DISTRIBUTION.md` §2.10 |
 | On GitHub plan changes | confirm Actions minutes/quota still cover macOS/Windows jobs; their three OS checks are required by branch protection | repo settings |
@@ -56,7 +56,7 @@ review or crawl remains pending until its result is observable.
 
 Manual: only the items in §2. A release is complete when `nido version`,
 `npm view nido-mcp version`, the MCP Registry listing, the container tag and
-`https://josepavese.github.io/nido/apt/dists/stable/Release` all agree on the
+the signed [APT package index](https://josepavese.github.io/nido/apt/dists/stable/main/binary-amd64/Packages.gz) all agree on the
 same version. Also verify the Homebrew/Scoop manifests and checksums, the
 signed APT/DNF package metadata, and a local install from the published native
 archive. Visually inspect that installed TUI at wide and compact sizes.
