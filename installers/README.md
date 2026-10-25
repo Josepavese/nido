@@ -50,6 +50,7 @@ review it, then execute the saved file.
 | DNF, Fedora / RHEL | [Nido DNF repository](#dnf-fedora--rhel) → `sudo dnf install nido` |
 | Container, Docker / Podman | `docker run -i --rm --device /dev/kvm --group-add "$(stat -c %g /dev/kvm)" -v nido-home:/home/nido/.nido ghcr.io/josepavese/nido mcp` |
 | Go toolchain | `go install github.com/Josepavese/nido/v4/cmd/nido@latest` |
+| Nix flake (Linux / macOS) | `nix run github:Josepavese/nido` (builds from source, wraps QEMU) |
 
 The npm launcher downloads the matching binary on first use and verifies it
 against release `SHA256SUMS`. Go install builds from source and does not install
@@ -72,6 +73,22 @@ docker run -i --rm --device /dev/kvm \
 Without `--device /dev/kvm` and the matching group id the container falls back
 to emulation or fails `nido doctor`; the image runs as the non-root `nido` user
 with `/home/nido/.nido` as its data volume.
+
+### Nix (flake, from source)
+
+The repository ships a `flake.nix`; Nix builds the current source and wraps
+`PATH` so the flake's QEMU is available at runtime:
+
+```bash
+nix run github:Josepavese/nido -- version
+nix run github:Josepavese/nido -- doctor
+```
+
+`nix profile install github:Josepavese/nido` adds `nido` and `nido-validator`
+to the profile. The version reported by the flake is read from `CHANGELOG.md`,
+so it tracks tags without a manual bump. Nixpkgs itself is intentionally not
+targeted: one flake avoids the weeks-long nixpkgs review while giving the same
+`nix run` entry point.
 
 ### APT (Debian / Ubuntu)
 
@@ -143,7 +160,7 @@ QEMU remains a host prerequisite, whichever Nido channel you choose.
 These catalogs help clients discover the server. Nido runs locally over stdio;
 QEMU, VM disks and host permissions belong to the machine running that process.
 Use the [MCP guide](../docs/mcp.md#configure-a-client) for the exact configuration.
-Smithery publication and other discovery integrations have their own activation
+Discovery integrations (Glama promotion, directory listings) have their own activation
 status in the [distribution guide](../docs/DISTRIBUTION.md).
 
 ## Host prerequisites

@@ -1,8 +1,10 @@
 # Distribution & visibility
 
 How Nido reaches users and AI-agent tooling, and what runs automatically on
-every release. Research verified on **2026-10-24**; the whole pipeline was then
-validated end-to-end on the `v4.8.1` tag (§1.1) and again on `v4.8.3` (§1.3).
+every release. Research verified on **2026-10-25**; the whole pipeline was then
+validated end-to-end on `v4.8.1` (§1.1), `v4.8.3` (§1.3), the GHCR container
+(§1.4) and the signed APT/DNF repositories (§1.5). Release-day manual actions
+are governed by [DISTRIBUTION-GOVERNANCE.md](DISTRIBUTION-GOVERNANCE.md).
 Account/token requirements are listed per channel. For user-facing commands,
 see [installation methods and MCP catalogs](../installers/README.md).
 
@@ -20,12 +22,12 @@ incremental.
 | **GitHub Releases** | tarballs, `nido.mcpb`, `server.json`, `SHA256SUMS`, installers | `GITHUB_TOKEN` | none | Asset names are a contract for every other channel. |
 | **Container image** (GHCR) | `distribution/docker/Dockerfile` built from the release binaries and pushed to `ghcr.io/josepavese/nido` | `GITHUB_TOKEN` (`packages: write`) | none | Every tag publishes `:{version}`, `:{minor}` and `:latest`, bundling QEMU; meant for `/dev/kvm` hosts and MCP stdio use. First publish needs the package made public (`gh api` step in the job). |
 | **APT / DNF repositories** (GitHub Pages) | `bin/publish-packages.sh` builds `.deb`/`.rpm` with nfpm, signs and indexes them; `publish-packages` pushes `gh-pages` | `GITHUB_TOKEN` (`contents: write`) | `PACKAGES_GPG_KEY` (stored in repo secrets) | Live: <https://josepavese.github.io/nido/> — signed APT `Release`/`InRelease`, signed RPM packages and DNF `repomd.xml`; keyring at `/nido-archive-keyring.asc`; both architectures per format. |
+| **Nix flake** (in repo) | `flake.nix` builds from source with `buildGoModule` and wraps QEMU; `Nix flake` CI job builds it on flake/Go changes | none | none | Live: `nix run github:Josepavese/nido`; version read from `CHANGELOG.md`, so tags track automatically. Nixpkgs packaging stays out of scope (§3). |
 | **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: [`io.github.Josepavese/nido`](https://registry.modelcontextprotocol.io/); every tag adds an immutable version. Runs **after** npm and waits for the npm version to appear (publish-time scanning is asynchronous, so the registry validation otherwise races the publish). |
 | **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: [`nido-mcp`](https://www.npmjs.com/package/nido-mcp) with the `latest` dist-tag; every release publishes with provenance, no token stored (§2.4). |
 | **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | `Josepavese.Nido` 4.8.6 is submitted and **fully validated** ([microsoft/winget-pkgs#460843](https://github.com/microsoft/winget-pkgs/pull/460843): 10/10 checks green, CLA signed, token configured); only community-moderator merge remains. Updates automate once merged. |
 | **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours; the dated verification below records tested versions. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
 | **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | **Blocked upstream:** AUR closed new registrations after the June 2026 takeover wave and captchas are still flaky; the job is wired and activates as soon as the three secrets exist. x86_64 only, `-bin` package. |
-| **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | **Deprioritized:** Smithery shuts down its MCP proxy and managed identity on 2026-10-31, so the account/key cost no longer buys durable reach. The job stays wired but is not on the critical path. |
 | **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours; the dated verification below records tested versions. |
 | **Glama** | auto-index + `glama.json` claim | GitHub OAuth, one-time | none | [Nido listing is live](https://glama.ai/mcp/servers/Josepavese/nido); descriptions/categories/README sync from the repo automatically, releases appear after the crawler re-syncs (claiming ownership unlocks a manual re-sync). `glama.json` names the maintainer. Nido is local-only, so Glama is used for **promotion/discovery only**, never to host or proxy the MCP server. |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
@@ -46,7 +48,7 @@ GitHub MCP Registry syncs versions after a manual onboarding.
 - Homebrew tap rendered formula `4.8.1` with SHA-256 values identical to
   `SHA256SUMS`; Scoop bucket manifest points to `4.8.1` with the matching zip
   hash. Both updates ran from their own scheduled workflows with no secrets.
-- Credential-gated jobs (npm, WinGet, Scoop push, AUR, Smithery) were reported
+- Credential-gated jobs (npm, WinGet, Scoop push, AUR) were reported
   as **skipped**, never failed.
 - Open submissions: [awesome-mcp-servers#17428](https://github.com/punkpeye/awesome-mcp-servers/pull/17428),
   [winget-pkgs#460843](https://github.com/microsoft/winget-pkgs/pull/460843) (validated),
@@ -105,7 +107,7 @@ the host passes `/dev/kvm` and the matching group (`--group-add "$(stat -c %g
 acceleration check as failed. The publish job is part of the release workflow,
 so the image appears on the next tag and `:latest` follows.
 
-### 1.5 Verified on 2026-10-24 (APT/DNF repositories)
+### 1.5 Verified on 2026-10-25 (APT/DNF repositories, signed)
 
 The `gh-pages` branch serves APT and DNF repositories built from the `v4.8.7`
 release binaries with nfpm (`nido_4.8.7_amd64.deb`, `nido_4.8.7_arm64.deb`,
@@ -236,12 +238,13 @@ AUR explicitly warns that malfunctioning automated updates can get accounts and
 packages removed; the job is `continue-on-error`, so a failure never blocks a
 release.
 
-### 2.7 Smithery - not configured yet
+### 2.7 Smithery - removed
 
-Log in to Smithery with GitHub, claim the `josepavese` namespace, create an API
-key (Settings → API keys) and store it as `SMITHERY_API_KEY`. Do **not** use
-service tokens: those have a 24-hour TTL. Then `smithery mcp publish` runs on
-every release using the `nido.mcpb` asset.
+The `SMITHERY_API_KEY` channel was dropped: Smithery shut down its MCP proxy and
+managed identity on 2026-10-31, so the account and key no longer bought durable
+reach. The release job, the gate output and the secret entry are gone; no action
+is required from maintainers. Nido remains discoverable through the Official
+MCP Registry and the directories listed in §2.8.
 
 ### 2.8 Manual submissions (once, no automation possible)
 
@@ -305,7 +308,7 @@ Without the secret the script falls back to unsigned repositories
 | Homebrew core | popularity thresholds (see above). |
 | Chocolatey | every version is human-moderated until the package becomes "trusted"; not worth it early. |
 | Snap Store | `classic` confinement needs an uncertain human review; packaging QEMU inside the snap is heavy. |
-| Nixpkgs | one PR + weeks of review; automatic bumps only after merge. A flake in-repo (`nix run github:Josepavese/nido`) is a cheaper alternative. |
+| Nixpkgs | one PR + weeks of review; automatic bumps only after merge. The in-repo flake (see §1) covers `nix run` without that review queue. |
 | Docker MCP Catalog | the catalog runs servers without host `/dev/kvm`, which a VM manager needs; the GHCR image is for self-hosting instead. |
 | Anthropic Claude directory | paid Claude plan; MCPB desktop extensions are no longer accepted (plugin bundles only). |
 | OpenAI plugin directory | local/desktop path is limited to allowlisted partners. |
@@ -355,7 +358,6 @@ URL must contain `mcp` - both registry requirements.
 - MCP package types (mcpb rules): <https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/package-types.mdx>
 - npm trusted publishing: <https://docs.npmjs.com/trusted-publishers>; staged publishing: <https://github.blog/changelog/2026-10-02-npm-staged-publishing-now-supports-creating-new-packages/>
 - npm malware scanning / dual-use: <https://github.blog/changelog/2026-07-28-npm-publish-time-malware-scanning-and-dual-use-metadata/>
-- Smithery publish: <https://smithery.ai/docs/build/publish>, <https://smithery.ai/docs/api-reference/servers/publish-a-server>
 - Glama claim: <https://glama.ai/blog/2025-07-08-what-is-glamajson>
 - awesome-mcp-servers agent fast-track: <https://github.com/punkpeye/awesome-mcp-servers/blob/main/CONTRIBUTING.md>
 - WinGet manifests / validation: <https://github.com/microsoft/winget-pkgs/blob/master/doc/manifest/schema/1.10.0/installer.md>, <https://github.com/microsoft/winget-pkgs/blob/master/doc/Validation.md>
