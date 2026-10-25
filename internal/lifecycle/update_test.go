@@ -121,7 +121,7 @@ func TestUpdaterInstallsVerifiedArtifactAndPreservesData(t *testing.T) {
 	client, request := updaterFixture(t)
 	observed := []events.Event{}
 	request.Events = func(e events.Event) { observed = append(observed, e) }
-	sentinels := []string{filepath.Join(request.NidoDir, "vms", "fixture.qcow2"), filepath.Join(request.NidoDir, "config.env")}
+	sentinels := []string{filepath.Join(request.NidoDir, "vms", "fixture.qcow2"), filepath.Join(request.NidoDir, "config.env"), filepath.Join(request.NidoDir, "run", "fixture.json")}
 	for _, p := range sentinels {
 		os.MkdirAll(filepath.Dir(p), 0755)
 		os.WriteFile(p, []byte("KEEP"), 0600)
@@ -133,7 +133,7 @@ func TestUpdaterInstallsVerifiedArtifactAndPreservesData(t *testing.T) {
 	if len(observed) != 2 || observed[1].Kind != events.Completed {
 		t.Fatalf("update events: %+v", observed)
 	}
-	for p, want := range map[string]string{request.Executable: "NEW EXECUTABLE", request.Executable + ".bak": "OLD EXECUTABLE", sentinels[0]: "KEEP", sentinels[1]: "KEEP"} {
+	for p, want := range map[string]string{request.Executable: "NEW EXECUTABLE", request.Executable + ".bak": "OLD EXECUTABLE", sentinels[0]: "KEEP", sentinels[1]: "KEEP", sentinels[2]: "KEEP"} {
 		data, err := os.ReadFile(p)
 		if err != nil || string(data) != want {
 			t.Fatalf("%s: %s %v", p, data, err)

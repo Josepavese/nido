@@ -214,6 +214,23 @@ its dependency and installation behavior before running it.
 
 Use the package manager that installed Nido, or `nido update` for the standalone
 binary updater. Do not uninstall first: uninstall removes Nido data.
+Self-update replaces the executable and synchronizes the bundled catalog; it
+does not delete VM disks, seeds, configuration or runtime metadata. From 4.10.2,
+archive transfer has a 15-minute total budget, while each metadata request and
+response headers remain bounded to 30 seconds. Prematurely disconnected bodies
+are retried up to three attempts with HTTP Range resumption; a server that
+ignores Range is handled by restarting the download safely. Cancellation or
+failure leaves the previous executable installed and removes private staging.
+Partial downloads are resumed within the same update invocation only.
+
+An older executable still uses its original updater: publishing a new release
+cannot change that timeout in place. If it times out, use the original package
+manager or rerun the binary installer above, preserving the same Nido data
+directory. Never uninstall to repair a download timeout. When crossing from the
+previous AMD64-only metadata to 4.10, follow the explicit
+[architecture migration](../docs/architectures.md) before reopening the fleet;
+the conversion preserves existing VM disks and backs up original metadata.
+
 Read the [changelog](../CHANGELOG.md) for upgrade notes, especially host PCI
 recovery records. Reconnect MCP clients after an executable upgrade so they
 load the current process and schemas.

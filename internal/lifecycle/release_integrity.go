@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/image"
 	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"io"
 	"net/http"
@@ -15,30 +17,44 @@ import (
 const maxChecksumMetadata = 1 << 20
 
 func downloadFile(ctx context.Context, client sysutil.HTTPClient, url, destPath string, expectedSize int64) error {
-	resp, err := getURL(ctx, client, url)
+	ctx, cancel := context.WithTimeout(ctx, updateDownloadTimeout)
+	defer cancel()
+	transfer := image.NewTransfer(image.TransferOptions{Context: ctx, Client: releaseDownloadClient{client, expectedSize}})
+	var err error
+	for attempt := 0; attempt < updateDownloadAttempts; attempt++ {
+		err = transfer.Download(url, destPath, expectedSize)
+		// Resume interrupted bodies through the existing transfer owner. Invalid
+		// ranges, HTTP errors and integrity failures never trigger a retry.
+		if err == nil || ctx.Err() != nil || !errors.Is(err, io.ErrUnexpectedEOF) {
+			break
+		}
+	}
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected HTTP status %d", resp.StatusCode)
+	info, err := os.Stat(destPath)
+	if err == nil && info.Size() != expectedSize {
+		err = fmt.Errorf("release archive size mismatch: expected %d, got %d", expectedSize, info.Size())
 	}
-
-	out, err := os.Create(destPath)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	written, copyErr := io.Copy(out, io.LimitReader(resp.Body, expectedSize+1))
-	if copyErr != nil {
-		return copyErr
-	}
-	if written != expectedSize {
-		return fmt.Errorf("release archive size mismatch: expected %d, got %d", expectedSize, written)
-	}
-	err = out.Close()
 	return err
+}
+
+// Keep untrusted response bodies bounded even when upstream ignores the size
+// announced in release metadata. Close still reaches the transport on all paths.
+type releaseDownloadClient struct {
+	sysutil.HTTPClient
+	expectedSize int64
+}
+
+func (c releaseDownloadClient) Do(req *http.Request) (*http.Response, error) {
+	resp, err := c.HTTPClient.Do(req)
+	if err == nil {
+		resp.Body = struct {
+			io.Reader
+			io.Closer
+		}{io.LimitReader(resp.Body, c.expectedSize+1), resp.Body}
+	}
+	return resp, err
 }
 
 func verifyReleaseAssetChecksum(ctx context.Context, client sysutil.HTTPClient, checksumURL, assetName, archivePath string) error {
