@@ -443,7 +443,6 @@ jobs:
       winget: ${{ steps.gate.outputs.winget }}
       scoop: ${{ steps.gate.outputs.scoop }}
       aur: ${{ steps.gate.outputs.aur }}
-      smithery: ${{ steps.gate.outputs.smithery }}
     steps:
       - name: Check which channel secrets are configured
         id: gate
@@ -451,7 +450,6 @@ jobs:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
           SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY }}
         run: |
           emit() {
             if [ -n "${2:-}" ]; then echo "$1=true"; else echo "$1=false"; fi
@@ -460,7 +458,6 @@ jobs:
             emit winget "$WINGET_TOKEN"
             emit scoop "$SCOOP_BUCKET_TOKEN"
             emit aur "$AUR_SSH_PRIVATE_KEY"
-            emit smithery "$SMITHERY_API_KEY"
           } >> "$GITHUB_OUTPUT"
           echo "Channels:" && cat "$GITHUB_OUTPUT"
 
@@ -603,41 +600,6 @@ jobs:
           commit_message: "nido-bin ${{ env.VERSION }}"
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
 
-  publish-smithery:
-    name: Publish to Smithery
-    needs: [release, dist_gate]
-    if: needs.dist_gate.outputs.smithery == 'true'
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    env:
-      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-
-      - name: Download the MCP bundle from the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          tag="$VERSION"
-          [[ "$tag" == v* ]] || tag="v$tag"
-          gh release download "$tag" --pattern nido.mcpb --dir dist
-          ls -l dist/nido.mcpb
-
-      - name: Publish to Smithery
-        env:
-          SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY }}
-        run: |
-          set -euo pipefail
-          npm install -g smithery@latest
-          smithery mcp publish ./dist/nido.mcpb -n josepavese/nido
-
   # Zero-credential container channel: GHCR accepts the workflow token, and the
   # image is rebuilt from the published release assets on every tag. The image
   # bootstraps QEMU and is meant for hosts that expose /dev/kvm; it does not
@@ -709,6 +671,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh api -X PATCH /user/packages/container/nido -f visibility=public
+
+      - name: Smoke-test the published image
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          image="${IMAGE}:${{ steps.tags.outputs.version }}"
+          for _ in $(seq 1 12); do
+            if docker pull --quiet "$image" >/dev/null 2>&1; then
+              docker run --rm "$image" version
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::warning::image published but not pullable yet"
+          exit 1
 
   # Zero-credential distro repositories: the workflow token pushes a single
   # compact gh-pages commit, and GitHub Pages serves APT (Debian/Ubuntu) and
@@ -786,3 +763,21 @@ jobs:
         run: |
           printf '%s' '{"source":{"branch":"gh-pages","path":"/"}}' \
             | gh api -X POST "repos/${GITHUB_REPOSITORY}/pages" --input - >/dev/null
+
+      - name: Smoke-test the published repositories
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          base=https://josepavese.github.io/nido
+          for _ in $(seq 1 12); do
+            if curl -fsSL --max-time 20 "$base/apt/dists/stable/Release" >/dev/null \
+              && curl -fsSL --max-time 20 "$base/apt/dists/stable/main/binary-amd64/Packages.gz" >/dev/null \
+              && curl -fsSL --max-time 20 "$base/rpm/repodata/repomd.xml" >/dev/null \
+              && curl -fsSL --max-time 20 "$base/rpm/nido.repo" >/dev/null; then
+              echo "APT and DNF repositories are live"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::packages were pushed but Pages has not served them yet"
+          exit 1
