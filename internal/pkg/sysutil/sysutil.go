@@ -56,6 +56,37 @@ func CopyFile(src, dst string) error {
 	return FixPermissions(dst)
 }
 
+// CopyWritableFile copies a private mutable instance from a possibly immutable
+// package/store seed, without changing the source's permissions or bytes.
+func CopyWritableFile(src, dst string) error {
+	if info, err := os.Lstat(dst); err == nil && !info.Mode().IsRegular() {
+		return fmt.Errorf("mutable copy target is not a regular file: %s", dst)
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := CopyFile(src, dst); err != nil {
+		return err
+	}
+	return MakeWritable(dst)
+}
+
+// MakeWritable enables owner writes on an owned regular file. Refuse symlinks:
+// a private mutable instance must not change permissions on a shared seed.
+func MakeWritable(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("writable instance is not a regular file: %s", path)
+	}
+	const ownerWrite = 0200 // Filesystem owner-write permission bit.
+	if info.Mode().Perm()&ownerWrite != 0 {
+		return nil
+	}
+	return os.Chmod(path, info.Mode().Perm()|ownerWrite)
+}
+
 // TempDir returns a cross-platform safe temporary directory for Nido.
 func TempDir() string {
 	dir := filepath.Join(os.TempDir(), "nido")

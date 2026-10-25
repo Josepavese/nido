@@ -163,7 +163,7 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) (resultErr error) {
 	if tpl != "" {
 		sourceVars := image.VariablesPath(tpl)
 		if _, err := os.Stat(sourceVars); err == nil {
-			if err := sysutil.CopyFile(sourceVars, image.VariablesPath(filepath.Join(p.RootDir, "vms", name+".qcow2"))); err != nil {
+			if err := sysutil.CopyWritableFile(sourceVars, image.VariablesPath(filepath.Join(p.RootDir, "vms", name+".qcow2"))); err != nil {
 				return err
 			}
 		} else if !os.IsNotExist(err) {
@@ -418,10 +418,13 @@ func (p *QemuProvider) Start(name string, opts VMOptions) (resultErr error) {
 		}
 		vars := image.VariablesPath(diskPath)
 		if _, err := os.Stat(vars); os.IsNotExist(err) {
-			if err := sysutil.CopyFile(fw.Variables, vars); err != nil {
+			if err := sysutil.CopyWritableFile(fw.Variables, vars); err != nil {
 				return rollback(err)
 			}
 		} else if err != nil {
+			return rollback(err)
+		}
+		if err := sysutil.MakeWritable(vars); err != nil {
 			return rollback(err)
 		}
 		firmwareArgs = machine.FirmwareArgs(fw.Code, vars)
@@ -856,7 +859,7 @@ func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (resul
 	}
 	sourceVars := image.VariablesPath(srcDisk)
 	if _, err := os.Stat(sourceVars); err == nil {
-		if err := sysutil.CopyFile(sourceVars, image.VariablesPath(targetTemplate)); err != nil {
+		if err := sysutil.CopyWritableFile(sourceVars, image.VariablesPath(targetTemplate)); err != nil {
 			return "", err
 		}
 	} else if !os.IsNotExist(err) {

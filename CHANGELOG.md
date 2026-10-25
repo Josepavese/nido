@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [4.10.1] - 2026-10-25 "Private Wings"
+
+### Fixed
+
+- Give ARM UEFI variable copies owner-write permission even when firmware or
+  template seeds are read-only. Preserve shared seeds and existing private
+  variable contents, and repair private copies made by 4.10.0 on restart.
+
 ## [4.10.0] - 2026-10-25 "Native Wings"
 
 ### Added

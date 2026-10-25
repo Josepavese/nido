@@ -56,6 +56,9 @@ ARM64 uses QEMU's `virt` board, virtio PCI disks/networking and AArch64 UEFI.
 Native ARM KVM selects the host GIC version, supporting hosts with GICv2 or
 GICv3 without assuming a PC interrupt controller. Every VM owns writable UEFI variables; firmware code and the packaged variables
 seed are never modified. ARM graphical guests use virtio GPU and USB input.
+Private variable copies remain writable when the firmware seed lives in a
+read-only package store. Version 4.10.1 also repairs an existing read-only
+private variables file on start, preserving its contents.
 See the upstream [virt board](https://www.qemu.org/docs/master/system/arm/virt)
 and [WHPX requirements](https://www.qemu.org/docs/master/system/whpx.html).
 Windows ARM WHPX requires Windows 11 24H2 with the 2025 API updates and a QEMU
