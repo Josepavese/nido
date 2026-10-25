@@ -63,22 +63,22 @@ func Build(config SourcesConfig, previous *image.Catalog, fetcher Fetcher, now t
 		for i := range entry.Versions {
 			v := &entry.Versions[i]
 			v.SizeHuman = image.FormatBytes(v.SizeBytes)
-			if versions[v.Version] {
+			if versions[v.Version+":"+v.Arch] {
 				return nil, nil, nil, fmt.Errorf("%s: duplicate version %s", src.Name, v.Version)
 			}
-			versions[v.Version] = true
+			versions[v.Version+":"+v.Arch] = true
 			if err := validateVersion(*v); err != nil {
 				return nil, nil, nil, fmt.Errorf("%s:%s: %w", src.Name, v.Version, err)
 			}
 			for _, alias := range v.Aliases {
-				if aliases[alias] {
+				if aliases[alias+":"+v.Arch] {
 					return nil, nil, nil, fmt.Errorf("%s: ambiguous alias %q", src.Name, alias)
 				}
-				aliases[alias] = true
+				aliases[alias+":"+v.Arch] = true
 			}
 			var oldVersion *image.Version
 			if previous != nil {
-				_, oldVersion, _ = previous.FindImage(src.Name, v.Version)
+				_, oldVersion, _ = previous.FindImage(src.Name, v.Version, v.Arch)
 			}
 			// Image identity changes need validation even if the OS version is unchanged.
 			if oldVersion == nil || oldVersion.URL != v.URL || oldVersion.Checksum != v.Checksum || oldVersion.ChecksumType != v.ChecksumType || oldVersion.Format != v.Format || oldVersion.Arch != v.Arch || oldVersion.SizeBytes != v.SizeBytes || !reflect.DeepEqual(oldVersion.PartURLs, v.PartURLs) {

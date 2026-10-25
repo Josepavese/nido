@@ -71,7 +71,7 @@ func TestBuildQemuArgs_CrossPlatform(t *testing.T) {
 				p.Hardware = argumentHost{Virtual: hardware.Virtualization{Accelerator: "whpx", CPU: "host"}}
 			}
 			// pass accelerators from test case if present
-			args := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0, nil, tt.opts.Accelerators)
+			args := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0, nil, tt.opts.Accelerators, "amd64")
 
 			// Verify common arguments are present
 			if !contains(args, "-name") {
@@ -140,7 +140,7 @@ func TestBuildQemuArgs_CommonArguments(t *testing.T) {
 		Config:  &config.Config{},
 	}
 
-	args := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0, nil, nil)
+	args := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0, nil, nil, "amd64")
 
 	requiredArgs := map[string]bool{
 		"-name":   false,
@@ -176,7 +176,7 @@ func TestWindowsTCGFallbackArgs(t *testing.T) {
 		"-display", "none",
 	}
 
-	got := windowsTCGFallbackArgs(args)
+	got := windowsTCGFallbackArgs(args, "amd64")
 	if !contains(got, "-accel") || !contains(got, "tcg") {
 		t.Fatalf("fallback args should switch WHPX to TCG: %v", got)
 	}
@@ -199,7 +199,7 @@ func TestBuildQemuArgs_DiskPath(t *testing.T) {
 	}
 
 	diskPath := "/path/to/vm.qcow2"
-	args := p.buildQemuArgs("test-vm", diskPath, 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0, nil, nil)
+	args := p.buildQemuArgs("test-vm", diskPath, 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0, nil, nil, "amd64")
 
 	found := false
 	for _, arg := range args {
@@ -222,7 +222,7 @@ func TestBuildQemuArgs_VNC(t *testing.T) {
 	}
 
 	// 1. Test with VNC enabled (port 5901)
-	args := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 5901, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0, nil, nil)
+	args := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 5901, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0, nil, nil, "amd64")
 	if !contains(args, "-vnc") {
 		t.Error("Missing -vnc argument when port is provided")
 	}
@@ -232,7 +232,7 @@ func TestBuildQemuArgs_VNC(t *testing.T) {
 	}
 
 	// 2. Test with VNC disabled (port 0)
-	argsNoVNC := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0, nil, nil)
+	argsNoVNC := p.buildQemuArgs("test-vm", filepath.Join(os.TempDir(), "test.qcow2"), 50022, 0, nil, filepath.Join(os.TempDir(), "run"), "", 2048, 0, nil, nil, "amd64")
 	if contains(argsNoVNC, "-vnc") {
 		t.Error("-vnc argument should not be present when port is 0")
 	}
@@ -395,8 +395,8 @@ func contains(slice []string, item string) bool {
 // An injected backend proves capability selection independently of native devices.
 type argumentHost struct{ Virtual hardware.Virtualization }
 
-func (h argumentHost) Virtualization() hardware.Virtualization         { return h.Virtual }
-func (argumentHost) ListAccelerators() ([]hardware.Accelerator, error) { return nil, nil }
+func (h argumentHost) Virtualization(guest string) hardware.Virtualization { return h.Virtual }
+func (argumentHost) ListAccelerators() ([]hardware.Accelerator, error)     { return nil, nil }
 func (argumentHost) PreparePassthrough(context.Context, string, string, string) error {
 	return hardware.ErrUnsupported
 }

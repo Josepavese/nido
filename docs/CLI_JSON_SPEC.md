@@ -175,3 +175,9 @@ complete standard response envelope with `command: "events"` and one event in
 operation identity/action, VM, resource URIs and a snapshot marker. A resync
 barrier requires resource refresh; snapshots use its sequence watermark.
 The stream ends on Ctrl+C. See [event semantics](events.md).
+
+VM list/detail and catalog entries include `arch` (`amd64` or `arm64`). VM detail
+includes `virtualization_capability` with the HAL accelerator and CPU model;
+this is capability information, not a runtime QMP observation. Native image
+resolution accepts omitted/`auto` architecture; explicit variants never silently
+fall back to another ISA. `migrate --json` reports the number of records converted.

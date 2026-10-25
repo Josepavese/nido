@@ -49,11 +49,13 @@ type Version struct {
 // CachedImage represents a cached image file on disk.
 // Used for cache management operations.
 type CachedImage struct {
-	Name    string    // Image name (e.g., "ubuntu")
-	Version string    // Version (e.g., "24.04")
-	Path    string    // Full path to cached file
-	Size    int64     // File size in bytes
-	ModTime time.Time // Last modification time
+	Arch     string
+	FileName string
+	Name     string    // Image name (e.g., "ubuntu")
+	Version  string    // Version (e.g., "24.04")
+	Path     string    // Full path to cached file
+	Size     int64     // File size in bytes
+	ModTime  time.Time // Last modification time
 }
 
 // CacheStats provides statistics about the image cache.
@@ -64,3 +66,7 @@ type CacheStats struct {
 	OldestImage time.Time // Modification time of oldest image
 	NewestImage time.Time // Modification time of newest image
 }
+
+// CacheStem is the canonical identity of a downloaded guest artifact.
+func (v Version) CacheStem(name string) string     { return name + "-" + v.Version + "-" + v.Arch }
+func (v Version) CacheFileName(name string) string { return v.CacheStem(name) + ".qcow2" }

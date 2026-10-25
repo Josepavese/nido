@@ -86,7 +86,7 @@ func configTestApp(t *testing.T) *appContext {
 	if err := os.Mkdir(run, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	data := []byte(`{"name":"fixture","pid":0,"memory_mb":512,"vcpus":1,"ssh_port":51022,"ssh_user":"fixture-user","raw_qemu_args":["-name","original-marker"]}`)
+	data := []byte(`{"arch":"amd64","name":"fixture","pid":0,"memory_mb":512,"vcpus":1,"ssh_port":51022,"ssh_user":"fixture-user","raw_qemu_args":["-name","original-marker"]}`)
 	if err := os.WriteFile(filepath.Join(run, "fixture.json"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}

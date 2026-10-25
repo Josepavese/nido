@@ -20,6 +20,7 @@ echo "${RESET}"
 # Detect OS and Architecture
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
+if [ "$OS" = darwin ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" = 1 ]; then ARCH=arm64; fi
 
 # Detect Termux
 IS_TERMUX=0
@@ -119,7 +120,7 @@ if [ ! -x "${PKG_DIR}/nido" ]; then
 fi
 
 # Setup Nido home directory
-NIDO_HOME="${HOME}/.nido"
+NIDO_HOME="${NIDO_HOME:-${HOME}/.nido}"
 mkdir -p "${NIDO_HOME}/bin"
 mkdir -p "${NIDO_HOME}/vms"
 mkdir -p "${NIDO_HOME}/run"
@@ -250,10 +251,12 @@ fi
 
 # --- Dependency Check & Proactive Install ---
 echo "${CYAN}🔍 Checking flight readiness (dependencies)...${RESET}"
+QEMU_RUNTIME=qemu-system-x86_64
+[ "$ARCH" != arm64 ] || QEMU_RUNTIME=qemu-system-aarch64
 QEMU_INSTALLED=0
 QEMU_SYSTEM_INSTALLED=0
 QEMU_IMG_INSTALLED=0
-if command -v qemu-system-x86_64 >/dev/null 2>&1 || command -v qemu-system-aarch64 >/dev/null 2>&1 || command -v qemu-system >/dev/null 2>&1; then
+if command -v "$QEMU_RUNTIME" >/dev/null 2>&1; then
     QEMU_SYSTEM_INSTALLED=1
 fi
 if command -v qemu-img >/dev/null 2>&1; then
@@ -274,11 +277,12 @@ if [ $QEMU_INSTALLED -eq 0 ]; then
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         if [ $IS_TERMUX -eq 1 ]; then
             PKG="qemu-system-x86-64-headless qemu-utils"
+            [ "$ARCH" != arm64 ] || PKG="qemu-system-aarch64-headless qemu-utils"
             echo "${CYAN}🛠️  Installing ${PKG}...${RESET}"
             pkg install -y $PKG
         elif [ "$OS" = "linux" ]; then
             PKG="qemu-system-x86 qemu-utils"
-            [ "$ARCH" = "arm64" ] && PKG="qemu-system-arm qemu-system-gui qemu-utils"
+            [ "$ARCH" = "arm64" ] && PKG="qemu-system-arm qemu-efi-aarch64 qemu-utils"
             echo "${CYAN}🛠️  Updating repositories and installing ${PKG}...${RESET}"
             sudo apt update && sudo apt install -y $PKG
         elif [ "$OS" = "darwin" ]; then
@@ -334,7 +338,7 @@ echo "  1. Reload shell:  ${CYAN}source ${SHELL_RC:-~/.bashrc}${RESET}"
 echo "  2. Verify install: ${CYAN}nido version${RESET}"
 echo "  3. Check system:   ${CYAN}nido doctor${RESET}"
 echo ""
-if { command -v qemu-system-x86_64 >/dev/null 2>&1 || command -v qemu-system-aarch64 >/dev/null 2>&1 || command -v qemu-system >/dev/null 2>&1; } && command -v qemu-img >/dev/null 2>&1; then
+if { command -v "$QEMU_RUNTIME" >/dev/null 2>&1; } && command -v qemu-img >/dev/null 2>&1; then
     if [ "$OS" = "linux" ] && [ $IS_TERMUX -eq 0 ] && [ ! -w /dev/kvm ]; then
         echo "${YELLOW}⚠️  KVM needs permission: sudo usermod -aG kvm \$USER && newgrp kvm${RESET}"
     else
@@ -342,7 +346,7 @@ if { command -v qemu-system-x86_64 >/dev/null 2>&1 || command -v qemu-system-aar
     fi
 else
     QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils"
-    [ "$ARCH" = "arm64" ] && QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-system-gui qemu-utils"
+    [ "$ARCH" = "arm64" ] && QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-efi-aarch64 qemu-utils"
     echo "${YELLOW}💡 Note: You still need QEMU to run VMs${RESET}"
     echo "   Linux: ${CYAN}${QEMU_CMD}${RESET}"
     [ $IS_TERMUX -eq 1 ] && echo "   Termux: ${CYAN}pkg install qemu-system-x86-64-headless qemu-utils${RESET}"

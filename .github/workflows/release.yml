@@ -73,7 +73,8 @@ jobs:
 
       - name: Build release binaries
         run: |
-          bash bin/build-release.sh ${{ env.VERSION }}
+          bash bin/build-release.sh ${{ env.VERSION }} "$RUNNER_TEMP/nido-dist"
+          ln -s "$RUNNER_TEMP/nido-dist" dist
 
       - name: Generate release notes
         id: release_notes
@@ -268,7 +269,7 @@ jobs:
           \`\`\`
           
           #### Windows
-          Download \`nido-windows-amd64.zip\` from the assets below, extract, and add the folder to your PATH.
+          Download \`nido-windows-amd64.zip\` (Intel/AMD) or \`nido-windows-arm64.zip\` (ARM64) from the assets below, extract, and add the folder to your PATH.
           
           ---
           
@@ -302,6 +303,7 @@ jobs:
             dist/nido-darwin-amd64.tar.gz
             dist/nido-darwin-arm64.tar.gz
             dist/nido-windows-amd64.zip
+            dist/nido-windows-arm64.zip
             dist/nido.mcpb
             dist/server.json
             dist/install.sh
@@ -577,13 +579,17 @@ jobs:
           if (-not $tag.StartsWith('v')) { $tag = "v$tag" }
           $version = $tag.Substring(1)
           $sums = Invoke-RestMethod "https://github.com/Josepavese/nido/releases/download/$tag/SHA256SUMS"
-          $sha = ($sums -split "`n" | Where-Object { $_ -match 'nido-windows-amd64\.zip' } | Select-Object -First 1).Trim().Split(' ')[0]
-          if (-not $sha) { throw "SHA256 for nido-windows-amd64.zip not found" }
           $manifestPath = 'bucket/nido.json'
-          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          $manifest = Get-Content 'bucket/nido.json' -Raw | ConvertFrom-Json
           $manifest.version = $version
-          $manifest.architecture.'64bit'.url = "https://github.com/Josepavese/nido/releases/download/$tag/nido-windows-amd64.zip"
-          $manifest.architecture.'64bit'.hash = $sha
+          $manifest.PSObject.Properties.Remove('extract_dir')
+          foreach ($target in @(@('64bit','amd64'), @('arm64','arm64'))) {
+            $asset = "nido-windows-$($target[1]).zip"
+            $line = $sums -split "`n" | Where-Object { $_ -match " $([regex]::Escape($asset))$" } | Select-Object -First 1
+            if (-not $line) { throw "SHA256 missing: $asset" }
+            $entry = @{ url = "https://github.com/Josepavese/nido/releases/download/$tag/$asset"; hash = $line.Trim().Split(' ')[0]; extract_dir = "nido-windows-$($target[1])" }
+            $manifest.architecture | Add-Member -Force -NotePropertyName $target[0] -NotePropertyValue $entry
+          }
           $json = $manifest | ConvertTo-Json -Depth 10
           # Write UTF-8 without BOM: Scoop parsers expect a plain JSON file.
           [System.IO.File]::WriteAllText((Join-Path (Get-Location) $manifestPath), $json)
@@ -617,8 +623,9 @@ jobs:
           version="${tag#v}"
           sums=$(curl -fsSL "https://github.com/Josepavese/nido/releases/download/${tag}/SHA256SUMS")
           sha=$(printf '%s\n' "$sums" | awk '$2 == "nido-linux-amd64.tar.gz" { print $1 }')
-          test -n "$sha"
-          sed -e "s/__PKGVER__/${version}/" -e "s/__SHA256__/${sha}/" \
+          arm_sha=$(printf '%s\n' "$sums" | awk '$2 == "nido-linux-arm64.tar.gz" { print $1 }')
+          test -n "$sha" && test -n "$arm_sha"
+          sed -e "s/__PKGVER__/${version}/" -e "s/__SHA256_AMD64__/${sha}/" -e "s/__SHA256_ARM64__/${arm_sha}/" \
             distribution/aur/PKGBUILD.in > PKGBUILD
           cat PKGBUILD
 
@@ -659,12 +666,17 @@ jobs:
           set -euo pipefail
           tag="$VERSION"
           [[ "$tag" == v* ]] || tag="v$tag"
-          gh release download "$tag" --pattern nido-linux-amd64.tar.gz --dir dist
-          tar -xzf dist/nido-linux-amd64.tar.gz -C dist
           install -d image
           cp distribution/docker/Dockerfile image/Dockerfile
-          install -m 0755 dist/nido-linux-amd64/nido image/nido
-          install -m 0755 dist/nido-linux-amd64/nido-validator image/nido-validator
+          for arch in amd64 arm64; do
+            gh release download "$tag" --pattern "nido-linux-$arch.tar.gz" --dir "$RUNNER_TEMP"
+            tar -xzf "$RUNNER_TEMP/nido-linux-$arch.tar.gz" -C image
+          done
+
+      - name: Set up QEMU for multi-platform image build
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Resolve image tags
         id: tags
@@ -685,6 +697,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: image
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ${{ env.IMAGE }}:${{ steps.tags.outputs.version }}

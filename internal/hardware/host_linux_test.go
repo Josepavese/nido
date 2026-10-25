@@ -178,11 +178,11 @@ func TestPCICancellationPreventsBinding(t *testing.T) {
 func TestVirtualizationUsesAccessibleDevice(t *testing.T) {
 	h, f := pciFixture(t, "7", "0")
 	f.kvmErr = fs.ErrPermission
-	if v := h.Virtualization(); v.Accelerator != "" || v.CPU != "qemu64" {
+	if v := h.Virtualization(sysutil.HostArchitecture()); v.Accelerator != "tcg" || v.CPU != "qemu64" {
 		t.Fatalf("claimed unavailable acceleration: %+v", v)
 	}
 	f.kvmErr = nil
-	if v := h.Virtualization(); v.Accelerator != "kvm" || v.CPU != "host" {
+	if v := h.Virtualization(sysutil.HostArchitecture()); v.Accelerator != "kvm" || v.CPU != "host" {
 		t.Fatalf("lost real capability: %+v", v)
 	}
 }
@@ -222,5 +222,24 @@ func TestPCILeaseRejectsAnotherOwnerAndLegacyRecord(t *testing.T) {
 	data, _ := f.ReadFile("/run/pci-0000:01:00.0.driver")
 	if string(data) != "native" {
 		t.Fatal("historical journal modified")
+	}
+}
+
+func TestForeignGuestNeverUsesHostKVM(t *testing.T) {
+	h, _ := pciFixture(t, "1", "0")
+	guest := "arm64"
+	if sysutil.HostArchitecture() == "arm64" {
+		guest = "amd64"
+	}
+	v := h.Virtualization(guest)
+	if v.Accelerator != "tcg" || v.Accelerated() {
+		t.Fatalf("foreign guest was accelerated: %#v", v)
+	}
+	wantCPU := "max"
+	if guest == "amd64" {
+		wantCPU = "qemu64"
+	}
+	if v.CPU != wantCPU {
+		t.Fatalf("wrong software CPU %#v", v)
 	}
 }

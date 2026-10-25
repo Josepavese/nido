@@ -9,19 +9,19 @@ import (
 	"time"
 )
 
-func (p *QemuProvider) launchQEMU(args []string) (int, error) {
-	pid, err := launchWindowsQEMU(args)
+func (p *QemuProvider) launchQEMU(args []string, arch string) (int, error) {
+	pid, err := launchWindowsQEMU(args, arch)
 	if err == nil {
 		return pid, nil
 	}
-	fallback := windowsTCGFallbackArgs(args)
+	fallback := windowsTCGFallbackArgs(args, arch)
 	if slices.Equal(args, fallback) {
 		return 0, err
 	}
-	return launchWindowsQEMU(fallback)
+	return launchWindowsQEMU(fallback, arch)
 }
-func launchWindowsQEMU(args []string) (int, error) {
-	binary, err := sysutil.QemuSystemBinary()
+func launchWindowsQEMU(args []string, arch string) (int, error) {
+	binary, err := sysutil.QemuSystemBinary(arch)
 	if err != nil {
 		return 0, err
 	}

@@ -29,7 +29,7 @@ func TestConfigRawQemuArgsMCP(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(root, "run"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	state := []byte(`{"name":"fixture","pid":0,"memory_mb":512,"vcpus":1,"ssh_port":51022,"ssh_user":"fixture-user","raw_qemu_args":["-name","original-marker"]}`)
+	state := []byte(`{"arch":"amd64","name":"fixture","pid":0,"memory_mb":512,"vcpus":1,"ssh_port":51022,"ssh_user":"fixture-user","raw_qemu_args":["-name","original-marker"]}`)
 	if err := os.WriteFile(filepath.Join(root, "run", "fixture.json"), state, 0o600); err != nil {
 		t.Fatal(err)
 	}

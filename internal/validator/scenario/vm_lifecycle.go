@@ -402,11 +402,7 @@ func appendDiagnostic(a, b string) string {
 }
 
 func validatorSSHKeyArgs() []string {
-	home, err := sysutil.UserHome()
-	if err != nil {
-		return nil
-	}
-	keyPath := filepath.Join(home, ".nido", "nido_ed25519")
+	keyPath := filepath.Join(sysutil.NidoHome(), "nido_ed25519")
 	if _, err := os.Stat(keyPath); err != nil {
 		return nil
 	}
@@ -545,8 +541,7 @@ func cmdlineTest(ctx *Context) report.StepResult {
 		return startRes
 	}
 
-	home, _ := sysutil.UserHome()
-	vmsDir := filepath.Join(home, ".nido", "vms")
+	vmsDir := filepath.Join(sysutil.NidoHome(), "vms")
 	kernelPath := filepath.Join(vmsDir, vmName+".kernel")
 	if _, err := os.Stat(kernelPath); err == nil {
 		checkRes := runSSHCommand(ctx, sshPort, sshUser, host, "cat /proc/cmdline", 15*time.Second)

@@ -6,6 +6,10 @@ Choose a binary installer, a package manager or an MCP client integration.
 The binary installers require no repository clone or Go toolchain. QEMU is a
 separate runtime dependency.
 
+AMD64 and ARM64 host/guest selection, requirements and data-preserving upgrades:
+[Architecture guide](../docs/architectures.md). Omitted architecture selects native; use `--arch`
+on CLI, `arch` on MCP, or the TUI **Arch** selector for an explicit guest ISA.
+
 ## Binary installers
 
 Linux / macOS:

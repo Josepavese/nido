@@ -92,7 +92,7 @@ func TestOpenSUSEMirrorRecovery(t *testing.T) {
 			}))
 			defer server.Close()
 			base = server.URL
-			versions, err := NewFetcher(server.Client()).Fetch(Source{Name: "opensuse"}, Strategy{Type: "opensuse-tumbleweed", BaseURL: base, Versions: []string{"Latest"}})
+			versions, err := NewFetcher(server.Client()).Fetch(Source{Name: "opensuse"}, Strategy{Architectures: []string{"amd64"}, Type: "opensuse-tumbleweed", BaseURL: base, Versions: []string{"Latest"}})
 			if tc.want == "" {
 				if err == nil {
 					t.Fatalf("accepted invalid/unavailable upstream: %+v", versions)

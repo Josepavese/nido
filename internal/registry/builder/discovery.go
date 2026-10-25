@@ -85,7 +85,7 @@ func (f *UpstreamFetcher) discover(s Strategy) ([]release, error) {
 		}
 		switch s.Type {
 		case "ubuntu-cloud":
-			out, err = parseUbuntuReleases(text, f.now())
+			out, err = parseUbuntuReleases(text, f.now(), s.architecture)
 		case "alpine-cdn":
 			out, err = parseAlpineReleases(text, f.now())
 		case "generic":
@@ -142,7 +142,7 @@ func paragraph(s string) map[string]string {
 }
 
 // The released SimpleStreams feed is authoritative for available, supported cloud images.
-func parseUbuntuReleases(text string, now time.Time) ([]release, error) {
+func parseUbuntuReleases(text string, now time.Time, arch string) ([]release, error) {
 	var data struct {
 		Products map[string]struct {
 			Version   string `json:"version"`
@@ -159,7 +159,7 @@ func parseUbuntuReleases(text string, now time.Time) ([]release, error) {
 	}
 	var out []release
 	for _, p := range data.Products {
-		if p.Arch != "amd64" || p.OS != "ubuntu" || !p.Supported {
+		if p.Arch != arch || p.OS != "ubuntu" || !p.Supported {
 			continue
 		}
 		end, err := time.Parse(time.DateOnly, p.EOL)

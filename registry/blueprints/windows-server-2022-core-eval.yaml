@@ -1,3 +1,4 @@
+arch: amd64
 name: windows-server-2022-core-eval
 display_name: "Windows Server 2022 Evaluation (Server Core)"
 description: "Windows Server 2022 Evaluation (180 Days). Minimal official Windows Server Core image."

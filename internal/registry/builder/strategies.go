@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/machine"
 	"io"
 	"net/http"
 	"os"
@@ -33,6 +34,26 @@ func NewFetcher(client sysutil.HTTPClient) *UpstreamFetcher {
 
 // Fetch resolves current releases and dispatches through the provider boundary.
 func (f *UpstreamFetcher) Fetch(src Source, strat Strategy) ([]image.Version, error) {
+	if len(strat.Architectures) == 0 {
+		return nil, fmt.Errorf("%s: strategy architectures must be declared", src.Name)
+	}
+	var result []image.Version
+	for _, requested := range strat.Architectures {
+		arch, err := machine.Normalize(requested)
+		if err != nil {
+			return nil, err
+		}
+		strat.architecture = arch
+		variants, err := f.fetchArchitecture(src, strat)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, variants...)
+	}
+	return result, nil
+}
+
+func (f *UpstreamFetcher) fetchArchitecture(src Source, strat Strategy) ([]image.Version, error) {
 	releases, err := f.discover(strat)
 	if err != nil {
 		return nil, err
@@ -91,7 +112,7 @@ func (f *UpstreamFetcher) fetchGeneric(src Source, strat Strategy) ([]image.Vers
 
 	for _, ver := range strat.Versions {
 		// 1. Construct URLs
-		replacer := strings.NewReplacer("{base_url}", strat.BaseURL, "{version}", ver)
+		replacer := strings.NewReplacer("{base_url}", strat.BaseURL, "{version}", ver, "{arch}", strat.architecture)
 		imgURL := replacer.Replace(strat.TemplateURL)
 		checksumURL := replacer.Replace(strat.ChecksumURL)
 		regex := replacer.Replace(strat.Regex)
@@ -116,7 +137,7 @@ func (f *UpstreamFetcher) fetchGeneric(src Source, strat Strategy) ([]image.Vers
 		results = append(results, image.Version{
 			Version:       ver,
 			Aliases:       []string{ver}, // TODO: Add aliases config if needed
-			Arch:          "amd64",       // TODO: Make configurable
+			Arch:          strat.architecture,
 			URL:           imgURL,
 			ChecksumType:  strat.ChecksumType,
 			Checksum:      chk,
@@ -185,7 +206,7 @@ func (f *UpstreamFetcher) fetchUbuntu(src Source, strat Strategy, releases []rel
 		}
 
 		// Parse SUMS. Format: <hash> *<filename>
-		lineRegex := regexp.MustCompile(`(?m)^([a-f0-9]{64})\s+\*?(ubuntu-` + regexp.QuoteMeta(ver) + `-server-cloudimg-amd64\.img)$`)
+		lineRegex := regexp.MustCompile(`(?m)^([a-f0-9]{64})\s+\*?(ubuntu-` + regexp.QuoteMeta(ver) + `-server-cloudimg-` + regexp.QuoteMeta(strat.architecture) + `\.img)$`)
 		sumsMatch := lineRegex.FindStringSubmatch(sumsContent)
 		if sumsMatch == nil {
 			return nil, fmt.Errorf("%s:%s upstream metadata unavailable or invalid", src.Name, ver)
@@ -204,7 +225,7 @@ func (f *UpstreamFetcher) fetchUbuntu(src Source, strat Strategy, releases []rel
 		results = append(results, image.Version{
 			Version:       ver,
 			Aliases:       []string{},
-			Arch:          "amd64",
+			Arch:          strat.architecture,
 			URL:           imgURL,
 			ChecksumType:  "sha256",
 			Checksum:      hash,
@@ -258,7 +279,7 @@ func (f *UpstreamFetcher) fetchDebian(src Source, strat Strategy, releases []rel
 		}
 
 		// debian-12-genericcloud-amd64-20260225-2399.qcow2
-		lineRegex := regexp.MustCompile(`([a-f0-9]{128})\s+\*?(debian-` + regexp.QuoteMeta(ver) + `-genericcloud-amd64[^\s]*\.qcow2)`)
+		lineRegex := regexp.MustCompile(`([a-f0-9]{128})\s+\*?(debian-` + regexp.QuoteMeta(ver) + `-genericcloud-` + regexp.QuoteMeta(strat.architecture) + `[^\s]*\.qcow2)`)
 		sumsMatch := lineRegex.FindStringSubmatch(sumsContent)
 		if sumsMatch == nil {
 			return nil, fmt.Errorf("%s:%s upstream metadata unavailable or invalid", src.Name, ver)
@@ -276,7 +297,7 @@ func (f *UpstreamFetcher) fetchDebian(src Source, strat Strategy, releases []rel
 		results = append(results, image.Version{
 			Version:       ver,
 			Aliases:       []string{codename},
-			Arch:          "amd64",
+			Arch:          strat.architecture,
 			URL:           imgURL,
 			ChecksumType:  "sha512",
 			Checksum:      hash,
@@ -290,6 +311,9 @@ func (f *UpstreamFetcher) fetchDebian(src Source, strat Strategy, releases []rel
 }
 
 func (f *UpstreamFetcher) fetchAlpine(src Source, strat Strategy) ([]image.Version, error) {
+	if strat.architecture != machine.AMD64 {
+		return nil, fmt.Errorf("this image source currently supports amd64 only")
+	}
 	var results []image.Version
 
 	for _, ver := range strat.Versions {
@@ -334,7 +358,7 @@ func (f *UpstreamFetcher) fetchAlpine(src Source, strat Strategy) ([]image.Versi
 		results = append(results, image.Version{
 			Version:       ver,
 			Aliases:       []string{ver},
-			Arch:          "amd64",
+			Arch:          strat.architecture,
 			URL:           imgURL,
 			ChecksumType:  "sha512",
 			Checksum:      hash,
@@ -348,6 +372,9 @@ func (f *UpstreamFetcher) fetchAlpine(src Source, strat Strategy) ([]image.Versi
 }
 
 func (f *UpstreamFetcher) fetchOpenSUSE(src Source, strat Strategy) ([]image.Version, error) {
+	if strat.architecture != machine.AMD64 {
+		return nil, fmt.Errorf("this image source currently supports amd64 only")
+	}
 	var results []image.Version
 
 	for _, ver := range strat.Versions { // ver can be just "Latest" mapped to the latest snapshot
@@ -393,7 +420,7 @@ func (f *UpstreamFetcher) fetchOpenSUSE(src Source, strat Strategy) ([]image.Ver
 		results = append(results, image.Version{
 			Version:       "Snapshot" + snapshotDate,
 			Aliases:       []string{ver}, // maps "Latest" to this version
-			Arch:          "amd64",
+			Arch:          strat.architecture,
 			URL:           resolvedURL,
 			ChecksumType:  "sha256",
 			Checksum:      hash,
@@ -496,6 +523,9 @@ func (f *UpstreamFetcher) findChecksum(url, regexPattern, algo string) (string, 
 }
 
 func (f *UpstreamFetcher) fetchGithubRelease(src Source, strat Strategy) ([]image.Version, error) {
+	if strat.architecture != machine.AMD64 {
+		return nil, fmt.Errorf("this image source currently supports amd64 only")
+	}
 	if strat.Owner == "" || strat.Repo == "" {
 		return nil, fmt.Errorf("github-release strategy requires owner and repo")
 	}
@@ -633,7 +663,7 @@ func (f *UpstreamFetcher) fetchGithubRelease(src Source, strat Strategy) ([]imag
 			results = append(results, image.Version{
 				Version:      ver,
 				Aliases:      []string{ver},
-				Arch:         "amd64",
+				Arch:         strat.architecture,
 				URL:          g.parts[0],
 				PartURLs:     g.parts,
 				ChecksumType: g.chkType,

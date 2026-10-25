@@ -7,6 +7,7 @@ import (
 
 func buildActionRegistry(app *appContext) map[string]climeta.ActionFunc {
 	return map[string]climeta.ActionFunc{
+		"system.migrate":               actionMigrate(app),
 		"vm.list":                      actionVMList(app),
 		"vm.info":                      actionVMInfo(app),
 		"vm.spawn":                     actionVMSpawn(app),

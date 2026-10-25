@@ -29,6 +29,10 @@ to your terminal and your MCP client. Each VM has its own guest kernel.
 | Keep multiple dashboards and agents in sync | [Shared local events](docs/events.md), live TUI updates and selective MCP notifications |
 | Choose the right starting point | An automatically refreshed cloud-image catalog, local templates and buildable blueprints |
 
+AMD64 and ARM64 host/guest selection, requirements and data-preserving upgrades:
+[Architecture guide](docs/architectures.md). Omitted architecture selects native; use `--arch`
+on CLI, `arch` on MCP, or the TUI **Arch** selector for an explicit guest ISA.
+
 ## Press start
 
 QEMU is required to run VMs. Nido supports Linux, macOS and Windows hosts;

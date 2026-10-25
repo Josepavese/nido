@@ -34,7 +34,7 @@ def mcp(tool, **args):
     return result, json.loads(result['content'][0]['text'])
 
 def state(name, **values):
-    value = dict(name=name, pid=0, ssh_port=51022, ssh_user='audit', memory_mb=128, vcpus=1)
+    value = dict(name=name, arch="amd64", pid=0, ssh_port=51022, ssh_user='audit', memory_mb=128, vcpus=1)
     value.update(values)
     (HOME_DIR/'run'/f'{name}.json').write_text(json.dumps(value))
 
@@ -105,7 +105,7 @@ def inside(case):
         observations['corrupt_state'] = {'cli_success':p.returncode==0,'mcp_success':not r.get('isError',False),'mcp_error':b.get('error')}
         assert p.returncode != 0 and r.get('isError',False)
     elif case == 'cache-direct':
-        base = HOME_DIR/'images'/'audit-v1.qcow2'
+        base = HOME_DIR/'images'/'audit-v1-amd64.qcow2'
         vm = HOME_DIR/'vms'/'fixture.qcow2'
         disk(base); disk(vm, base)
         assert healthy(vm)
@@ -115,7 +115,7 @@ def inside(case):
         broken = not healthy(vm)
         observations = {'cli_refuses_used_image':True,'mcp_reported_success':not r.get('isError',False),'base_removed':not base.exists(),'vm_backing_chain_broken':broken}
         assert r.get('isError',False) and base.exists() and not broken
-        base2 = HOME_DIR/'images'/'audit-v2.qcow2'
+        base2 = HOME_DIR/'images'/'audit-v2-amd64.qcow2'
         vm2 = HOME_DIR/'vms'/'fixture2.qcow2'
         disk(base2); disk(vm2,base2)
         blocked2 = cli('images','remove','audit:v2')

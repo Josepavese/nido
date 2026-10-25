@@ -48,8 +48,8 @@ func (m *mockProvider) ListCachedImages() ([]provider.CachedImage, error) { retu
 func (m *mockProvider) CacheInfo() (provider.CacheInfoResult, error) {
 	return provider.CacheInfoResult{}, nil
 }
-func (m *mockProvider) CacheRemove(name, version string) error { return nil }
-func (m *mockProvider) SSHArgs(name string) ([]string, error)  { return nil, nil }
+func (m *mockProvider) CacheRemove(name, version, arch string) error { return nil }
+func (m *mockProvider) SSHArgs(name string) ([]string, error)        { return nil, nil }
 func (m *mockProvider) PortForward(name string, pf provider.PortForward) (provider.PortForward, error) {
 	return pf, nil
 }
@@ -165,6 +165,7 @@ func TestMCPActionsCoverCLIManifest(t *testing.T) {
 		"blueprint.build":              {"nido_blueprint", "build"},
 		"build":                        {"nido_blueprint", "build"},
 		"system.events":                {"nido_events", "subscribe"},
+		"system.migrate":               {"nido_system", "migrate"},
 		"system.doctor":                {"nido_system", "doctor"},
 		"system.accel.list":            {"nido_system", "accel_list"},
 		"system.config":                {"nido_system", "config_get"},
@@ -328,7 +329,8 @@ func TestVMCreateFromBuiltBlueprintImageAppliesBlueprintMetadata(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(imageDir, "windows-fixture.qcow2"), []byte("qcow2"), 0o644); err != nil {
 		t.Fatalf("write image fixture: %v", err)
 	}
-	data := []byte(`name: windows-fixture
+	data := []byte(`arch: amd64
+name: windows-fixture
 description: Windows fixture blueprint
 version: "0.1.0"
 ssh_user: vmuser
@@ -407,7 +409,7 @@ func (m *mockProvider) ReloadConfig(path string) error {
 	return nil
 }
 
-func (*mockProvider) Virtualization() hardware.Virtualization {
+func (*mockProvider) Virtualization(guest string) hardware.Virtualization {
 	return hardware.Virtualization{CPU: "qemu64"}
 }
 
@@ -473,3 +475,19 @@ func TestSSHResponsePreservesStructuredArguments(t *testing.T) {
 }
 
 func (m *mockProvider) EventPublisher() events.Publisher { return nil }
+
+func (m *mockProvider) MigrateArchitecture() (int, error) { return 0, nil }
+
+func TestVMCreatePropagatesArchitecture(t *testing.T) {
+	for _, arch := range []string{"auto", "amd64", "arm64"} {
+		p := &mockProvider{}
+		s := &Server{Provider: p}
+		raw, _ := json.Marshal(map[string]interface{}{"action": "create", "name": "isa-test", "arch": arch})
+		if _, err := s.callVMTool(raw); err != nil {
+			t.Fatal(err)
+		}
+		if p.spawnOpts.Arch != arch {
+			t.Fatalf("architecture lost: %q", p.spawnOpts.Arch)
+		}
+	}
+}

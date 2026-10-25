@@ -1,0 +1,32 @@
+[
+  {
+    "os": "linux",
+    "arch": "amd64",
+    "extension": "tar.gz"
+  },
+  {
+    "os": "linux",
+    "arch": "arm64",
+    "extension": "tar.gz"
+  },
+  {
+    "os": "darwin",
+    "arch": "amd64",
+    "extension": "tar.gz"
+  },
+  {
+    "os": "darwin",
+    "arch": "arm64",
+    "extension": "tar.gz"
+  },
+  {
+    "os": "windows",
+    "arch": "amd64",
+    "extension": "zip"
+  },
+  {
+    "os": "windows",
+    "arch": "arm64",
+    "extension": "zip"
+  }
+]

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [4.10.0] - 2026-10-25 "Native Wings"
+
+### Added
+
+- Support native AMD64/ARM64 guest selection and explicit CLI, MCP and TUI
+  architecture choices, ISA-qualified cloud-image caches and portable QEMU
+  profiles with per-VM ARM UEFI state. Ubuntu and Debian offer both ISAs.
+- Build Windows ARM64 release archives and multi-platform Linux container
+  images; choose native installers and report architecture-specific dependencies.
+- Add an explicit, resumable `nido migrate` conversion for the previous AMD64-only
+  state. Original metadata, disks and backing paths are preserved. Run migration
+  before reopening existing VM inventories with the new binary.
+
+
 ## [4.9.0] - 2026-10-25 "Room to Roost"
 
 ### Added

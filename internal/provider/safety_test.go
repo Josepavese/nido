@@ -25,7 +25,7 @@ func TestIdentifierRejectsPathsBeforeEffects(t *testing.T) {
 				func() error { _, err := p.Info(name); return err },
 				func() error { return p.DeleteTemplate(name, true) },
 				func() error { _, err := p.CreateTemplate("valid", name); return err },
-				func() error { return p.CacheRemove(name, "v1") },
+				func() error { return p.CacheRemove(name, "v1", "amd64") },
 			}
 			for i, operation := range operations {
 				if operation() == nil {

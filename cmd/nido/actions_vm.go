@@ -25,6 +25,7 @@ func actionVMList(app *appContext) func(cmd *cobra.Command, args []string) {
 			}
 
 			type vmJSON struct {
+				Arch    string `json:"arch"`
 				Name    string `json:"name"`
 				State   string `json:"state"`
 				PID     int    `json:"pid"`
@@ -36,6 +37,7 @@ func actionVMList(app *appContext) func(cmd *cobra.Command, args []string) {
 			items := make([]vmJSON, 0, len(vms))
 			for _, vm := range vms {
 				items = append(items, vmJSON{
+					Arch:    vm.Arch,
 					Name:    vm.Name,
 					State:   vm.State,
 					PID:     vm.PID,
@@ -65,7 +67,7 @@ func actionVMList(app *appContext) func(cmd *cobra.Command, args []string) {
 			if vm.State == "running" {
 				stateColor = ui.Green
 			}
-			fmt.Printf(" %-20s %s%-12s%s %-10d %s\n", vm.Name, stateColor, vm.State, ui.Reset, vm.PID, formatVMTablePortSummary(vm))
+			fmt.Printf(" %-20s %s%-12s%s %-10d %s [%s]\n", vm.Name, stateColor, vm.State, ui.Reset, vm.PID, formatVMTablePortSummary(vm), vm.Arch)
 		}
 		fmt.Println("")
 	}
@@ -87,20 +89,22 @@ func actionVMInfo(app *appContext) func(cmd *cobra.Command, args []string) {
 		if jsonOut {
 			_ = clijson.PrintJSON(clijson.NewResponseOK("info", map[string]interface{}{
 				"vm": map[string]interface{}{
-					"name":          info.Name,
-					"state":         info.State,
-					"ip":            info.IP,
-					"ssh_user":      info.SSHUser,
-					"ssh_port":      info.SSHPort,
-					"vnc_port":      info.VNCPort,
-					"memory_mb":     info.MemoryMB,
-					"vcpus":         info.VCPUs,
-					"gui":           info.Gui,
-					"cmdline":       info.Cmdline,
-					"forwarding":    info.Forwarding,
-					"raw_qemu_args": info.RawQemuArgs,
-					"accelerators":  info.Accelerators,
-					"disk_path":     info.DiskPath, "disk_missing": info.DiskMissing, "state_missing": info.StateMissing, "backing_path": info.BackingPath, "backing_missing": info.BackingMissing,
+					"name":                      info.Name,
+					"state":                     info.State,
+					"ip":                        info.IP,
+					"ssh_user":                  info.SSHUser,
+					"ssh_port":                  info.SSHPort,
+					"vnc_port":                  info.VNCPort,
+					"memory_mb":                 info.MemoryMB,
+					"vcpus":                     info.VCPUs,
+					"arch":                      info.Arch,
+					"virtualization_capability": info.VirtualizationCapability,
+					"gui":                       info.Gui,
+					"cmdline":                   info.Cmdline,
+					"forwarding":                info.Forwarding,
+					"raw_qemu_args":             info.RawQemuArgs,
+					"accelerators":              info.Accelerators,
+					"disk_path":                 info.DiskPath, "disk_missing": info.DiskMissing, "state_missing": info.StateMissing, "backing_path": info.BackingPath, "backing_missing": info.BackingMissing,
 				},
 			}))
 			return
@@ -123,6 +127,8 @@ func actionVMInfo(app *appContext) func(cmd *cobra.Command, args []string) {
 		if info.VNCPort > 0 {
 			ui.FancyLabel("GUI (VNC)", fmt.Sprintf("127.0.0.1:%d", info.VNCPort))
 		}
+		ui.FancyLabel("Architecture", info.Arch)
+		ui.FancyLabel("Acceleration capability", info.VirtualizationCapability.Accelerator)
 		ui.FancyLabel("Memory", fmt.Sprintf("%d MB", info.MemoryMB))
 		ui.FancyLabel("vCPUs", fmt.Sprintf("%d", info.VCPUs))
 		ui.FancyLabel("GUI Enabled", fmt.Sprintf("%v", info.Gui))
@@ -166,6 +172,7 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 		if len(args) > 1 {
 			tpl = args[1]
 		}
+		arch, _ := cmd.Flags().GetString("arch")
 		imageTag, _ := cmd.Flags().GetString("image")
 		userDataPath, _ := cmd.Flags().GetString("user-data")
 		gui, _ := cmd.Flags().GetBool("gui")
@@ -235,7 +242,7 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 					pName, pVer = parts[0], parts[1]
 				}
 
-				img, ver, err := catalog.FindImage(pName, pVer)
+				img, ver, err := catalog.FindImage(pName, pVer, arch)
 				if err != nil {
 					if jsonOut {
 						_ = clijson.PrintJSON(clijson.NewResponseError("spawn", "ERR_NOT_FOUND", "Image not found", err.Error(), "Run 'nido images list' to see available images.", nil))
@@ -252,7 +259,7 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 					customSshPassword = img.SSHPassword
 				}
 
-				imgPath := filepath.Join(app.ImageDir(), fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
+				imgPath := filepath.Join(app.ImageDir(), ver.CacheFileName(img.Name))
 				if _, err := os.Stat(imgPath); os.IsNotExist(err) {
 					if !jsonOut {
 						ui.Info("Image not found locally. Pulling %s:%s...", img.Name, ver.Version)
@@ -288,6 +295,7 @@ func actionVMSpawn(app *appContext) func(cmd *cobra.Command, args []string) {
 		}
 
 		spawnOpts := provider.VMOptions{
+			Arch:         arch,
 			DiskPath:     tpl,
 			UserDataPath: userDataPath,
 			Gui:          gui,
@@ -374,12 +382,13 @@ func actionVMStart(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		jsonOut := jsonEnabled(cmd)
 		gui, _ := cmd.Flags().GetBool("gui")
+		arch, _ := cmd.Flags().GetString("arch")
 		startCmdline, _ := cmd.Flags().GetString("cmdline")
 
 		if !jsonOut {
 			ui.Step("Starting VM...")
 		}
-		if err := app.Provider.Start(args[0], provider.VMOptions{Gui: gui, Cmdline: startCmdline}); err != nil {
+		if err := app.Provider.Start(args[0], provider.VMOptions{Arch: arch, Gui: gui, Cmdline: startCmdline}); err != nil {
 			if jsonOut {
 				_ = clijson.PrintJSON(clijson.NewResponseError("start", "ERR_INTERNAL", "Start failed", err.Error(), "Check the VM state and try again.", nil))
 			} else {

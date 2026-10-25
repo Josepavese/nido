@@ -25,8 +25,7 @@ type appContext struct {
 }
 
 func newAppContext() *appContext {
-	home, _ := sysutil.UserHome()
-	nidoDir := filepath.Join(home, ".nido")
+	nidoDir := sysutil.NidoHome()
 	cwd, _ := os.Getwd()
 
 	cfgPath := filepath.Join(nidoDir, "config.env")

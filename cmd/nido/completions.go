@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/Josepavese/nido/v4/internal/machine"
 	"strings"
 
 	"github.com/Josepavese/nido/v4/internal/builder"
@@ -10,6 +11,9 @@ import (
 
 func buildCompletionRegistry(app *appContext) map[string]climeta.CompletionFunc {
 	return map[string]climeta.CompletionFunc{
+		"architectures": func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return toShellDirective(append([]string{machine.Auto}, machine.Architectures()...))
+		},
 		"vms":        completeVMs(app),
 		"templates":  completeTemplates(app),
 		"images":     completeImages(app),

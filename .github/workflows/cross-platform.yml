@@ -68,6 +68,9 @@ jobs:
             exit 1
           fi
 
+      - name: Check npm native release selection
+        run: node --test npm/lib/install.test.js
+
       - name: Run unit tests
         run: go test -v -count=1 ./...
 
@@ -77,7 +80,8 @@ jobs:
         run: |
           scratch=$(mktemp -d /tmp/nido-events-ci.XXXXXX)
           trap 'rm -rf "$scratch"' EXIT
-          NIDO_TEST_BINARY="$GITHUB_WORKSPACE/nido" NIDO_TEST_STORAGE="$scratch" python3 tests/events_integration.py
+          NIDO_TEST_BINARY="$GITHUB_WORKSPACE/nido" NIDO_TEST_STORAGE="$scratch" python3 -B tests/events_integration.py
+          NIDO_TEST_BINARY="$GITHUB_WORKSPACE/nido" NIDO_TEST_STORAGE="$scratch" python3 -B tests/architectures_integration.py
 
       - name: Run go vet
         run: go vet ./...
@@ -309,7 +313,9 @@ jobs:
           exit 1
 
       - name: Build release archives
-        run: bash bin/build-release.sh ci-snapshot
+        run: |
+          bash bin/build-release.sh ci-snapshot "$RUNNER_TEMP/nido-dist"
+          ln -s "$RUNNER_TEMP/nido-dist" dist
 
       - name: Validate release archives
         run: bash bin/verify-release.sh --local dist

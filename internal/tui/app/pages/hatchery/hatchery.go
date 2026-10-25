@@ -3,6 +3,8 @@ package hatchery
 import (
 	"fmt"
 	"github.com/Josepavese/nido/v4/internal/hardware"
+	"github.com/Josepavese/nido/v4/internal/machine"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"strings"
 
 	"github.com/Josepavese/nido/v4/internal/provider"
@@ -80,6 +82,7 @@ type Incubator struct {
 	input        *widget.Input
 	memInput     *widget.Input
 	cpuInput     *widget.Input
+	archSelect   *widget.Select
 	rawArgsInput *widget.Input
 	accelSelect  *widget.Select // New widget
 	addPortBtn   *widget.Button
@@ -123,6 +126,22 @@ func NewIncubator(parent *Hatchery) *Incubator {
 	// Real-time filtering for valid VM name characters
 	inc.input.Filter = widget.FilterHostName
 
+	inc.archSelect = widget.NewSelect("Arch", machine.Auto, func() tea.Cmd {
+		choices := append([]string{machine.Auto}, machine.Architectures()...)
+		for index, choice := range choices {
+			if choice == inc.archSelect.Value {
+				inc.archSelect.Value = choices[(index+1)%len(choices)]
+				break
+			}
+		}
+		resolved, _ := machine.Resolve(inc.archSelect.Value, sysutil.HostArchitecture())
+		mode := "TCG"
+		if parent.prov != nil && parent.prov.Virtualization(resolved).Accelerated() {
+			mode = "native"
+		}
+		inc.archSelect.Label = "Arch: " + mode
+		return nil
+	})
 	// 3. Resource Inputs (Memory & CPUs)
 	inc.memInput = widget.NewInput("Memory (MB)", "2048", nil)
 	inc.memInput.Filter = widget.FilterNumber
@@ -166,7 +185,7 @@ func (i *Incubator) rebuildForm() {
 	elements = append(elements, i.input)
 
 	// 2. Resources (Memory & CPUs) - 50/50 split
-	elements = append(elements, widget.NewRow(i.memInput, i.cpuInput))
+	elements = append(elements, i.archSelect, widget.NewRow(i.memInput, i.cpuInput))
 
 	// 2c. Accelerator (Full Width)
 	elements = append(elements, i.accelSelect)
@@ -249,6 +268,7 @@ func (i *Incubator) submitSpawn() tea.Cmd {
 
 	// Construct Msg
 	req := ops.RequestSpawnMsg{
+		Arch:        i.archSelect.Value,
 		Name:        i.input.Value(),
 		Source:      i.SelectedSource.Label,
 		SourceType:  i.SelectedSource.Type,

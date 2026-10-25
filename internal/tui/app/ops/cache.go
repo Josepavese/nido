@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Josepavese/nido/v4/internal/builder"
 	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
@@ -16,6 +17,7 @@ import (
 
 // CacheItem represents a cached image.
 type CacheItem struct {
+	Arch          string
 	Name          string
 	Version       string
 	Size          string
@@ -60,14 +62,15 @@ func ListCache(prov provider.VMProvider) tea.Cmd {
 		var cacheItems []CacheItem
 		for _, img := range items {
 			item := CacheItem{
+				Arch:          img.Arch,
 				Name:          img.Name,
 				Version:       img.Version,
 				Size:          img.Size,
 				Kind:          "image",
-				DeleteName:    img.Name,
-				DeleteVersion: img.Version,
+				DeleteName:    strings.TrimSuffix(img.FileName, ".qcow2"),
+				DeleteVersion: "",
 			}
-			if bp, ok := blueprints[cacheFilename(img.Name, img.Version)]; ok {
+			if bp, ok := blueprints[img.FileName]; ok {
 				item.Name = bp.DisplayName
 				if item.Name == "" {
 					item.Name = bp.Name
@@ -87,8 +90,7 @@ func cachedBlueprintsByOutput(prov provider.VMProvider) map[string]builder.Bluep
 		return out
 	}
 	cfg := prov.GetConfig()
-	home, _ := sysutil.UserHome()
-	nidoDir := filepath.Join(home, ".nido")
+	nidoDir := sysutil.NidoHome()
 	imageDir := cfg.ImageDir
 	if imageDir == "" {
 		imageDir = filepath.Join(nidoDir, "images")
@@ -104,13 +106,6 @@ func cachedBlueprintsByOutput(prov provider.VMProvider) map[string]builder.Bluep
 		}
 	}
 	return out
-}
-
-func cacheFilename(name, version string) string {
-	if version == "" {
-		return fmt.Sprintf("%s.qcow2", name)
-	}
-	return fmt.Sprintf("%s-%s.qcow2", name, version)
 }
 
 // FetchCacheStats retrieves cache statistics.
@@ -149,10 +144,10 @@ func PruneCache(prov provider.VMProvider) tea.Cmd {
 }
 
 // DeleteCacheImage removes a specific cached image.
-func DeleteCacheImage(prov provider.VMProvider, name, version string) tea.Cmd {
+func DeleteCacheImage(prov provider.VMProvider, name, version, arch string) tea.Cmd {
 	opName := fmt.Sprintf("delete %s", name)
 	return func() tea.Msg {
-		err := prov.CacheRemove(name, version)
+		err := prov.CacheRemove(name, version, arch)
 		return OpResultMsg{Op: opName, Err: err}
 	}
 }

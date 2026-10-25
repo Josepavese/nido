@@ -35,7 +35,7 @@ func actionBlueprintBuild(app *appContext) func(cmd *cobra.Command, args []strin
 	return func(cmd *cobra.Command, args []string) {
 		jsonOut := jsonEnabled(cmd)
 		ensureBundledRegistryCurrent("blueprint build", app.NidoDir, jsonOut)
-		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), app.Provider.Virtualization(), args, jsonOut, "blueprint build", app.Provider.EventPublisher())
+		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), app.Provider.Virtualization, args, jsonOut, "blueprint build", app.Provider.EventPublisher())
 	}
 }
 
@@ -130,7 +130,7 @@ func blueprintDisplayName(info builder.BlueprintInfo) string {
 	return info.Name
 }
 
-func cmdBuild(cwd, nidoDir, imageDir string, acceleration hardware.Virtualization, args []string, jsonOut bool, command string, publish events.Publisher) {
+func cmdBuild(cwd, nidoDir, imageDir string, virtualization func(string) hardware.Virtualization, args []string, jsonOut bool, command string, publish events.Publisher) {
 	if len(args) < 1 {
 		ui.Error("Usage: nido build <blueprint>")
 		ui.Info("Example: nido build windows-11-eval")
@@ -184,7 +184,7 @@ func cmdBuild(cwd, nidoDir, imageDir string, acceleration hardware.Virtualizatio
 	if !jsonOut {
 		opts = append(opts, builder.WithReporter(cliBuildReporter{}))
 	}
-	eng := builder.NewEngine(cacheDir, workDir, imageDir, acceleration, opts...)
+	eng := builder.NewEngine(cacheDir, workDir, imageDir, virtualization(bp.Arch), opts...)
 
 	if err := eng.Build(bp); err != nil {
 		if jsonOut {

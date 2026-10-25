@@ -39,3 +39,5 @@ catalog aliases for introductory examples and pin numbered tags for a specified
 OS release. Keep measured qualification separate from claims about all hosts or
 guest images. Describe supported behavior before using arcade metaphors, and use
 the ASCII hyphen `-` for prose separators.
+
+- [AMD64/ARM64 architecture selection, prerequisites and migration](architectures.md)

@@ -140,3 +140,12 @@ with session-local subscriptions and mute/filter state. Slow consumers reconnect
 through a resync barrier; VM state files remain authoritative. No permanent
 service, per-consumer fleet polling or durable event log is installed. See
 [events](events.md) for the catalog, safety semantics and qualification scope.
+
+## Guest architecture ownership
+
+`internal/machine` owns the supported ISA vocabulary and QEMU board/CPU/console
+profiles. PAL `sysutil` discovers host ISA, state root, emulator and firmware;
+HAL evaluates acceleration for the requested guest. The provider persists VM
+identity and rejects architecture changes. Catalog entries, artifacts and build
+recipes declare ISA; all three user surfaces consume those contracts. See the
+[guest architecture guide](architectures.md) for behavior and upgrade procedure.

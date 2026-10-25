@@ -109,3 +109,9 @@ published wrapper. These checks do not replace host or guest security policy.
 [Image catalog](https://github.com/Josepavese/nido/blob/main/docs/images.md) · [Windows](https://github.com/Josepavese/nido/blob/main/docs/windows.md) · [Source](https://github.com/Josepavese/nido) · [Issues](https://github.com/Josepavese/nido/issues)
 
 MIT licensed. **Hatch your agents. Let them fly.**
+
+Native release launchers cover AMD64 and ARM64 on Linux, macOS and Windows.
+Guest ISA defaults to the native host; pass `--arch arm64` / `--arch amd64` for
+an explicit VM, or `arch` in MCP. Install the corresponding QEMU emulator and
+ARM UEFI firmware before creating ARM guests. See the
+[architecture and migration guide](https://github.com/Josepavese/nido/blob/main/docs/architectures.md).

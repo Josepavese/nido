@@ -2,4 +2,4 @@
 
 package hardware
 
-func (*nativeHost) Virtualization() Virtualization { return Virtualization{CPU: "qemu64"} }
+func (*nativeHost) Virtualization(guest string) Virtualization { return SoftwareVirtualization(guest) }

@@ -1,12 +1,12 @@
 'use strict';
 
 // Resolves, downloads, verifies and caches the Nido binary shipped in GitHub
-// Releases. No npm dependencies: Node >= 18 only.
+// Releases. No npm dependencies: Node >= 18.9 only.
 //
 // Asset contract (published by bin/build-release.sh):
 //   nido-linux-amd64.tar.gz, nido-linux-arm64.tar.gz,
 //   nido-darwin-amd64.tar.gz, nido-darwin-arm64.tar.gz,
-//   nido-windows-amd64.zip, SHA256SUMS
+//   nido-windows-amd64.zip, nido-windows-arm64.zip, SHA256SUMS
 // Each archive contains a top-level nido-<os>-<arch>/ directory with the
 // nido (or nido.exe) binary plus the bundled registry.
 
@@ -19,7 +19,10 @@ const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 
 const REPO = 'Josepavese/nido';
+const HOST_PROBE_TIMEOUT_MS = 3000;
 const pkg = require('../package.json');
+// Generated from internal/build/targets.json at npm packaging time.
+const targets = require('./targets.json');
 
 function verbose() {
   return process.env.NIDO_NPM_VERBOSE === '1';
@@ -29,25 +32,30 @@ function log(...args) {
   if (verbose()) console.error('[nido]', ...args);
 }
 
-function target() {
-  const platform = process.platform === 'win32' ? 'windows' : process.platform;
-  if (!['linux', 'darwin', 'windows'].includes(platform)) {
-    throw new Error(`unsupported platform: ${process.platform}`);
-  }
-  let arch = process.arch;
-  if (arch === 'x64') arch = 'amd64';
-  if (arch !== 'amd64' && arch !== 'arm64') {
-    throw new Error(`unsupported architecture: ${process.arch}`);
-  }
-  const ext = platform === 'windows' ? 'zip' : 'tar.gz';
+function targetFor(platform, architecture) {
+  const aliases = { x64: 'amd64', x86_64: 'amd64', aarch64: 'arm64' };
+  const arch = aliases[architecture.toLowerCase()] || architecture.toLowerCase();
+  platform = platform === 'win32' ? 'windows' : platform;
+  const release = targets.find(value => value.os === platform && value.arch === arch);
+  if (!release) throw new Error(`unsupported release target: ${platform}/${arch}`);
   return {
-    platform,
-    arch,
-    ext,
-    asset: `nido-${platform}-${arch}.${ext}`,
+    platform, arch, ext: release.extension,
+    asset: `nido-${platform}-${arch}.${release.extension}`,
     binName: platform === 'windows' ? 'nido.exe' : 'nido',
     folder: `nido-${platform}-${arch}`,
   };
+}
+
+function target() {
+  // os.machine identifies the host rather than the Node executable's ISA.
+  let arch = os.machine();
+  if (process.platform === 'win32') {
+    arch = process.env.PROCESSOR_ARCHITEW6432 || process.env.PROCESSOR_ARCHITECTURE || arch;
+  } else if (process.platform === 'darwin') {
+    const native = spawnSync('sysctl', ['-n', 'hw.optional.arm64'], { encoding: 'utf8', timeout: HOST_PROBE_TIMEOUT_MS });
+    if (native.status === 0 && native.stdout.trim() === '1') arch = 'arm64';
+  }
+  return targetFor(process.platform, arch);
 }
 
 function cacheRoot() {
@@ -166,4 +174,4 @@ async function ensureBinary() {
   }
 }
 
-module.exports = { ensureBinary, target, resolveVersion };
+module.exports = { ensureBinary, target, targetFor, resolveVersion };

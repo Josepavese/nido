@@ -5,6 +5,10 @@
 Use a distinct VM name for each disposable task. Commands here target that named
 VM; run cleanup only after saving the outputs you need.
 
+AMD64 and ARM64 host/guest selection, requirements and data-preserving upgrades:
+[Architecture guide](architectures.md). Omitted architecture selects native; use `--arch`
+on CLI, `arch` on MCP, or the TUI **Arch** selector for an explicit guest ISA.
+
 ## Provision and connect
 
 ```bash

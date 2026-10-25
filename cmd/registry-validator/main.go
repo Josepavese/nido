@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Josepavese/nido/v4/internal/hardware"
 	"github.com/Josepavese/nido/v4/internal/image"
 )
 
@@ -46,15 +47,7 @@ func main() {
 	failures := []string{}
 
 	// 2. Validate Loop
-	// Check for KVM availability once before the loop
-	hasKVM := false
-	if os.Getenv("GITHUB_ACTIONS") == "true" {
-		fmt.Println("⚠️  KVM not available or unreliable in GitHub Actions. Skipping VM lifecycle tests.")
-		fmt.Println("👉 Advice: Use a self-hosted runner with KVM support or a larger GitHub runner for full validation.")
-		hasKVM = false
-	} else if _, err := os.Stat("/dev/kvm"); err == nil {
-		hasKVM = true
-	}
+	host := hardware.New()
 
 	for _, img := range catalog.Images {
 		// Apply filter if provided
@@ -64,7 +57,7 @@ func main() {
 
 		for _, ver := range img.Versions {
 			imageTag := fmt.Sprintf("%s:%s", img.Name, ver.Version)
-			vmName := fmt.Sprintf("%s-%s-%s", TestVMParams, img.Name, strings.ReplaceAll(ver.Version, ".", "-"))
+			vmName := fmt.Sprintf("%s-%s-%s-%s", TestVMParams, img.Name, strings.ReplaceAll(ver.Version, ".", "-"), ver.Arch)
 			if ver.Checksum == "" || ver.ChecksumType == "" {
 				missingChecksumCount++
 				fmt.Printf("⚠️  Integrity metadata missing for %s. Download will be allowed but cannot be cryptographically verified.\n", imageTag)
@@ -74,14 +67,14 @@ func main() {
 			fmt.Printf("🧪 Testing Image: %s\n", imageTag)
 			fmt.Printf("------------------------------------------------\n")
 
-			if !hasKVM {
-				fmt.Printf("⏭️  SKIPPING: No KVM acceleration available.\n")
+			if os.Getenv("GITHUB_ACTIONS") == "true" || !host.Virtualization(ver.Arch).Accelerated() {
+				fmt.Printf("⏭️  SKIPPING: No qualified native acceleration for %s.\n", ver.Arch)
 				skipCount++
 				continue
 			}
 
 			start := time.Now()
-			if err := runTest(vmName, imageTag); err != nil {
+			if err := runTest(vmName, imageTag, ver.Arch); err != nil {
 				fmt.Printf("\n❌ FAILED: %s (%v)\n", imageTag, err)
 				failCount++
 				failures = append(failures, fmt.Sprintf("%s: %v", imageTag, err))
@@ -112,11 +105,11 @@ func main() {
 	fmt.Printf("✨ All systems nominal.\n")
 }
 
-func runTest(vmName, imageTag string) error {
+func runTest(vmName, imageTag, arch string) error {
 	// A. Spawn (Handles Download + Start)
 	// We force --image to ensure it pulls/verifies
 	fmt.Printf("🐣 Spawning %s...\n", vmName)
-	if err := nido("spawn", vmName, "--image", imageTag); err != nil {
+	if err := nido("spawn", vmName, "--image", imageTag, "--arch", arch); err != nil {
 		return fmt.Errorf("spawn failed: %w", err)
 	}
 

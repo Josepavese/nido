@@ -5,18 +5,9 @@
 
 set -euo pipefail
 
-REQUIRED_ASSETS=(
-  "nido-linux-amd64.tar.gz"
-  "nido-linux-arm64.tar.gz"
-  "nido-darwin-amd64.tar.gz"
-  "nido-darwin-arm64.tar.gz"
-  "nido-windows-amd64.zip"
-  "nido.mcpb"
-  "server.json"
-  "install.sh"
-  "install.ps1"
-  "SHA256SUMS"
-)
+REQUIRED_ASSETS=()
+while IFS= read -r asset; do REQUIRED_ASSETS+=("$asset"); done < <(jq -r '.[] | "nido-\(.os)-\(.arch).\(.extension)"' internal/build/targets.json)
+REQUIRED_ASSETS+=(nido.mcpb server.json install.sh install.ps1 SHA256SUMS)
 
 default_version() {
   grep -oE 'Version = "v[0-9.]+"' internal/build/version.go | cut -d'"' -f2

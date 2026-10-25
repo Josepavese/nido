@@ -164,7 +164,7 @@ func (fixtureTransfer) Decompress(string, string) error {
 }
 func TestPrepareLocalImageAcceptsSubstitute(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "image")
-	if err := (fixtureTransfer{}).Prepare(Version{URL: "https://example.test/image", Format: "qcow2"}, dest); err != nil {
+	if err := (fixtureTransfer{}).Prepare(Version{Arch: "amd64", URL: "https://example.test/image", Format: "qcow2"}, dest); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(dest)
@@ -253,7 +253,7 @@ func TestPrepareVerifiesBeforePublication(t *testing.T) {
 			dest := filepath.Join(root, "image")
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "CORRUPT") }))
 			defer server.Close()
-			ver := Version{URL: server.URL, Checksum: strings.Repeat("0", 64), ChecksumType: "sha256"}
+			ver := Version{Arch: "amd64", URL: server.URL, Checksum: strings.Repeat("0", 64), ChecksumType: "sha256"}
 			if multipart {
 				ver.PartURLs = []string{server.URL}
 			}

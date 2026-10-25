@@ -30,6 +30,7 @@ func TestSafeJoinRejectsPathEscape(t *testing.T) {
 func TestLoadBlueprintRejectsExternalScriptEscape(t *testing.T) {
 	dir := t.TempDir()
 	blueprint := `
+arch: amd64
 name: test
 description: test
 version: "0.0.1"
@@ -127,7 +128,8 @@ func TestListBlueprintsReportsBuiltOutputAndDeduplicates(t *testing.T) {
 
 func writeTestBlueprint(t *testing.T, path, name, description string) {
 	t.Helper()
-	data := `name: ` + name + `
+	data := `arch: amd64
+name: ` + name + `
 description: ` + description + `
 version: "0.1.0"
 iso_url: https://example.test/fixture.iso
@@ -258,7 +260,7 @@ func TestCanonicalSeedScriptsRejectsConflictingWindowsAnswerFiles(t *testing.T) 
 }
 
 func TestBlueprintSpawnSeedFilesKeepsSupportScriptsOnly(t *testing.T) {
-	files := BlueprintSpawnSeedFiles(&image.Blueprint{Scripts: map[string]string{
+	files := BlueprintSpawnSeedFiles(&image.Blueprint{Arch: "amd64", Scripts: map[string]string{
 		"Autounattend.xml":            "<unattend/>",
 		"windows-setup-openssh.ps1":   "Write-Host ssh",
 		"support/windows-helper.ps1":  "Write-Host helper",
@@ -316,7 +318,7 @@ func TestBuildFailurePreservesExistingWorkspaceAndCache(t *testing.T) {
 		}
 	}
 	engine := NewEngine(cache, work, images, hardware.Virtualization{CPU: "qemu64"})
-	bp := &image.Blueprint{Name: "fixture", ISOName: "installer.iso", ISOURL: "https://example.test/installer.iso", OutputImage: "fixture.qcow2", Scripts: map[string]string{"../escape": "invalid"}}
+	bp := &image.Blueprint{Arch: "amd64", Name: "fixture", ISOName: "installer.iso", ISOURL: "https://example.test/installer.iso", OutputImage: "fixture.qcow2", Scripts: map[string]string{"../escape": "invalid"}}
 	if err := engine.Build(bp); err == nil {
 		t.Fatal("invalid build reported success")
 	}

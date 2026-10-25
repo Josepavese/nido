@@ -18,7 +18,7 @@ $arch = switch -Regex ($processorArch) {
     "^ARM64$" { "arm64"; break }
     default { "386" }
 }
-if ($arch -ne "amd64") {
+if ($arch -notin @("amd64", "arm64")) {
     Write-Host "[ERROR] No pre-built release artifact for Windows/$arch." -ForegroundColor Red
     Write-Host "   Use the source installer from installers/build-from-source.sh on a supported shell." -ForegroundColor Gray
     exit 1
@@ -47,7 +47,7 @@ $checksumUrl = "https://github.com/Josepavese/nido/releases/download/$version/SH
 
 Write-Host "[DOWNLOAD] Downloading $archiveName..." -ForegroundColor Cyan
 
-$nidoHome = "$env:USERPROFILE\.nido"
+$nidoHome = if ($env:NIDO_HOME) { $env:NIDO_HOME } else { "$env:USERPROFILE\.nido" }
 $binDir = "$nidoHome\bin"
 $targetPath = "$binDir\nido.exe"
 $validatorPath = "$binDir\nido-validator.exe"
@@ -293,9 +293,8 @@ Refresh-CurrentPath
 $qemuRuntimeInstalled = $false
 $qemuImgInstalled = $false
 try {
-    if (Get-Command "qemu-system-x86_64" -ErrorAction SilentlyContinue) { $qemuRuntimeInstalled = $true }
-    elseif (Get-Command "qemu-system-aarch64" -ErrorAction SilentlyContinue) { $qemuRuntimeInstalled = $true }
-    elseif (Get-Command "qemu-system" -ErrorAction SilentlyContinue) { $qemuRuntimeInstalled = $true }
+    $requiredEmulator = if ($arch -eq "arm64") { "qemu-system-aarch64" } else { "qemu-system-x86_64" }
+    if (Get-Command $requiredEmulator -ErrorAction SilentlyContinue) { $qemuRuntimeInstalled = $true }
     if (Get-Command "qemu-img" -ErrorAction SilentlyContinue) { $qemuImgInstalled = $true }
 } catch {}
 $qemuInstalled = $qemuRuntimeInstalled -and $qemuImgInstalled
@@ -304,6 +303,12 @@ if (-not $qemuInstalled) {
     Write-Host "[WARN]  QEMU dependencies are incomplete. Nido needs qemu-system and qemu-img to hatch VMs." -ForegroundColor Yellow
     if (-not $qemuRuntimeInstalled) { Write-Host "   - qemu-system: Missing" -ForegroundColor Yellow }
     if (-not $qemuImgInstalled) { Write-Host "   - qemu-img: Missing" -ForegroundColor Yellow }
+    if ($arch -eq "arm64") {
+        Write-Host "   Install native ARM64 QEMU in the MSYS2 CLANGARM64 shell:" -ForegroundColor Yellow
+        Write-Host "   pacman -S mingw-w64-clang-aarch64-qemu" -ForegroundColor Cyan
+        Write-Host "   Add its clangarm64/bin directory to PATH, then run nido doctor." -ForegroundColor Gray
+        Write-Host "   https://packages.msys2.org/packages/mingw-w64-clang-aarch64-qemu" -ForegroundColor Gray
+    } else {
     $response = Read-Host "[INSTALL] Would you like to install QEMU dependencies automatically via winget? (y/N)"
     if ($response -eq "y") {
         if (Ensure-Winget) {
@@ -312,7 +317,7 @@ if (-not $qemuInstalled) {
             if ($LASTEXITCODE -eq 0) {
                 Refresh-CurrentPath
                 Write-Host "[TIP] Note: You might need to restart your terminal for QEMU to be in your PATH." -ForegroundColor Yellow
-                $qemuInstalled = $true
+                $qemuInstalled = [bool](Get-Command $requiredEmulator -ErrorAction SilentlyContinue) -and [bool](Get-Command "qemu-img" -ErrorAction SilentlyContinue)
             } else {
                 Write-Host "[WARN]  QEMU installation failed via winget (exit $LASTEXITCODE)." -ForegroundColor Yellow
                 Write-Host "   Try manually: winget install --id SoftwareFreedomConservancy.QEMU -e --source winget" -ForegroundColor Gray
@@ -322,7 +327,9 @@ if (-not $qemuInstalled) {
         }
     } else {
         Write-Host "[TIP] Skipping automatic installation. You'll need to install it manually." -ForegroundColor Gray
+        Write-Host "   ARM64 requires a native ARM64 QEMU build with EDK2 firmware; use TCG if WHPX is unavailable." -ForegroundColor Gray
         Write-Host "   QEMU Windows options: https://www.qemu.org/download/#windows" -ForegroundColor Gray
+    }
     }
 } else {
     Write-Host "[OK] QEMU is already present." -ForegroundColor Green
