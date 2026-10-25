@@ -9,8 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Josepavese/nido/v5/internal/events"
-	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 )
 
 const qemuEventSuffix = ".events.qmp"

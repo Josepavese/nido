@@ -4,7 +4,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/Josepavese/nido/v5/internal/validator/report"
+	"github.com/Josepavese/nido/v4/internal/validator/report"
 )
 
 // Cleanup removes tracked resources unless keep-artifacts is set.

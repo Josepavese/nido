@@ -1,11 +1,11 @@
 package ops
 
 import (
-	"github.com/Josepavese/nido/v5/internal/events"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"os"
 
-	"github.com/Josepavese/nido/v5/internal/lifecycle"
-	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/lifecycle"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

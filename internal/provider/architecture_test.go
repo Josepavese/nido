@@ -6,9 +6,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/Josepavese/nido/v5/internal/config"
-	"github.com/Josepavese/nido/v5/internal/hardware"
-	"github.com/Josepavese/nido/v5/internal/image"
+	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/hardware"
+	"github.com/Josepavese/nido/v4/internal/image"
 )
 
 func TestARMGuestPlatform(t *testing.T) {

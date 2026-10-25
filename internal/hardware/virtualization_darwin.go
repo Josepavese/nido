@@ -2,7 +2,7 @@ package hardware
 
 import (
 	"context"
-	"github.com/Josepavese/nido/v5/internal/machine"
+	"github.com/Josepavese/nido/v4/internal/machine"
 	"strings"
 	"time"
 )

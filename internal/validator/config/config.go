@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	nidocfg "github.com/Josepavese/nido/v5/internal/config"
-	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
+	nidocfg "github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 )
 
 // Config holds all configurable knobs for the validation suite.

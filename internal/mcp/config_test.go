@@ -2,15 +2,15 @@ package mcp
 
 import (
 	"encoding/json"
-	"github.com/Josepavese/nido/v5/internal/hardware"
+	"github.com/Josepavese/nido/v4/internal/hardware"
 	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
 
-	"github.com/Josepavese/nido/v5/internal/config"
-	"github.com/Josepavese/nido/v5/internal/provider"
+	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/provider"
 )
 
 type configRecordingProvider struct {

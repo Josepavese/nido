@@ -5,20 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Josepavese/nido/v5/internal/machine"
-	"github.com/Josepavese/nido/v5/internal/pkg/identifier"
+	"github.com/Josepavese/nido/v4/internal/machine"
+	"github.com/Josepavese/nido/v4/internal/pkg/identifier"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 
-	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 
-	"github.com/Josepavese/nido/v5/internal/config"
-	"github.com/Josepavese/nido/v5/internal/events"
-	"github.com/Josepavese/nido/v5/internal/hardware"
-	"github.com/Josepavese/nido/v5/internal/image"
+	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v4/internal/hardware"
+	"github.com/Josepavese/nido/v4/internal/image"
 )
 
 // QemuProvider implements VMProvider using raw QEMU. Lifecycle and configuration

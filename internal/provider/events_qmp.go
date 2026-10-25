@@ -7,7 +7,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/Josepavese/nido/v5/internal/events"
+	"github.com/Josepavese/nido/v4/internal/events"
 )
 
 var qmpEventKinds = map[string]string{

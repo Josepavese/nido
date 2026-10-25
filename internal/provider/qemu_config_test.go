@@ -1,14 +1,14 @@
 package provider
 
 import (
-	"github.com/Josepavese/nido/v5/internal/hardware"
+	"github.com/Josepavese/nido/v4/internal/hardware"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"testing"
 
-	"github.com/Josepavese/nido/v5/internal/config"
+	"github.com/Josepavese/nido/v4/internal/config"
 )
 
 func TestUpdateConfigRawQemuArgs(t *testing.T) {

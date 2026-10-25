@@ -3,9 +3,9 @@ package image
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/Josepavese/nido/v5/internal/events"
-	"github.com/Josepavese/nido/v5/internal/machine"
-	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v4/internal/machine"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"io"
 	"net/http"
 	"os"

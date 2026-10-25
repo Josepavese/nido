@@ -40,7 +40,7 @@ func TestDeviceAndAdapterBoundaries(t *testing.T) {
 				if value == "github.com/fsnotify/fsnotify" && !strings.HasPrefix(rel, "internal/pkg/sysutil/") {
 					t.Errorf("native watcher outside PAL: %s", rel)
 				}
-				if strings.HasPrefix(rel, "internal/events/") && strings.HasPrefix(value, "github.com/Josepavese/nido/v5/internal/") && value != "github.com/Josepavese/nido/v5/internal/pkg/sysutil" && value != "github.com/Josepavese/nido/v5/internal/pkg/identifier" {
+				if strings.HasPrefix(rel, "internal/events/") && strings.HasPrefix(value, "github.com/Josepavese/nido/v4/internal/") && value != "github.com/Josepavese/nido/v4/internal/pkg/sysutil" && value != "github.com/Josepavese/nido/v4/internal/pkg/identifier" {
 					t.Errorf("event contract depends on domain adapter: %s", rel)
 				}
 				if value == "os/exec" && (strings.HasPrefix(rel, "cmd/nido/") || strings.HasPrefix(rel, "internal/mcp/") || strings.HasPrefix(rel, "internal/tui/") || strings.HasPrefix(rel, "internal/builder/") || strings.HasPrefix(rel, "internal/image/")) {
@@ -62,10 +62,10 @@ func TestDeviceAndAdapterBoundaries(t *testing.T) {
 						if aliases[pkg.Name] == "net" && (selector.Sel.Name == "Dial" || selector.Sel.Name == "DialTimeout" || selector.Sel.Name == "Listen") && (strings.HasPrefix(rel, "internal/tui/") || strings.HasPrefix(rel, "internal/mcp/") || strings.HasPrefix(rel, "cmd/nido/")) {
 							t.Errorf("native event/network connection outside PAL: %s", rel)
 						}
-						if aliases[pkg.Name] == "github.com/Josepavese/nido/v5/internal/provider" && selector.Sel.Name == "QemuProvider" {
+						if aliases[pkg.Name] == "github.com/Josepavese/nido/v4/internal/provider" && selector.Sel.Name == "QemuProvider" {
 							t.Errorf("concrete VM adapter type in consumer: %s", rel)
 						}
-						if aliases[pkg.Name] == "github.com/Josepavese/nido/v5/internal/image" && selector.Sel.Name == "Downloader" {
+						if aliases[pkg.Name] == "github.com/Josepavese/nido/v4/internal/image" && selector.Sel.Name == "Downloader" {
 							t.Errorf("concrete transfer adapter in consumer: %s", rel)
 						}
 						if aliases[pkg.Name] == "runtime" && (selector.Sel.Name == "GOOS" || selector.Sel.Name == "GOARCH") && (strings.HasPrefix(rel, "internal/provider/") || strings.HasPrefix(rel, "internal/builder/") || strings.HasPrefix(rel, "cmd/nido/") || strings.HasPrefix(rel, "internal/mcp/") || strings.HasPrefix(rel, "internal/tui/")) {

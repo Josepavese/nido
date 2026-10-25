@@ -2,9 +2,9 @@ package provider
 
 import (
 	"bytes"
-	"github.com/Josepavese/nido/v5/internal/config"
-	"github.com/Josepavese/nido/v5/internal/hardware"
-	"github.com/Josepavese/nido/v5/internal/image"
+	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/hardware"
+	"github.com/Josepavese/nido/v4/internal/image"
 	"os"
 	"path/filepath"
 	"testing"

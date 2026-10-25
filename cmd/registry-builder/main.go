@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Josepavese/nido/v5/internal/image"
-	"github.com/Josepavese/nido/v5/internal/registry/builder"
+	"github.com/Josepavese/nido/v4/internal/image"
+	"github.com/Josepavese/nido/v4/internal/registry/builder"
 	"gopkg.in/yaml.v3"
 )
 

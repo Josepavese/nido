@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Josepavese/nido/v5/internal/image"
-	"github.com/Josepavese/nido/v5/internal/machine"
-	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/image"
+	"github.com/Josepavese/nido/v4/internal/machine"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 )
 
 // MigrateArchitecture performs the explicit, resumable conversion from Nido's

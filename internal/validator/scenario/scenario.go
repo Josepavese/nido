@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/v5/internal/validator/config"
-	"github.com/Josepavese/nido/v5/internal/validator/report"
-	"github.com/Josepavese/nido/v5/internal/validator/runner"
-	"github.com/Josepavese/nido/v5/internal/validator/state"
+	"github.com/Josepavese/nido/v4/internal/validator/config"
+	"github.com/Josepavese/nido/v4/internal/validator/report"
+	"github.com/Josepavese/nido/v4/internal/validator/runner"
+	"github.com/Josepavese/nido/v4/internal/validator/state"
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
 )

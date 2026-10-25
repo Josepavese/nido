@@ -1,8 +1,8 @@
 package main
 
 import (
-	clijson "github.com/Josepavese/nido/v5/internal/cli"
-	"github.com/Josepavese/nido/v5/internal/ui"
+	clijson "github.com/Josepavese/nido/v4/internal/cli"
+	"github.com/Josepavese/nido/v4/internal/ui"
 	"github.com/spf13/cobra"
 )
 

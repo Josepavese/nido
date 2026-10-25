@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/Josepavese/nido/v5/internal/events"
+	"github.com/Josepavese/nido/v4/internal/events"
 	"os"
 	"path/filepath"
 	"testing"

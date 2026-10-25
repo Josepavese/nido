@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Josepavese/nido/v5/internal/validator/config"
+	"github.com/Josepavese/nido/v4/internal/validator/config"
 )
 
 func TestStoppedNonValidatorVMsBlocksOnlyStoppedNonTestVMs(t *testing.T) {

@@ -3,7 +3,7 @@ package image
 import (
 	"errors"
 	"fmt"
-	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"net/http"
 	"net/http/httptest"
 	"os"

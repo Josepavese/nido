@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"io"
 	"net/http"
 	"runtime/debug"
@@ -13,7 +13,7 @@ import (
 )
 
 // Version is stamped by bin/build-release.sh through
-// -ldflags "-X github.com/Josepavese/nido/v5/internal/build.Version=vX.Y.Z".
+// -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=vX.Y.Z".
 // It stays empty for source builds so init can recover the installed module
 // version (`go install ...@latest`) instead of reporting a stale constant.
 var Version string

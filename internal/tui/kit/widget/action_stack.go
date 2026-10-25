@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/v5/internal/tui/kit/layout"
-	"github.com/Josepavese/nido/v5/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"

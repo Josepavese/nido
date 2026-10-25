@@ -3,16 +3,16 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/Josepavese/nido/v5/internal/hardware"
+	"github.com/Josepavese/nido/v4/internal/hardware"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"testing"
 
-	clijson "github.com/Josepavese/nido/v5/internal/cli"
-	"github.com/Josepavese/nido/v5/internal/config"
-	"github.com/Josepavese/nido/v5/internal/provider"
+	clijson "github.com/Josepavese/nido/v4/internal/cli"
+	"github.com/Josepavese/nido/v4/internal/config"
+	"github.com/Josepavese/nido/v4/internal/provider"
 )
 
 func TestConfigRawQemuArgsCLI(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Josepavese/nido/v5/internal/image"
+	"github.com/Josepavese/nido/v4/internal/image"
 )
 
 // BlueprintInfo is the public, serializable summary used by CLI, MCP, and TUI.

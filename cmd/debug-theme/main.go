@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
-	"github.com/Josepavese/nido/v5/internal/tui/kit/theme"
-	"github.com/Josepavese/nido/v5/internal/tui/kit/widget"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/lipgloss"
 )

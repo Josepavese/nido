@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	cli "github.com/Josepavese/nido/v5/internal/cli"
-	"github.com/Josepavese/nido/v5/internal/events"
-	"github.com/Josepavese/nido/v5/internal/validator/report"
+	cli "github.com/Josepavese/nido/v4/internal/cli"
+	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v4/internal/validator/report"
 )
 
 const eventScenarioTimeout = 10 * time.Second

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/Josepavese/nido/v5/internal/events"
+	"github.com/Josepavese/nido/v4/internal/events"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

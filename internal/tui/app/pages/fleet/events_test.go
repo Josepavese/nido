@@ -1,11 +1,11 @@
 package fleet
 
 import (
-	"github.com/Josepavese/nido/v5/internal/tui/kit/layout"
-	"github.com/Josepavese/nido/v5/internal/tui/kit/widget"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 	"testing"
 
-	"github.com/Josepavese/nido/v5/internal/tui/app/ops"
+	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

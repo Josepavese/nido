@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Josepavese/nido/v5/internal/pkg/seediso"
-	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/pkg/seediso"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 )
 
 // CloudInit handles the generation of cloud-init seed ISOs.

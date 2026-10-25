@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/v5/internal/config"
-	nidonet "github.com/Josepavese/nido/v5/internal/net"
-	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/config"
+	nidonet "github.com/Josepavese/nido/v4/internal/net"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 )
 
 const vmStopTimeout = 5 * time.Second

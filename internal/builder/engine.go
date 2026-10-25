@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"fmt"
-	"github.com/Josepavese/nido/v5/internal/events"
-	"github.com/Josepavese/nido/v5/internal/machine"
+	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v4/internal/machine"
 	"io"
 	"net/url"
 	"os"
@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josepavese/nido/v5/internal/hardware"
-	"github.com/Josepavese/nido/v5/internal/image"
-	"github.com/Josepavese/nido/v5/internal/pkg/seediso"
-	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/hardware"
+	"github.com/Josepavese/nido/v4/internal/image"
+	"github.com/Josepavese/nido/v4/internal/pkg/seediso"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"gopkg.in/yaml.v3"
 )
 

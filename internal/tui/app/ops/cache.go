@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Josepavese/nido/v5/internal/builder"
-	"github.com/Josepavese/nido/v5/internal/pkg/sysutil"
-	"github.com/Josepavese/nido/v5/internal/provider"
+	"github.com/Josepavese/nido/v4/internal/builder"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
+	"github.com/Josepavese/nido/v4/internal/provider"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

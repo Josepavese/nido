@@ -7,7 +7,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/Josepavese/nido/v5/internal/events"
+	"github.com/Josepavese/nido/v4/internal/events"
 )
 
 const notificationInterval = 500 * time.Millisecond

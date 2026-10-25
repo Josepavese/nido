@@ -1,6 +1,6 @@
 package hardware
 
-import "github.com/Josepavese/nido/v5/internal/machine"
+import "github.com/Josepavese/nido/v4/internal/machine"
 
 // KVM_GET_API_VERSION and KVM_API_VERSION from linux/kvm.h.
 const kvmGetAPIVersion = 0xAE00

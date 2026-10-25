@@ -53,7 +53,7 @@ review it, then execute the saved file.
 | APT, Debian / Ubuntu | [Nido APT repository](#apt-debian--ubuntu) → `sudo apt-get install nido` |
 | DNF, Fedora / RHEL | [Nido DNF repository](#dnf-fedora--rhel) → `sudo dnf install nido` |
 | Container, Docker / Podman | `docker run -i --rm --device /dev/kvm --group-add "$(stat -c %g /dev/kvm)" -v nido-home:/home/nido/.nido ghcr.io/josepavese/nido mcp` |
-| Go toolchain | `go install github.com/Josepavese/nido/v5/cmd/nido@latest` |
+| Go toolchain | `go install github.com/Josepavese/nido/v4/cmd/nido@latest` |
 | Nix flake (Linux / macOS) | `nix run github:Josepavese/nido` (builds from source, wraps QEMU) |
 
 The npm launcher downloads the matching binary on first use and verifies it

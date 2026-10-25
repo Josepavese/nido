@@ -1,8 +1,8 @@
 package widget
 
 import (
-	"github.com/Josepavese/nido/v5/internal/tui/kit/layout"
-	"github.com/Josepavese/nido/v5/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"strings"

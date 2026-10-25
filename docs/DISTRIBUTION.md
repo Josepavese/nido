@@ -2,7 +2,7 @@
 
 How Nido reaches users and AI-agent tooling, and what runs automatically on
 every release. Research verified on **2026-10-25**; the whole pipeline was then
-validated end-to-end on `v5.0.0` (§1.1), `v4.8.3` (§1.3), the GHCR container
+validated end-to-end on `v4.8.1` (§1.1), `v4.8.3` (§1.3), the GHCR container
 (§1.4) and the signed APT/DNF repositories (§1.5). Release-day manual actions
 are governed by [DISTRIBUTION-GOVERNANCE.md](DISTRIBUTION-GOVERNANCE.md).
 Account/token requirements are listed per channel. For user-facing commands,
@@ -373,13 +373,13 @@ Without the secret the script falls back to unsigned repositories
 Because the module path was `github.com/Josepavese/nido` while releases were
 tagged `v4.x`, the Go proxy rejected those versions and `go install …@latest`
 resolved to a broken `v1.0.0`. The module is now
-`github.com/Josepavese/nido/v5` for the 5.0.0 architecture release:
+`github.com/Josepavese/nido/v4` and the path is verified on `v4.8.1`:
 
 ```bash
-go install github.com/Josepavese/nido/v5/cmd/nido@latest   # reports the installed version
+go install github.com/Josepavese/nido/v4/cmd/nido@latest   # reports the installed version
 ```
 
-<https://pkg.go.dev/github.com/Josepavese/nido/v5> is the Go reference page; a
+<https://pkg.go.dev/github.com/Josepavese/nido/v4> is the Go reference page; a
 fresh tag may need one **Request** click on pkg.go.dev before it is generated.
 Old `v1.x` tags remain historical.
 

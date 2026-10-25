@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Josepavese/nido/v5/internal/machine"
+	"github.com/Josepavese/nido/v4/internal/machine"
 )
 
 const architectureProbeTimeout = 3 * time.Second

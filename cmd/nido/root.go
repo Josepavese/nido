@@ -4,7 +4,7 @@ import (
 	"io"
 	"os"
 
-	climeta "github.com/Josepavese/nido/v5/internal/cli"
+	climeta "github.com/Josepavese/nido/v4/internal/cli"
 	"github.com/spf13/cobra"
 )
 
