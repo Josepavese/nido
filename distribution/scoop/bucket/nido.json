@@ -7,10 +7,10 @@
   "architecture": {
     "64bit": {
       "url": "https://github.com/Josepavese/nido/releases/download/v4.7.0/nido-windows-amd64.zip",
-      "hash": "1edf8ac88f8eee569e0b421db3abd565eb96dcb5b0bdef32d7b1e38a95974c97"
+      "hash": "1edf8ac88f8eee569e0b421db3abd565eb96dcb5b0bdef32d7b1e38a95974c97",
+      "extract_dir": "nido-windows-amd64"
     }
   },
-  "extract_dir": "nido-windows-amd64",
   "bin": [
     [
       "nido.exe",
@@ -27,7 +27,12 @@
   "autoupdate": {
     "architecture": {
       "64bit": {
-        "url": "https://github.com/Josepavese/nido/releases/download/v$version/nido-windows-amd64.zip"
+        "url": "https://github.com/Josepavese/nido/releases/download/v$version/nido-windows-amd64.zip",
+        "extract_dir": "nido-windows-amd64"
+      },
+      "arm64": {
+        "url": "https://github.com/Josepavese/nido/releases/download/v$version/nido-windows-arm64.zip",
+        "extract_dir": "nido-windows-arm64"
       }
     }
   },

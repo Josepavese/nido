@@ -5,6 +5,7 @@ sources:
     homepage: "https://ubuntu.com/"
     strategies:
       - type: "ubuntu-cloud"
+        architectures: [amd64, arm64]
         base_url: "https://cloud-images.ubuntu.com/releases"
         discovery:
           url: "https://cloud-images.ubuntu.com/releases/streams/v1/com.ubuntu.cloud:released:download.json"
@@ -15,6 +16,7 @@ sources:
     homepage: "https://get.opensuse.org/tumbleweed/"
     strategies:
       - type: "opensuse-tumbleweed"
+        architectures: [amd64]
         base_url: "https://download.opensuse.org/tumbleweed/appliances"
         versions: ["Latest"]
 
@@ -24,6 +26,7 @@ sources:
     homepage: "https://www.kali.org/"
     strategies:
       - type: "generic"
+        architectures: [amd64]
         base_url: "https://kali.download/cloud-images"
         discovery:
           url: "https://kali.download/cloud-images/"
@@ -41,6 +44,7 @@ sources:
     homepage: "https://www.debian.org/"
     strategies:
       - type: "debian-cloud"
+        architectures: [amd64, arm64]
         base_url: "https://cloud.debian.org/images/cloud"
         discovery:
           url: "https://deb.debian.org/debian/dists"
@@ -52,6 +56,7 @@ sources:
     homepage: "https://alpinelinux.org/"
     strategies:
       - type: "alpine-cdn"
+        architectures: [amd64]
         base_url: "https://dl-cdn.alpinelinux.org/alpine"
         discovery:
           url: "https://alpinelinux.org/releases.json"
@@ -63,6 +68,7 @@ sources:
     ssh_user: cirros
     strategies:
       - type: "generic"
+        architectures: [amd64]
         base_url: "https://download.cirros-cloud.net"
         discovery:
           url: "https://download.cirros-cloud.net/"
@@ -81,6 +87,7 @@ sources:
     homepage: "https://github.com/Josepavese/nido"
     strategies:
       - type: "github-release"
+        architectures: [amd64]
         owner: "Josepavese"
         repo: "nido"
 
@@ -92,6 +99,7 @@ sources:
     homepage: "https://github.com/Josepavese/nido"
     strategies:
       - type: "github-release"
+        architectures: [amd64]
         owner: "Josepavese"
         repo: "nido"
 
@@ -103,6 +111,7 @@ sources:
     homepage: "https://github.com/Josepavese/nido"
     strategies:
       - type: "github-release"
+        architectures: [amd64]
         owner: "Josepavese"
         repo: "nido"
 
@@ -114,6 +123,7 @@ sources:
     homepage: "https://github.com/Josepavese/nido"
     strategies:
       - type: "github-release"
+        architectures: [amd64]
         owner: "Josepavese"
         repo: "nido"
 
@@ -125,6 +135,7 @@ sources:
     homepage: "https://github.com/Josepavese/nido"
     strategies:
       - type: "github-release"
+        architectures: [amd64]
         owner: "Josepavese"
         repo: "nido"
 

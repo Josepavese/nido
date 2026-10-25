@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-10-25T10:29:18.420588354Z",
+  "updated_at": "2026-10-25T18:01:06.068793418Z",
   "images": [
     {
       "name": "ubuntu",
@@ -69,6 +69,68 @@
           "format": "qcow2",
           "checksum_url": "https://cloud-images.ubuntu.com/releases/22.04/release-20261020/SHA256SUMS",
           "checksum_regex": "ubuntu-22\\.04-server-cloudimg-amd64\\.img"
+        },
+        {
+          "version": "26.10",
+          "aliases": [
+            "stonking",
+            "latest"
+          ],
+          "arch": "arm64",
+          "url": "https://cloud-images.ubuntu.com/releases/stonking/release-20261019/ubuntu-26.10-server-cloudimg-arm64.img",
+          "checksum_type": "sha256",
+          "checksum": "ef1ac0e0bfd3ab265507c9efe78f130960b808b940b4f03e68382f1fd3f34a1e",
+          "size_bytes": 976805888,
+          "size": "931.6 MB",
+          "format": "qcow2",
+          "checksum_url": "https://cloud-images.ubuntu.com/releases/stonking/release-20261019/SHA256SUMS",
+          "checksum_regex": "ubuntu-26\\.10-server-cloudimg-arm64\\.img"
+        },
+        {
+          "version": "26.04",
+          "aliases": [
+            "resolute",
+            "lts"
+          ],
+          "arch": "arm64",
+          "url": "https://cloud-images.ubuntu.com/releases/26.04/release-20261016/ubuntu-26.04-server-cloudimg-arm64.img",
+          "checksum_type": "sha256",
+          "checksum": "8eb876c2ccc4b6ff89e4a65d511815923b285e04503ba465809bf587f763da24",
+          "size_bytes": 940373504,
+          "size": "896.8 MB",
+          "format": "qcow2",
+          "checksum_url": "https://cloud-images.ubuntu.com/releases/26.04/release-20261016/SHA256SUMS",
+          "checksum_regex": "ubuntu-26\\.04-server-cloudimg-arm64\\.img"
+        },
+        {
+          "version": "24.04",
+          "aliases": [
+            "noble"
+          ],
+          "arch": "arm64",
+          "url": "https://cloud-images.ubuntu.com/releases/24.04/release-20261017/ubuntu-24.04-server-cloudimg-arm64.img",
+          "checksum_type": "sha256",
+          "checksum": "50e24e1fb79e89116e939d90aa7738f7af48c442fa1bc2510131e0b39c50348e",
+          "size_bytes": 616522752,
+          "size": "588.0 MB",
+          "format": "qcow2",
+          "checksum_url": "https://cloud-images.ubuntu.com/releases/24.04/release-20261017/SHA256SUMS",
+          "checksum_regex": "ubuntu-24\\.04-server-cloudimg-arm64\\.img"
+        },
+        {
+          "version": "22.04",
+          "aliases": [
+            "jammy"
+          ],
+          "arch": "arm64",
+          "url": "https://cloud-images.ubuntu.com/releases/22.04/release-20261020/ubuntu-22.04-server-cloudimg-arm64.img",
+          "checksum_type": "sha256",
+          "checksum": "e720ae083f93baae47ac9b76a096243fe1027f60998cf1127a47a74c880f64ed",
+          "size_bytes": 700955648,
+          "size": "668.5 MB",
+          "format": "qcow2",
+          "checksum_url": "https://cloud-images.ubuntu.com/releases/22.04/release-20261020/SHA256SUMS",
+          "checksum_regex": "ubuntu-22\\.04-server-cloudimg-arm64\\.img"
         }
       ]
     },
@@ -156,6 +218,39 @@
           "format": "qcow2",
           "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/20261021-2638/SHA512SUMS",
           "checksum_regex": "debian-12-genericcloud-amd64-20261021-2638\\.qcow2"
+        },
+        {
+          "version": "13",
+          "aliases": [
+            "trixie",
+            "stable",
+            "latest"
+          ],
+          "arch": "arm64",
+          "url": "https://cloud.debian.org/images/cloud/trixie/20261021-2638/debian-13-genericcloud-arm64-20261021-2638.qcow2",
+          "checksum_type": "sha512",
+          "checksum": "e66eea33be9e1345e6c8737e65096e5b31031f4bd4f3f7d59a6f8b53f995a9c41996e97c5b4ab89f1587663efed11dfbd10c4d35b7bcc85b2545e58a12cd0e83",
+          "size_bytes": 336265216,
+          "size": "320.7 MB",
+          "format": "qcow2",
+          "checksum_url": "https://cloud.debian.org/images/cloud/trixie/20261021-2638/SHA512SUMS",
+          "checksum_regex": "debian-13-genericcloud-arm64-20261021-2638\\.qcow2"
+        },
+        {
+          "version": "12",
+          "aliases": [
+            "bookworm",
+            "oldstable"
+          ],
+          "arch": "arm64",
+          "url": "https://cloud.debian.org/images/cloud/bookworm/20261021-2638/debian-12-genericcloud-arm64-20261021-2638.qcow2",
+          "checksum_type": "sha512",
+          "checksum": "7aab8897223cf51f0559e45654a11c03a695ec94fe016a6f2dcb3ede3c5cacf314e0918f77fef571962c3a3a49470eb3d4dc967f848682700ab00ba38e8c5b6f",
+          "size_bytes": 341311488,
+          "size": "325.5 MB",
+          "format": "qcow2",
+          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/20261021-2638/SHA512SUMS",
+          "checksum_regex": "debian-12-genericcloud-arm64-20261021-2638\\.qcow2"
         }
       ]
     },

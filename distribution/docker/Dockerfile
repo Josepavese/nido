@@ -6,6 +6,7 @@
 # (`nido-linux-amd64/`): nido and nido-validator. QEMU is installed from Debian
 # so the image can boot VMs on a host that exposes /dev/kvm.
 FROM debian:bookworm-slim
+ARG TARGETARCH
 
 ENV DEBIAN_FRONTEND=noninteractive \
     NIDO_HOME=/home/nido/.nido
@@ -13,6 +14,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       qemu-system-x86 \
+      qemu-system-arm \
+      qemu-efi-aarch64 \
       qemu-utils \
       openssh-client \
       sshpass \
@@ -21,8 +24,8 @@ RUN apt-get update \
       iproute2 \
  && rm -rf /var/lib/apt/lists/*
 
-COPY nido /usr/local/bin/nido
-COPY nido-validator /usr/local/bin/nido-validator
+COPY nido-linux-${TARGETARCH}/nido /usr/local/bin/nido
+COPY nido-linux-${TARGETARCH}/nido-validator /usr/local/bin/nido-validator
 RUN chmod 0755 /usr/local/bin/nido /usr/local/bin/nido-validator \
  && useradd --create-home --uid 1000 nido \
  && mkdir -p "$NIDO_HOME/bin" "$NIDO_HOME/vms" "$NIDO_HOME/run" "$NIDO_HOME/backups" \

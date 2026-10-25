@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v4/internal/machine"
 	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"io"
 	"net/http"
@@ -228,6 +229,9 @@ func (d *downloader) downloadMultiPart(urls []string, dest string, expectedTotal
 func (d *downloader) Prepare(ver Version, dest string) (resultErr error) {
 	finish := events.Begin(d.events, events.ImageAcquire, "")
 	defer func() { finish(resultErr) }()
+	if _, err := machine.Normalize(ver.Arch); err != nil {
+		return err
+	}
 	downloadPath := dest
 	isTarXz := strings.HasSuffix(ver.URL, ".tar.xz")
 	isZst := strings.Contains(ver.URL, ".zst") || strings.Contains(ver.URL, ".zstandard")
@@ -264,7 +268,7 @@ func (d *downloader) Prepare(ver Version, dest string) (resultErr error) {
 		_ = os.Remove(downloadPath)
 	}
 
-	return nil
+	return WriteArchitecture(dest, ver.Arch)
 }
 
 // Decompress extracts an archive to a destination.

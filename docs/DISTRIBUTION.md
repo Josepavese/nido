@@ -27,7 +27,7 @@ incremental.
 | **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: [`nido-mcp`](https://www.npmjs.com/package/nido-mcp) with the `latest` dist-tag; every release publishes with provenance, no token stored (§2.4). |
 | **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | `Josepavese.Nido` 4.9.0 is submitted and **fully validated** ([microsoft/winget-pkgs#460843](https://github.com/microsoft/winget-pkgs/pull/460843): 10/10 checks green, CLA signed, token configured); only community-moderator merge remains. Updates automate once merged. |
 | **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours; the dated verification below records tested versions. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
-| **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | **Blocked upstream:** the registration page was checked on 2026-10-25 and confirms registrations are closed, with no manual queue. No maintainer account exists yet. Configure the channel after registration reopens; do not script registration retries. x86_64 only, `-bin` package. |
+| **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | **Blocked upstream:** the registration page was checked on 2026-10-25 and confirms registrations are closed, with no manual queue. No maintainer account exists yet. Configure the channel after registration reopens; do not script registration retries. The `-bin` template covers x86_64 and aarch64; publication is still blocked. |
 | **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours; the dated verification below records tested versions. |
 | **Glama** | directory indexing | GitHub OAuth, one-time | auto-release off | [Nido listing](https://glama.ai/mcp/servers/Josepavese/nido) provides discovery and local installation instructions. Hosted deployment is outside this channel's intended use; withdrawal of the previously published Glama release remains pending (§1.6). |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
@@ -392,7 +392,8 @@ Every packaging channel assumes these names, produced by `bin/build-release.sh`:
 ```
 nido-linux-amd64.tar.gz      nido-darwin-amd64.tar.gz
 nido-linux-arm64.tar.gz      nido-darwin-arm64.tar.gz
-nido-windows-amd64.zip       nido.mcpb        server.json
+nido-windows-amd64.zip       nido-windows-arm64.zip
+nido.mcpb        server.json
 install.sh                   install.ps1      SHA256SUMS
 ```
 
@@ -418,3 +419,16 @@ URL must contain `mcp` - both registry requirements.
 - Homebrew taps / acceptance policy: <https://github.com/Homebrew/brew/blob/main/docs/How-to-Create-and-Maintain-a-Tap.md>, <https://github.com/Homebrew/brew/blob/main/docs/Package-Acceptance-Policy.md>
 - AUR guidelines: <https://wiki.archlinux.org/title/AUR_submission_guidelines>; AUR action: <https://github.com/KSXGitHub/github-actions-deploy-aur>
 - Go modules major versions: <https://go.dev/ref/mod#major-version-suffixes>
+
+The release target matrix is owned by `internal/build/targets.json`; packaging
+and asset verification consume it. All six native host binaries are built,
+including Windows ARM64. Linux container publication stages both Linux release
+archives and builds `linux/amd64,linux/arm64`. Package publication produces real
+checksums for each ISA; unpublished Windows ARM assets are not assigned invented
+hashes in the checked-in historical Scoop snapshot. The next publication adds
+its ARM64 entry. Qualification and publishing status are distinct: changing the
+release pipeline does not establish that these new assets are already published.
+
+Release builds take an optional external output directory:
+`bash bin/build-release.sh VERSION /tmp/nido-release-VERSION`. Repository-local
+build outputs are rejected. See [architecture requirements](architectures.md).

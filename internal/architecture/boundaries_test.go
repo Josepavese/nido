@@ -68,7 +68,7 @@ func TestDeviceAndAdapterBoundaries(t *testing.T) {
 						if aliases[pkg.Name] == "github.com/Josepavese/nido/v4/internal/image" && selector.Sel.Name == "Downloader" {
 							t.Errorf("concrete transfer adapter in consumer: %s", rel)
 						}
-						if aliases[pkg.Name] == "runtime" && selector.Sel.Name == "GOOS" && (strings.HasPrefix(rel, "internal/provider/") || strings.HasPrefix(rel, "internal/builder/") || strings.HasPrefix(rel, "cmd/nido/") || strings.HasPrefix(rel, "internal/mcp/") || strings.HasPrefix(rel, "internal/tui/")) {
+						if aliases[pkg.Name] == "runtime" && (selector.Sel.Name == "GOOS" || selector.Sel.Name == "GOARCH") && (strings.HasPrefix(rel, "internal/provider/") || strings.HasPrefix(rel, "internal/builder/") || strings.HasPrefix(rel, "cmd/nido/") || strings.HasPrefix(rel, "internal/mcp/") || strings.HasPrefix(rel, "internal/tui/")) {
 							t.Errorf("runtime platform selection outside native backend: %s", rel)
 						}
 					}

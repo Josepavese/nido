@@ -14,6 +14,7 @@ Environment:
   NIDO_BIN                 Nido binary to use. Default: nido
   NIDO_VM_NAME             VM name. Default: nido-test-<timestamp>-<pid>
   NIDO_TEST_IMAGE          Image tag. Default: ubuntu:24.04
+  NIDO_ARCH                Guest ISA: auto, amd64 or arm64. Default: auto
   NIDO_MEMORY              VM memory MB. Default: 4096
   NIDO_CPUS                VM vCPUs. Default: 2
   NIDO_APP_PORT            Guest service port to forward with label "app". Default: 8080
@@ -55,6 +56,7 @@ shell_quote() {
 NIDO_BIN="${NIDO_BIN:-nido}"
 NIDO_VM_NAME="${NIDO_VM_NAME:-nido-test-$(date +%Y%m%d%H%M%S)-$$}"
 NIDO_TEST_IMAGE="${NIDO_TEST_IMAGE:-ubuntu:24.04}"
+NIDO_ARCH="${NIDO_ARCH:-auto}"
 NIDO_MEMORY="${NIDO_MEMORY:-4096}"
 NIDO_CPUS="${NIDO_CPUS:-2}"
 NIDO_APP_PORT="${NIDO_APP_PORT:-8080}"
@@ -106,7 +108,7 @@ fi
 
 echo "Spawning $NIDO_VM_NAME from $NIDO_TEST_IMAGE"
 "$NIDO_BIN" spawn "$NIDO_VM_NAME" \
-  --image "$NIDO_TEST_IMAGE" \
+  --image "$NIDO_TEST_IMAGE" --arch "$NIDO_ARCH" \
   --memory "$NIDO_MEMORY" \
   --cpus "$NIDO_CPUS" \
   --user-data "$USER_DATA_PATH" \

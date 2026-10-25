@@ -45,7 +45,7 @@ func TestUpdateConfigRawQemuArgs(t *testing.T) {
 				}
 				p := NewQemuProvider(root, &config.Config{}, hardware.New())
 				fw := []PortForward{{Label: "fixture", GuestPort: 80, HostPort: 31080, Protocol: "tcp"}}
-				if err := p.saveState("fixture", pid, 51022, 0, false, "fixture-user", fw, "fixture-cmdline", 512, 1, tt.initial, []string{"virtual:gpu"}); err != nil {
+				if err := p.saveState("fixture", pid, 51022, 0, false, "fixture-user", fw, "fixture-cmdline", 512, 1, tt.initial, []string{"virtual:gpu"}, "amd64"); err != nil {
 					t.Fatal(err)
 				}
 				before, err := p.loadState("fixture")
@@ -74,7 +74,7 @@ func TestUpdateConfigRawQemuArgs(t *testing.T) {
 					t.Fatalf("unrelated state changed:\ngot  %#v\nwant %#v", after, wantState)
 				}
 				// Exercise the argument builder used by Start, without launching QEMU.
-				args := reopened.buildQemuArgs(after.Name, filepath.Join(root, "fixture.qcow2"), after.SSHPort, after.VNCPort, after.Forwarding, filepath.Join(root, "run"), after.Cmdline, after.MemoryMB, after.VCPUs, after.RawQemuArgs, after.Accelerators)
+				args := reopened.buildQemuArgs(after.Name, filepath.Join(root, "fixture.qcow2"), after.SSHPort, after.VNCPort, after.Forwarding, filepath.Join(root, "run"), after.Cmdline, after.MemoryMB, after.VCPUs, after.RawQemuArgs, after.Accelerators, "amd64")
 				if len(tt.want) > 0 && !slices.Equal(args[len(args)-len(tt.want):], tt.want) {
 					t.Fatalf("next-start argument suffix = %#v, want %#v", args, tt.want)
 				}

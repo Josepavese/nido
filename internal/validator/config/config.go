@@ -68,8 +68,7 @@ func Parse(runID string) Config {
 	defaultPortWait := getenvDuration("PORT_WAIT_TIMEOUT", 30*time.Second)
 
 	// Load Nido's main config for SSOT defaults
-	home, _ := sysutil.UserHome()
-	nidoConfigPath := filepath.Join(home, ".nido", "config.env")
+	nidoConfigPath := filepath.Join(sysutil.NidoHome(), "config.env")
 	nidoCfg, _ := nidocfg.LoadConfig(nidoConfigPath)
 
 	if defaultSSHUser == "" && nidoCfg != nil {

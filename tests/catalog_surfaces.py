@@ -44,9 +44,9 @@ def probe(binary, catalog):
     resource_list = mcp('resources/read', {'uri': 'nido://catalog/images'})
     if isinstance(resource_list, dict):
         resource_list = resource_list['images']
-    tags = {(i['name'], v['version']) for i in expected for v in i['versions']}
+    tags = {(i['name'], v['version'],v['arch']) for i in expected for v in i['versions']}
     for result in [cli_list, tool_list, resource_list]:
-        actual = {(i['name'], i['version']) for i in result if i['registry'] != 'blueprint'}
+        actual = {(i['name'], i['version'],i['arch']) for i in result if i['registry'] != 'blueprint'}
         assert actual == tags, (actual, tags)
     checks = 0
     for image in expected:
@@ -56,9 +56,9 @@ def probe(binary, catalog):
                 refs.append('')
             for ref in refs:
                 tag = image['name']+(':'+ref if ref else '')
-                cli = run('images', 'info', tag, '--json')['data']['image']['version']
-                tool = mcp('tools/call', {'name': 'nido_image', 'arguments': {'action': 'info', 'image': tag}})['image']
-                resource = mcp('resources/read', {'uri': 'nido://image/'+tag})['image']
+                cli = run('images', 'info', tag, '--arch',version['arch'], '--json')['data']['image']['version']
+                tool = mcp('tools/call', {'name': 'nido_image', 'arguments': {'action': 'info', 'image': tag,'arch':version['arch']}})['image']
+                resource = mcp('resources/read', {'uri': 'nido://image/'+tag+'?arch='+version['arch']})['image']
                 for actual in [cli, tool, resource]:
                     assert actual['version'] == version['version'], (tag, actual)
                     for key in ['url', 'checksum', 'checksum_type', 'size_bytes']:
@@ -79,7 +79,7 @@ def probe(binary, catalog):
                            text=True, capture_output=True, timeout=20)
         assert p.returncode != 0 and json.loads(p.stdout)['status'] == 'error'
         request = {'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call',
-                   'params': {'name': 'nido_image', 'arguments': {'action': 'info', 'image': tag}}}
+                   'params': {'name': 'nido_image', 'arguments': {'action': 'info', 'image': tag,'arch':version['arch']}}}
         response = run('mcp', request=json.dumps(request)+'\n')
         assert response['result'].get('isError'), response
     for name in ['vms', 'backups', 'run']:

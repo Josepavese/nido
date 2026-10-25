@@ -7,6 +7,7 @@ import (
 
 // RequestSpawnMsg requests a VM spawn.
 type RequestSpawnMsg struct {
+	Arch         string
 	Name         string
 	Source       string
 	SourceType   string
@@ -47,6 +48,7 @@ type TemplateUsageMsg struct {
 
 // RegistryImage represents a remote image available for download.
 type RegistryImage struct {
+	Arch        string
 	Name        string
 	Version     string
 	Registry    string // "nido" or "official"
@@ -62,11 +64,13 @@ type RegistryListMsg struct {
 
 // RequestPullMsg requests an image pull.
 type RequestPullMsg struct {
+	Arch  string
 	Image string // "ubuntu:24.04"
 }
 
 // RequestDeleteImageMsg requests deletion of a cached image.
 type RequestDeleteImageMsg struct {
+	Arch    string
 	Name    string
 	Version string
 }

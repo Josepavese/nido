@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -74,9 +75,8 @@ func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, for
 			// 2. Cloud Images from Catalog (with registry distinction)
 			cfg := prov.GetConfig()
 			catalogDir := cfg.ImageDir
-			home, _ := sysutil.UserHome()
 			if catalogDir == "" {
-				catalogDir = filepath.Join(home, ".nido", "images")
+				catalogDir = filepath.Join(sysutil.NidoHome(), "images")
 			}
 
 			var catalog *image.Catalog
@@ -84,7 +84,7 @@ func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, for
 
 			cwd, _ := os.Getwd()
 			localRegistry := filepath.Join(cwd, "registry", "images.json")
-			blueprints, bpErr := builder.ListBlueprints(cwd, filepath.Join(home, ".nido"), catalogDir)
+			blueprints, bpErr := builder.ListBlueprints(cwd, sysutil.NidoHome(), catalogDir)
 
 			if cachedOnly {
 				catalog, catErr = image.LoadCatalogFromFile(filepath.Join(catalogDir, image.CatalogCacheFile))
@@ -137,6 +137,8 @@ func FetchSources(prov provider.VMProvider, action SourceAction, cachedOnly, for
 
 			sort.Strings(flavours)
 			sort.Strings(cloud)
+			flavours = slices.Compact(flavours)
+			cloud = slices.Compact(cloud)
 
 			for _, f := range flavours {
 				srcList = append(srcList, fmt.Sprintf("[FLAVOUR] %s", f))
@@ -195,8 +197,7 @@ func FetchRegistryImages(prov provider.VMProvider, forceRemote bool) tea.Cmd {
 		cfg := prov.GetConfig()
 		catalogDir := cfg.ImageDir
 		if catalogDir == "" {
-			home, _ := sysutil.UserHome()
-			catalogDir = filepath.Join(home, ".nido", "images")
+			catalogDir = filepath.Join(sysutil.NidoHome(), "images")
 		}
 
 		cwd, _ := os.Getwd()
@@ -223,7 +224,7 @@ func FetchRegistryImages(prov provider.VMProvider, forceRemote bool) tea.Cmd {
 		var results []RegistryImage
 		for _, img := range catalog.Images {
 			for _, ver := range img.Versions {
-				results = append(results, RegistryImage{
+				results = append(results, RegistryImage{Arch: ver.Arch,
 					Name:        img.Name,
 					Version:     ver.Version,
 					Registry:    img.Registry,
@@ -247,7 +248,7 @@ func FetchRegistryImages(prov provider.VMProvider, forceRemote bool) tea.Cmd {
 }
 
 // PullImage initiates a download operation with progress tracking.
-func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
+func PullImage(prov provider.VMProvider, imageRef, arch string) tea.Cmd {
 	opName := fmt.Sprintf("pull %s", imageRef)
 
 	return func() tea.Msg {
@@ -265,8 +266,7 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 			cfg := prov.GetConfig()
 			imgDir := cfg.ImageDir
 			if imgDir == "" {
-				home, _ := sysutil.UserHome()
-				imgDir = filepath.Join(home, ".nido", "images")
+				imgDir = filepath.Join(sysutil.NidoHome(), "images")
 			}
 
 			catalog, err := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
@@ -281,14 +281,14 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 				pName, pVer = parts[0], parts[1]
 			}
 
-			img, ver, err := catalog.FindImage(pName, pVer)
+			img, ver, err := catalog.FindImage(pName, pVer, arch)
 			if err != nil {
 				ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("image not found: %w", err)}}
 				return
 			}
 
 			// --- 1. Download Main Image ---
-			destPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
+			destPath := filepath.Join(imgDir, ver.CacheFileName(img.Name))
 			if _, err := os.Stat(destPath); os.IsNotExist(err) {
 				downloader := image.NewTransfer(image.TransferOptions{Events: prov.EventPublisher(), OnProgress: func(current, total int64) {
 					ratio := 0.0
@@ -338,7 +338,7 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 
 			// --- 2. Download Kernel (if defined) ---
 			if ver.KernelURL != "" {
-				kernelPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.kernel", img.Name, ver.Version))
+				kernelPath := filepath.Join(imgDir, ver.CacheStem(img.Name)+".kernel")
 				if _, err := os.Stat(kernelPath); os.IsNotExist(err) {
 					downloader := image.NewTransfer(image.TransferOptions{Events: prov.EventPublisher(), OnProgress: func(current, total int64) {
 						ratio := 0.0
@@ -370,7 +370,7 @@ func PullImage(prov provider.VMProvider, imageRef string) tea.Cmd {
 
 			// --- 3. Download Initrd (if defined) ---
 			if ver.InitrdURL != "" {
-				initrdPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.initrd", img.Name, ver.Version))
+				initrdPath := filepath.Join(imgDir, ver.CacheStem(img.Name)+".initrd")
 				if _, err := os.Stat(initrdPath); os.IsNotExist(err) {
 					downloader := image.NewTransfer(image.TransferOptions{Events: prov.EventPublisher(), OnProgress: func(current, total int64) {
 						ratio := 0.0

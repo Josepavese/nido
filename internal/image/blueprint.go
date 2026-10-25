@@ -3,6 +3,7 @@ package image
 // Blueprint defines the Single Source of Truth "recipe" for building an image locally.
 // Unlike Catalog/Image entries which point to static files, Blueprints describe a process.
 type Blueprint struct {
+	Arch string `yaml:"arch" json:"arch"`
 	// Metadata
 	Name        string `yaml:"name" json:"name"`
 	DisplayName string `yaml:"display_name,omitempty" json:"display_name,omitempty"`

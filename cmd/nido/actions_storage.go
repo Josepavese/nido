@@ -145,7 +145,7 @@ func actionCacheList(app *appContext) func(cmd *cobra.Command, args []string) {
 			if version == "" {
 				version = "-"
 			}
-			fmt.Printf(" %-25s %-15s %s\n", img.Name, version, img.Size)
+			fmt.Printf(" %-25s %-15s %s\n", img.Name, version+" ["+img.Arch+"]", img.Size)
 		}
 		fmt.Println("")
 	}
@@ -184,7 +184,8 @@ func actionCacheRemove(app *appContext) func(cmd *cobra.Command, args []string) 
 	return func(cmd *cobra.Command, args []string) {
 		jsonOut := jsonEnabled(cmd)
 		name, version := parseImageRef(args[0])
-		if err := app.Provider.CacheRemove(name, version); err != nil {
+		arch, _ := cmd.Flags().GetString("arch")
+		if err := app.Provider.CacheRemove(name, version, arch); err != nil {
 			if isNotFoundErr(err) {
 				if jsonOut {
 					_ = clijson.PrintJSON(clijson.NewResponseOK("cache remove", map[string]interface{}{
@@ -252,19 +253,22 @@ func actionImagesList(app *appContext) func(cmd *cobra.Command, args []string) {
 
 func actionImagesPull(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		cmdImagePull(app.Cwd, app.ImageDir(), args, jsonEnabled(cmd), app.Provider.EventPublisher())
+		arch, _ := cmd.Flags().GetString("arch")
+		cmdImagePull(app.Cwd, app.ImageDir(), args, jsonEnabled(cmd), app.Provider.EventPublisher(), arch)
 	}
 }
 
 func actionImagesInfo(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		cmdImageInfo(app.Cwd, app.ImageDir(), args, jsonEnabled(cmd))
+		arch, _ := cmd.Flags().GetString("arch")
+		cmdImageInfo(app.Cwd, app.ImageDir(), args, jsonEnabled(cmd), arch)
 	}
 }
 
 func actionImagesRemove(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
-		cmdImageRemove(app.ImageDir(), app.Provider, args, jsonEnabled(cmd))
+		arch, _ := cmd.Flags().GetString("arch")
+		cmdImageRemove(app.ImageDir(), app.Provider, args, jsonEnabled(cmd), arch)
 	}
 }
 
@@ -278,7 +282,7 @@ func actionBuild(app *appContext) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		jsonOut := jsonEnabled(cmd)
 		ensureBundledRegistryCurrent("build", app.NidoDir, jsonOut)
-		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), app.Provider.Virtualization(), args, jsonOut, "build", app.Provider.EventPublisher())
+		cmdBuild(app.Cwd, app.NidoDir, app.ImageDir(), app.Provider.Virtualization, args, jsonOut, "build", app.Provider.EventPublisher())
 	}
 }
 

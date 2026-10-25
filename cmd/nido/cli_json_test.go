@@ -7,6 +7,7 @@ import (
 	"github.com/Josepavese/nido/v4/internal/hardware"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Josepavese/nido/v4/internal/config"
@@ -127,7 +128,7 @@ func TestImageInfoAndRemoveJSONStayClean(t *testing.T) {
 	}
 
 	stdout, stderr := captureProcessIO(t, func() {
-		cmdImageInfo(app.Cwd, app.ImageDir(), []string{"ubuntu:24.04"}, true)
+		cmdImageInfo(app.Cwd, app.ImageDir(), []string{"ubuntu:24.04"}, true, "amd64")
 	})
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -136,7 +137,7 @@ func TestImageInfoAndRemoveJSONStayClean(t *testing.T) {
 	assertCatalogFixtureUsed(t, stdout, app.ImageDir())
 
 	stdout, stderr = captureProcessIO(t, func() {
-		cmdImageRemove(app.ImageDir(), fakeProvider{}, []string{"ubuntu:24.04"}, true)
+		cmdImageRemove(app.ImageDir(), fakeProvider{}, []string{"ubuntu:24.04"}, true, "amd64")
 	})
 	if stderr != "" {
 		t.Fatalf("expected empty stderr, got %q", stderr)
@@ -191,7 +192,8 @@ func TestApplyBlueprintImageMetadataAddsSpawnSeedFiles(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir blueprint registry: %v", err)
 	}
-	data := []byte(`name: windows-fixture
+	data := []byte(`arch: amd64
+name: windows-fixture
 description: Windows fixture blueprint
 version: "0.1.0"
 ssh_user: vmuser
@@ -260,7 +262,8 @@ func writeBlueprintFixture(t *testing.T, cwd string) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir blueprint registry: %v", err)
 	}
-	data := []byte(`name: fixture-blueprint
+	data := []byte(`arch: amd64
+name: fixture-blueprint
 description: Fixture blueprint
 version: "0.1.0"
 iso_url: https://example.test/fixture.iso
@@ -314,7 +317,7 @@ func (fakeProvider) CacheInfo() (provider.CacheInfoResult, error) {
 	return provider.CacheInfoResult{Count: 1, TotalSize: "1.2 GB"}, nil
 }
 func (fakeProvider) CachePrune(unusedOnly bool) (int, int64, error) { return 1, 1024, nil }
-func (fakeProvider) CacheRemove(name, version string) error         { return nil }
+func (fakeProvider) CacheRemove(name, version, arch string) error   { return nil }
 func (fakeProvider) SSHArgs(name string) ([]string, error) {
 	return []string{"ssh", "-p", "50022", "vmuser@127.0.0.1"}, nil
 }
@@ -442,8 +445,41 @@ func writeCatalogFixture(t *testing.T, cwd string) {
 	}
 }
 
-func (fakeProvider) Virtualization() hardware.Virtualization {
+func (fakeProvider) Virtualization(guest string) hardware.Virtualization {
 	return hardware.Virtualization{CPU: "qemu64"}
 }
 
 func (fakeProvider) EventPublisher() events.Publisher { return nil }
+
+func (m fakeProvider) MigrateArchitecture() (int, error) { return 0, nil }
+
+type architectureProvider struct {
+	fakeProvider
+	opts provider.VMOptions
+}
+
+func (p *architectureProvider) Spawn(name string, opts provider.VMOptions) error {
+	p.opts = opts
+	return nil
+}
+
+func TestSpawnArchitectureFlag(t *testing.T) {
+	for _, arch := range []string{"auto", "amd64", "arm64"} {
+		app := testAppContext(t)
+		p := &architectureProvider{}
+		app.Provider = p
+		root, err := newRootCommand(app)
+		if err != nil {
+			t.Fatal(err)
+		}
+		root.SetArgs([]string{"spawn", "isa-test", "--arch", arch, "--json"})
+		stdout, stderr := captureProcessIO(t, func() {
+			if err := root.Execute(); err != nil {
+				t.Fatal(err)
+			}
+		})
+		if p.opts.Arch != arch || stderr != "" || !strings.Contains(stdout, `"status":"ok"`) {
+			t.Fatalf("lost architecture: %s %s %#v", stdout, stderr, p.opts)
+		}
+	}
+}

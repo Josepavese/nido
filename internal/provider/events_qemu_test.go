@@ -18,7 +18,7 @@ import (
 
 type eventSoftwareHost struct{ hardware.Host }
 
-func (eventSoftwareHost) Virtualization() hardware.Virtualization {
+func (eventSoftwareHost) Virtualization(guest string) hardware.Virtualization {
 	return hardware.Virtualization{CPU: "qemu64"}
 }
 

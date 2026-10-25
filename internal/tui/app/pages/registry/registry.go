@@ -15,6 +15,7 @@ import (
 
 // RegistryItem represents an image in the sidebar (either remote or local).
 type RegistryItem struct {
+	Arch          string
 	Name          string
 	Version       string
 	Provider      string // "nido", "official", or "blueprint"
@@ -24,7 +25,7 @@ type RegistryItem struct {
 }
 
 func (i RegistryItem) Title() string {
-	return fmt.Sprintf("%s:%s", i.Name, i.Version)
+	return fmt.Sprintf("%s:%s [%s]", i.Name, i.Version, i.Arch)
 }
 
 func (i RegistryItem) Description() string {
@@ -146,7 +147,7 @@ func NewRegistry(prov provider.VMProvider) *Registry {
 					deleteVersion = item.Version
 				}
 				return func() tea.Msg {
-					return ops.RequestDeleteImageMsg{Name: deleteName, Version: deleteVersion}
+					return ops.RequestDeleteImageMsg{Name: deleteName, Version: deleteVersion, Arch: item.Arch}
 				}
 			}
 			return nil
@@ -267,6 +268,7 @@ func (r *Registry) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 		var items []RegistryItem
 		for _, img := range msg.Images {
 			items = append(items, RegistryItem{
+				Arch:     img.Arch,
 				Name:     img.Name,
 				Version:  img.Version,
 				Provider: img.Registry, // "nido" or "official"
@@ -283,6 +285,7 @@ func (r *Registry) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 		var items []RegistryItem
 		for _, img := range msg.Items {
 			items = append(items, RegistryItem{
+				Arch:          img.Arch,
 				Name:          img.Name,
 				Version:       img.Version,
 				Provider:      img.Kind,
@@ -501,7 +504,7 @@ func (d *RegistryDetail) pullSelected() tea.Cmd {
 		return nil
 	}
 	ref := fmt.Sprintf("%s:%s", d.Item.Name, d.Item.Version)
-	return func() tea.Msg { return ops.RequestPullMsg{Image: ref} }
+	return func() tea.Msg { return ops.RequestPullMsg{Image: ref, Arch: d.Item.Arch} }
 }
 
 func (SectionHeader) Selectable() bool { return false }

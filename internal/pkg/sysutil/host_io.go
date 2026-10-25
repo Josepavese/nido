@@ -13,6 +13,7 @@ import (
 // HostIO is the PAL used by native hardware adapters. Tests supply a private
 // filesystem and command recorder; no host device access is needed.
 type HostIO interface {
+	Architecture() string
 	AcquireFile(string, []byte, fs.FileMode) error
 	ReadDir(string) ([]fs.DirEntry, error)
 	ReadFile(string) ([]byte, error)

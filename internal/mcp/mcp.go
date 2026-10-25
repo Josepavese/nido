@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v4/internal/machine"
 	"io"
 	"net/url"
 	"os"
@@ -99,6 +100,7 @@ func ToolsCatalog() []map[string]interface{} {
 					"action":        map[string]interface{}{"type": "string", "enum": []string{"list", "info", "create", "start", "stop", "delete", "ssh", "prune", "config_update", "port_forward", "port_unforward", "port_list"}},
 					"name":          map[string]interface{}{"type": "string", "description": "VM name for any action that targets a specific VM."},
 					"template":      map[string]interface{}{"type": "string", "description": "Template name for action=create."},
+					"arch":          map[string]interface{}{"type": "string", "enum": append([]string{machine.Auto}, machine.Architectures()...), "description": "Guest ISA; omitted or auto selects the native host architecture."},
 					"image":         map[string]interface{}{"type": "string", "description": "Image tag like ubuntu:24.04 for action=create."},
 					"user_data":     map[string]interface{}{"type": "string", "description": "Cloud-init user-data content for action=create."},
 					"gui":           map[string]interface{}{"type": "boolean"},
@@ -140,6 +142,7 @@ func ToolsCatalog() []map[string]interface{} {
 			"inputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
+					"arch":        map[string]interface{}{"type": "string", "enum": append([]string{machine.Auto}, machine.Architectures()...)},
 					"action":      map[string]interface{}{"type": "string", "enum": []string{"list", "info", "pull", "remove", "refresh_catalog", "cache_list", "cache_info", "cache_remove", "cache_prune"}},
 					"image":       map[string]interface{}{"type": "string", "description": "Image tag like debian:12."},
 					"unused_only": map[string]interface{}{"type": "boolean", "description": "Used by action=cache_prune."},
@@ -162,11 +165,11 @@ func ToolsCatalog() []map[string]interface{} {
 		},
 		{
 			"name":        "nido_system",
-			"description": "Access system-wide Nido operations that are not tied to one VM. Supported actions are doctor, version, update_check, update, config_get, config_set, accel_list, register, completion, build_image, and uninstall. Use read-only resources when possible.",
+			"description": "Access system-wide Nido operations that are not tied to one VM. Supported actions are migrate, doctor, version, update_check, update, config_get, config_set, accel_list, register, completion, build_image, and uninstall. Use read-only resources when possible.",
 			"inputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"action":         map[string]interface{}{"type": "string", "enum": []string{"doctor", "version", "update_check", "update", "config_get", "config_set", "accel_list", "register", "completion", "build_image", "uninstall"}},
+					"action":         map[string]interface{}{"type": "string", "enum": []string{"migrate", "doctor", "version", "update_check", "update", "config_get", "config_set", "accel_list", "register", "completion", "build_image", "uninstall"}},
 					"blueprint_name": map[string]interface{}{"type": "string", "description": "Blueprint used by action=build_image."},
 					"key":            map[string]interface{}{"type": "string", "description": "Global config key for action=config_set."},
 					"value":          map[string]interface{}{"type": "string", "description": "Global config value for action=config_set."},
@@ -200,7 +203,7 @@ func ResourcesCatalog() []map[string]interface{} {
 func ResourceTemplatesCatalog() []map[string]interface{} {
 	return []map[string]interface{}{
 		{"name": "VM Detail", "uriTemplate": events.VMResourcePrefix + "{name}", "mimeType": "application/json", "description": "Detailed state for one VM."},
-		{"name": "Image Detail", "uriTemplate": "nido://image/{tag}", "mimeType": "application/json", "description": "Detailed catalog metadata for one image tag."},
+		{"name": "Image Detail", "uriTemplate": "nido://image/{tag}{?arch}", "mimeType": "application/json", "description": "Detailed catalog metadata for one image tag."},
 		{"name": "Blueprint Detail", "uriTemplate": "nido://blueprint/{name}", "mimeType": "application/json", "description": "Detailed metadata for one image blueprint."},
 	}
 }
@@ -440,6 +443,7 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 
 func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 	var args struct {
+		Arch         string   `json:"arch"`
 		Action       string   `json:"action"`
 		Name         string   `json:"name"`
 		Template     string   `json:"template"`
@@ -480,6 +484,7 @@ func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 		return map[string]interface{}{"action": "info", "vm": info}, nil
 	case "create":
 		opts := provider.VMOptions{
+			Arch:         args.Arch,
 			Gui:          args.Gui,
 			Cmdline:      args.Cmdline,
 			MemoryMB:     args.MemoryMB,
@@ -514,7 +519,7 @@ func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 		}
 		source := chooseSource(args.Image, args.Template)
 		if args.Image != "" {
-			resolved, err := s.resolveCreateImage(args.Image)
+			resolved, err := s.resolveCreateImage(args.Image, args.Arch)
 			if err != nil {
 				return nil, err
 			}
@@ -538,7 +543,7 @@ func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 		}
 		return map[string]interface{}{"action": "create", "name": args.Name, "source": source, "status": "created"}, nil
 	case "start":
-		if err := s.Provider.Start(args.Name, provider.VMOptions{Gui: args.Gui, Cmdline: args.Cmdline}); err != nil {
+		if err := s.Provider.Start(args.Name, provider.VMOptions{Arch: args.Arch, Gui: args.Gui, Cmdline: args.Cmdline}); err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"action": "start", "name": args.Name, "status": "started"}, nil
@@ -655,6 +660,7 @@ func (s *Server) callTemplateTool(raw json.RawMessage) (interface{}, error) {
 
 func (s *Server) callImageTool(raw json.RawMessage) (interface{}, error) {
 	var args struct {
+		Arch       string `json:"arch"`
 		Action     string `json:"action"`
 		Image      string `json:"image"`
 		UnusedOnly bool   `json:"unused_only"`
@@ -671,13 +677,13 @@ func (s *Server) callImageTool(raw json.RawMessage) (interface{}, error) {
 		}
 		return map[string]interface{}{"action": "list", "images": summaries}, nil
 	case "info":
-		detail, err := s.imageDetail(args.Image)
+		detail, err := s.imageDetail(args.Image, args.Arch)
 		if err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"action": "info", "image": detail}, nil
 	case "pull":
-		if _, err := s.resolveImagePath(args.Image); err != nil {
+		if _, err := s.resolveImagePath(args.Image, args.Arch); err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"action": "pull", "image": args.Image, "status": "ready"}, nil
@@ -686,7 +692,7 @@ func (s *Server) callImageTool(raw json.RawMessage) (interface{}, error) {
 		if ver == "" {
 			ver = "latest"
 		}
-		if err := s.Provider.CacheRemove(name, ver); err != nil {
+		if err := s.Provider.CacheRemove(name, ver, args.Arch); err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"action": "remove", "image": fmt.Sprintf("%s:%s", name, ver), "status": "removed"}, nil
@@ -725,7 +731,7 @@ func (s *Server) callImageTool(raw json.RawMessage) (interface{}, error) {
 		if ver == "" {
 			ver = "latest"
 		}
-		if err := s.Provider.CacheRemove(name, ver); err != nil {
+		if err := s.Provider.CacheRemove(name, ver, args.Arch); err != nil {
 			return nil, err
 		}
 		return map[string]interface{}{"action": "cache_remove", "image": fmt.Sprintf("%s:%s", name, ver), "status": "removed"}, nil
@@ -792,6 +798,10 @@ func (s *Server) callSystemTool(raw json.RawMessage) (interface{}, error) {
 	}
 
 	switch args.Action {
+	case "migrate":
+		count, err := s.Provider.MigrateArchitecture()
+		return map[string]interface{}{"converted": count}, err
+
 	case "doctor":
 		return map[string]interface{}{"action": "doctor", "reports": s.Provider.Doctor()}, nil
 	case "version":
@@ -955,11 +965,15 @@ func (s *Server) readResource(uri string) (interface{}, error) {
 			return map[string]interface{}{"vm": vm}, nil
 		}
 		if strings.HasPrefix(uri, "nido://image/") {
-			tag, err := url.PathUnescape(strings.TrimPrefix(uri, "nido://image/"))
+			parsed, err := url.Parse(uri)
 			if err != nil {
 				return nil, err
 			}
-			detail, err := s.imageDetail(tag)
+			tag, err := url.PathUnescape(strings.TrimPrefix(parsed.EscapedPath(), "/"))
+			if err != nil {
+				return nil, err
+			}
+			detail, err := s.imageDetail(tag, parsed.Query().Get("arch"))
 			if err != nil {
 				return nil, err
 			}
@@ -1043,11 +1057,12 @@ func (s *Server) imageCatalogSummaryWithTTL(ttl time.Duration) ([]map[string]int
 	var summaries []map[string]interface{}
 	for _, img := range catalog.Images {
 		for _, ver := range img.Versions {
-			imgPath := filepath.Join(s.imageDir(), fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
+			imgPath := filepath.Join(s.imageDir(), ver.CacheFileName(img.Name))
 			_, statErr := os.Stat(imgPath)
 			summaries = append(summaries, map[string]interface{}{
 				"name":       img.Name,
 				"version":    ver.Version,
+				"arch":       ver.Arch,
 				"registry":   img.Registry,
 				"aliases":    ver.Aliases,
 				"downloaded": statErr == nil,
@@ -1057,19 +1072,20 @@ func (s *Server) imageCatalogSummaryWithTTL(ttl time.Duration) ([]map[string]int
 	return summaries, nil
 }
 
-func (s *Server) imageDetail(tag string) (map[string]interface{}, error) {
+func (s *Server) imageDetail(tag, arch string) (map[string]interface{}, error) {
 	catalog, err := s.loadCatalog(image.DefaultCacheTTL)
 	if err != nil {
 		return nil, err
 	}
 	name, ver := splitImageTag(tag)
-	_, version, err := catalog.FindImage(name, ver)
+	_, version, err := catalog.FindImage(name, ver, arch)
 	if err != nil {
 		return nil, err
 	}
 	data := map[string]interface{}{
 		"name":          name,
 		"version":       version.Version,
+		"arch":          version.Arch,
 		"url":           version.URL,
 		"size_bytes":    version.SizeBytes,
 		"checksum":      version.Checksum,
@@ -1102,7 +1118,7 @@ func (s *Server) buildBlueprint(name string) (builder.BlueprintInfo, string, err
 	if info.Built {
 		return info, "ready", nil
 	}
-	eng := builder.NewEngine(filepath.Join(s.nidoDir(), "cache"), filepath.Join(s.nidoDir(), "tmp"), s.imageDir(), s.Provider.Virtualization(), builder.WithEvents(s.Provider.EventPublisher()))
+	eng := builder.NewEngine(filepath.Join(s.nidoDir(), "cache"), filepath.Join(s.nidoDir(), "tmp"), s.imageDir(), s.Provider.Virtualization(bp.Arch), builder.WithEvents(s.Provider.EventPublisher()))
 	if err := eng.Build(bp); err != nil {
 		return builder.BlueprintInfo{}, "", err
 	}
@@ -1119,7 +1135,7 @@ type createImageResolution struct {
 	Source      string
 }
 
-func (s *Server) resolveCreateImage(tag string) (createImageResolution, error) {
+func (s *Server) resolveCreateImage(tag, arch string) (createImageResolution, error) {
 	imageDir := s.imageDir()
 	localPath := filepath.Join(imageDir, tag+".qcow2")
 	if _, err := os.Stat(localPath); err == nil {
@@ -1139,12 +1155,12 @@ func (s *Server) resolveCreateImage(tag string) (createImageResolution, error) {
 		return createImageResolution{}, err
 	}
 	name, verRef := splitImageTag(tag)
-	img, ver, err := catalog.FindImage(name, verRef)
+	img, ver, err := catalog.FindImage(name, verRef, arch)
 	if err != nil {
 		return createImageResolution{}, err
 	}
 
-	imgPath := filepath.Join(imageDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
+	imgPath := filepath.Join(imageDir, ver.CacheFileName(img.Name))
 	if _, err := os.Stat(imgPath); os.IsNotExist(err) {
 		downloader := image.NewTransfer(image.TransferOptions{Events: s.Provider.EventPublisher(), OnProgress: nil})
 		if err := downloader.Prepare(*ver, imgPath); err != nil {
@@ -1183,18 +1199,18 @@ func (s *Server) applyBlueprintMetadata(imageTag string, res *createImageResolut
 	res.SeedFiles = metadata.SeedFiles
 }
 
-func (s *Server) resolveImagePath(tag string) (string, error) {
+func (s *Server) resolveImagePath(tag, arch string) (string, error) {
 	catalog, err := s.loadCatalog(image.DefaultCacheTTL)
 	if err != nil {
 		return "", err
 	}
 	name, ver := splitImageTag(tag)
-	img, version, err := catalog.FindImage(name, ver)
+	img, version, err := catalog.FindImage(name, ver, arch)
 	if err != nil {
 		return "", err
 	}
 
-	imgPath := filepath.Join(s.imageDir(), fmt.Sprintf("%s-%s.qcow2", img.Name, version.Version))
+	imgPath := filepath.Join(s.imageDir(), version.CacheFileName(img.Name))
 	if _, err := os.Stat(imgPath); err == nil {
 		return imgPath, nil
 	}
@@ -1325,13 +1341,11 @@ func (s *Server) imageDir() string {
 	if cfg.ImageDir != "" {
 		return cfg.ImageDir
 	}
-	home, _ := sysutil.UserHome()
-	return filepath.Join(home, ".nido", "images")
+	return filepath.Join(sysutil.NidoHome(), "images")
 }
 
 func (s *Server) nidoDir() string {
-	home, _ := sysutil.UserHome()
-	return filepath.Join(home, ".nido")
+	return sysutil.NidoHome()
 }
 
 func (s *Server) writeFrame(frame interface{}) {

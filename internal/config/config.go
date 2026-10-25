@@ -71,14 +71,13 @@ func SupportedGlobalConfigKeys() []string {
 // LoadConfig reads the genetic configuration from a file.
 // If a key is missing, it falls back to historical defaults.
 func LoadConfig(path string) (*Config, error) {
-	home, _ := sysutil.UserHome()
 
 	// Initialize with defaults
 	cfg := &Config{
 		sourcePath:     path,
-		BackupDir:      filepath.Join(home, ".nido", "backups"),
+		BackupDir:      filepath.Join(sysutil.NidoHome(), "backups"),
 		SSHUser:        "vmuser",
-		ImageDir:       filepath.Join(home, ".nido", "images"),
+		ImageDir:       filepath.Join(sysutil.NidoHome(), "images"),
 		LinkedClones:   true, // Default to true (space saving)
 		PortRangeStart: DefaultPortRangeStart,
 		PortRangeEnd:   DefaultPortRangeEnd,

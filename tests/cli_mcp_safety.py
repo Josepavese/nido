@@ -34,7 +34,7 @@ def mcp(tool, **args):
     return result, json.loads(result['content'][0]['text'])
 
 def state(name, **values):
-    value = dict(name=name, pid=0, ssh_port=51022, ssh_user='audit', memory_mb=128, vcpus=1)
+    value = dict(name=name, arch="amd64", pid=0, ssh_port=51022, ssh_user='audit', memory_mb=128, vcpus=1)
     value.update(values)
     (HOME_DIR/'run'/f'{name}.json').write_text(json.dumps(value))
 

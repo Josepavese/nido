@@ -1,3 +1,4 @@
+arch: amd64
 name: windows-11-eval
 display_name: "Windows 11 Enterprise Evaluation"
 description: "Windows 11 Enterprise Evaluation (90 Days). Auto-install via unattended XML."

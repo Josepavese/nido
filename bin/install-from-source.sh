@@ -59,7 +59,7 @@ else
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         if [[ "$OS" == "linux" ]]; then
             PKG="qemu-system-x86 qemu-utils"
-            [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]] && PKG="qemu-system-arm qemu-utils"
+            [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]] && PKG="qemu-system-arm qemu-efi-aarch64 qemu-utils"
             echo "  ${STEP} Updating repositories and installing ${PKG}..."
             sudo apt update && sudo apt install -y $PKG
         elif [[ "$OS" == "darwin" ]]; then
@@ -72,7 +72,7 @@ else
         fi
     else
         QEMU_CMD="sudo apt update && sudo apt install qemu-system-x86 qemu-utils"
-        [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]] && QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-utils"
+        [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]] && QEMU_CMD="sudo apt update && sudo apt install qemu-system-arm qemu-efi-aarch64 qemu-utils"
         echo "  ${INFO} Skipping automatic installation. You'll need to install it manually."
         echo "        Linux: ${CYAN}${QEMU_CMD}${RESET}"
         echo "        macOS: ${CYAN}brew install qemu${RESET}"
@@ -108,10 +108,12 @@ if [[ "$OS" == "linux" ]]; then
 fi
 
 # 2. Build
+build_dir=$(mktemp -d "${TMPDIR:-/tmp}/nido-source.XXXXXX")
+trap 'rm -rf "$build_dir"' EXIT
 echo ""
 echo "${STEP} Building the new engine..."
-go build -o nido ./cmd/nido
-go build -o nido-validator ./cmd/nido-validator
+go build -o "$build_dir/nido" ./cmd/nido
+go build -o "$build_dir/nido-validator" ./cmd/nido-validator
 echo "  ${OK} Binaries built successfully."
 
 # 3. Setup local environment
@@ -123,8 +125,8 @@ mkdir -p "${NIDO_HOME}/run"
 mkdir -p "${NIDO_HOME}/vms"
 mkdir -p "${NIDO_HOME}/config"
 
-mv nido "${NIDO_HOME}/bin/nido"
-mv nido-validator "${NIDO_HOME}/bin/nido-validator"
+mv "$build_dir/nido" "${NIDO_HOME}/bin/nido"
+mv "$build_dir/nido-validator" "${NIDO_HOME}/bin/nido-validator"
 
 # Ensure config exists
 if [[ ! -f "${NIDO_HOME}/config.env" ]]; then

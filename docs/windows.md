@@ -5,6 +5,10 @@ Nido now has two Windows-facing surfaces:
 - Windows as a host OS for running Nido itself.
 - Windows images as buildable blueprints.
 
+AMD64 and ARM64 host/guest selection, requirements and data-preserving upgrades:
+[Architecture guide](architectures.md). Omitted architecture selects native; use `--arch`
+on CLI, `arch` on MCP, or the TUI **Arch** selector for an explicit guest ISA.
+
 ## Host Status
 
 Windows host support is smoke-tested on a real Windows VM. The latest validation covered:
@@ -15,6 +19,16 @@ Windows host support is smoke-tested on a real Windows VM. The latest validation
 - basic VM lifecycle from Windows: spawn, SSH command execution, stop, delete.
 
 This is enough to call the core workflow usable. It is not yet equivalent to the Linux/macOS path for heavy or long-running workloads. Keep testing intensive agent workloads, repeated lifecycle loops, GUI sessions, and large Windows blueprint builds before relying on it as the default production host.
+
+## ARM64 prerequisites
+
+The ARM64 installer selects `nido-windows-arm64.zip`. Install native QEMU from
+[MSYS2 CLANGARM64](https://packages.msys2.org/packages/mingw-w64-clang-aarch64-qemu)
+with `pacman -S mingw-w64-clang-aarch64-qemu`, expose its `clangarm64/bin` directory
+on PATH and run `nido doctor`. The ARM installer gives this instruction instead
+of automatically substituting an x64 QEMU package. See [MSYS2 ARM64 support](https://www.msys2.org/docs/arm64/).
+Native Windows ARM lifecycle and WHPX require physical qualification separately
+from cross-compilation and ARM guest emulation on Linux.
 
 ## Choose an installer
 

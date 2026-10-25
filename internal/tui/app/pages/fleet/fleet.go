@@ -52,6 +52,7 @@ func (i FleetItem) IsAction() bool { return false }
 
 // FleetDetail holds the state for the detailed view logic
 type FleetDetail struct {
+	Arch           string
 	QEMUState      string
 	Name           string
 	State          string
@@ -342,6 +343,7 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 		f.latestDetail = msg.RequestedAt
 		if msg.Err == nil {
 			f.detail = FleetDetail{
+				Arch:           msg.Detail.Arch,
 				Name:           msg.Detail.Name,
 				QEMUState:      f.runtimeStates[msg.Detail.Name],
 				State:          msg.Detail.State,
@@ -780,7 +782,7 @@ func (c *ComponentsDetail) UpdateDetail(d FleetDetail) {
 	}
 	c.header.Icon = icon
 	c.header.Title = d.Name
-	c.header.Subtitle = status
+	c.header.Subtitle = status + " | " + d.Arch
 
 	// Update fields
 

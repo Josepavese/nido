@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v4/internal/machine"
 	"os"
 	"path/filepath"
 	"sort"
@@ -144,7 +145,7 @@ func FetchVMInfo(prov provider.VMProvider, name string) tea.Cmd {
 }
 
 // SpawnVM creates a new VM. It pulls images or builds blueprints when needed.
-func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string, gui bool, memoryMB, vcpus int, ports []provider.PortForward, rawArgs []string, accelerators []string) tea.Cmd {
+func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string, gui bool, memoryMB, vcpus int, ports []provider.PortForward, rawArgs []string, accelerators []string, arch string) tea.Cmd {
 	opName := "spawn"
 
 	return func() tea.Msg {
@@ -158,8 +159,7 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 				}
 
 				cfg := prov.GetConfig()
-				home, _ := sysutil.UserHome()
-				nidoDir := filepath.Join(home, ".nido")
+				nidoDir := sysutil.NidoHome()
 				imgDir := cfg.ImageDir
 				if imgDir == "" {
 					imgDir = filepath.Join(nidoDir, "images")
@@ -170,6 +170,14 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 				if err != nil {
 					ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: err}}
 					return
+				}
+
+				if arch != "" && arch != machine.Auto {
+					requested, err := machine.Normalize(arch)
+					if err != nil || requested != bp.Arch {
+						ch <- ProgressMsg{Result: &OpResultMsg{Op: opName, Err: fmt.Errorf("blueprint architecture %s conflicts with requested %s", bp.Arch, arch)}}
+						return
+					}
 				}
 
 				built := false
@@ -186,7 +194,7 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 						filepath.Join(nidoDir, "cache"),
 						filepath.Join(nidoDir, "tmp"),
 						imgDir,
-						prov.Virtualization(),
+						prov.Virtualization(bp.Arch),
 						builder.WithEvents(prov.EventPublisher()),
 						builder.WithReporter(tuiBuildReporter{ch: ch, opName: opName}),
 					)
@@ -208,6 +216,7 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 				}
 
 				opts := provider.VMOptions{
+					Arch:         arch,
 					DiskPath:     imagePath,
 					UserDataPath: userData,
 					Gui:          gui,
@@ -241,6 +250,7 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 		if filepath.IsAbs(source) || strings.Contains(source, "/") {
 			// Just spawn, provider handles file not found or uses it
 			opts := provider.VMOptions{
+				Arch:         arch,
 				DiskPath:     source,
 				UserDataPath: userData,
 				Gui:          gui,
@@ -267,6 +277,7 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 
 		if isTemplate {
 			opts := provider.VMOptions{
+				Arch:         arch,
 				DiskPath:     source,
 				UserDataPath: userData,
 				Gui:          gui,
@@ -291,8 +302,7 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 			cfg := prov.GetConfig()
 			imgDir := cfg.ImageDir
 			if imgDir == "" {
-				home, _ := sysutil.UserHome()
-				imgDir = filepath.Join(home, ".nido", "images")
+				imgDir = filepath.Join(sysutil.NidoHome(), "images")
 			}
 
 			catalog, err := image.LoadCatalog(imgDir, image.DefaultCacheTTL)
@@ -309,11 +319,12 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 				pName, pVer = parts[0], parts[1]
 			}
 
-			img, ver, err := catalog.FindImage(pName, pVer)
+			img, ver, err := catalog.FindImage(pName, pVer, arch)
 			if err != nil {
 				// Not found in catalog? Maybe the provider can handle it (e.g. unknown magic).
 				// Try direct spawn.
 				opts := provider.VMOptions{
+					Arch:         arch,
 					DiskPath:     source,
 					UserDataPath: userData,
 					Gui:          gui,
@@ -327,7 +338,7 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 			}
 
 			// Image found! Check if we have it.
-			destPath := filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
+			destPath := filepath.Join(imgDir, ver.CacheFileName(img.Name))
 			if _, err := os.Stat(destPath); os.IsNotExist(err) {
 				// NEED TO PULL
 				ch <- ProgressMsg{
@@ -383,6 +394,7 @@ func SpawnVM(prov provider.VMProvider, name, source, sourceType, userData string
 			// We pass the RAW source string, trusting that QemuProvider (which we updated)
 			// will resolve it to the now-existing file.
 			opts := provider.VMOptions{
+				Arch:         arch,
 				DiskPath:     source,
 				UserDataPath: userData,
 				Gui:          gui,

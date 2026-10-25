@@ -12,6 +12,7 @@ import (
 
 // BlueprintInfo is the public, serializable summary used by CLI, MCP, and TUI.
 type BlueprintInfo struct {
+	Arch        string `json:"arch"`
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name,omitempty"`
 	Description string `json:"description"`
@@ -172,6 +173,7 @@ func NewBlueprintInfo(path, source, imageDir string, bp *image.Blueprint) Bluepr
 	}
 
 	return BlueprintInfo{
+		Arch:        bp.Arch,
 		Name:        bp.Name,
 		DisplayName: bp.DisplayName,
 		Description: bp.Description,

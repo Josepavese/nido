@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v4/internal/machine"
 	"io"
 	"net/url"
 	"os"
@@ -87,6 +88,11 @@ func LoadBlueprint(path string) (*image.Blueprint, error) {
 		bp.Scripts[name] = content
 	}
 
+	arch, err := machine.Normalize(bp.Arch)
+	if err != nil {
+		return nil, fmt.Errorf("blueprint architecture: %w", err)
+	}
+	bp.Arch = arch
 	return &bp, nil
 }
 
@@ -94,6 +100,10 @@ func LoadBlueprint(path string) (*image.Blueprint, error) {
 func (e *Engine) Build(bp *image.Blueprint) (resultErr error) {
 	finish := events.Begin(e.Events, events.BlueprintBuild, "")
 	defer func() { finish(resultErr) }()
+	profile, err := machine.For(bp.Arch)
+	if err != nil {
+		return err
+	}
 	// 1. Prepare Environments
 	if err := os.MkdirAll(e.CacheDir, 0755); err != nil {
 		return fmt.Errorf("failed to create cache dir: %w", err)
@@ -198,6 +208,7 @@ func (e *Engine) Build(bp *image.Blueprint) (resultErr error) {
 	e.Reporter.Info("This process may take a while (%s timeout).", bp.BuildSpecs.Timeout)
 
 	qemuArgs := []string{
+		"-machine", profile.Machine,
 		"-m", bp.BuildSpecs.Memory,
 		"-smp", fmt.Sprintf("%d", bp.BuildSpecs.CPU),
 		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", tmpOutputPath),
@@ -216,9 +227,33 @@ func (e *Engine) Build(bp *image.Blueprint) (resultErr error) {
 		qemuArgs = append(qemuArgs, "-drive", fmt.Sprintf("file=%s,media=cdrom", drv))
 	}
 
+	if bp.Arch == machine.ARM64 {
+		fw, err := sysutil.FindQEMUFirmware(bp.Arch)
+		if err != nil {
+			return err
+		}
+		vars := filepath.Join(work, "uefi.fd")
+		if err := sysutil.CopyFile(fw.Variables, vars); err != nil {
+			return err
+		}
+		// ARM virt has no PC VGA or IDE controllers. Preserve explicit backend IDs.
+		qemuArgs = []string{"-machine", profile.Machine, "-m", bp.BuildSpecs.Memory, "-smp", fmt.Sprintf("%d", bp.BuildSpecs.CPU),
+			"-drive", "file=" + tmpOutputPath + ",format=qcow2,if=none,id=root", "-device", "virtio-blk-pci,drive=root",
+			"-device", "virtio-scsi-pci,id=installer-scsi", "-drive", "file=" + isoPath + ",if=none,id=installer,media=cdrom,readonly=on", "-device", "scsi-cd,drive=installer,bus=installer-scsi.0",
+			"-drive", "file=" + seedISO + ",if=none,id=seed,media=cdrom,readonly=on", "-device", "scsi-cd,drive=seed,bus=installer-scsi.0",
+			"-netdev", "user,id=net0", "-device", "virtio-net-pci,netdev=net0", "-display", "none", "-no-reboot"}
+		qemuArgs = append(qemuArgs, machine.FirmwareArgs(fw.Code, vars)...)
+	}
+	if bp.Arch == machine.ARM64 {
+		for index, driver := range driverPaths {
+			id := fmt.Sprintf("driver%d", index)
+			qemuArgs = append(qemuArgs, "-drive", "file="+driver+",if=none,id="+id+",media=cdrom,readonly=on", "-device", "scsi-cd,drive="+id+",bus=installer-scsi.0")
+		}
+		qemuArgs = append(qemuArgs, "-device", "virtio-gpu-pci")
+	}
 	qemuArgs = append(qemuArgs, e.Acceleration.QEMUArgs()...)
 	qemuArgs = append(qemuArgs, "-cpu", e.Acceleration.CPU)
-	if e.Acceleration.Accelerator == "" {
+	if !e.Acceleration.Accelerated() {
 		e.Reporter.Warn("Hardware acceleration not available. Build will be slower.")
 	}
 
@@ -227,7 +262,7 @@ func (e *Engine) Build(bp *image.Blueprint) (resultErr error) {
 	e.Reporter.Info("VNC available on 127.0.0.1:99 (port 5999).")
 
 	e.Reporter.Info("Starting QEMU...")
-	qemuSystem, err := sysutil.QemuSystemBinary()
+	qemuSystem, err := sysutil.QemuSystemBinary(bp.Arch)
 	if err != nil {
 		return fmt.Errorf("failed to find QEMU: %w", err)
 	}
@@ -249,6 +284,14 @@ func (e *Engine) Build(bp *image.Blueprint) (resultErr error) {
 		return fmt.Errorf("failed to finalize output image: %w", err)
 	}
 
+	if err := image.WriteArchitecture(outputPath, bp.Arch); err != nil {
+		return err
+	}
+	if bp.Arch == machine.ARM64 {
+		if err := sysutil.CopyFile(filepath.Join(work, "uefi.fd"), image.VariablesPath(outputPath)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

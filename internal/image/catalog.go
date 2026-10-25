@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v4/internal/machine"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"io"
 	"net/http"
 	"os"
@@ -67,23 +69,22 @@ func LoadCatalog(cacheDir string, ttl time.Duration) (*Catalog, error) {
 // FindImage locates an image and version in the catalog.
 // If version is empty, returns the first version (usually latest).
 // Returns the Image, Version, and any error encountered.
-func (c *Catalog) FindImage(name, version string) (*Image, *Version, error) {
+func (c *Catalog) FindImage(name, version, architecture string) (*Image, *Version, error) {
+	arch, err := machine.Resolve(architecture, sysutil.HostArchitecture())
+	if err != nil {
+		return nil, nil, err
+	}
 	for i := range c.Images {
 		if c.Images[i].Name == name {
 			img := &c.Images[i]
 
-			// If no version specified, return first version
-			if version == "" {
-				if len(img.Versions) == 0 {
-					return nil, nil, fmt.Errorf("image %s has no versions", name)
-				}
-				return img, &img.Versions[0], nil
-			}
-
 			// Search for exact version or alias match
 			for j := range img.Versions {
 				v := &img.Versions[j]
-				if v.Version == version {
+				if v.Arch != arch {
+					continue
+				}
+				if version == "" || v.Version == version {
 					return img, v, nil
 				}
 				// Check aliases
@@ -94,7 +95,7 @@ func (c *Catalog) FindImage(name, version string) (*Image, *Version, error) {
 				}
 			}
 
-			return nil, nil, fmt.Errorf("version %s not found for image %s", version, name)
+			return nil, nil, fmt.Errorf("image %s:%s has no %s variant", name, version, arch)
 		}
 	}
 
@@ -103,8 +104,8 @@ func (c *Catalog) FindImage(name, version string) (*Image, *Version, error) {
 
 // HasVersion checks if a specific image version exists in the catalog.
 // Used by registry builder to detect new versions.
-func (c *Catalog) HasVersion(imageName, version string) bool {
-	_, _, err := c.FindImage(imageName, version)
+func (c *Catalog) HasVersion(imageName, version, architecture string) bool {
+	_, _, err := c.FindImage(imageName, version, architecture)
 	return err == nil
 }
 
@@ -125,6 +126,14 @@ func (c *Catalog) GetCachedImages(cacheDir string) ([]CachedImage, error) {
 
 		// Parse filename: <name>-<version>.qcow2
 		name := strings.TrimSuffix(entry.Name(), ".qcow2")
+		arch := ""
+		for _, candidate := range machine.Architectures() {
+			if strings.HasSuffix(name, "-"+candidate) {
+				arch = candidate
+				name = strings.TrimSuffix(name, "-"+candidate)
+				break
+			}
+		}
 
 		imageName := name
 		imageVersion := ""
@@ -169,7 +178,16 @@ func (c *Catalog) GetCachedImages(cacheDir string) ([]CachedImage, error) {
 		}
 
 		fullPath := filepath.Join(cacheDir, entry.Name())
+		if declared, err := ReadArchitecture(fullPath); err == nil {
+			if arch != "" && arch != declared {
+				return nil, fmt.Errorf("architecture metadata conflicts with filename: %s", entry.Name())
+			}
+			arch = declared
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
 		cached = append(cached, CachedImage{
+			Arch: arch, FileName: entry.Name(),
 			Name:    imageName,
 			Version: imageVersion,
 			Path:    fullPath,

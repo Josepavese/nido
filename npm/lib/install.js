@@ -6,7 +6,7 @@
 // Asset contract (published by bin/build-release.sh):
 //   nido-linux-amd64.tar.gz, nido-linux-arm64.tar.gz,
 //   nido-darwin-amd64.tar.gz, nido-darwin-arm64.tar.gz,
-//   nido-windows-amd64.zip, SHA256SUMS
+//   nido-windows-amd64.zip, nido-windows-arm64.zip, SHA256SUMS
 // Each archive contains a top-level nido-<os>-<arch>/ directory with the
 // nido (or nido.exe) binary plus the bundled registry.
 

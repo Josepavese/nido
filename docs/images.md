@@ -11,6 +11,10 @@ Choose a starting point based on what you already have:
 | Blueprint | A recipe that builds a disk from media and automation files | Windows evaluation guests or custom image builds |
 | Flavour | A published, preconfigured Nido image | A ready-made environment when its assets are available |
 
+AMD64 and ARM64 host/guest selection, requirements and data-preserving upgrades:
+[Architecture guide](architectures.md). Omitted architecture selects native; use `--arch`
+on CLI, `arch` on MCP, or the TUI **Arch** selector for an explicit guest ISA.
+
 ## Browse and pull
 
 ```bash

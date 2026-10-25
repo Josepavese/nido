@@ -21,9 +21,11 @@ type Source struct {
 
 // Strategy defines how to fetch images for a provider
 type Strategy struct {
-	Type     string   `yaml:"type"`               // e.g., "ubuntu-cloud", "generic", "github-release"
-	BaseURL  string   `yaml:"base_url"`           // Root URL for scanning
-	Versions []string `yaml:"versions,omitempty"` // Versions to scan (e.g. ["24.04", "22.04"])
+	Architectures []string `yaml:"architectures"`
+	architecture  string
+	Type          string   `yaml:"type"`               // e.g., "ubuntu-cloud", "generic", "github-release"
+	BaseURL       string   `yaml:"base_url"`           // Root URL for scanning
+	Versions      []string `yaml:"versions,omitempty"` // Versions to scan (e.g. ["24.04", "22.04"])
 
 	Discovery *Discovery `yaml:"discovery,omitempty"`
 

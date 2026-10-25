@@ -32,7 +32,7 @@
         ],
         "platform": {
           "windows": {
-            "command": "nido.exe",
+            "command": "nido.cmd",
             "args": [
               "mcp"
             ]

@@ -12,8 +12,8 @@ import (
 	"time"
 )
 
-func (p *QemuProvider) launchQEMU(args []string) (int, error) {
-	binary, err := sysutil.QemuSystemBinary()
+func (p *QemuProvider) launchQEMU(args []string, arch string) (int, error) {
+	binary, err := sysutil.QemuSystemBinary(arch)
 	if err != nil {
 		return 0, err
 	}

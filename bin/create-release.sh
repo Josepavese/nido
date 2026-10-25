@@ -16,7 +16,8 @@ echo "🐣 Preparing release $VERSION..."
 
 # Build binaries
 echo "Building release binaries..."
-bash bin/build-release.sh "$VERSION"
+release_dir="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/nido-release-${VERSION}"
+bash bin/build-release.sh "$VERSION" "$release_dir"
 
 # Create git tag
 echo "Creating git tag..."
@@ -33,7 +34,7 @@ echo "3. Add the Nido personality:"
 echo "   - Add emoji to section headers"
 echo "   - Add a witty intro paragraph"
 echo "   - Highlight breaking changes with bird puns"
-echo "4. Upload binaries from dist/ folder"
+echo "4. Upload binaries from $release_dir"
 echo "5. Publish!"
 echo ""
 echo "🪺 Happy releasing!"

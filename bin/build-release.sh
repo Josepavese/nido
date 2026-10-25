@@ -3,136 +3,66 @@
 
 set -euo pipefail
 
-VERSION=${1:-v3.0.0}
-OUTPUT_DIR="dist"
-
-echo "Building Nido $VERSION for all platforms..."
-
-require_tool() {
-    if ! command -v "$1" >/dev/null 2>&1; then
-        echo "Missing required build tool: $1" >&2
-        exit 1
-    fi
-}
-
-require_tool go
-require_tool tar
-require_tool zip
-require_tool jq
-if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
-    echo "Missing required SHA-256 tool: sha256sum or shasum" >&2
-    exit 1
-fi
-
-# Reject invalid registry metadata before compiling or publishing any assets.
-bash bin/verify-release.sh --metadata server.json
-
+VERSION=${1:?Usage: build-release.sh VERSION [OUTPUT_DIR]}
+OUTPUT_DIR=${2:-"${RUNNER_TEMP:-${TMPDIR:-/tmp}}/nido-release-${VERSION}"}
 mkdir -p "$OUTPUT_DIR"
-rm -rf "$OUTPUT_DIR/staging" "$OUTPUT_DIR/mcp_staging"
-rm -f "$OUTPUT_DIR"/nido-linux-amd64.tar.gz \
-      "$OUTPUT_DIR"/nido-linux-arm64.tar.gz \
-      "$OUTPUT_DIR"/nido-darwin-amd64.tar.gz \
-      "$OUTPUT_DIR"/nido-darwin-arm64.tar.gz \
-      "$OUTPUT_DIR"/nido-windows-amd64.zip \
-      "$OUTPUT_DIR"/nido.mcpb \
-      "$OUTPUT_DIR"/server.json \
-      "$OUTPUT_DIR"/install.sh \
-      "$OUTPUT_DIR"/install.ps1 \
-      "$OUTPUT_DIR"/SHA256SUMS \
-      "$OUTPUT_DIR"/nido-linux-amd64 \
-      "$OUTPUT_DIR"/nido-linux-arm64 \
-      "$OUTPUT_DIR"/nido-darwin-amd64 \
-      "$OUTPUT_DIR"/nido-darwin-arm64 \
-      "$OUTPUT_DIR"/nido.exe \
-      "$OUTPUT_DIR"/nido-validator-*
-
-# Linux (amd64)
-echo "Building for Linux (amd64)..."
-GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-linux-amd64" ./cmd/nido
-GOOS=linux GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator-linux-amd64" ./cmd/nido-validator
-
-# Linux (arm64)
-echo "Building for Linux (arm64)..."
-GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-linux-arm64" ./cmd/nido
-GOOS=linux GOARCH=arm64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator-linux-arm64" ./cmd/nido-validator
-
-# macOS (Intel)
-echo "Building for macOS (Intel)..."
-GOOS=darwin GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-darwin-amd64" ./cmd/nido
-GOOS=darwin GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator-darwin-amd64" ./cmd/nido-validator
-
-# macOS (Apple Silicon)
-echo "Building for macOS (Apple Silicon)..."
-GOOS=darwin GOARCH=arm64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-darwin-arm64" ./cmd/nido
-GOOS=darwin GOARCH=arm64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator-darwin-arm64" ./cmd/nido-validator
-
-# Windows (amd64)
-echo "Building for Windows (amd64)..."
-GOOS=windows GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido.exe" ./cmd/nido
-GOOS=windows GOARCH=amd64 go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$OUTPUT_DIR/nido-validator.exe" ./cmd/nido-validator
-
-echo ""
-echo "📦 Packaging releases..."
-
-# Function to package
-package() {
-    OS=$1
-    ARCH=$2
-    BIN=$3
-    EXT=$4
-    
-    NAME="nido-${OS}-${ARCH}"
-    STAGING_DIR="${OUTPUT_DIR}/staging"
-    PKG_DIR="${STAGING_DIR}/${NAME}"
-    mkdir -p "$PKG_DIR"
-    
-    # Copy binaries
-    cp "${OUTPUT_DIR}/${BIN}" "${PKG_DIR}/nido${EXT}"
-    cp "${OUTPUT_DIR}/nido-validator-${OS}-${ARCH}" "${PKG_DIR}/nido-validator${EXT}"
-    
-    # Copy registry
-    cp -r registry "${PKG_DIR}/"
-    
-    # Archive
-    if [ "$OS" == "windows" ]; then
-        (cd "$STAGING_DIR" && zip -qr "../${NAME}.zip" "${NAME}")
-        echo "  Created ${NAME}.zip"
+OUTPUT_DIR=$(cd "$OUTPUT_DIR" && pwd)
+case "$OUTPUT_DIR/" in "$PWD/"*) echo "Release output must be outside the repository" >&2; exit 1;; esac
+for tool in go tar zip jq; do command -v "$tool" >/dev/null || { echo "Missing build tool: $tool" >&2; exit 1; }; done
+bash bin/verify-release.sh --metadata server.json
+# Each invocation owns a private staging directory; never purge unrelated outputs.
+STAGING_DIR=$(mktemp -d "$OUTPUT_DIR/.staging.XXXXXX")
+trap 'rm -rf "$STAGING_DIR"' EXIT
+BUNDLE_DIR="$STAGING_DIR/bundle"
+mkdir -p "$BUNDLE_DIR"
+BINARIES=()
+CHECKSUM_FILES=()
+while IFS=$'\t' read -r target_os target_arch archive_ext; do
+    name="nido-${target_os}-${target_arch}"
+    suffix=""; [ "$target_os" != windows ] || suffix=".exe"
+    pkg_dir="$STAGING_DIR/$name"
+    mkdir -p "$pkg_dir"
+    for command_name in nido nido-validator; do
+        GOOS="$target_os" GOARCH="$target_arch" go build -ldflags "-X github.com/Josepavese/nido/v4/internal/build.Version=$VERSION" -o "$pkg_dir/$command_name$suffix" "./cmd/$command_name"
+    done
+    # Flat executable names remain unique in the MCP bundle.
+    bundle_binary="$name$suffix"
+    cp "$pkg_dir/nido$suffix" "$BUNDLE_DIR/$bundle_binary"
+    BINARIES+=("$bundle_binary")
+    cp -R registry "$pkg_dir/registry"
+    rm -f "$OUTPUT_DIR/$name.$archive_ext"
+    if [ "$archive_ext" = zip ]; then
+        (cd "$STAGING_DIR" && zip -qr "$OUTPUT_DIR/$name.zip" "$name")
     else
-        (cd "$STAGING_DIR" && tar -czf "../${NAME}.tar.gz" "${NAME}")
-        echo "  Created ${NAME}.tar.gz"
+        (cd "$STAGING_DIR" && tar -czf "$OUTPUT_DIR/$name.tar.gz" "$name")
     fi
-    
-    # Cleanup staging
-    rm -rf "$PKG_DIR"
-}
-
-package "linux" "amd64" "nido-linux-amd64" ""
-package "linux" "arm64" "nido-linux-arm64" ""
-package "darwin" "amd64" "nido-darwin-amd64" ""
-package "darwin" "arm64" "nido-darwin-arm64" ""
-
-# Windows needs special handling for binary name in previous steps or just reuse
-# I used "nido-windows-amd64.exe" but common convention is just nido.exe inside the zip
-# Re-building or renaming...
-# Let's just fix the packaging function to handle input name.
-
-# Manual for Windows to ensure nido.exe naming
-STAGING_DIR="${OUTPUT_DIR}/staging"
-NAME="nido-windows-amd64"
-PKG_DIR="${STAGING_DIR}/${NAME}"
-mkdir -p "$PKG_DIR"
-cp "${OUTPUT_DIR}/nido.exe" "${PKG_DIR}/nido.exe"
-cp "${OUTPUT_DIR}/nido-validator.exe" "${PKG_DIR}/nido-validator.exe"
-cp -r registry "${PKG_DIR}/"
-(cd "$STAGING_DIR" && zip -qr "../${NAME}.zip" "${NAME}")
-echo "  Created ${NAME}.zip"
-rm -rf "$PKG_DIR"
-
+    rm -rf "$pkg_dir"
+    CHECKSUM_FILES+=("$name.$archive_ext")
+done < <(jq -r '.[] | [.os,.arch,.extension] | @tsv' internal/build/targets.json)
 echo ""
 echo "🧠 Generating MCP Assets..."
 
+# Launchers select one native executable inside the local bundle.
+cat > "$BUNDLE_DIR/nido" <<'LAUNCHER'
+#!/bin/sh
+set -eu
+case "$(uname -s)" in Linux) target_os=linux;; Darwin) target_os=darwin;; *) exit 1;; esac
+case "$(uname -m)" in x86_64|amd64) target_arch=amd64;; arm64|aarch64) target_arch=arm64;; *) exit 1;; esac
+if [ "$target_os" = darwin ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" = 1 ]; then target_arch=arm64; fi
+exec "$(dirname "$0")/nido-$target_os-$target_arch" "$@"
+LAUNCHER
+cat > "$BUNDLE_DIR/nido.cmd" <<'LAUNCHER'
+@echo off
+setlocal
+set "nido_arch=%PROCESSOR_ARCHITECTURE%"
+if defined PROCESSOR_ARCHITEW6432 set "nido_arch=%PROCESSOR_ARCHITEW6432%"
+if /I "%nido_arch%"=="AMD64" (set "nido_arch=amd64") else if /I "%nido_arch%"=="ARM64" (set "nido_arch=arm64") else (exit /b 1)
+"%~dp0nido-windows-%nido_arch%.exe" %*
+LAUNCHER
+chmod 0755 "$BUNDLE_DIR/nido"
+BINARIES+=(nido nido.cmd)
 # The MCP bundle is a flat tarball of runnable server binaries.
-(cd "$OUTPUT_DIR" && tar -czf "nido.mcpb" nido-linux-amd64 nido-linux-arm64 nido-darwin-amd64 nido-darwin-arm64 nido.exe)
+(cd "$BUNDLE_DIR" && tar -czf "$OUTPUT_DIR/nido.mcpb" "${BINARIES[@]}")
 echo "  Created nido.mcpb"
 
 # Generate server.json with SHA256 injection.
@@ -160,7 +90,7 @@ chmod 0644 "${OUTPUT_DIR}/install.ps1"
 chmod 0755 "${OUTPUT_DIR}/install.sh"
 echo "  Created installer assets"
 
-CHECKSUM_FILES=(nido-linux-amd64.tar.gz nido-linux-arm64.tar.gz nido-darwin-amd64.tar.gz nido-darwin-arm64.tar.gz nido-windows-amd64.zip nido.mcpb server.json install.sh install.ps1)
+CHECKSUM_FILES+=(nido.mcpb server.json install.sh install.ps1)
 
 if command -v sha256sum &> /dev/null; then
     (cd "$OUTPUT_DIR" && sha256sum "${CHECKSUM_FILES[@]}" > SHA256SUMS)
@@ -169,11 +99,6 @@ elif command -v shasum &> /dev/null; then
     (cd "$OUTPUT_DIR" && shasum -a 256 "${CHECKSUM_FILES[@]}" > SHA256SUMS)
     echo "  Created SHA256SUMS"
 fi
-
-# Cleanup raw binaries (Moved from previous location to be after MCP generation)
-rm -rf "$STAGING_DIR"
-rm -f "$OUTPUT_DIR"/nido-linux-amd64 "$OUTPUT_DIR"/nido-linux-arm64 "$OUTPUT_DIR"/nido-darwin-amd64 "$OUTPUT_DIR"/nido-darwin-arm64
-rm -f "$OUTPUT_DIR"/nido-validator-* "$OUTPUT_DIR"/nido.exe "$OUTPUT_DIR"/nido-validator.exe
 
 echo ""
 echo "✅ Build & Package complete! Archives in $OUTPUT_DIR/"

@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/machine"
 	"github.com/Josepavese/nido/v4/internal/pkg/identifier"
 	"net"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
@@ -55,6 +55,12 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) (resultErr error) {
 	if err := identifier.Validate(name); err != nil {
 		return err
 	}
+	requestedArch := opts.Arch
+	arch, err := machine.Resolve(opts.Arch, sysutil.HostArchitecture())
+	if err != nil {
+		return err
+	}
+	opts.Arch = arch
 	// 0. Validate input
 	if err := hardware.ValidateAccelerators(opts.Accelerators); err != nil {
 		return err
@@ -83,9 +89,8 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) (resultErr error) {
 			backupsDir = cfg.BackupDir
 			imgDir = cfg.ImageDir
 		} else {
-			home, _ := sysutil.UserHome()
-			backupsDir = filepath.Join(home, ".nido", "backups")
-			imgDir = filepath.Join(home, ".nido", "images")
+			backupsDir = filepath.Join(sysutil.NidoHome(), "backups")
+			imgDir = filepath.Join(sysutil.NidoHome(), "images")
 		}
 
 		templatePath := filepath.Join(backupsDir, tpl+".compact.qcow2")
@@ -100,9 +105,9 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) (resultErr error) {
 					parts := strings.Split(tpl, ":")
 					pName, pVer = parts[0], parts[1]
 				}
-				img, ver, err := catalog.FindImage(pName, pVer)
+				img, ver, err := catalog.FindImage(pName, pVer, opts.Arch)
 				if err == nil {
-					tpl = filepath.Join(imgDir, fmt.Sprintf("%s-%s.qcow2", img.Name, ver.Version))
+					tpl = filepath.Join(imgDir, ver.CacheFileName(img.Name))
 					if opts.SSHUser == "" && img.SSHUser != "" {
 						opts.SSHUser = img.SSHUser
 					}
@@ -118,6 +123,20 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) (resultErr error) {
 		}
 	}
 
+	// A template/imported disk owns its ISA. Omission cannot relabel it as the host.
+	if tpl != "" {
+		sourceArch, err := image.ReadArchitecture(tpl)
+		if err == nil {
+			if requestedArch != "" && requestedArch != machine.Auto && opts.Arch != sourceArch {
+				return fmt.Errorf("source architecture %s conflicts with requested %s", sourceArch, opts.Arch)
+			}
+			opts.Arch = sourceArch
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("source metadata: %w", err)
+		} else if requestedArch == "" || requestedArch == machine.Auto {
+			return fmt.Errorf("source %s has no architecture metadata; declare --arch explicitly before importing", tpl)
+		}
+	}
 	// 2. Create Disk
 	diskSize := sysutil.DefaultDiskSize
 	if tpl != "" {
@@ -141,6 +160,19 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) (resultErr error) {
 		return err
 	}
 
+	if tpl != "" {
+		sourceVars := image.VariablesPath(tpl)
+		if _, err := os.Stat(sourceVars); err == nil {
+			if err := sysutil.CopyFile(sourceVars, image.VariablesPath(filepath.Join(p.RootDir, "vms", name+".qcow2"))); err != nil {
+				return err
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+	}
+	if err := image.WriteArchitecture(filepath.Join(p.RootDir, "vms", name+".qcow2"), opts.Arch); err != nil {
+		return err
+	}
 	// 3. Prepare Paths
 	runDir := filepath.Join(p.RootDir, "run")
 	vmsDir := filepath.Join(p.RootDir, "vms")
@@ -216,7 +248,7 @@ func (p *QemuProvider) Spawn(name string, opts VMOptions) (resultErr error) {
 		cpu = sysutil.DefaultVCPUs()
 	}
 
-	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser, opts.Forwarding, opts.Cmdline, mem, cpu, opts.RawQemuArgs, opts.Accelerators); err != nil {
+	if err := p.saveState(name, 0, sshPort, vncPort, opts.Gui, sshUser, opts.Forwarding, opts.Cmdline, mem, cpu, opts.RawQemuArgs, opts.Accelerators, opts.Arch); err != nil {
 		return fmt.Errorf("failed to save initial state: %w", err)
 	}
 
@@ -283,6 +315,25 @@ func (p *QemuProvider) Start(name string, opts VMOptions) (resultErr error) {
 		}
 	}
 
+	if state.Arch == "" {
+		if opts.Arch == "" || opts.Arch == machine.Auto {
+			return fmt.Errorf("VM %s has no architecture metadata; recover with an explicit --arch", name)
+		}
+		var err error
+		state.Arch, err = machine.Normalize(opts.Arch)
+		if err != nil {
+			return err
+		}
+	}
+	if opts.Arch != "" && opts.Arch != machine.Auto {
+		requested, err := machine.Normalize(opts.Arch)
+		if err != nil {
+			return err
+		}
+		if requested != state.Arch {
+			return fmt.Errorf("VM architecture is immutable: %s", state.Arch)
+		}
+	}
 	// We honor the requested GUI flag even if the previously saved state
 	// had it disabled. Evolution in action.
 	if opts.Gui && !state.Gui {
@@ -333,7 +384,7 @@ func (p *QemuProvider) Start(name string, opts VMOptions) (resultErr error) {
 		return err
 	}
 	state.Forwarding = resolved
-	if err := p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators); err != nil {
+	if err := p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators, state.Arch); err != nil {
 		return err
 	}
 
@@ -358,15 +409,33 @@ func (p *QemuProvider) Start(name string, opts VMOptions) (resultErr error) {
 		}
 	}
 
+	// Resolve boot firmware before starting QEMU. Each VM owns its variables.
+	var firmwareArgs []string
+	if state.Arch == machine.ARM64 {
+		fw, err := sysutil.FindQEMUFirmware(state.Arch)
+		if err != nil {
+			return rollback(err)
+		}
+		vars := image.VariablesPath(diskPath)
+		if _, err := os.Stat(vars); os.IsNotExist(err) {
+			if err := sysutil.CopyFile(fw.Variables, vars); err != nil {
+				return rollback(err)
+			}
+		} else if err != nil {
+			return rollback(err)
+		}
+		firmwareArgs = machine.FirmwareArgs(fw.Code, vars)
+	}
 	// 3. Build Arguments (cross-platform)
-	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, state.Forwarding, runDir, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+	args := p.buildQemuArgs(name, diskPath, state.SSHPort, state.VNCPort, state.Forwarding, runDir, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators, state.Arch)
 
 	eventArgs, err := prepareQEMUEvents(p.RootDir, name)
 	if err != nil {
 		return rollback(err)
 	}
+	args = append(args, firmwareArgs...)
 	args = append(args, eventArgs...)
-	launchedPID, err := p.launchQEMU(args)
+	launchedPID, err := p.launchQEMU(args, state.Arch)
 	if err != nil {
 		return rollback(err)
 	}
@@ -378,10 +447,11 @@ func (p *QemuProvider) Start(name string, opts VMOptions) (resultErr error) {
 	pid := readLaunchedQemuPID(runDir, name, launchedPID)
 
 	// 6. Update State with PID (0 if unknown)
-	return p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+	return p.saveState(name, pid, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators, state.Arch)
 }
 
-func windowsTCGFallbackArgs(args []string) []string {
+func windowsTCGFallbackArgs(args []string, arch string) []string {
+	profile, _ := machine.For(arch)
 	out := append([]string(nil), args...)
 	for i := 0; i < len(out)-1; i++ {
 		switch out[i] {
@@ -391,7 +461,7 @@ func windowsTCGFallbackArgs(args []string) []string {
 			}
 		case "-cpu":
 			if out[i+1] == "host" {
-				out[i+1] = "qemu64"
+				out[i+1] = profile.SoftwareCPU
 			}
 		}
 	}
@@ -399,7 +469,8 @@ func windowsTCGFallbackArgs(args []string) []string {
 }
 
 // buildQemuArgs constructs the heavy-duty command line arguments for QEMU.
-func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort int, fw []PortForward, runDir string, cmdline string, memoryMB, vcpus int, rawArgs []string, accelerators []string) []string {
+func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort int, fw []PortForward, runDir string, cmdline string, memoryMB, vcpus int, rawArgs []string, accelerators []string, arch string) []string {
+	profile, _ := machine.For(arch)
 	vmsDir := filepath.Join(p.RootDir, "vms")
 
 	// Safe minimums if 0 (for robustness, should be handled by Spawn)
@@ -413,7 +484,7 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 	args := []string{
 		"-name", name,
 		"-m", fmt.Sprintf("%d", memoryMB),
-		"-machine", "pc",
+		"-machine", profile.Machine,
 	}
 
 	// Inject Raw Args early (so they can override defaults if needed, though QEMU parsing order varies)
@@ -422,7 +493,7 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 
 	// ... (rest of standard args)
 
-	capabilities := p.Hardware.Virtualization()
+	capabilities := p.Hardware.Virtualization(arch)
 	cpuArg := capabilities.CPU
 	args = append(args, capabilities.QEMUArgs()...)
 
@@ -446,15 +517,17 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 		if finalCmdline == "" {
 			// Default cmdline for cloud images (vga console + serial + root)
 			// For now we use a sensible default that matches nido-init's needs.
-			finalCmdline = "root=/dev/sda rw console=ttyS0 console=tty0"
+			finalCmdline = "root=/dev/vda rw console=" + profile.Console + " console=tty0"
 		}
 		args = append(args, "-append", finalCmdline)
 	}
 
 	// Common arguments
-	args = append(args,
-		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", diskPath),
-	)
+	if arch == machine.ARM64 {
+		args = append(args, "-drive", "file="+diskPath+",format=qcow2,if=none,id=root", "-device", "virtio-blk-pci,drive=root")
+	} else {
+		args = append(args, "-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", diskPath))
+	}
 	args = append(args, qemuDaemonArgs(runDir, name)...)
 
 	args = append(args,
@@ -468,7 +541,11 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 	// Attach Cloud-Init Seed if exists
 	seedPath := filepath.Join(p.RootDir, "vms", name+"-seed.iso")
 	if _, err := os.Stat(seedPath); err == nil {
-		args = append(args, "-cdrom", seedPath)
+		if arch == machine.ARM64 {
+			args = append(args, "-device", "virtio-scsi-pci,id=seed-scsi", "-drive", "file="+seedPath+",if=none,id=seed,media=cdrom,readonly=on", "-device", "scsi-cd,drive=seed,bus=seed-scsi.0")
+		} else {
+			args = append(args, "-cdrom", seedPath)
+		}
 	}
 
 	args = append(args, "-qmp", qemuQMPEndpoint(runDir, name))
@@ -478,6 +555,9 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 		// QEMU uses display numbers (port - 5900)
 		display := vncPort - 5900
 		args = append(args, "-vnc", fmt.Sprintf("127.0.0.1:%d", display))
+		if arch == machine.ARM64 {
+			args = append(args, "-device", "virtio-gpu-pci", "-device", "qemu-xhci", "-device", "usb-kbd", "-device", "usb-tablet")
+		}
 	} else {
 		args = append(args, "-display", "none")
 	}
@@ -486,7 +566,7 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 	// Linux Only for VFIO, Cross-Platform for Virtual
 	for _, acc := range accelerators {
 		if acc == hardware.VirtualGPUAcceleratorID {
-			args = append(args, "-device", virtualGPUDevice())
+			args = append(args, "-device", guestGPUDevice(arch))
 			continue
 		}
 
@@ -541,6 +621,7 @@ func (p *QemuProvider) List() ([]VMStatus, error) {
 
 			results = append(results, VMStatus{
 				Name:       name,
+				Arch:       vmState.Arch,
 				State:      stateStr,
 				PID:        pid,
 				SSHPort:    vmState.SSHPort,
@@ -589,24 +670,26 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 	backingPath, backingMissing := backingInfo(diskPath)
 
 	detail := VMDetail{
-		Name:           name,
-		State:          liveness,
-		PID:            pid,
-		IP:             "127.0.0.1",
-		SSHUser:        state.SSHUser,
-		SSHPort:        state.SSHPort,
-		VNCPort:        state.VNCPort,
-		MemoryMB:       state.MemoryMB,
-		VCPUs:          state.VCPUs,
-		Gui:            state.Gui,
-		Cmdline:        state.Cmdline,
-		Forwarding:     state.Forwarding,
-		RawQemuArgs:    state.RawQemuArgs,
-		Accelerators:   state.Accelerators,
-		DiskPath:       diskPath,
-		DiskMissing:    statErr != nil,
-		BackingPath:    backingPath,
-		BackingMissing: backingMissing,
+		Arch:                     state.Arch,
+		VirtualizationCapability: p.Hardware.Virtualization(state.Arch),
+		Name:                     name,
+		State:                    liveness,
+		PID:                      pid,
+		IP:                       "127.0.0.1",
+		SSHUser:                  state.SSHUser,
+		SSHPort:                  state.SSHPort,
+		VNCPort:                  state.VNCPort,
+		MemoryMB:                 state.MemoryMB,
+		VCPUs:                    state.VCPUs,
+		Gui:                      state.Gui,
+		Cmdline:                  state.Cmdline,
+		Forwarding:               state.Forwarding,
+		RawQemuArgs:              state.RawQemuArgs,
+		Accelerators:             state.Accelerators,
+		DiskPath:                 diskPath,
+		DiskMissing:              statErr != nil,
+		BackingPath:              backingPath,
+		BackingMissing:           backingMissing,
 	}
 
 	return detail, nil
@@ -684,7 +767,7 @@ func (p *QemuProvider) Stop(name string) (resultErr error) {
 	os.Remove(filepath.Join(sysutil.EventsDirectory(p.RootDir), name+qemuEventSuffix))
 
 	if state, err := p.loadState(name); err == nil {
-		_ = p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+		_ = p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators, state.Arch)
 	}
 
 	// RESTORE ACCELERATORS (Start of Double Fix)
@@ -720,6 +803,9 @@ func (p *QemuProvider) Delete(name string) (resultErr error) {
 	_ = safeRemove(filepath.Join(vmsDir, name+"-seed.iso"))
 	_ = safeRemove(filepath.Join(vmsDir, name+".kernel"))
 	_ = safeRemove(filepath.Join(vmsDir, name+".initrd"))
+	if err := safeRemove(image.VariablesPath(diskPath)); err != nil {
+		return err
+	}
 	return safeRemove(diskPath)
 }
 
@@ -744,6 +830,10 @@ func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (resul
 	backupsDir := cfg.BackupDir
 	os.MkdirAll(backupsDir, 0755)
 
+	state, err := p.loadState(vmName)
+	if err != nil {
+		return "", err
+	}
 	srcDisk := filepath.Join(vmsDir, vmName+".qcow2")
 	targetTemplate := filepath.Join(backupsDir, templateName+".compact.qcow2")
 
@@ -761,6 +851,27 @@ func (p *QemuProvider) CreateTemplate(vmName string, templateName string) (resul
 		return "", err
 	}
 
+	if err := image.WriteArchitecture(targetTemplate, state.Arch); err != nil {
+		return "", err
+	}
+	sourceVars := image.VariablesPath(srcDisk)
+	if _, err := os.Stat(sourceVars); err == nil {
+		if err := sysutil.CopyFile(sourceVars, image.VariablesPath(targetTemplate)); err != nil {
+			return "", err
+		}
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+	for _, ext := range []string{".kernel", ".initrd"} {
+		source := filepath.Join(vmsDir, vmName+ext)
+		if _, err := os.Stat(source); err == nil {
+			if err := sysutil.CopyFile(source, strings.TrimSuffix(targetTemplate, ".qcow2")+ext); err != nil {
+				return "", err
+			}
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
+	}
 	return targetTemplate, nil
 }
 
@@ -797,6 +908,12 @@ func (p *QemuProvider) DeleteTemplate(name string, force bool) (resultErr error)
 		}
 	}
 
+	if err := safeRemove(image.MetadataPath(templatePath)); err != nil {
+		return err
+	}
+	if err := safeRemove(image.VariablesPath(templatePath)); err != nil {
+		return err
+	}
 	return safeRemove(templatePath)
 }
 
@@ -927,6 +1044,7 @@ func (p *QemuProvider) findAvailablePort(start int, reserved map[int]bool) int {
 }
 
 type VMState struct {
+	Arch         string        `json:"arch"`
 	Name         string        `json:"name"`
 	PID          int           `json:"pid"`
 	SSHPort      int           `json:"ssh_port"`
@@ -941,8 +1059,9 @@ type VMState struct {
 	Accelerators []string      `json:"accelerators,omitempty"`
 }
 
-func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser string, fw []PortForward, cmdline string, memoryMB, vcpus int, rawArgs []string, accelerators []string) error {
+func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser string, fw []PortForward, cmdline string, memoryMB, vcpus int, rawArgs []string, accelerators []string, arch string) error {
 	state := VMState{
+		Arch:         arch,
 		Name:         name,
 		PID:          pid,
 		SSHPort:      sshPort,
@@ -1027,7 +1146,7 @@ func (p *QemuProvider) UpdateConfig(name string, updates VMConfigUpdates) (resul
 	}
 
 	// 3. Persist
-	return p.saveState(state.Name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+	return p.saveState(state.Name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators, state.Arch)
 }
 
 func (p *QemuProvider) loadState(name string) (VMState, error) {
@@ -1041,6 +1160,9 @@ func (p *QemuProvider) loadState(name string) (VMState, error) {
 	}
 	if err := json.Unmarshal(data, &state); err != nil {
 		return state, err
+	}
+	if _, err := machine.Normalize(state.Arch); err != nil {
+		return state, fmt.Errorf("VM %s requires `nido migrate` before use: %w", name, err)
 	}
 	if state.Name != name {
 		return state, fmt.Errorf("VM state identity %q does not match %q", state.Name, name)
@@ -1156,8 +1278,14 @@ func (p *QemuProvider) Doctor() []string {
 		add("Dir: "+filepath.Base(d), err == nil, d)
 	}
 
+	// 2. Native architecture and dependencies
+	add("Host architecture", sysutil.HostArchitecture() != "", sysutil.HostArchitecture())
+	if sysutil.HostArchitecture() == machine.ARM64 {
+		fw, err := sysutil.FindQEMUFirmware(machine.ARM64)
+		add("ARM64 UEFI", err == nil, fw.Code)
+	}
 	// 2. Binaries
-	qemu, err := sysutil.QemuSystemBinary()
+	qemu, err := sysutil.QemuSystemBinary(sysutil.HostArchitecture())
 
 	qemuHint, qimgHint := qemuInstallHints()
 	if err == nil {
@@ -1187,8 +1315,8 @@ func (p *QemuProvider) Doctor() []string {
 	}
 	add("Tools: ISO Creator", true, isoHint)
 
-	acceleration := p.Hardware.Virtualization()
-	add("Acceleration", acceleration.Accelerator != "", fmt.Sprintf("accelerator=%s cpu=%s", acceleration.Accelerator, acceleration.CPU))
+	acceleration := p.Hardware.Virtualization(sysutil.HostArchitecture())
+	add("Acceleration", acceleration.Accelerated(), fmt.Sprintf("accelerator=%s cpu=%s", acceleration.Accelerator, acceleration.CPU))
 
 	return reports
 }
@@ -1225,75 +1353,20 @@ func (p *QemuProvider) ListCachedImages() ([]CachedImage, error) {
 	if imagesDir == "" {
 		imagesDir = filepath.Join(p.RootDir, "images")
 	}
-
-	files, err := os.ReadDir(imagesDir)
+	catalog, err := image.LoadCatalogFromFile(filepath.Join(imagesDir, image.CatalogCacheFile))
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		catalog = &image.Catalog{}
+	}
+	cached, err := catalog.GetCachedImages(imagesDir)
 	if err != nil {
 		return nil, err
 	}
-
-	var items []CachedImage
-	for _, f := range files {
-		if f.IsDir() || !strings.HasSuffix(f.Name(), ".qcow2") {
-			continue
-		}
-		info, err := f.Info()
-		if err != nil {
-			continue
-		}
-		// Parse name and version from filename (e.g., "ubuntu-24.04.qcow2")
-		name := strings.TrimSuffix(f.Name(), ".qcow2")
-
-		imageName := name
-		version := ""
-
-		// Smarter splitting: Try to match against known image names in catalog
-		catPath := filepath.Join(imagesDir, image.CatalogCacheFile)
-		if catalog, err := image.LoadCatalogFromFile(catPath); err == nil {
-			found := false
-			// Sort images by name length descending to match longest name first (e.g. ubuntu-24.04-apache-wordpress vs ubuntu)
-			imgs := catalog.Images
-			sort.Slice(imgs, func(i, j int) bool {
-				return len(imgs[i].Name) > len(imgs[j].Name)
-			})
-
-			for _, img := range imgs {
-				if name == img.Name {
-					imageName = img.Name
-					version = ""
-					found = true
-					break
-				}
-				prefix := img.Name + "-"
-				if strings.HasPrefix(name, prefix) {
-					imageName = img.Name
-					version = strings.TrimPrefix(name, prefix)
-					found = true
-					break
-				}
-			}
-
-			if !found {
-				// Fallback to simple split if not in catalog
-				parts := strings.Split(name, "-")
-				imageName = parts[0]
-				if len(parts) > 1 {
-					version = strings.Join(parts[1:], "-")
-				}
-			}
-		} else {
-			// Fallback: simple split
-			parts := strings.Split(name, "-")
-			imageName = parts[0]
-			if len(parts) > 1 {
-				version = strings.Join(parts[1:], "-")
-			}
-		}
-
-		items = append(items, CachedImage{
-			Name:    imageName,
-			Version: version,
-			Size:    formatBytes(info.Size()),
-		})
+	items := make([]CachedImage, 0, len(cached))
+	for _, entry := range cached {
+		items = append(items, CachedImage{Name: entry.Name, Version: entry.Version, Arch: entry.Arch, FileName: entry.FileName, Size: formatBytes(entry.Size)})
 	}
 	return items, nil
 }
@@ -1374,7 +1447,7 @@ func (p *QemuProvider) CachePrune(unusedOnly bool) (resultCount int, resultRecla
 		if err != nil {
 			return 0, 0, err
 		}
-		if unusedOnly && usedMap[absPath] {
+		if usedMap[absPath] {
 			continue // Skip images in use
 		}
 
@@ -1383,15 +1456,16 @@ func (p *QemuProvider) CachePrune(unusedOnly bool) (resultCount int, resultRecla
 			reclaimed += info.Size()
 		}
 
-		if err := os.Remove(fullPath); err == nil {
-			count++
+		if err := removeArtifact(fullPath); err != nil {
+			return count, reclaimed, err
 		}
+		count++
 	}
 	return count, reclaimed, nil
 }
 
 // CacheRemove removes a specific cached image.
-func (p *QemuProvider) CacheRemove(name, version string) (resultErr error) {
+func (p *QemuProvider) CacheRemove(name, version, arch string) (resultErr error) {
 	cfg := p.configSnapshot()
 	finish := p.operation(events.CacheRemove, "")
 	defer func() { finish(resultErr) }()
@@ -1408,11 +1482,22 @@ func (p *QemuProvider) CacheRemove(name, version string) (resultErr error) {
 		imagesDir = filepath.Join(p.RootDir, "images")
 	}
 
+	resolved, err := machine.Resolve(arch, sysutil.HostArchitecture())
+	if err != nil {
+		return err
+	}
 	var filename string
 	if version == "" {
 		filename = fmt.Sprintf("%s.qcow2", name)
 	} else {
-		filename = fmt.Sprintf("%s-%s.qcow2", name, version)
+		if catalog, err := image.LoadCatalogFromFile(filepath.Join(imagesDir, image.CatalogCacheFile)); err == nil {
+			if img, v, err := catalog.FindImage(name, version, resolved); err == nil {
+				filename = v.CacheFileName(img.Name)
+			}
+		}
+		if filename == "" {
+			filename = (image.Version{Version: version, Arch: resolved}).CacheFileName(name)
+		}
 	}
 	fullPath := filepath.Join(imagesDir, filename)
 
@@ -1439,7 +1524,12 @@ func (p *QemuProvider) CacheRemove(name, version string) (resultErr error) {
 		}
 	}
 
-	return os.Remove(fullPath)
+	if arch != "" && arch != machine.Auto {
+		if actual, err := image.ReadArchitecture(fullPath); err == nil && actual != resolved {
+			return fmt.Errorf("artifact architecture %s conflicts with %s", actual, resolved)
+		}
+	}
+	return removeArtifact(fullPath)
 }
 
 func (p *QemuProvider) PortForward(name string, pf PortForward) (result PortForward, resultErr error) {
@@ -1470,14 +1560,14 @@ func (p *QemuProvider) PortForward(name string, pf PortForward) (result PortForw
 		if f.GuestPort == pf.GuestPort && f.Protocol == pf.Protocol {
 			// Update existing rule
 			state.Forwarding[i] = pf
-			err := p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+			err := p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators, state.Arch)
 			return pf, err
 		}
 	}
 
 	// Add new rule
 	state.Forwarding = append(state.Forwarding, pf)
-	err = p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+	err = p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators, state.Arch)
 	return pf, err
 }
 
@@ -1506,7 +1596,7 @@ func (p *QemuProvider) PortUnforward(name string, guestPort int, protocol string
 		}
 		if f.GuestPort == guestPort && (stateProtocol == protocol || protocol == "") {
 			state.Forwarding = append(state.Forwarding[:i], state.Forwarding[i+1:]...)
-			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators)
+			return p.saveState(name, state.PID, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators, state.Arch)
 		}
 	}
 
@@ -1616,4 +1706,24 @@ func (p *QemuProvider) resolveAutoAccelerators(input []string) ([]string, error)
 	}
 
 	return finalList, nil
+}
+
+// removeArtifact is called only after backing-chain ownership checks.
+func removeArtifact(path string) error {
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+	for _, sidecar := range []string{image.MetadataPath(path), image.VariablesPath(path), strings.TrimSuffix(path, ".qcow2") + ".kernel", strings.TrimSuffix(path, ".qcow2") + ".initrd"} {
+		if err := safeRemove(sidecar); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func guestGPUDevice(arch string) string {
+	if arch == machine.ARM64 {
+		return "virtio-gpu-pci"
+	}
+	return virtualGPUDevice()
 }

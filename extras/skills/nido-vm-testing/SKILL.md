@@ -32,6 +32,18 @@ For a complete shell workflow, inspect or adapt
 for SSH and cloud-init, uploads `NIDO_PROJECT_DIR` and deletes its successful spawn
 on exit. `NIDO_KEEP_VM=1` retains the VM on exit, including after test failure.
 
+## Choose the guest architecture
+
+Use omitted/`auto` architecture for native catalog guests. For cross-ISA testing
+pass CLI `--arch amd64|arm64` or MCP `arch`; expect TCG rather than KVM/HVF/WHPX.
+Do not treat an ARM guest emulated on x86 as native ARM hardware qualification.
+Templates inherit their declared ISA and reject explicit conflicts. Verify the
+guest with `uname -m` over SSH, separately from QEMU process state. A missing
+image variant is an error, not permission to substitute a foreign guest.
+For a pre-architecture installation, follow the explicit `nido migrate` procedure
+in the [architecture guide](https://github.com/Josepavese/nido/blob/main/docs/architectures.md);
+preserve disks and backing paths.
+
 ## Observe through CLI or MCP
 
 With Nido v4.8.7 or later, use events for shared state changes across independent

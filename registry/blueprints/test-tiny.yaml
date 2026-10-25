@@ -1,3 +1,4 @@
+arch: amd64
 name: test-tiny
 description: "Tiny test blueprint to verify Nido Builder Engine mechanism (Alpine based)"
 version: "0.0.1"

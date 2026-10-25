@@ -178,7 +178,7 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		n.Shell.SwitchTo("fleet")
 		id, cmd := n.Shell.StartAction(fmt.Sprintf("Spawning %s", msg.Name))
 		n.activeActions[opName] = id
-		return n, tea.Batch(cmd, ops.SpawnVM(n.prov, msg.Name, msg.Source, msg.SourceType, msg.UserData, msg.GUI, msg.MemoryMB, msg.VCPUs, msg.Ports, msg.RawQemuArgs, msg.Accelerators))
+		return n, tea.Batch(cmd, ops.SpawnVM(n.prov, msg.Name, msg.Source, msg.SourceType, msg.UserData, msg.GUI, msg.MemoryMB, msg.VCPUs, msg.Ports, msg.RawQemuArgs, msg.Accelerators, msg.Arch))
 
 	case ops.RequestCreateTemplateMsg:
 		opName := "create-template"
@@ -194,14 +194,14 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		n.Shell.Operation = opName
 		id, cmd := n.Shell.StartAction(fmt.Sprintf("Pulling %s", msg.Image))
 		n.activeActions[opName] = id
-		return n, tea.Batch(cmd, ops.PullImage(n.prov, msg.Image))
+		return n, tea.Batch(cmd, ops.PullImage(n.prov, msg.Image, msg.Arch))
 
 	case ops.RequestDeleteImageMsg:
 		opName := fmt.Sprintf("delete %s", msg.Name)
 		n.Shell.Operation = opName
 		id, cmd := n.Shell.StartAction(fmt.Sprintf("Deleting %s", msg.Name))
 		n.activeActions[opName] = id
-		return n, tea.Batch(cmd, ops.DeleteCacheImage(n.prov, msg.Name, msg.Version))
+		return n, tea.Batch(cmd, ops.DeleteCacheImage(n.prov, msg.Name, msg.Version, msg.Arch))
 
 	case ops.RequestPruneMsg:
 		opName := "prune"

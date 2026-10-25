@@ -7,6 +7,10 @@ and TUI. The MCP client starts `nido mcp` as a local child process. There is no
 remote HTTP/SSE MCP listener. TUI/MCP sessions share a private local event socket
 behind the stdio server; it is not an additional remote MCP transport.
 
+AMD64 and ARM64 host/guest selection, requirements and data-preserving upgrades:
+[Architecture guide](architectures.md). Omitted architecture selects native; use `--arch`
+on CLI, `arch` on MCP, or the TUI **Arch** selector for an explicit guest ISA.
+
 ## Choose an installation method
 
 Install the CLI through npm (`nido-mcp`), Homebrew, Scoop or the binary installers,

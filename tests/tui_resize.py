@@ -36,11 +36,11 @@ def run():
         disk = home/'vms/robin.qcow2'
         disk.write_bytes(b'private metadata fixture; never boot')
         state = home/'run/robin.json'
-        state.write_text(json.dumps(dict(name='robin', pid=0, memory_mb=512,
+        state.write_text(json.dumps(dict(name='robin', arch='amd64', pid=0, memory_mb=512,
                                         vcpus=1, ssh_port=51022, ssh_user='fixture')))
         (home/'backups/template-a.compact.qcow2').write_bytes(b'private template metadata fixture')
         protected = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in [disk, state, config]}
-        environment = dict(os.environ, HOME=str(root), USERPROFILE=str(root),
+        environment = dict(os.environ, NIDO_HOME=str(home),
                            TERM='xterm-256color', COLORTERM='truecolor',
                            COLORFGBG='15;0', NIDO_THEME=os.environ.get('NIDO_TUI_TEST_THEME','dark'))
         for key in ['NO_COLOR', 'NIDO_JSON']:
@@ -158,7 +158,7 @@ def run():
             tui = TUI(environment, root, size=(120, 36), observer=observer)
             tui.text('robin')
             key(b'\x1b[C'); key(b'\r')
-            for _ in range(6):
+            for _ in range(7):
                 key(b'\t')
             key(b'\r', 'Add Port Forwarding')
             for width, height in [(120, 36), (80, 24), (60, 15), (40, 10)]:

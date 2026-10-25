@@ -111,11 +111,11 @@ def run():
         (home/'backups/template-a.compact.qcow2').write_bytes(b'private template metadata fixture')
         (home/'config.env').write_text(f'SSH_USER=fixture\nIMAGE_DIR={home}/images\nBACKUP_DIR={home}/backups\n')
         vm = 'event-vm'
-        state = dict(name=vm, pid=0, memory_mb=512, vcpus=1, ssh_port=51022, ssh_user='fixture')
+        state = dict(name=vm, arch='amd64', pid=0, memory_mb=512, vcpus=1, ssh_port=51022, ssh_user='fixture')
         (home/f'vms/{vm}.qcow2').write_bytes(b'private metadata fixture, no VM launch')
         state_path = home/f'run/{vm}.json'
         state_path.write_text(json.dumps(state))
-        environment = dict(os.environ, HOME=str(root), USERPROFILE=str(root), TERM='xterm-256color')
+        environment = dict(os.environ, NIDO_HOME=str(home), TERM='xterm-256color')
         environment.pop('NIDO_JSON', None)
         processes = []
         owner = subprocess.Popen([BINARY, 'events', '--json'], env=environment, cwd=root,

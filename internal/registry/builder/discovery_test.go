@@ -62,10 +62,10 @@ func TestFutureReleasesAcrossProviders(t *testing.T) {
 		s    Strategy
 		want []string
 	}{
-		{"ubuntu", Strategy{Type: "ubuntu-cloud", BaseURL: server.URL + "/u", Discovery: &Discovery{URL: server.URL + "/ubuntu-metadata"}}, []string{"28.10", "28.04"}},
-		{"debian", Strategy{Type: "debian-cloud", BaseURL: server.URL + "/d", Discovery: &Discovery{URL: server.URL + "/dists", Channels: []string{"stable", "oldstable"}}}, []string{"14", "13"}},
-		{"alpine", Strategy{Type: "alpine-cdn", BaseURL: server.URL + "/a", Discovery: &Discovery{URL: server.URL + "/alpine-metadata"}}, []string{"3.10", "3.9"}},
-		{"generic", Strategy{Type: "generic", BaseURL: server.URL + "/generic", TemplateURL: "{base_url}/{version}/image-amd64.img", ChecksumURL: "{base_url}/{version}/SHA256SUMS", ChecksumType: "sha256", Regex: `image-amd64\.img$`, Discovery: &Discovery{URL: server.URL + "/generic/", Pattern: `href="v([^"/]+)/"`, Limit: 1}}, []string{"2028.10"}},
+		{"ubuntu", Strategy{Architectures: []string{"amd64"}, Type: "ubuntu-cloud", BaseURL: server.URL + "/u", Discovery: &Discovery{URL: server.URL + "/ubuntu-metadata"}}, []string{"28.10", "28.04"}},
+		{"debian", Strategy{Architectures: []string{"amd64"}, Type: "debian-cloud", BaseURL: server.URL + "/d", Discovery: &Discovery{URL: server.URL + "/dists", Channels: []string{"stable", "oldstable"}}}, []string{"14", "13"}},
+		{"alpine", Strategy{Architectures: []string{"amd64"}, Type: "alpine-cdn", BaseURL: server.URL + "/a", Discovery: &Discovery{URL: server.URL + "/alpine-metadata"}}, []string{"3.10", "3.9"}},
+		{"generic", Strategy{Architectures: []string{"amd64"}, Type: "generic", BaseURL: server.URL + "/generic", TemplateURL: "{base_url}/{version}/image-amd64.img", ChecksumURL: "{base_url}/{version}/SHA256SUMS", ChecksumType: "sha256", Regex: `image-amd64\.img$`, Discovery: &Discovery{URL: server.URL + "/generic/", Pattern: `href="v([^"/]+)/"`, Limit: 1}}, []string{"2028.10"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -135,7 +135,7 @@ func TestUbuntuFallsBackToCodenameDirectory(t *testing.T) {
 
 	fetcher := NewFetcher(server.Client())
 	fetcher.now = func() time.Time { return time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC) }
-	versions, err := fetcher.Fetch(Source{Name: "ubuntu"}, Strategy{
+	versions, err := fetcher.Fetch(Source{Name: "ubuntu"}, Strategy{Architectures: []string{"amd64"},
 		Type:      "ubuntu-cloud",
 		BaseURL:   server.URL + "/u",
 		Discovery: &Discovery{URL: server.URL + "/metadata"},
@@ -193,7 +193,7 @@ func (f fixtureFetcher) Fetch(Source, Strategy) ([]image.Version, error) { retur
 
 func TestBuildIntegrityChangesAndStableTimestamp(t *testing.T) {
 	v := image.Version{Version: "28.04", Aliases: []string{"latest", "lts"}, Arch: "amd64", URL: "https://example.test/build1/image", ChecksumType: "sha256", Checksum: strings.Repeat("a", 64), SizeBytes: 12345, Format: "qcow2"}
-	config := SourcesConfig{Sources: []Source{{Name: "ubuntu", Strategies: []Strategy{{Type: "fixture"}}}}}
+	config := SourcesConfig{Sources: []Source{{Name: "ubuntu", Strategies: []Strategy{{Architectures: []string{"amd64"}, Type: "fixture"}}}}}
 	now := time.Now().UTC()
 	c, changed, _, err := Build(config, nil, fixtureFetcher{versions: []image.Version{v}}, now)
 	if err != nil || len(changed) != 1 {

@@ -176,7 +176,7 @@ func GetLocalSSHKey() string {
 			return strings.TrimSpace(string(data))
 		}
 	}
-	nidoDir := filepath.Join(home, ".nido")
+	nidoDir := sysutil.NidoHome()
 	keyPath := filepath.Join(nidoDir, "nido_ed25519")
 	pubPath := keyPath + ".pub"
 	if data, err := os.ReadFile(pubPath); err == nil {
@@ -197,11 +197,7 @@ func GetLocalSSHKey() string {
 }
 
 func localNidoSSHKeyPath() string {
-	home, err := sysutil.UserHome()
-	if err != nil {
-		return ""
-	}
-	keyPath := filepath.Join(home, ".nido", "nido_ed25519")
+	keyPath := filepath.Join(sysutil.NidoHome(), "nido_ed25519")
 	if _, err := os.Stat(keyPath); err == nil {
 		return keyPath
 	}

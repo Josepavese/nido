@@ -44,6 +44,7 @@ func ValidatePortForward(pf PortForward) error {
 
 // VMStatus represents basic information about a VM.
 type VMStatus struct {
+	Arch       string `json:"arch"`
 	Name       string
 	State      string
 	PID        int
@@ -72,6 +73,7 @@ type NetworkConfig struct {
 
 // VMOptions defines parameters for creating/starting a VM.
 type VMOptions struct {
+	Arch         string
 	MemoryMB     int
 	VCPUs        int
 	DiskPath     string
@@ -93,17 +95,19 @@ type VMOptions struct {
 
 // VMDetail contains comprehensive data about a VM.
 type VMDetail struct {
-	Name     string
-	State    string
-	PID      int
-	IP       string
-	SSHUser  string
-	SSHPort  int
-	VNCPort  int
-	MemoryMB int    `json:"memory_mb,omitempty"`
-	VCPUs    int    `json:"vcpus,omitempty"`
-	Gui      bool   `json:"gui,omitempty"`
-	Cmdline  string `json:"cmdline,omitempty"`
+	Arch                     string                  `json:"arch"`
+	VirtualizationCapability hardware.Virtualization `json:"virtualization_capability"`
+	Name                     string
+	State                    string
+	PID                      int
+	IP                       string
+	SSHUser                  string
+	SSHPort                  int
+	VNCPort                  int
+	MemoryMB                 int    `json:"memory_mb,omitempty"`
+	VCPUs                    int    `json:"vcpus,omitempty"`
+	Gui                      bool   `json:"gui,omitempty"`
+	Cmdline                  string `json:"cmdline,omitempty"`
 	// Active port forwardings
 	Forwarding []PortForward
 	// Saved raw arguments, used on the next start (not necessarily active yet).
@@ -124,9 +128,11 @@ type VMDetail struct {
 
 // CachedImage represents a cached cloud image.
 type CachedImage struct {
-	Name    string
-	Version string
-	Size    string
+	Arch     string
+	FileName string
+	Name     string
+	Version  string
+	Size     string
 }
 
 // CacheInfoResult contains cache statistics.
@@ -138,8 +144,9 @@ type CacheInfoResult struct {
 // VMProvider defines the contract for OS-specific hypervisor management.
 // Implementations handle VM lifecycle, storage, and connectivity operations.
 type VMProvider interface {
+	MigrateArchitecture() (int, error)
 	EventPublisher() events.Publisher
-	Virtualization() hardware.Virtualization
+	Virtualization(guest string) hardware.Virtualization
 
 	// Lifecycle operations
 
@@ -214,7 +221,7 @@ type VMProvider interface {
 	CachePrune(unusedOnly bool) (int, int64, error)
 
 	// CacheRemove removes a specific cached image by name and version.
-	CacheRemove(name, version string) error
+	CacheRemove(name, version, arch string) error
 
 	// Connectivity
 

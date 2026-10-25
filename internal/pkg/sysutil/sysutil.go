@@ -2,6 +2,7 @@ package sysutil
 
 import (
 	"fmt"
+	"github.com/Josepavese/nido/v4/internal/machine"
 	"io"
 	"os"
 	"os/exec"
@@ -123,8 +124,12 @@ func FindExecutable(names ...string) (string, error) {
 }
 
 // QemuSystemBinary resolves the QEMU system emulator used by Nido.
-func QemuSystemBinary() (string, error) {
-	return FindExecutable("qemu-system-x86_64", "qemu-system")
+func QemuSystemBinary(arch string) (string, error) {
+	profile, err := machine.For(arch)
+	if err != nil {
+		return "", err
+	}
+	return FindExecutable(profile.Binary)
 }
 
 // QemuImgBinary resolves qemu-img.
@@ -134,3 +139,15 @@ func QemuImgBinary() (string, error) {
 
 // MakeExecutable applies native executable permissions to an installed artifact.
 func MakeExecutable(path string) error { return os.Chmod(path, 0755) }
+
+// NidoHome owns the application state root. An explicit root isolates test and
+// container instances without changing the operating-system user's home.
+func NidoHome() string {
+	if root := os.Getenv("NIDO_HOME"); root != "" {
+		if abs, err := filepath.Abs(root); err == nil {
+			return abs
+		}
+	}
+	home, _ := UserHome()
+	return filepath.Join(home, ".nido")
+}

@@ -3,17 +3,21 @@ pkgname=nido-bin
 pkgver=__PKGVER__
 pkgrel=1
 pkgdesc="Local VM manager for AI agents, with CLI, TUI and native MCP"
-arch=('x86_64')
+arch=('x86_64' 'aarch64')
 url="https://github.com/Josepavese/nido"
 license=('MIT')
 depends=('qemu')
 provides=('nido')
 conflicts=('nido')
 options=('!strip')
-source=("${pkgname}-${pkgver}.tar.gz::https://github.com/Josepavese/nido/releases/download/v${pkgver}/nido-linux-amd64.tar.gz")
-sha256sums=('__SHA256__')
+source_x86_64=("${pkgname}-${pkgver}-amd64.tar.gz::https://github.com/Josepavese/nido/releases/download/v${pkgver}/nido-linux-amd64.tar.gz")
+sha256sums_x86_64=('__SHA256_AMD64__')
+source_aarch64=("${pkgname}-${pkgver}-arm64.tar.gz::https://github.com/Josepavese/nido/releases/download/v${pkgver}/nido-linux-arm64.tar.gz")
+sha256sums_aarch64=('__SHA256_ARM64__')
 
 package() {
-  install -Dm755 "${srcdir}/nido-linux-amd64/nido" "${pkgdir}/usr/bin/nido"
-  install -Dm755 "${srcdir}/nido-linux-amd64/nido-validator" "${pkgdir}/usr/bin/nido-validator"
+  local nido_arch=amd64
+  [[ "$CARCH" != aarch64 ]] || nido_arch=arm64
+  install -Dm755 "${srcdir}/nido-linux-${nido_arch}/nido" "${pkgdir}/usr/bin/nido"
+  install -Dm755 "${srcdir}/nido-linux-${nido_arch}/nido-validator" "${pkgdir}/usr/bin/nido-validator"
 }

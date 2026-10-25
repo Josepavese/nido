@@ -3,7 +3,6 @@ package ops
 import (
 	"github.com/Josepavese/nido/v4/internal/events"
 	"os"
-	"path/filepath"
 
 	"github.com/Josepavese/nido/v4/internal/lifecycle"
 	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
@@ -19,9 +18,8 @@ type RequestUninstallMsg struct{}
 func UninstallCmd(publish events.Publisher) tea.Cmd {
 	return func() tea.Msg {
 		// Calculate paths similar to CLI
-		home, _ := sysutil.UserHome()
 
-		nidoDir := filepath.Join(home, ".nido")
+		nidoDir := sysutil.NidoHome()
 
 		exe, err := os.Executable()
 		if err != nil {
