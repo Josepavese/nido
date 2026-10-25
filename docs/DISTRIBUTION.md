@@ -25,9 +25,9 @@ incremental.
 | **Nix flake** (in repo) | `flake.nix` builds from source with `buildGoModule` and wraps QEMU; `Nix flake` CI job builds it on flake/Go changes | none | none | Live: `nix run github:Josepavese/nido`; version read from `CHANGELOG.md`, so tags track automatically. Nixpkgs packaging stays out of scope (§3). |
 | **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: [`io.github.Josepavese/nido`](https://registry.modelcontextprotocol.io/); every tag adds an immutable version. Runs **after** npm and waits for the npm version to appear (publish-time scanning is asynchronous, so the registry validation otherwise races the publish). |
 | **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: [`nido-mcp`](https://www.npmjs.com/package/nido-mcp) with the `latest` dist-tag; every release publishes with provenance, no token stored (§2.4). |
-| **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | `Josepavese.Nido` 4.8.6 is submitted and **fully validated** ([microsoft/winget-pkgs#460843](https://github.com/microsoft/winget-pkgs/pull/460843): 10/10 checks green, CLA signed, token configured); only community-moderator merge remains. Updates automate once merged. |
+| **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | `Josepavese.Nido` 4.9.0 is submitted and **fully validated** ([microsoft/winget-pkgs#460843](https://github.com/microsoft/winget-pkgs/pull/460843): 10/10 checks green, CLA signed, token configured); only community-moderator merge remains. Updates automate once merged. |
 | **Scoop** (companion bucket) | [`Josepavese/scoop-nido`](https://github.com/Josepavese/scoop-nido) Excavator rewrites `bucket/nido.json` | `GITHUB_TOKEN` of the bucket | none | Live, zero secrets; polled every 4 hours; the dated verification below records tested versions. The release job can also push immediately when `SCOOP_BUCKET_TOKEN` exists. |
-| **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | **Blocked upstream:** AUR closed new registrations after the June 2026 takeover wave and captchas are still flaky; the job is wired and activates as soon as the three secrets exist. x86_64 only, `-bin` package. |
+| **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | **Blocked upstream:** the registration page was checked on 2026-10-25 and confirms registrations are closed, with no manual queue. No maintainer account exists yet. Configure the channel after registration reopens; do not script registration retries. x86_64 only, `-bin` package. |
 | **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours; the dated verification below records tested versions. |
 | **Glama** | directory indexing | GitHub OAuth, one-time | auto-release off | [Nido listing](https://glama.ai/mcp/servers/Josepavese/nido) provides discovery and local installation instructions. Hosted deployment is outside this channel's intended use; withdrawal of the previously published Glama release remains pending (§1.6). |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
@@ -150,6 +150,11 @@ disable hosted deployment while preserving the directory entry. Disabling
 auto-release alone does not withdraw an existing release. Glama's generated
 usage FAQ still suggests hosted deployment and also needs correction.
 
+**Support receipt reconciled on 2026-10-25:** the original withdrawal email has
+an acknowledgement from Glama confirming that a support ticket was submitted.
+This confirms receipt, not withdrawal. Await the support team's outcome;
+there is no need to send the original request again or repeat GitHub login.
+
 No persistent hosted instance was deployed during qualification, and no local
 VM directories or credentials were supplied. A Glama-hosted process would
 manage its own environment and could not access the user's local VM inventory.
@@ -234,7 +239,7 @@ own secret here.
 ### 2.5 WinGet
 
 1. The fork `Josepavese/winget-pkgs` exists and the manifest PR carries
-   `Josepavese.Nido` 4.8.6 with the **1.12.0** manifest schema:
+   `Josepavese.Nido` 4.9.0 with the **1.12.0** manifest schema:
    [microsoft/winget-pkgs#460843](https://github.com/microsoft/winget-pkgs/pull/460843).
    The Microsoft CLA is signed and all ten validation checks are green
    (`Validation-Completed`, `Azure-Pipeline-Passed`); only community-moderator
@@ -246,13 +251,30 @@ own secret here.
    `winget-releaser` push the fork branch and open the update PR on every
    release. Rotate it before it expires.
 
-After the first version is merged, `winget upgrade Josepavese.Nido` follows every
-release automatically. The in-repo template lives under
-`distribution/winget/manifests/j/Josepavese/Nido/4.8.6/`.
+The release workflow checks whether the initial package exists upstream before
+invoking the update action. While the first PR awaits moderation, it records
+**pending**, not a successful publication. API errors other than a missing
+package remain errors. After the first merge, `winget upgrade Josepavese.Nido`
+follows subsequent releases automatically.
+
+The validated manifests in the WinGet PR, and then `microsoft/winget-pkgs`, own
+the package definition. The obsolete in-repo bootstrap copy has been removed;
+release automation reads the upstream definition instead of maintaining a
+second versioned snapshot. No new CLA signature or token is needed now.
 
 ### 2.6 AUR
 
-1. Create an AUR account at `aur.archlinux.org` and add an SSH public key.
+**Registration checked on 2026-10-25:** the [AUR registration page](https://aur.archlinux.org/register)
+states that account creation is temporarily closed and there is **no manual
+registration queue**. The maintainer has no existing AUR account. This is an
+upstream block, not an uncompleted user setup step. Do not send manual account
+requests or script retries. Follow the announcements linked from that page.
+
+After registration reopens:
+
+1. Create and verify an AUR account at `aur.archlinux.org`, then add a dedicated
+   SSH public key. Email verification or an identity challenge requires the
+   account holder; package preparation and GitHub secret setup can follow.
 2. Create the `nido-bin` package once:
    ```bash
    git clone ssh://aur@aur.archlinux.org/nido-bin.git
@@ -260,8 +282,9 @@ release automatically. The in-repo template lives under
    makepkg --printsrcinfo > .SRCINFO
    git add PKGBUILD .SRCINFO && git commit -m "initial" && git push
    ```
-3. Store the private key as `AUR_SSH_PRIVATE_KEY`, plus `AUR_USERNAME` and
-   `AUR_EMAIL` (optional, defaults exist).
+3. Store the private key directly in GitHub as `AUR_SSH_PRIVATE_KEY`; set
+   `AUR_USERNAME` and `AUR_EMAIL` to the verified account identity. Never paste
+   private keys into chat. Until then the channel is unconfigured, not published.
 
 AUR explicitly warns that malfunctioning automated updates can get accounts and
 packages removed; the job is `continue-on-error`, so a failure never blocks a
