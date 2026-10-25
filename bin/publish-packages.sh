@@ -134,37 +134,7 @@ if [ -n "$PREVIOUS_SITE_DIR" ] && [ -d "$PREVIOUS_SITE_DIR" ]; then
   fi
 fi
 
-python3 - "$POOL_DIR" "$RPM_REPO/Packages" "$KEEP_VERSIONS" <<'PYPRUNE'
-import re
-import sys
-from pathlib import Path
-
-pool, rpm_dir, keep = Path(sys.argv[1]), Path(sys.argv[2]), int(sys.argv[3])
-
-
-def version_key(path):
-    match = re.search(r"_([0-9][0-9A-Za-z.+~:-]*?)_[a-z0-9]+\.deb$", path.name)
-    if match is None:
-        match = re.search(r"-([0-9][0-9A-Za-z.+~]*?)-[0-9][^-]*\.[a-z0-9]+\.rpm$", path.name)
-    if match is None:
-        return ((0, 0),)
-    parts = re.split(r"[.~\-]", match.group(1))
-    return tuple((0, int(part)) if part.isdigit() else (1, part) for part in parts)
-
-
-def prune(directory, pattern):
-    versions = {}
-    for path in directory.glob(pattern):
-        versions.setdefault(version_key(path), []).append(path)
-    for key in sorted(versions)[:-keep]:
-        for path in versions[key]:
-            path.unlink()
-    print(f"pruned {directory}: kept {len(sorted(versions)[-keep:])} version(s)")
-
-
-prune(pool, "*.deb")
-prune(rpm_dir, "*.rpm")
-PYPRUNE
+python3 "$ROOT/bin/prune-package-versions.py" "$POOL_DIR" "$RPM_REPO/Packages" "$KEEP_VERSIONS"
 
 # apt-ftparchive indexes the whole pool; split the stanzas per architecture so
 # each binary-<arch>/Packages only advertises the packages a client can install.
