@@ -60,6 +60,11 @@ the signed [APT package index](https://josepavese.github.io/nido/apt/dists/stabl
 same version. Also verify the Homebrew/Scoop manifests and checksums, the
 signed APT/DNF package metadata, and a local install from the published native
 archive. Visually inspect that installed TUI at wide and compact sizes.
+To repair APT/DNF, dispatch `release.yml` on current `main` with the existing
+`version` tag and `packages_only=true`. This skips release creation and every
+other publisher, verifies the native archives against the release checksums,
+and rebuilds the signed repositories from those exact binaries.
+
 When a channel disagrees, repair that channel without overwriting immutable
 release assets. Record external pending submissions explicitly in the release
 notes; they do not become a successful publication because CI continued.
