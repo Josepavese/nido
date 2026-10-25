@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [4.10.2] - 2026-10-25 "Steady Wings"
+
+### Fixed
+
+- Let self-update stream release archives for up to 15 minutes instead of
+  aborting healthy downloads after 30 seconds. Keep metadata and response
+  headers bounded, honor cancellation and resume prematurely disconnected
+  bodies up to three attempts through the shared transfer adapter.
+- Preserve the installed executable and VM data on failed, cancelled or corrupt
+  downloads; verify archive size and SHA256 before atomic replacement.
+
 ## [4.10.1] - 2026-10-25 "Private Wings"
 
 ### Fixed

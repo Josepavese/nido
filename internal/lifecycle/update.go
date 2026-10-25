@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/Josepavese/nido/v4/internal/build"
 	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
@@ -33,7 +34,22 @@ type Updater interface {
 }
 type nativeUpdater struct{ client sysutil.HTTPClient }
 
-func NewUpdater(client sysutil.HTTPClient) Updater { return &nativeUpdater{client: client} }
+const (
+	updateMetadataTimeout  = 30 * time.Second
+	updateDownloadTimeout  = 15 * time.Minute
+	updateDownloadAttempts = 3
+)
+
+// NewUpdater owns the network policy for every update surface. Injected clients
+// must allow streaming bodies; request contexts bound metadata and downloads.
+func NewUpdater(client sysutil.HTTPClient) Updater {
+	if client == nil {
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.ResponseHeaderTimeout = updateMetadataTimeout
+		client = &http.Client{Transport: transport}
+	}
+	return &nativeUpdater{client: client}
+}
 
 func getURL(ctx context.Context, client sysutil.HTTPClient, url string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -49,7 +65,9 @@ func (u *nativeUpdater) Update(ctx context.Context, request UpdateRequest) (resu
 	if request.NidoDir == "" {
 		return result, fmt.Errorf("nido data directory is required")
 	}
-	release, err := build.LatestRelease(ctx, u.client)
+	metadataCtx, cancelMetadata := context.WithTimeout(ctx, updateMetadataTimeout)
+	release, err := build.LatestRelease(metadataCtx, u.client)
+	cancelMetadata()
 	if err != nil {
 		return result, err
 	}
@@ -107,7 +125,10 @@ func (u *nativeUpdater) Update(ctx context.Context, request UpdateRequest) (resu
 	if err := downloadFile(ctx, u.client, assetURL, archive, assetSize); err != nil {
 		return result, err
 	}
-	if err := verifyReleaseAssetChecksum(ctx, u.client, checksumURL, assetName, archive); err != nil {
+	checksumCtx, cancelChecksum := context.WithTimeout(ctx, updateMetadataTimeout)
+	err = verifyReleaseAssetChecksum(checksumCtx, u.client, checksumURL, assetName, archive)
+	cancelChecksum()
+	if err != nil {
 		return result, err
 	}
 	candidate := filepath.Join(stage, binaryName)
@@ -115,6 +136,9 @@ func (u *nativeUpdater) Update(ctx context.Context, request UpdateRequest) (resu
 		return result, err
 	}
 	if err := sysutil.MakeExecutable(candidate); err != nil {
+		return result, err
+	}
+	if err := ctx.Err(); err != nil {
 		return result, err
 	}
 	if err := os.Rename(target, backup); err != nil {

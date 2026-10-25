@@ -4,10 +4,8 @@ import (
 	"github.com/Josepavese/nido/v4/internal/events"
 	"github.com/Josepavese/nido/v4/internal/hardware"
 	"github.com/Josepavese/nido/v4/internal/lifecycle"
-	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/Josepavese/nido/v4/internal/config"
 	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
@@ -46,7 +44,7 @@ func newAppContext() *appContext {
 		ConfigPath: cfgPath,
 		Config:     cfg,
 		Provider:   qemu,
-		Updater:    lifecycle.NewUpdater(&http.Client{Timeout: 30 * time.Second}),
+		Updater:    lifecycle.NewUpdater(nil),
 	}
 }
 
