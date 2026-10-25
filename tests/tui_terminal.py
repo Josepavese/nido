@@ -117,4 +117,5 @@ class Observer:
                 line.append(f'<span style="{previous_style}">{html.escape("".join(run))}</span>')
             rows.append(''.join(line))
         title = f'{name} | {self.screen.columns}x{self.screen.lines}'
-        return f'<h2>{html.escape(title)}</h2><pre>' + '\n'.join(rows) + '</pre>'
+        background = '#ffffff' if self.light else '#0f1216'
+        return f'<h2>{html.escape(title)}</h2><pre style="background:{background}">' + '\n'.join(rows) + '</pre>'

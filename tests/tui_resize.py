@@ -182,8 +182,6 @@ def run():
                  'h2{font-size:15px}pre{font:14px/1.3 "DejaVu Sans Mono",monospace;'
                  'white-space:pre;background:#0f1216;padding:16px;width:max-content}'
                  'section{display:inline-block;vertical-align:top;margin:12px}</style>')
-        if os.environ.get('NIDO_TUI_TEST_THEME') == 'light':
-            style += '<style>pre{background:#ffffff}</style>'
         links = '<nav>' + ' '.join(f'<a href="frame-{i:02}.html">{i:02}</a>' for i in range(len(snapshots))) + '</nav>'
         for i, snapshot in enumerate(snapshots):
             (target/f'frame-{i:02}.html').write_text(style + links + snapshot)
