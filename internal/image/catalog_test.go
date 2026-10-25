@@ -109,7 +109,7 @@ func TestFindImage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name+":"+tt.version, func(t *testing.T) {
-			_, ver, err := catalog.FindImage(tt.name, tt.version, "")
+			_, ver, err := catalog.FindImage(tt.name, tt.version, "amd64")
 
 			if tt.wantErr {
 				if err == nil {
@@ -142,7 +142,7 @@ func TestFindImageCaseSensitive(t *testing.T) {
 	}
 
 	// Should not find "Ubuntu" (capital U)
-	_, _, err := catalog.FindImage("Ubuntu", "24.04", "")
+	_, _, err := catalog.FindImage("Ubuntu", "24.04", "amd64")
 	if err == nil {
 		t.Error("expected error for case mismatch, got nil")
 	}

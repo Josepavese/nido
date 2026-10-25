@@ -1,6 +1,7 @@
 package image
 
 import (
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,6 +15,12 @@ func TestVariantsDoNotCollideOrSubstitute(t *testing.T) {
 		_, v, err := c.FindImage("ubuntu", "lts", arch)
 		if err != nil || v.Arch != arch {
 			t.Fatalf("resolution for %s = %#v, %v", arch, v, err)
+		}
+	}
+	for _, request := range []string{"", "auto"} {
+		_, v, err := c.FindImage("ubuntu", "lts", request)
+		if err != nil || v.Arch != sysutil.HostArchitecture() {
+			t.Fatalf("native variant = %#v %v", v, err)
 		}
 	}
 	if x86.CacheFileName("ubuntu") == arm.CacheFileName("ubuntu") {

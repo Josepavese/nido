@@ -43,3 +43,14 @@ func TestSourceArchitectureConflictFailsBeforeDiskCreation(t *testing.T) {
 		t.Fatal("conflicting request created a disk")
 	}
 }
+
+func TestPruneRejectsUsedImageDeletionPolicy(t *testing.T) {
+	root := t.TempDir()
+	p := NewQemuProvider(root, &config.Config{}, hardware.New())
+	if _, _, err := p.CachePrune(false); err == nil {
+		t.Fatal("accepted pruning without backing protection")
+	}
+	if entries, _ := os.ReadDir(root); len(entries) != 0 {
+		t.Fatal("invalid policy had side effects")
+	}
+}

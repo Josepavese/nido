@@ -31,7 +31,7 @@ def run():
         shutil.copy(REPO/'registry/images.json', root/'registry/images.json')
         shutil.copy(REPO/'registry/images.json', image_dir/'.catalog.json')
         (home/'config.env').write_text(f'IMAGE_DIR={image_dir}\nBACKUP_DIR={home}/backups\nSSH_USER=debian\nLINKED_CLONES=true\n')
-        environment = dict(os.environ, NIDO_HOME=str(home), TERM='xterm-256color')
+        environment = dict(os.environ, NIDO_HOME=str(home), TERM='xterm-256color',COLORTERM='truecolor',COLORFGBG='15;0')
         environment.pop('NIDO_JSON', None)
 
         def cli(*args, timeout=20):
@@ -55,7 +55,7 @@ def run():
             native = cli('images', 'info', 'ubuntu:24.04')['image']['version']['arch']
             assert native in ['amd64', 'arm64'], native
             observer=Observer() if os.environ.get("NIDO_TUI_VISUAL_DIR") else None
-            tui = TUI(environment, root,observer=observer)
+            tui = TUI(environment, root,size=(120,36),observer=observer)
             tui.text('FLEET')
             tui.key(b'\x1b[C')
             tui.text('SPAWN')
@@ -84,17 +84,18 @@ def run():
             detail = cli('info', 'arm-proof')['vm']
             assert detail['arch'] == 'arm64', detail
             assert detail['virtualization_capability']['accelerator'] == 'tcg', detail
-            deadline = time.monotonic() + 240
+            deadline = time.monotonic() + 420
             while time.monotonic() < deadline:
-                result = subprocess.run([BINARY, 'ssh', 'arm-proof', 'uname', '-m'], cwd=root,
+                result = subprocess.run([BINARY, 'ssh', 'arm-proof', '--', 'uname', '-m'], cwd=root,
                                         env=environment, capture_output=True, text=True, timeout=15)
+                assert 'unknown shorthand flag' not in result.stderr, result.stderr
                 if result.returncode == 0 and 'aarch64' in result.stdout:
                     print('PASS: real guest SSH reports aarch64 under TCG', flush=True)
                     break
                 time.sleep(2)
             else:
                 serial = home/'run/arm-proof.serial.log'
-                raise AssertionError('ARM guest readiness deadline: ' + (serial.read_text(errors='replace')[-6000:] if serial.exists() else 'no serial'))
+                raise AssertionError('ARM guest readiness deadline; last SSH: '+result.stderr+'; serial: ' + (serial.read_text(errors='replace')[-6000:] if serial.exists() else 'no serial'))
             cli('stop', 'arm-proof')
             cli('start', 'arm-proof')
             assert cli('info', 'arm-proof')['vm']['arch'] == 'arm64'

@@ -145,7 +145,7 @@ func ToolsCatalog() []map[string]interface{} {
 					"arch":        map[string]interface{}{"type": "string", "enum": append([]string{machine.Auto}, machine.Architectures()...)},
 					"action":      map[string]interface{}{"type": "string", "enum": []string{"list", "info", "pull", "remove", "refresh_catalog", "cache_list", "cache_info", "cache_remove", "cache_prune"}},
 					"image":       map[string]interface{}{"type": "string", "description": "Image tag like debian:12."},
-					"unused_only": map[string]interface{}{"type": "boolean", "description": "Used by action=cache_prune."},
+					"unused_only": map[string]interface{}{"type": "boolean", "description": "Defaults to true. Cache pruning protects all VM backing images; false is rejected."},
 				},
 				"required": []string{"action"},
 			},
@@ -665,6 +665,7 @@ func (s *Server) callImageTool(raw json.RawMessage) (interface{}, error) {
 		Image      string `json:"image"`
 		UnusedOnly bool   `json:"unused_only"`
 	}
+	args.UnusedOnly = true
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return nil, err
 	}

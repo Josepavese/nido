@@ -19,6 +19,7 @@ nido spawn x86-test --image ubuntu:24.04 --arch amd64
 nido images pull ubuntu:24.04 --arch arm64
 nido images info ubuntu:24.04 --arch arm64 --json
 nido info arm-test --json
+nido ssh arm-test -- uname -m
 ```
 
 The TUI Hatchery has an **Arch** selector: `auto`, `amd64`, `arm64`. Activate it
@@ -79,7 +80,8 @@ Catalog cache identity includes ISA: `ubuntu-24.04-arm64.qcow2`. An adjacent
 `.nido.json` declares the architecture. Templates carry the same metadata and,
 for ARM, a private `.uefi.fd` variables image. Omitted architecture inherits a
 template's declared ISA. An explicit conflict fails before disk creation.
-Raw imported disks without metadata require an explicit `--arch`; Nido cannot
+Cache pruning always protects backing images; MCP `unused_only` defaults to true
+and explicitly disabling it is rejected. Raw imported disks without metadata require an explicit `--arch`; Nido cannot
 reliably infer an instruction set from the QCOW2 container format.
 
 A VM's architecture is immutable after creation. `start --arch` checks identity

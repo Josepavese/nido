@@ -1405,6 +1405,10 @@ func (p *QemuProvider) CacheInfo() (CacheInfoResult, error) {
 
 // CachePrune removes cached images.
 func (p *QemuProvider) CachePrune(unusedOnly bool) (resultCount int, resultReclaimed int64, resultErr error) {
+	if !unusedOnly {
+		return 0, 0, fmt.Errorf("cache pruning supports unused images only")
+	}
+
 	cfg := p.configSnapshot()
 	finish := p.operation(events.CachePrune, "")
 	defer func() { finish(resultErr) }()
