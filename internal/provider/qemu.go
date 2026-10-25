@@ -481,10 +481,11 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 		vcpus = 1
 	}
 
+	capabilities := p.Hardware.Virtualization(arch)
 	args := []string{
 		"-name", name,
 		"-m", fmt.Sprintf("%d", memoryMB),
-		"-machine", profile.Machine,
+		"-machine", profile.MachineFor(capabilities.Accelerator),
 	}
 
 	// Inject Raw Args early (so they can override defaults if needed, though QEMU parsing order varies)
@@ -493,7 +494,6 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 
 	// ... (rest of standard args)
 
-	capabilities := p.Hardware.Virtualization(arch)
 	cpuArg := capabilities.CPU
 	args = append(args, capabilities.QEMUArgs()...)
 
@@ -1161,9 +1161,11 @@ func (p *QemuProvider) loadState(name string) (VMState, error) {
 	if err := json.Unmarshal(data, &state); err != nil {
 		return state, err
 	}
-	if _, err := machine.Normalize(state.Arch); err != nil {
+	canonical, err := machine.Normalize(state.Arch)
+	if err != nil {
 		return state, fmt.Errorf("VM %s requires `nido migrate` before use: %w", name, err)
 	}
+	state.Arch = canonical
 	if state.Name != name {
 		return state, fmt.Errorf("VM state identity %q does not match %q", state.Name, name)
 	}

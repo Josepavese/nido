@@ -18,3 +18,14 @@ func TestArchitectureResolution(t *testing.T) {
 		}
 	}
 }
+
+func TestNativeARMInterruptController(t *testing.T) {
+	arm, _ := For(ARM64)
+	x86, _ := For(AMD64)
+	if arm.MachineFor(AcceleratorKVM) != "virt,gic-version=host" {
+		t.Fatal("ARM KVM must match the host GIC")
+	}
+	if arm.MachineFor(AcceleratorTCG) != "virt" || x86.MachineFor(AcceleratorKVM) != "pc" {
+		t.Fatal("native ARM policy leaked into another profile")
+	}
+}

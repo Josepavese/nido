@@ -53,7 +53,8 @@ Otherwise Nido selects TCG even for a native guest. Cross-ISA emulation is usefu
 for compatibility testing but can be substantially slower.
 
 ARM64 uses QEMU's `virt` board, virtio PCI disks/networking and AArch64 UEFI.
-Every VM owns writable UEFI variables; firmware code and the packaged variables
+Native ARM KVM selects the host GIC version, supporting hosts with GICv2 or
+GICv3 without assuming a PC interrupt controller. Every VM owns writable UEFI variables; firmware code and the packaged variables
 seed are never modified. ARM graphical guests use virtio GPU and USB input.
 See the upstream [virt board](https://www.qemu.org/docs/master/system/arm/virt)
 and [WHPX requirements](https://www.qemu.org/docs/master/system/whpx.html).

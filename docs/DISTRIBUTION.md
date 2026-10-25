@@ -421,7 +421,8 @@ URL must contain `mcp` - both registry requirements.
 - Go modules major versions: <https://go.dev/ref/mod#major-version-suffixes>
 
 The release target matrix is owned by `internal/build/targets.json`; packaging
-and asset verification consume it. All six native host binaries are built,
+and asset verification consume it. npm ships a generated projection, refreshed
+by `prepack` and checked against the owner in CI. All six native host binaries are built,
 including Windows ARM64. Linux container publication stages both Linux release
 archives and builds `linux/amd64,linux/arm64`. Package publication produces real
 checksums for each ISA; unpublished Windows ARM assets are not assigned invented

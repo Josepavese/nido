@@ -35,7 +35,7 @@ def probe(binary, catalog):
 
     expected = json.loads(pathlib.Path(catalog).read_text())['images']
     # Distinct sentinels detect any accidental write into VM/data directories.
-    nido_home = pathlib.Path.home()/'.nido'
+    nido_home = pathlib.Path(os.environ['NIDO_HOME'])
     for name in ['vms', 'backups', 'run']:
         (nido_home/name).mkdir(parents=True, exist_ok=True)
         (nido_home/name/'sentinel').write_bytes(b'PRESERVE CATALOG TEST DATA')
@@ -116,8 +116,8 @@ def main():
         (devices/'0000:01:00.0/iommu_group').symlink_to('/sys/kernel/iommu_groups/7')
         command = ['bwrap', '--ro-bind', '/', '/', '--ro-bind', str(sysfs), '/sys', '--dev', '/dev', '--unshare-user',
                    '--unshare-pid', '--unshare-net', '--proc', '/proc', '--tmpfs',
-                   str(pathlib.Path.home()), '--bind', temp, temp, '--setenv', 'HOME',
-                   str(home), '--setenv', 'TMPDIR', str(root/'tmp'), '--chdir', temp,
+                   str(pathlib.Path.home()), '--bind', temp, temp, '--setenv', 'NIDO_HOME',
+                   str(cache.parent), '--setenv', 'TMPDIR', str(root/'tmp'), '--chdir', temp,
                    '--', sys.executable, str(pathlib.Path(__file__).resolve()),
                    '--inside', binary, str(root/'catalog.json')]
         # The binary and test script may live below the hidden original home.

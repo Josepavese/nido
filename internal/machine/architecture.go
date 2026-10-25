@@ -12,6 +12,7 @@ const (
 	AMD64          = "amd64"
 	ARM64          = "arm64"
 	AcceleratorTCG = "tcg"
+	AcceleratorKVM = "kvm"
 	CPUHost        = "host"
 	FirmwareARM64  = "edk2-aarch64-code.fd"
 )
@@ -61,4 +62,13 @@ func For(arch string) (Profile, error) {
 // FirmwareArgs attaches immutable UEFI code and caller-owned writable variables.
 func FirmwareArgs(code, variables string) []string {
 	return []string{"-drive", "if=pflash,format=raw,readonly=on,file=" + code, "-drive", "if=pflash,format=raw,file=" + variables}
+}
+
+// MachineFor uses the host interrupt controller only with native ARM KVM.
+// Software emulation and other backends keep their portable board defaults.
+func (p Profile) MachineFor(accelerator string) string {
+	if p.Architecture == ARM64 && accelerator == AcceleratorKVM {
+		return p.Machine + ",gic-version=host"
+	}
+	return p.Machine
 }

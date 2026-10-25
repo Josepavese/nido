@@ -208,7 +208,7 @@ func (e *Engine) Build(bp *image.Blueprint) (resultErr error) {
 	e.Reporter.Info("This process may take a while (%s timeout).", bp.BuildSpecs.Timeout)
 
 	qemuArgs := []string{
-		"-machine", profile.Machine,
+		"-machine", profile.MachineFor(e.Acceleration.Accelerator),
 		"-m", bp.BuildSpecs.Memory,
 		"-smp", fmt.Sprintf("%d", bp.BuildSpecs.CPU),
 		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", tmpOutputPath),
@@ -237,7 +237,7 @@ func (e *Engine) Build(bp *image.Blueprint) (resultErr error) {
 			return err
 		}
 		// ARM virt has no PC VGA or IDE controllers. Preserve explicit backend IDs.
-		qemuArgs = []string{"-machine", profile.Machine, "-m", bp.BuildSpecs.Memory, "-smp", fmt.Sprintf("%d", bp.BuildSpecs.CPU),
+		qemuArgs = []string{"-machine", profile.MachineFor(e.Acceleration.Accelerator), "-m", bp.BuildSpecs.Memory, "-smp", fmt.Sprintf("%d", bp.BuildSpecs.CPU),
 			"-drive", "file=" + tmpOutputPath + ",format=qcow2,if=none,id=root", "-device", "virtio-blk-pci,drive=root",
 			"-device", "virtio-scsi-pci,id=installer-scsi", "-drive", "file=" + isoPath + ",if=none,id=installer,media=cdrom,readonly=on", "-device", "scsi-cd,drive=installer,bus=installer-scsi.0",
 			"-drive", "file=" + seedISO + ",if=none,id=seed,media=cdrom,readonly=on", "-device", "scsi-cd,drive=seed,bus=installer-scsi.0",

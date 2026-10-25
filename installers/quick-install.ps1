@@ -47,7 +47,7 @@ $checksumUrl = "https://github.com/Josepavese/nido/releases/download/$version/SH
 
 Write-Host "[DOWNLOAD] Downloading $archiveName..." -ForegroundColor Cyan
 
-$nidoHome = "$env:USERPROFILE\.nido"
+$nidoHome = if ($env:NIDO_HOME) { $env:NIDO_HOME } else { "$env:USERPROFILE\.nido" }
 $binDir = "$nidoHome\bin"
 $targetPath = "$binDir\nido.exe"
 $validatorPath = "$binDir\nido-validator.exe"

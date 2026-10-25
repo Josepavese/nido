@@ -34,11 +34,20 @@ if ! command -v go >/dev/null 2>&1; then
 fi
 echo "  ${OK} Go found: $(go version)"
 
+# OS and Architecture Detection
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+ARCH="$(uname -m)"
+if [ "$OS" = darwin ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" = 1 ]; then ARCH=arm64; fi
+
+case "$ARCH" in x86_64|amd64) ARCH=amd64;; aarch64|arm64) ARCH=arm64;; *) echo "Unsupported architecture: $ARCH" >&2; exit 1;; esac
+QEMU_RUNTIME=qemu-system-x86_64
+[ "$ARCH" != arm64 ] || QEMU_RUNTIME=qemu-system-aarch64
+
 # 1b. Check for QEMU (Runtime Dependency)
 echo "${STEP} Checking for QEMU binaries (runtime)..."
 QEMU_MISSING=0
-if ! command -v qemu-system-x86_64 >/dev/null 2>&1; then
-    echo "  ${WARN} qemu-system-x86_64 is missing! (Required to run VMs)"
+if ! command -v "$QEMU_RUNTIME" >/dev/null 2>&1; then
+    echo "  ${WARN} $QEMU_RUNTIME is missing! (Required to run VMs)"
     QEMU_MISSING=1
 fi
 if ! command -v qemu-img >/dev/null 2>&1; then
@@ -46,9 +55,6 @@ if ! command -v qemu-img >/dev/null 2>&1; then
     QEMU_MISSING=1
 fi
 
-# OS and Architecture Detection
-OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
-ARCH="$(uname -m)"
 
 if [[ $QEMU_MISSING -eq 0 ]]; then
     echo "  ${OK} QEMU binaries found."
@@ -112,14 +118,14 @@ build_dir=$(mktemp -d "${TMPDIR:-/tmp}/nido-source.XXXXXX")
 trap 'rm -rf "$build_dir"' EXIT
 echo ""
 echo "${STEP} Building the new engine..."
-go build -o "$build_dir/nido" ./cmd/nido
-go build -o "$build_dir/nido-validator" ./cmd/nido-validator
+GOOS="$OS" GOARCH="$ARCH" go build -o "$build_dir/nido" ./cmd/nido
+GOOS="$OS" GOARCH="$ARCH" go build -o "$build_dir/nido-validator" ./cmd/nido-validator
 echo "  ${OK} Binaries built successfully."
 
 # 3. Setup local environment
 echo ""
 echo "${STEP} Structuring the nest (~/.nido)..."
-NIDO_HOME="${HOME}/.nido"
+NIDO_HOME="${NIDO_HOME:-${HOME}/.nido}"
 mkdir -p "${NIDO_HOME}/bin"
 mkdir -p "${NIDO_HOME}/run"
 mkdir -p "${NIDO_HOME}/vms"

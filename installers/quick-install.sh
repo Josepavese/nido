@@ -20,6 +20,7 @@ echo "${RESET}"
 # Detect OS and Architecture
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
+if [ "$OS" = darwin ] && [ "$(sysctl -n hw.optional.arm64 2>/dev/null || true)" = 1 ]; then ARCH=arm64; fi
 
 # Detect Termux
 IS_TERMUX=0
@@ -119,7 +120,7 @@ if [ ! -x "${PKG_DIR}/nido" ]; then
 fi
 
 # Setup Nido home directory
-NIDO_HOME="${HOME}/.nido"
+NIDO_HOME="${NIDO_HOME:-${HOME}/.nido}"
 mkdir -p "${NIDO_HOME}/bin"
 mkdir -p "${NIDO_HOME}/vms"
 mkdir -p "${NIDO_HOME}/run"

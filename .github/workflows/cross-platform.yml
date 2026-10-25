@@ -68,6 +68,9 @@ jobs:
             exit 1
           fi
 
+      - name: Check npm native release selection
+        run: node --test npm/lib/install.test.js
+
       - name: Run unit tests
         run: go test -v -count=1 ./...
 

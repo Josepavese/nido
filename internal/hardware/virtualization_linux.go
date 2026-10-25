@@ -11,7 +11,7 @@ func (h *nativeHost) Virtualization(guest string) Virtualization {
 		return SoftwareVirtualization(guest)
 	}
 	if version, err := h.io.DeviceValue("/dev/kvm", kvmGetAPIVersion); err == nil && version == kvmAPIVersion {
-		return Virtualization{Accelerator: "kvm", CPU: machine.CPUHost}
+		return Virtualization{Accelerator: machine.AcceleratorKVM, CPU: machine.CPUHost}
 	}
 	return SoftwareVirtualization(guest)
 }

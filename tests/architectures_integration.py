@@ -85,9 +85,15 @@ def run():
             assert detail['arch'] == 'arm64', detail
             assert detail['virtualization_capability']['accelerator'] == 'tcg', detail
             deadline = time.monotonic() + 420
+            last_error="not attempted"
             while time.monotonic() < deadline:
-                result = subprocess.run([BINARY, 'ssh', 'arm-proof', '--', 'uname', '-m'], cwd=root,
-                                        env=environment, capture_output=True, text=True, timeout=15)
+                try:
+                    result = subprocess.run([BINARY, 'ssh', 'arm-proof', '--', 'uname', '-m'], cwd=root,
+                                            env=environment, capture_output=True, text=True, timeout=45)
+                except subprocess.TimeoutExpired as error:
+                    last_error=str(error)
+                    continue
+                last_error=result.stderr
                 assert 'unknown shorthand flag' not in result.stderr, result.stderr
                 if result.returncode == 0 and 'aarch64' in result.stdout:
                     print('PASS: real guest SSH reports aarch64 under TCG', flush=True)
@@ -95,7 +101,7 @@ def run():
                 time.sleep(2)
             else:
                 serial = home/'run/arm-proof.serial.log'
-                raise AssertionError('ARM guest readiness deadline; last SSH: '+result.stderr+'; serial: ' + (serial.read_text(errors='replace')[-6000:] if serial.exists() else 'no serial'))
+                raise AssertionError('ARM guest readiness deadline; last SSH: '+last_error+'; serial: ' + (serial.read_text(errors='replace')[-6000:] if serial.exists() else 'no serial'))
             cli('stop', 'arm-proof')
             cli('start', 'arm-proof')
             assert cli('info', 'arm-proof')['vm']['arch'] == 'arm64'

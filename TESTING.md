@@ -136,3 +136,25 @@ errors, diagnostic/update/cache results, and background progress. It never runs
 operation commands; these offline views complement the actual PTY journey and
 are not evidence that an update, removal or diagnostic operation succeeded.
 `NIDO_THEME=light` with `NIDO_TUI_TEST_THEME=light` exports a light-theme gallery.
+
+## AMD64 / ARM64 qualification
+
+`tests/architectures_integration.py` checks native/default and explicit CLI
+variants, MCP resources and the actual TUI architecture selector. It uses a
+private `NIDO_HOME`. Set `NIDO_TEST_QEMU_ARM=1` for real ARM64 Debian acquisition,
+SSH `uname -m`, restart and template cloning. Install `qemu-system-aarch64`,
+`qemu-img` and ARM UEFI first. Budget 2 GiB of scratch plus build dependencies;
+TCG provisioning can take several minutes. `NIDO_TEST_IMAGE_CACHE` can reuse
+an owned, verified acquisition across trials. The test removes only its private
+VM instances; retire the owned cache after its last consumer.
+
+```bash
+NIDO_TEST_BINARY="$scratch/nido" NIDO_TEST_STORAGE="$scratch" \
+  python3 -B tests/architectures_integration.py
+NIDO_TEST_BINARY="$scratch/nido" NIDO_TEST_STORAGE="$scratch" \
+  NIDO_TEST_QEMU_ARM=1 python3 -B tests/architectures_integration.py
+```
+
+Software ARM emulation on x86 proves that guest path only. Raspberry Pi KVM,
+Apple Silicon HVF and Windows ARM WHPX require separate native lifecycle and
+workload trials. See [architecture requirements and migration](docs/architectures.md).

@@ -37,10 +37,11 @@
     "bin/nido.js",
     "lib/install.js",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "lib/targets.json"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=18.9"
   },
   "os": [
     "linux",
@@ -53,5 +54,8 @@
   ],
   "publishConfig": {
     "access": "public"
+  },
+  "scripts": {
+    "prepack": "node -e \"require('node:fs').copyFileSync('../internal/build/targets.json','lib/targets.json')\""
   }
 }
