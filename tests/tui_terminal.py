@@ -67,8 +67,11 @@ class TUI:
             time.sleep(.025)
         raise AssertionError(f'TUI did not render {value!r}: ' + self.output.decode(errors='replace')[-4000:])
 
-    def close(self):
-        self.key(b'\x03')
+    def close(self, quit_key=b'\x03'):
+        if self.stop.is_set():
+            return
+        if self.process.poll() is None:
+            self.key(quit_key)
         try:
             self.process.wait(timeout=TIMEOUT)
         finally:

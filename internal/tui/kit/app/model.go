@@ -38,17 +38,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if !layout.IsViable(a.Shell.Width, a.Shell.Height) && a.Shell.Width > 0 {
-			if msg.String() != "ctrl+c" && msg.String() != "ctrl+q" {
-				return a, nil
-			}
-		}
-		switch msg.String() {
-		case "ctrl+c", "ctrl+q":
+		if view.IsQuitMessage(msg) {
 			if a.OnQuit != nil {
 				a.OnQuit()
 			}
 			return a, tea.Quit
+		}
+		if !layout.IsViable(a.Shell.Width, a.Shell.Height) && a.Shell.Width > 0 {
+			return a, nil
+		}
+		switch msg.String() {
 		// GLOBAL NAV: Intercept Arrow Keys for Tab Switching
 		case "right", "ctrl+right":
 			if !blocking && (msg.String() == "ctrl+right" || a.Shell.ActiveViewlet() == nil || !a.Shell.ActiveViewlet().HasActiveTextInput()) {

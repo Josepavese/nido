@@ -52,7 +52,7 @@ func TestGlobalErrorStillAllowsExit(t *testing.T) {
 	for _, key := range []tea.KeyType{tea.KeyCtrlC, tea.KeyCtrlQ} {
 		model := &NidoApp{App: kit.NewApp(), ErrorModal: widget.NewAlertModal("Error", "fixture", nil)}
 		model.ErrorModal.Show()
-		_, cmd := model.Update(tea.KeyMsg{Type: key})
+		_, cmd := model.Update(tea.KeyMsg{Type: key, Alt: true})
 		if cmd == nil {
 			t.Fatal("global error swallowed exit")
 		}

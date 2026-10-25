@@ -52,7 +52,7 @@ func (n *NidoApp) Init() tea.Cmd {
 
 // Update intercepts messages to handle Nido domain logic.
 func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if key, ok := msg.(tea.KeyMsg); ok && (key.String() == "ctrl+c" || key.String() == "ctrl+q") {
+	if view.IsQuitMessage(msg) {
 		_, cmd := n.App.Update(msg)
 		return n, cmd
 	}

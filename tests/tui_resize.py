@@ -169,7 +169,7 @@ def run():
             key(b'\x1b')
             assert b'Spawning ' not in tui.output, 'audit activated a spawn action'
         finally:
-            tui.close()
+            tui.close(b'\x1b\x03')  # Immediate Esc + Ctrl+C must still exit.
         for path, digest in protected.items():
             assert hashlib.sha256(path.read_bytes()).hexdigest() == digest, f'Unexpected fixture mutation: {path}'
         assert not (home/'events/bus.sock').exists(), 'terminal left event owner running'

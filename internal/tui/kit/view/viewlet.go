@@ -161,3 +161,10 @@ func IsInputMessage(msg tea.Msg) bool {
 	}
 	return false
 }
+
+// IsQuitMessage recognizes the control code even when an immediately preceding
+// Escape made the terminal decoder annotate it with Alt.
+func IsQuitMessage(msg tea.Msg) bool {
+	key, ok := msg.(tea.KeyMsg)
+	return ok && (key.Type == tea.KeyCtrlC || key.Type == tea.KeyCtrlQ)
+}

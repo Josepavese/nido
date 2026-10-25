@@ -71,3 +71,21 @@ func TestMouseRoutesUseRenderedTabs(t *testing.T) {
 		t.Fatal("rendered second tab not clickable")
 	}
 }
+
+func TestQuitControlCodesSurviveEscapeModifier(t *testing.T) {
+	for _, key := range []tea.KeyType{tea.KeyCtrlC, tea.KeyCtrlQ} {
+		for _, width := range []int{12, 40, 120} {
+			a := NewApp()
+			a.Update(tea.WindowSizeMsg{Width: width, Height: 10})
+			calls := 0
+			a.OnQuit = func() { calls++ }
+			_, cmd := a.Update(tea.KeyMsg{Type: key, Alt: true})
+			if cmd == nil || calls != 1 {
+				t.Fatal("modified quit key did not reach lifecycle")
+			}
+			if _, ok := cmd().(tea.QuitMsg); !ok {
+				t.Fatal("modified control key was not an exit")
+			}
+		}
+	}
+}

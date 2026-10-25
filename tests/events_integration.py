@@ -197,8 +197,8 @@ def run():
             (home/f'vms/{vm}.qcow2').unlink()
             active.notified(uri)
             assert not active.resource('nido://fleet/vms')['vms']
-            a.text('Select VM', cuts[0])
-            b.text('Select VM', cuts[1])
+            a.text('Room for a new bird', cuts[0])
+            b.text('Room for a new bird', cuts[1])
             print(json.dumps(dict(result='PASS', scope='Linux real PTY and independent processes',
                                   two_tuis=True, background_route=True, draft_preserved=True, cli_to_mcp=True,
                                   no_unsolicited_notifications=True, mute_unmute=True,
