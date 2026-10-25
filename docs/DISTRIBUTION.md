@@ -27,7 +27,7 @@ incremental.
 | **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | **Blocked upstream:** AUR closed new registrations after the June 2026 takeover wave and captchas are still flaky; the job is wired and activates as soon as the three secrets exist. x86_64 only, `-bin` package. |
 | **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | **Deprioritized:** Smithery shuts down its MCP proxy and managed identity on 2026-10-31, so the account/key cost no longer buys durable reach. The job stays wired but is not on the critical path. |
 | **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours; the dated verification below records tested versions. |
-| **Glama** | directory indexing | GitHub OAuth, one-time | auto-release off | [Nido listing](https://glama.ai/mcp/servers/Josepavese/nido) provides discovery and local installation instructions. Hosted deployment is outside this channel's intended use; withdrawal of the previously published Glama release remains pending (§1.5). |
+| **Glama** | directory indexing | GitHub OAuth, one-time | auto-release off | [Nido listing](https://glama.ai/mcp/servers/Josepavese/nido) provides discovery and local installation instructions. Hosted deployment is outside this channel's intended use; withdrawal of the previously published Glama release remains pending (§1.6). |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
 
 Indirectly covered with no work: **PulseMCP** and **MCP Central** ingest the
@@ -125,7 +125,7 @@ keyring and imported automatically).
 
 ---
 
-### 1.5 Glama directory and local MCP (2026-10-25)
+### 1.6 Glama directory and local MCP (2026-10-25)
 
 Glama is a discovery channel for Nido. Ownership through `glama.json` remains
 verified, and the listing description directs users to install Nido and QEMU
@@ -164,7 +164,7 @@ image remains available for user-managed hosts (§1.4).
   settings and channel metadata focused on these capabilities; avoid generic
   buzzwords and unqualified performance or security claims.
 - `glama.json` at root - in repo; Glama ownership is verified. Keep the listing
-  and local installation instructions current, with auto-release off (§1.5).
+  and local installation instructions current, with auto-release off (§1.6).
 - `.mcp.json` at root - Open Plugins detection (Cursor Directory and friends).
 
 ### 2.2 Homebrew tap - live, zero secrets
