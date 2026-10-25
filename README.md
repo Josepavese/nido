@@ -83,7 +83,9 @@ every release and served from GitHub Pages:
 
 ```bash
 # Debian / Ubuntu
-echo "deb [trusted=yes] https://josepavese.github.io/nido/apt/ stable main" | sudo tee /etc/apt/sources.list.d/nido.list
+sudo install -d -m 0755 /etc/apt/keyrings
+sudo curl -fsSL https://josepavese.github.io/nido/nido-archive-keyring.asc -o /etc/apt/keyrings/nido.asc
+echo "deb [signed-by=/etc/apt/keyrings/nido.asc] https://josepavese.github.io/nido/apt/ stable main" | sudo tee /etc/apt/sources.list.d/nido.list
 sudo apt-get update && sudo apt-get install nido
 
 # Fedora / RHEL
@@ -92,8 +94,9 @@ sudo dnf install nido
 ```
 
 Install QEMU first (`qemu-system-x86 qemu-utils` / `qemu-kvm qemu-img`), then run
-`nido doctor`. The repositories are unsigned, so APT uses `[trusted=yes]` and
-DNF `gpgcheck=0`; see [the installers guide](installers/README.md#apt-debian--ubuntu).
+`nido doctor`. Both repositories are GPG-signed by the Nido package archive key
+(`DBB87CB63A94ABA50B33C7B919C6A95C9D280B64`); see
+[the installers guide](installers/README.md#apt-debian--ubuntu).
 
 **WinGet**: `Josepavese.Nido` is awaiting Microsoft review. See
 [availability and commands](installers/README.md#winget-windows).

@@ -710,11 +710,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh api -X PATCH /user/packages/container/nido -f visibility=public
 
-  # Zero-credential distro repositories: the workflow token can push the
-  # gh-pages branch, and GitHub Pages serves APT (Debian/Ubuntu) and DNF
-  # (Fedora/RHEL) metadata rebuilt from the release binaries. Packages are
-  # unsigned unless a PACKAGES_GPG_KEY secret is present, which is documented
-  # in installers/README.md.
+  # Zero-credential distro repositories: the workflow token pushes a single
+  # compact gh-pages commit, and GitHub Pages serves APT (Debian/Ubuntu) and
+  # DNF (Fedora/RHEL) metadata rebuilt from the release binaries. The
+  # PACKAGES_GPG_KEY repository secret signs the APT Release/InRelease, the RPM
+  # packages and the DNF repomd; the public keyring lives in the repository and
+  # is served from Pages.
   publish-packages:
     name: Publish APT/DNF repositories
     needs: [release]
@@ -726,6 +727,7 @@ jobs:
     env:
       VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
       NFPM_VERSION: v2.48.0
+      KEEP_VERSIONS: "5"
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -739,31 +741,45 @@ jobs:
       - name: Install packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends apt-utils createrepo-c
+          sudo apt-get install -y --no-install-recommends apt-utils createrepo-c rpm gnupg
           go install "github.com/goreleaser/nfpm/v2/cmd/nfpm@${NFPM_VERSION}"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Check out the previous gh-pages tree
+        run: |
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch --depth=1 origin gh-pages
+            git worktree add --detach previous-site FETCH_HEAD
+          fi
 
       - name: Build the repositories
         env:
           GH_TOKEN: ${{ github.token }}
           PACKAGES_GPG_KEY: ${{ secrets.PACKAGES_GPG_KEY }}
+          PREVIOUS_SITE_DIR: ${{ github.workspace }}/previous-site
         run: bin/publish-packages.sh "$VERSION"
 
       - name: Publish to the gh-pages branch
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git fetch origin gh-pages
-          git worktree add packages-site origin/gh-pages
-          rsync -a --delete --exclude .git build/packages-site/ packages-site/
-          if [ -z "$(git -C packages-site status --porcelain)" ]; then
+          site_dir="$(mktemp -d)"
+          git -C "$site_dir" init -q -b gh-pages
+          rsync -a --delete build/packages-site/ "$site_dir/"
+          git -C "$site_dir" add -A
+          if git -C "$site_dir" diff --cached --quiet; then
             echo "Packages are already up to date"
             exit 0
           fi
-          git -C packages-site add -A
-          git -C packages-site commit -m "Packages $VERSION"
-          git -C packages-site push origin HEAD:gh-pages
+          git -C "$site_dir" -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -qm "Packages $VERSION"
+          # Rewriting the branch keeps the repository small: package history is
+          # not useful and each release would otherwise add ~25 MB of objects.
+          git -C "$site_dir" remote add origin \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git -C "$site_dir" push -q -f origin gh-pages
 
       - name: Ensure GitHub Pages serves the branch
         continue-on-error: true

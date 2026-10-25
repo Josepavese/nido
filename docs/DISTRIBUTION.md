@@ -19,7 +19,7 @@ incremental.
 | --- | --- | --- | --- | --- |
 | **GitHub Releases** | tarballs, `nido.mcpb`, `server.json`, `SHA256SUMS`, installers | `GITHUB_TOKEN` | none | Asset names are a contract for every other channel. |
 | **Container image** (GHCR) | `distribution/docker/Dockerfile` built from the release binaries and pushed to `ghcr.io/josepavese/nido` | `GITHUB_TOKEN` (`packages: write`) | none | Every tag publishes `:{version}`, `:{minor}` and `:latest`, bundling QEMU; meant for `/dev/kvm` hosts and MCP stdio use. First publish needs the package made public (`gh api` step in the job). |
-| **APT / DNF repositories** (GitHub Pages) | `bin/publish-packages.sh` builds `.deb`/`.rpm` with nfpm and indexes them; `publish-packages` pushes `gh-pages` | `GITHUB_TOKEN` (`contents: write`) | none (optional `PACKAGES_GPG_KEY`) | Live: <https://josepavese.github.io/nido/> — `deb [trusted=yes] …/apt/ stable main`, DNF baseurl `…/rpm/`; unsigned unless the GPG secret exists; both architectures per format. |
+| **APT / DNF repositories** (GitHub Pages) | `bin/publish-packages.sh` builds `.deb`/`.rpm` with nfpm, signs and indexes them; `publish-packages` pushes `gh-pages` | `GITHUB_TOKEN` (`contents: write`) | `PACKAGES_GPG_KEY` (stored in repo secrets) | Live: <https://josepavese.github.io/nido/> — signed APT `Release`/`InRelease`, signed RPM packages and DNF `repomd.xml`; keyring at `/nido-archive-keyring.asc`; both architectures per format. |
 | **Official MCP Registry** | `mcp-publisher login github-oidc` + `publish` | GitHub OIDC (`id-token: write`) | none | Live: [`io.github.Josepavese/nido`](https://registry.modelcontextprotocol.io/); every tag adds an immutable version. Runs **after** npm and waits for the npm version to appear (publish-time scanning is asynchronous, so the registry validation otherwise races the publish). |
 | **npm** `nido-mcp` | launcher in [`npm/`](../npm), downloads + verifies the release binary lazily | npm trusted publishing (OIDC) | repo variable `NPM_TRUSTED_PUBLISHER=true` + npm trusted-publisher config | Live: [`nido-mcp`](https://www.npmjs.com/package/nido-mcp) with the `latest` dist-tag; every release publishes with provenance, no token stored (§2.4). |
 | **WinGet** | `vedantmgoyal9/winget-releaser` updates the manifest | classic PAT (`public_repo`) | `WINGET_TOKEN` | `Josepavese.Nido` 4.8.6 is submitted and **fully validated** ([microsoft/winget-pkgs#460843](https://github.com/microsoft/winget-pkgs/pull/460843): 10/10 checks green, CLA signed, token configured); only community-moderator merge remains. Updates automate once merged. |
@@ -27,7 +27,7 @@ incremental.
 | **AUR** `nido-bin` | PKGBUILD rendered from `distribution/aur/`, pushed by CI | AUR account + SSH key | `AUR_SSH_PRIVATE_KEY`, `AUR_USERNAME`, `AUR_EMAIL` | **Blocked upstream:** AUR closed new registrations after the June 2026 takeover wave and captchas are still flaky; the job is wired and activates as soon as the three secrets exist. x86_64 only, `-bin` package. |
 | **Smithery** | `smithery mcp publish nido.mcpb -n josepavese/nido` | Bearer API key | `SMITHERY_API_KEY` | **Deprioritized:** Smithery shuts down its MCP proxy and managed identity on 2026-10-31, so the account/key cost no longer buys durable reach. The job stays wired but is not on the critical path. |
 | **Homebrew** (companion tap) | [`Josepavese/homebrew-nido`](https://github.com/Josepavese/homebrew-nido) cron renders the formula | `GITHUB_TOKEN` of the tap | none | Live, zero secrets; polled every 6 hours; the dated verification below records tested versions. |
-| **Glama** | auto-index + `glama.json` claim | GitHub OAuth, one-time | none | [Nido listing is live](https://glama.ai/mcp/servers/Josepavese/nido); descriptions/categories/README sync from the repo automatically, releases appear after the crawler re-syncs (claiming ownership unlocks a manual re-sync). `glama.json` names the maintainer. |
+| **Glama** | auto-index + `glama.json` claim | GitHub OAuth, one-time | none | [Nido listing is live](https://glama.ai/mcp/servers/Josepavese/nido); descriptions/categories/README sync from the repo automatically, releases appear after the crawler re-syncs (claiming ownership unlocks a manual re-sync). `glama.json` names the maintainer. Nido is local-only, so Glama is used for **promotion/discovery only**, never to host or proxy the MCP server. |
 | **mcpdir.dev / MCP Hub** | crawls GitHub topic `mcp-server`, npm, official registry | none | none | Topics already set on the repo. |
 
 Indirectly covered with no work: **PulseMCP** and **MCP Central** ingest the
@@ -115,6 +115,13 @@ end-to-end from the **live Pages URLs** in throwaway containers:
 `fedora:latest`, each then reporting `nido version v4.8.7`; the APT `Release`
 file indexes `amd64` and `arm64`, and `createrepo_c` produced the DNF
 `repodata`/`nido.repo`. The same build was replayed locally before publishing.
+
+On 2026-10-25 the repositories were **signed** with the Nido package archive key
+`DBB87CB63A94ABA50B33C7B919C6A95C9D280B64` (expires 2029-10-24): GPG verified
+`Release.gpg`, `InRelease`, the RPM package signatures and `repomd.xml.asc`,
+and signed installs were exercised in clean containers (APT via `signed-by`,
+DNF with `gpgcheck=1` + `repo_gpgcheck=1`, key fetched from the published
+keyring and imported automatically).
 
 ---
 
@@ -266,16 +273,27 @@ visibility by hand if the API call was skipped.
 
 ### 2.10 APT / DNF repositories (GitHub Pages)
 
-Nothing to configure: Pages serves the `gh-pages` branch at
-<https://josepavese.github.io/nido/> and the `publish-packages` job rebuilds the
-repositories on every tag with the workflow token (`contents: write`). The job
-also tries to enable Pages on each run and tolerates "already enabled".
+Pages serves the `gh-pages` branch at <https://josepavese.github.io/nido/> and
+the `publish-packages` job rebuilds the repositories on every tag with the
+workflow token (`contents: write`). It rewrites `gh-pages` as a single commit so
+the package history does not grow the repository, keeps the last
+`KEEP_VERSIONS` (default 5) releases in the pools, and tolerates "already
+enabled" when ensuring Pages.
 
-Optional but recommended: add a **`PACKAGES_GPG_KEY`** secret (ASCII-armored
-private key) to sign the APT `Release`/`InRelease` and publish
-`nido-archive-keyring.asc`; clients then drop `[trusted=yes]` for `signed-by=`.
-Without it the repositories stay **unsigned** (`trusted=yes` / `gpgcheck=0`),
-which is documented in [installers](../installers/README.md#apt-debian--ubuntu).
+Signing uses the **`PACKAGES_GPG_KEY`** repository secret (ASCII-armored private
+key, no passphrase, 4096-bit RSA, expires 2029-10-24). The public half is
+committed at `distribution/packages/nido-archive-keyring.asc` and served as
+`/nido-archive-keyring.asc`; clients trust it through `signed-by=` (APT) or the
+`gpgkey=` line in `nido.repo` (DNF). The workflow signs the APT
+`Release`/`InRelease`, every RPM package (`rpmsign`) and the DNF
+`repomd.xml.asc`. **Rotation:** generate a new key, publish it under a new
+keyring file name (e.g. `nido-archive-keyring-2029.asc`), update `signed-by=`/
+`gpgkey=` and the `PACKAGES_GPG_KEY` secret together, and keep the old keyring
+published for one release cycle so existing clients can upgrade.
+
+Without the secret the script falls back to unsigned repositories
+(`trusted=yes` / `gpgcheck=0`), which keeps local builds and forks working; see
+[installers](../installers/README.md#apt-debian--ubuntu).
 
 ---
 
