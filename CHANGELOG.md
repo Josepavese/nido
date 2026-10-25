@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   overlay shortcuts and consistent focus handling across all TUI screens.
 - Publish signed APT and DNF repositories for amd64 and arm64 from the same
   GitHub release binaries; retain Homebrew, Scoop, npm, MCP Registry and GHCR.
+- Add a source-based Nix flake with QEMU on PATH and CI qualification tied to
+  the canonical changelog version.
 
 ### Fixed
 

@@ -1,0 +1,44 @@
+name: Nix flake
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - flake.nix
+      - flake.lock
+      - go.mod
+      - go.sum
+      - CHANGELOG.md
+      - .github/workflows/nix.yml
+  pull_request:
+    paths:
+      - flake.nix
+      - flake.lock
+      - go.mod
+      - go.sum
+      - CHANGELOG.md
+      - .github/workflows/nix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flake:
+    name: Build the flake
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Build nido and nido-validator
+        run: nix build .#default
+
+      - name: Smoke-test the Nix build
+        run: ./result/bin/nido version

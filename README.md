@@ -98,6 +98,9 @@ Install QEMU first (`qemu-system-x86 qemu-utils` / `qemu-kvm qemu-img`), then ru
 (`DBB87CB63A94ABA50B33C7B919C6A95C9D280B64`); see
 [the installers guide](installers/README.md#apt-debian--ubuntu).
 
+**Nix**: `nix run github:Josepavese/nido` builds the current source and brings
+its own QEMU; see [the installers guide](installers/README.md#nix-flake-from-source).
+
 **WinGet**: `Josepavese.Nido` is awaiting Microsoft review. See
 [availability and commands](installers/README.md#winget-windows).
 
