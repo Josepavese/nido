@@ -79,7 +79,10 @@ The release workflow publishes an APT repository on GitHub Pages, rebuilt from
 the release binaries on every tag:
 
 ```bash
-echo "deb [trusted=yes] https://josepavese.github.io/nido/apt/ stable main" \
+sudo install -d -m 0755 /etc/apt/keyrings
+sudo curl -fsSL https://josepavese.github.io/nido/nido-archive-keyring.asc \
+  -o /etc/apt/keyrings/nido.asc
+echo "deb [signed-by=/etc/apt/keyrings/nido.asc] https://josepavese.github.io/nido/apt/ stable main" \
   | sudo tee /etc/apt/sources.list.d/nido.list
 sudo apt-get update
 sudo apt-get install nido
@@ -87,11 +90,11 @@ sudo apt-get install nido
 
 Packages exist for `amd64` and `arm64`. QEMU is a host prerequisite and is not
 pulled in by the package: `sudo apt-get install qemu-system-x86 qemu-utils`,
-then `nido doctor`. The repository is **unsigned**, hence `[trusted=yes]`; when
-the repository is signed (a `PACKAGES_GPG_KEY` secret), download
-`https://josepavese.github.io/nido/nido-archive-keyring.asc` into
-`/etc/apt/keyrings/` and replace `[trusted=yes]` with
-`[signed-by=/etc/apt/keyrings/nido.asc]`.
+then `nido doctor`. The APT `Release`/`InRelease` metadata is GPG-signed by the
+Nido package archive key (`DBB87CB63A94ABA50B33C7B919C6A95C9D280B64`, expires
+2029-10-24); the keyring is published at
+`https://josepavese.github.io/nido/nido-archive-keyring.asc` and mirrored in the
+repository at `distribution/packages/nido-archive-keyring.asc`.
 
 ### DNF (Fedora / RHEL)
 
@@ -101,9 +104,11 @@ sudo curl -fsSL https://josepavese.github.io/nido/rpm/nido.repo \
 sudo dnf install nido
 ```
 
-Packages exist for `x86_64` and `aarch64`. The repository is unsigned
-(`gpgcheck=0` in `nido.repo`); install QEMU first (`sudo dnf install qemu-kvm
-qemu-img`) and run `nido doctor` afterwards.
+Packages exist for `x86_64` and `aarch64`. Both the RPM packages and the DNF
+`repomd.xml` are GPG-signed, and `nido.repo` sets `gpgcheck=1`,
+`repo_gpgcheck=1` and `gpgkey=` to the published keyring, so DNF imports the key
+automatically. Install QEMU first (`sudo dnf install qemu-kvm qemu-img`) and run
+`nido doctor` afterwards.
 
 ### WinGet (Windows)
 

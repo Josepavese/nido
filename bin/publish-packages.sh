@@ -6,14 +6,18 @@
 #   bin/publish-packages.sh v4.8.7
 #
 # Environment:
-#   NFPM           nfpm binary (default: nfpm on PATH)
-#   SITE_DIR       output tree for the site (default: build/packages-site)
-#   DIST_DIR       where release tarballs are downloaded (default: build/packages-dist)
-#   WORK_DIR       scratch directory (default: build/packages)
-#   PACKAGES_GPG_KEY  optional ASCII-armored private key: signs the APT Release
+#   NFPM                nfpm binary (default: nfpm on PATH)
+#   SITE_DIR            output tree for the site (default: build/packages-site)
+#   DIST_DIR            where release tarballs are downloaded (default: build/packages-dist)
+#   WORK_DIR            scratch directory (default: build/packages)
+#   PREVIOUS_SITE_DIR   existing gh-pages checkout: keeps older versions around
+#   KEEP_VERSIONS       how many versions to retain (default: 5)
+#   PACKAGES_GPG_KEY    ASCII-armored private key: signs APT Release/InRelease,
+#                       the RPM packages and the DNF repomd.xml
 #
-# The package repository is unsigned by default, so APT needs
-# `[trusted=yes]` and DNF needs `gpgcheck=0`; see installers/README.md.
+# The repositories are signed when PACKAGES_GPG_KEY is set; the public keyring
+# is published as /nido-archive-keyring.asc. Without the secret they are
+# unsigned, so APT needs `[trusted=yes]` and DNF `gpgcheck=0`.
 
 set -euo pipefail
 
@@ -30,8 +34,12 @@ NFPM=${NFPM:-nfpm}
 SITE_DIR=${SITE_DIR:-"$ROOT/build/packages-site"}
 DIST_DIR=${DIST_DIR:-"$ROOT/build/packages-dist"}
 WORK_DIR=${WORK_DIR:-"$ROOT/build/packages"}
+PREVIOUS_SITE_DIR=${PREVIOUS_SITE_DIR:-}
+KEEP_VERSIONS=${KEEP_VERSIONS:-5}
+SIGNED=0
+GPG_FINGERPRINT=""
 
-for tool in "$NFPM" apt-ftparchive gzip; do
+for tool in "$NFPM" apt-ftparchive gzip python3; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "missing required tool: $tool" >&2
     exit 1
@@ -44,6 +52,18 @@ fi
 
 rm -rf "$SITE_DIR" "$WORK_DIR"
 mkdir -p "$SITE_DIR" "$DIST_DIR" "$WORK_DIR"
+
+if [ -n "${PACKAGES_GPG_KEY:-}" ]; then
+  command -v gpg >/dev/null 2>&1 || { echo "missing required tool for signing: gpg" >&2; exit 1; }
+  echo "==> Importing the package signing key"
+  export GNUPGHOME="$WORK_DIR/gnupg"
+  mkdir -p "$GNUPGHOME"
+  chmod 700 "$GNUPGHOME"
+  printf '%s' "$PACKAGES_GPG_KEY" | gpg --batch --import
+  GPG_FINGERPRINT=$(gpg --list-keys --with-colons | awk -F: '/^fpr/{print $10; exit}')
+  SIGNED=1
+  gpg --armor --export > "$SITE_DIR/nido-archive-keyring.asc"
+fi
 
 echo "==> Downloading release assets for $TAG"
 for arch in amd64 arm64; do
@@ -69,11 +89,72 @@ for arch in amd64 arm64; do
 done
 ls -l "$DEB_DIR" "$RPM_DIR"
 
+if [ "$SIGNED" = 1 ]; then
+  echo "==> Signing the RPM packages (key ${GPG_FINGERPRINT})"
+  if ! command -v rpmsign >/dev/null 2>&1; then
+    echo "missing required tool for signing: rpmsign (apt install rpm)" >&2
+    exit 1
+  fi
+  GPG_BIN=$(command -v gpg || command -v gpg2)
+  for rpm_file in "$RPM_DIR"/*.rpm; do
+    rpmsign --define "__gpg ${GPG_BIN}" --define "_gpg_name ${GPG_FINGERPRINT}" --addsign "$rpm_file" >/dev/null
+  done
+  rpm -q --qf '%{NAME} %{VERSION} %{SIGPGP:pgpsig}\n' "$RPM_DIR"/*.rpm
+fi
+
 echo "==> Assembling the APT repository"
 APT_DIR="$SITE_DIR/apt"
 POOL_DIR="$APT_DIR/pool/main/n/nido"
 mkdir -p "$POOL_DIR"
 cp "$DEB_DIR"/*.deb "$POOL_DIR/"
+
+echo "==> Assembling the DNF repository"
+RPM_REPO="$SITE_DIR/rpm"
+mkdir -p "$RPM_REPO/Packages"
+cp "$RPM_DIR"/*.rpm "$RPM_REPO/Packages/"
+
+if [ -n "$PREVIOUS_SITE_DIR" ] && [ -d "$PREVIOUS_SITE_DIR" ]; then
+  echo "==> Carrying over packages from the previous gh-pages tree"
+  if [ -d "$PREVIOUS_SITE_DIR/apt/pool/main/n/nido" ]; then
+    cp -n "$PREVIOUS_SITE_DIR"/apt/pool/main/n/nido/*.deb "$POOL_DIR/" 2>/dev/null || true
+  fi
+  if [ -d "$PREVIOUS_SITE_DIR/rpm/Packages" ]; then
+    cp -n "$PREVIOUS_SITE_DIR"/rpm/Packages/*.rpm "$RPM_REPO/Packages/" 2>/dev/null || true
+  fi
+fi
+
+python3 - "$POOL_DIR" "$RPM_REPO/Packages" "$KEEP_VERSIONS" <<'PYPRUNE'
+import re
+import sys
+from pathlib import Path
+
+pool, rpm_dir, keep = Path(sys.argv[1]), Path(sys.argv[2]), int(sys.argv[3])
+
+
+def version_key(path):
+    match = re.search(r"_([0-9][0-9A-Za-z.+~:-]*?)_[a-z0-9]+\.deb$", path.name)
+    if match is None:
+        match = re.search(r"-([0-9][0-9A-Za-z.+~]*?)-[0-9][^-]*\.[a-z0-9]+\.rpm$", path.name)
+    if match is None:
+        return ((0, 0),)
+    parts = re.split(r"[.~\-]", match.group(1))
+    return tuple((0, int(part)) if part.isdigit() else (1, part) for part in parts)
+
+
+def prune(directory, pattern):
+    versions = {}
+    for path in directory.glob(pattern):
+        versions.setdefault(version_key(path), []).append(path)
+    for key in sorted(versions)[:-keep]:
+        for path in versions[key]:
+            path.unlink()
+    print(f"pruned {directory}: kept {len(sorted(versions)[-keep:])} version(s)")
+
+
+prune(pool, "*.deb")
+prune(rpm_dir, "*.rpm")
+PYPRUNE
+
 # apt-ftparchive indexes the whole pool; split the stanzas per architecture so
 # each binary-<arch>/Packages only advertises the packages a client can install.
 ( cd "$APT_DIR" && apt-ftparchive packages pool ) > "$WORK_DIR/Packages-all"
@@ -100,29 +181,51 @@ done
     -o APT::FTPArchive::Release::Components="main" \
     release dists/stable ) > "$APT_DIR/dists/stable/Release"
 
-if [ -n "${PACKAGES_GPG_KEY:-}" ]; then
-  echo "==> Signing the APT Release (PACKAGES_GPG_KEY set)"
-  export GNUPGHOME="$WORK_DIR/gnupg"
-  mkdir -p "$GNUPGHOME"
-  chmod 700 "$GNUPGHOME"
-  printf '%s' "$PACKAGES_GPG_KEY" | gpg --batch --import
+if [ "$SIGNED" = 1 ]; then
+  echo "==> Signing the APT Release"
   gpg --batch --yes --armor --detach-sign -o "$APT_DIR/dists/stable/Release.gpg" "$APT_DIR/dists/stable/Release"
   gpg --batch --yes --clearsign -o "$APT_DIR/dists/stable/InRelease" "$APT_DIR/dists/stable/Release"
-  gpg --armor --export > "$SITE_DIR/nido-archive-keyring.asc"
 fi
 
-echo "==> Assembling the DNF repository"
-RPM_REPO="$SITE_DIR/rpm"
-mkdir -p "$RPM_REPO/Packages"
-cp "$RPM_DIR"/*.rpm "$RPM_REPO/Packages/"
 createrepo_c --database --update "$RPM_REPO"
-cat > "$RPM_REPO/nido.repo" <<REPO
+
+if [ "$SIGNED" = 1 ]; then
+  echo "==> Signing the DNF repomd"
+  gpg --batch --yes --armor --detach-sign -o "$RPM_REPO/repodata/repomd.xml.asc" "$RPM_REPO/repodata/repomd.xml"
+fi
+
+if [ "$SIGNED" = 1 ]; then
+  cat > "$RPM_REPO/nido.repo" <<REPO
+[nido]
+name=Nido
+baseurl=https://josepavese.github.io/nido/rpm/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://josepavese.github.io/nido/nido-archive-keyring.asc
+REPO
+else
+  cat > "$RPM_REPO/nido.repo" <<REPO
 [nido]
 name=Nido
 baseurl=https://josepavese.github.io/nido/rpm/
 enabled=1
 gpgcheck=0
 REPO
+fi
+
+if [ "$SIGNED" = 1 ]; then
+  APT_INSTRUCTIONS='sudo install -d -m 0755 /etc/apt/keyrings
+sudo curl -fsSL https://josepavese.github.io/nido/nido-archive-keyring.asc -o /etc/apt/keyrings/nido.asc
+echo "deb [signed-by=/etc/apt/keyrings/nido.asc] https://josepavese.github.io/nido/apt/ stable main" | sudo tee /etc/apt/sources.list.d/nido.list'
+  FOOTER='The repositories are signed with the Nido package archive key
+(fingerprint DBB87CB63A94ABA50B33C7B919C6A95C9D280B64, expires 2029-10-24);
+the public keyring is served as <code>/nido-archive-keyring.asc</code>.'
+else
+  APT_INSTRUCTIONS='echo "deb [trusted=yes] https://josepavese.github.io/nido/apt/ stable main" | sudo tee /etc/apt/sources.list.d/nido.list'
+  FOOTER='The repository is unsigned: APT uses <code>[trusted=yes]</code> and DNF
+<code>gpgcheck=0</code>.'
+fi
 
 cat > "$SITE_DIR/index.html" <<HTML
 <!doctype html>
@@ -140,17 +243,16 @@ cat > "$SITE_DIR/index.html" <<HTML
 <p>Packages for the <a href="https://github.com/Josepavese/nido">Nido local VM manager</a>.
 QEMU is a host prerequisite; run <code>nido doctor</code> after installing.</p>
 <h2>Debian / Ubuntu (APT)</h2>
-<pre>echo "deb [trusted=yes] https://josepavese.github.io/nido/apt/ stable main" | sudo tee /etc/apt/sources.list.d/nido.list
+<pre>$APT_INSTRUCTIONS
 sudo apt-get update
 sudo apt-get install nido</pre>
 <h2>Fedora / RHEL (DNF)</h2>
 <pre>sudo curl -fsSL https://josepavese.github.io/nido/rpm/nido.repo -o /etc/yum.repos.d/nido.repo
 sudo dnf install nido</pre>
-<p>The repository is unsigned: APT uses <code>[trusted=yes]</code> and DNF
-<code>gpgcheck=0</code>. Verify the binary with <code>nido version</code>.</p>
+<p>$FOOTER</p>
 </html>
 HTML
 : > "$SITE_DIR/.nojekyll"
 
-echo "==> Site ready: $SITE_DIR"
+echo "==> Site ready: $SITE_DIR (signed=$SIGNED)"
 find "$SITE_DIR" -maxdepth 4 -type f | sort | sed "s|$SITE_DIR/||"
