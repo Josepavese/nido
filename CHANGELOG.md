@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Fixed
+
+- Preserve AMD64 RPM packages alongside ARM64 when retaining repository
+  versions. Repair the signed 4.10.2 package repository without changing
+  released executable assets.
+
 ## [4.10.2] - 2026-10-25 "Steady Wings"
 
 ### Fixed

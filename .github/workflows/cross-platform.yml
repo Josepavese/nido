@@ -71,6 +71,10 @@ jobs:
       - name: Check npm native release selection
         run: node --test npm/lib/install.test.js
 
+      - name: Check package retention across host architectures
+        if: runner.os == 'Linux'
+        run: python3 -B tests/package_retention_test.py
+
       - name: Run unit tests
         run: go test -v -count=1 ./...
 
