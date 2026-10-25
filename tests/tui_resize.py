@@ -7,48 +7,17 @@ Visual export needs pyte in the observer environment, never in product runtime.
 All data is private metadata; this never launches, edits or deletes a real VM.
 """
 import hashlib
-import html
 import json
 import os
 import pathlib
 import tempfile
 import time
 
-from tui_terminal import TUI
+from tui_terminal import TUI, Observer
 
 VISUAL = os.environ.get('NIDO_TUI_VISUAL_DIR')
 
 
-class Observer:
-    def __init__(self):
-        import pyte
-        self.light = os.environ.get("NIDO_TUI_TEST_THEME") == "light"
-        self.screen = pyte.Screen(120, 36)
-        self.stream = pyte.Stream(self.screen)
-
-    def feed(self, data):
-        self.stream.feed(data)
-
-    def snapshot(self, name):
-        rows = []
-        colors = dict(black='000000', white='eeeeee', red='cc3333', green='33cc77',
-                      yellow='eecc55', blue='4488ff', magenta='cc66ee', cyan='66dddd',
-                      brown='cc9955', brightblack='666666', brightwhite='ffffff')
-        for y in range(self.screen.lines):
-            line = []
-            for x in range(self.screen.columns):
-                cell = self.screen.buffer[y][x]
-                if not cell.data:
-                    continue
-                fg = colors.get(cell.fg, cell.fg) if cell.fg != 'default' else ('1a1a1a' if self.light else 'cdd6f4')
-                bg = colors.get(cell.bg, cell.bg) if cell.bg != 'default' else ('ffffff' if self.light else '0f1216')
-                style = f'color:#{fg};background:#{bg};'
-                if cell.bold:
-                    style += 'font-weight:bold;'
-                line.append(f'<span style="{style}">{html.escape(cell.data)}</span>')
-            rows.append(''.join(line))
-        title = f'{name} | {self.screen.columns}x{self.screen.lines}'
-        return f'<h2>{html.escape(title)}</h2><pre>' + '\n'.join(rows) + '</pre>'
 
 
 def run():
@@ -158,6 +127,47 @@ def run():
             key(b'\r')
             capture('Registry - minimum detail')
             resize(120,36,'Registry - wide recovery')
+            # Audit every System detail without executing its action.
+            key(b'\x1b[C')
+            key(b'\x1b[H')
+            for page in ['Core', 'Rice', 'Evolution', 'Health', 'Artifacts', 'Self Destruct']:
+                key(b'\r')
+                for width, height in [(120, 36), (80, 24), (60, 15), (40, 10)]:
+                    resize(width, height, f'System {page} - audit')
+                if page == 'Self Destruct':
+                    key(b'\r', 'SELF DESTRUCT')
+                    capture('Uninstall - cancel only')
+                    key(b'\x1b')
+                key(b'\x1b')
+                key(b'\x1b[B')
+            # Fleet template text and both actions survive a resize round trip.
+            key(b'\x1b[C'); key(b'\x1b[C')
+            key(b't', 'Create Template')
+            key('città-bird'.encode())
+            for width, height in [(120, 36), (80, 24), (60, 15), (40, 10)]:
+                resize(width, height, 'Template - editing')
+            key(b'\t')
+            key(b'q')  # A dialog button must not turn q into a hidden quit.
+            capture('Template - confirm reachable')
+            key(b'\t'); capture('Template - cancel reachable')
+            key(b'\x1b')
+            assert b'Spawning ' not in tui.output, 'audit activated a spawn action'
+            # Start from a known focus state for the forwarding journey.
+            tui.close()
+            observer = Observer() if VISUAL else None
+            tui = TUI(environment, root, size=(120, 36), observer=observer)
+            tui.text('robin')
+            key(b'\x1b[C'); key(b'\r')
+            for _ in range(6):
+                key(b'\t')
+            key(b'\r', 'Add Port Forwarding')
+            for width, height in [(120, 36), (80, 24), (60, 15), (40, 10)]:
+                resize(width, height, 'Forwarding - editing')
+            key(b'\t'); key(b'\t'); key(b'8080')
+            key(b'\t'); key(b'\t'); capture('Forwarding - confirm reachable')
+            key(b'\t'); capture('Forwarding - cancel reachable')
+            key(b'\x1b')
+            assert b'Spawning ' not in tui.output, 'audit activated a spawn action'
         finally:
             tui.close()
         for path, digest in protected.items():

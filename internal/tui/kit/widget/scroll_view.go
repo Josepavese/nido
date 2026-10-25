@@ -34,6 +34,9 @@ func (s *ScrollView) Render(width, height int, content string, anchor layout.Rec
 			}
 			if anchor.Y+anchor.Height > s.offset+visible {
 				s.offset = anchor.Y + min(anchor.Height, visible) - visible
+				if anchor.Height > visible {
+					s.offset = anchor.Y + (anchor.Height-visible)/2
+				}
 			}
 		}
 	}

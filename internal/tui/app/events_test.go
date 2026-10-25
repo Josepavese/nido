@@ -2,6 +2,9 @@ package app
 
 import (
 	"context"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,5 +45,41 @@ func TestEventFlowContinuesBehindGlobalAndFleetModals(t *testing.T) {
 	model.Update(ops.VMListMsg{RequestedAt: requested.Add(time.Second)})
 	if f.Sidebar.SelectedItem() != nil {
 		t.Fatal("external deletion did not clear selection")
+	}
+}
+
+func TestGlobalErrorStillAllowsExit(t *testing.T) {
+	for _, key := range []tea.KeyType{tea.KeyCtrlC, tea.KeyCtrlQ} {
+		model := &NidoApp{App: kit.NewApp(), ErrorModal: widget.NewAlertModal("Error", "fixture", nil)}
+		model.ErrorModal.Show()
+		_, cmd := model.Update(tea.KeyMsg{Type: key})
+		if cmd == nil {
+			t.Fatal("global error swallowed exit")
+		}
+		if _, ok := cmd().(tea.QuitMsg); !ok {
+			t.Fatal("exit did not reach kit lifecycle")
+		}
+	}
+}
+
+func TestGlobalOverlayUsesShellGeometry(t *testing.T) {
+	for _, size := range [][2]int{{120, 36}, {40, 10}} {
+		model := &NidoApp{App: kit.NewApp(), ErrorModal: widget.NewAlertModal("Error", "fixture", nil)}
+		model.Shell.Resize(size[0], size[1])
+		model.ErrorModal.Show()
+		text := ansi.Strip(model.View())
+		if !strings.Contains(text, "^C quit") || strings.Contains(text, "flow") {
+			t.Fatal("global overlay lost its modal footer")
+		}
+		for y, line := range strings.Split(text, "\n") {
+			if index := strings.Index(line, "Close"); index >= 0 {
+				x := ansi.StringWidth(line[:index])
+				model.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+				break
+			}
+		}
+		if model.ErrorModal.IsActive() {
+			t.Fatal("global close click did not follow shell coordinates")
+		}
 	}
 }

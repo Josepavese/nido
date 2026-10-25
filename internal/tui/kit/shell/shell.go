@@ -47,6 +47,9 @@ type Shell struct {
 	HeaderContent string
 	FooterContent string
 
+	// Overlay blocks every route while retaining measured chrome and exit hints.
+	Overlay widget.Overlay
+
 	// Viewlet Management
 	routes        []Route
 	routesByKey   map[string]viewlet.Viewlet
@@ -329,7 +332,9 @@ func (s *Shell) View() string {
 	// 2. Render Body
 	// If we have an active viewlet, use it. Otherwise use static string.
 	var bodyContent string
-	if s.activeViewlet != nil {
+	if s.Overlay != nil && s.Overlay.IsActive() {
+		bodyContent = s.Overlay.View(s.grid.Body.Width, s.grid.Body.Height)
+	} else if s.activeViewlet != nil {
 		bodyContent = s.activeViewlet.View()
 	} else {
 		bodyContent = "No Active Viewlet"
@@ -379,16 +384,19 @@ func (s *Shell) renderFooter() string {
 
 	var sbItems []widget.StatusBarItem
 	// 2. Viewlet Shortcuts
-	if s.activeViewlet != nil {
-		for _, sc := range s.activeViewlet.Shortcuts() {
-			sbItems = append(sbItems, widget.StatusBarItem{
-				Key:   prettifyKey(sc.Key),
-				Label: sc.Label,
-			})
-		}
+	var shortcuts []viewlet.Shortcut
+	if s.Overlay != nil && s.Overlay.IsActive() {
+		shortcuts = s.Overlay.Shortcuts()
+	} else if s.activeViewlet != nil {
+		shortcuts = s.activeViewlet.Shortcuts()
+	}
+	for _, sc := range shortcuts {
+		sbItems = append(sbItems, widget.StatusBarItem{Key: prettifyKey(sc.Key), Label: sc.Label})
 	}
 
-	sbItems = append(sbItems, widget.StatusBarItem{Key: s.navigationKey(), Label: "flow"})
+	if !s.IsModalActive() {
+		sbItems = append(sbItems, widget.StatusBarItem{Key: s.navigationKey(), Label: "flow"})
+	}
 	// 3. System Exit (Always last)
 	sbItems = append(sbItems, widget.StatusBarItem{
 		Key:   "^C",
@@ -433,7 +441,15 @@ func prettifyKey(k string) string {
 // It returns the hit zone, localized coordinates within that zone, a command,
 // and a boolean indicating if the active viewlet handled the event.
 func (s *Shell) HandleMouse(msg tea.MouseMsg) (MouseZone, int, int, tea.Cmd, bool) {
-	if s.grid.Header.Contains(msg.X, msg.Y) && (s.activeViewlet == nil || !s.activeViewlet.IsModalActive()) {
+	if s.Overlay != nil && s.Overlay.IsActive() {
+		x, y := msg.X-s.grid.Body.X, msg.Y-s.grid.Body.Y
+		if s.grid.Body.Contains(msg.X, msg.Y) {
+			cmd, handled := s.Overlay.HandleMouse(x, y, msg)
+			return ZoneBody, x, y, cmd, handled
+		}
+		return ZoneBody, x, y, nil, true
+	}
+	if s.grid.Header.Contains(msg.X, msg.Y) && !s.IsModalActive() {
 		lx := msg.X - s.grid.Header.X
 		ly := msg.Y - s.grid.Header.Y
 
@@ -507,4 +523,8 @@ func (s *Shell) navigationKey() string {
 		return "ctrl+←/→"
 	}
 	return "←/→"
+}
+
+func (s *Shell) IsModalActive() bool {
+	return (s.Overlay != nil && s.Overlay.IsActive()) || (s.activeViewlet != nil && s.activeViewlet.IsModalActive())
 }

@@ -2,6 +2,7 @@ package theme
 
 import (
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
@@ -96,7 +97,8 @@ func AvailableThemes() []string {
 		// capitalize for display?
 		names = append(names, k) // we store lower, maybe return original case if we stored it?
 	}
-	return names // simple for now
+	sort.Strings(names)
+	return names
 }
 
 // GetPalette returns the palette for a registered theme.

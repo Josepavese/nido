@@ -366,6 +366,9 @@ func (c *Config) Focus() tea.Cmd {
 }
 
 func (c *Config) Shortcuts() []fv.Shortcut {
+	if overlay := c.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
+	}
 	s := c.MasterDetail.Shortcuts()
 	if c.MasterDetail.ActiveFocus == widget.FocusSidebar {
 		s = append(s, fv.Shortcut{Key: "enter", Label: "engage"})

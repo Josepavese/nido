@@ -34,10 +34,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	// Check for blocking viewlet (Modal active)
-	blocking := false
-	if v := a.Shell.ActiveViewlet(); v != nil {
-		blocking = v.IsModalActive()
-	}
+	blocking := a.Shell.IsModalActive()
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:

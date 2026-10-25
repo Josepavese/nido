@@ -3,6 +3,7 @@ package widget
 import (
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -16,9 +17,13 @@ type dialogGeometry struct {
 
 func measureDialog(parentW, parentH, preferredW, preferredH int) dialogGeometry {
 	w := max(0, min(preferredW, parentW-layout.DialogMargin))
-	h := max(0, min(preferredH, parentH-layout.DialogMargin))
-	padY := layout.DialogPaddingY
+	marginY := layout.DialogMargin
 	if parentH < layout.MinHeight {
+		marginY = 0
+	}
+	h := max(0, min(preferredH, parentH-marginY))
+	padY := layout.DialogPaddingY
+	if parentH < layout.CompactHeight {
 		padY = 0
 	}
 	outer := layout.NewRect((parentW-w)/2, (parentH-h)/2, w, h)
@@ -33,6 +38,17 @@ func (d dialogGeometry) render(parentW, parentH int, content string, color lipgl
 // using the same parent rectangle, independently of any panes behind it.
 type Overlay interface {
 	IsActive() bool
+	Shortcuts() []view.Shortcut
 	View(int, int) string
 	HandleMouse(int, int, tea.MouseMsg) (tea.Cmd, bool)
+}
+
+// ActiveOverlay resolves the same priority for rendering, mouse input and hints.
+func ActiveOverlay(overlays ...Overlay) Overlay {
+	for _, overlay := range overlays {
+		if overlay != nil && overlay.IsActive() {
+			return overlay
+		}
+	}
+	return nil
 }

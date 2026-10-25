@@ -1,9 +1,11 @@
 package widget
 
 import (
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Card is a static display element with an Icon, Title, and Subtitle.
@@ -32,77 +34,23 @@ func (c *Card) View(width int) string {
 	if width == 0 {
 		width = c.width
 	}
-	style := theme.Current().Styles.Border.
-		Width(width - 2)
-		// Inherit(c.Style) // This line is commented out as Card struct does not have a Style field.
-
-	// Calculate Available Space for Text
-	// Width - 2 (Border) - 1 (Safety Margin) -> Total Content Width
-	// Icon takes constant width (4 via RenderIcon)
-	// We need to fit Title and Subtitle in the rest.
-
-	totalContentWidth := width - 3 // -2 border, -1 safety
-	if totalContentWidth < 0 {
-		totalContentWidth = 0
+	if width <= 0 {
+		return ""
 	}
-
-	iconStr := theme.RenderIcon(c.Icon)
-	iconW := lipgloss.Width(iconStr)
-
-	textAvail := totalContentWidth - iconW
-	if textAvail < 0 {
-		textAvail = 0
+	t := theme.Current()
+	icon := theme.RenderIcon(c.Icon)
+	available := max(0, width-layout.DialogBorder-lipgloss.Width(icon))
+	titleBudget := available
+	gap := theme.Space.SM
+	if c.Subtitle != "" {
+		titleBudget = max(available/2, available-lipgloss.Width(c.Subtitle)-gap)
 	}
-
-	// Prepare Text Components
-	// Subtitle has PaddingLeft(2) -> effectively consumes +2 chars
-	subRaw := c.Subtitle
-	subPadding := 2
-	if subRaw == "" {
-		subPadding = 0
+	title := ansi.Truncate(c.Title, titleBudget, "…")
+	subtitle := ansi.Truncate(c.Subtitle, max(0, available-lipgloss.Width(title)-gap), "…")
+	content := icon + t.Styles.AccentStrong.Render(title)
+	if subtitle != "" {
+		content += t.Styles.TextDim.PaddingLeft(gap).Render(subtitle)
 	}
-	subW := lipgloss.Width(subRaw) + subPadding
-
-	titleRaw := c.Title
-	titleW := lipgloss.Width(titleRaw)
-
-	// Truncation Logic
-	// 1. If Title + Subtitle fits, great.
-	// 2. If not, prioritize Title? Or truncate Title to fit Subtitle?
-	// Strategy: Truncate Title first (as Subtitle acts as status often).
-	// If Title is too long, cut it.
-
-	if titleW+subW > textAvail {
-		// Try to shrink Title
-		maxTitleW := textAvail - subW
-		if maxTitleW < 4 { // If squeezing too much, drop subtitle
-			maxTitleW = textAvail
-			subRaw = "" // Drop subtitle
-			subPadding = 0
-		}
-
-		// Truncate Title loop
-		runes := []rune(titleRaw)
-		for len(runes) > 0 && lipgloss.Width(string(runes)) > maxTitleW {
-			runes = runes[:len(runes)-1]
-		}
-		titleRaw = string(runes)
-	}
-
-	// Render Components
-	titleStyled := theme.Current().Styles.AccentStrong.Render(titleRaw)
-
-	subStyled := ""
-	if subRaw != "" {
-		subStyled = lipgloss.NewStyle().Foreground(theme.Current().Palette.TextDim).PaddingLeft(subPadding).Render(subRaw)
-	}
-
-	// Join Horizontal (Guaranteed to fit)
-	titleParts := lipgloss.JoinHorizontal(lipgloss.Top,
-		iconStr,
-		titleStyled,
-		subStyled,
-	)
-
-	return style.Render(titleParts)
+	box := t.Styles.Border.Width(max(0, width-layout.DialogBorder)).Render(content)
+	return layout.Fit(width, lipgloss.Height(box), box)
 }

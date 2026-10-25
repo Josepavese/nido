@@ -5,7 +5,9 @@ import (
 	appconfig "github.com/Josepavese/nido/v4/internal/config"
 	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
 	fv "github.com/Josepavese/nido/v4/internal/tui/kit/view"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"strings"
@@ -76,5 +78,36 @@ func TestDiagnosticFailureUsesVisibleOverlay(t *testing.T) {
 	t.Log("\n" + rendered)
 	if !page.IsModalActive() || !strings.Contains(rendered, "Diagnostics failed") || !strings.Contains(rendered, "Close") {
 		t.Fatal("diagnostic error is hidden outside form viewport")
+	}
+}
+
+func TestThemePreviewCancelRestoresDraftWithoutChangingConfig(t *testing.T) {
+	t.Setenv("NIDO_THEME", "")
+	theme.SetTheme("dark")
+	t.Cleanup(func() { theme.SetTheme("auto") })
+	cfg := &appconfig.Config{Theme: "dark"}
+	model := NewConfig(cfg, nil)
+	p := model.PageAppearance
+	p.SelectTheme.OnActivate()
+	var lightIndex int
+	for i, item := range p.ThemeModal.List.Items() {
+		if item.(widget.ThemeItem).Name == "light" {
+			lightIndex = i
+		}
+	}
+	p.ThemeModal.List.Select(lightIndex)
+	p.ThemeModal.OnHighlight(p.ThemeModal.List.SelectedItem())
+	if theme.Current().Palette.Background != theme.Light.Background {
+		t.Fatal("preview did not reach theme owner")
+	}
+	p.ThemeModal.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if theme.Current().Palette.Background != theme.Dark.Background || cfg.Theme != "dark" {
+		t.Fatal("cancel committed preview")
+	}
+	p.SelectTheme.OnActivate()
+	p.ThemeModal.List.Select(lightIndex)
+	p.ThemeModal.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if p.SelectTheme.Value != "light" || cfg.Theme != "dark" {
+		t.Fatal("theme selection escaped the unsaved form")
 	}
 }

@@ -40,7 +40,19 @@ func NewStatusBar(width int, styles StatusBarStyles) StatusBar {
 
 // SetItems updates the keymap hints.
 func (s *StatusBar) SetItems(items []StatusBarItem) {
-	s.items = items
+	s.items = nil
+	if len(items) == 0 {
+		return
+	}
+	exit := items[len(items)-1]
+	seen := map[string]bool{exit.Key: true}
+	for _, item := range items[:len(items)-1] {
+		if !seen[item.Key] {
+			s.items = append(s.items, item)
+			seen[item.Key] = true
+		}
+	}
+	s.items = append(s.items, exit)
 }
 
 // SetStatus sets the right-aligned status text.

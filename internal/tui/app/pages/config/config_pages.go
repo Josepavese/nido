@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Josepavese/nido/v4/internal/build"
+	"github.com/Josepavese/nido/v4/internal/image"
 	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
@@ -156,11 +157,8 @@ func (p *ConfigPageGlobalForm) Focusable() bool {
 }
 
 func (p *ConfigPageGlobalForm) Shortcuts() []fv.Shortcut {
-	if p.IsModalActive() {
-		return []fv.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
+	if overlay := p.Parent.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 	return []fv.Shortcut{
 		{Key: "tab", Label: "glide"},
@@ -243,6 +241,7 @@ func (p *ConfigPageUpdate) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 				"Your Nest is already at the latest evolutionary state.\nNo ascension required.",
 				nil,
 			)
+			p.ResultModal.SetLevel(widget.ModalLevelSuccess)
 			p.ResultModal.Show()
 		} else if msg.Manual && msg.Err != nil {
 			p.ResultModal = widget.NewAlertModal(
@@ -261,14 +260,14 @@ func (p *ConfigPageUpdate) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 				"Nido has been successfully upgraded.\nPlease restart the application to apply changes.",
 				nil,
 			)
-			p.ResultModal.BorderColor = theme.Current().Palette.Success
+			p.ResultModal.SetLevel(widget.ModalLevelSuccess)
 		} else {
 			p.ResultModal = widget.NewAlertModal(
 				"Evolution Failed",
 				fmt.Sprintf("Failed to upgrade Nido:\n%v", msg.Err),
 				nil,
 			)
-			p.ResultModal.BorderColor = theme.Current().Palette.Error
+			p.ResultModal.SetLevel(widget.ModalLevelDanger)
 		}
 		p.ResultModal.Show()
 		return p, nil
@@ -345,11 +344,8 @@ func (p *ConfigPageUpdate) Focusable() bool {
 }
 
 func (p *ConfigPageUpdate) Shortcuts() []fv.Shortcut {
-	if p.IsModalActive() {
-		return []fv.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
+	if overlay := p.Parent.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 	return []fv.Shortcut{
 		{Key: "enter", Label: "engage"},
@@ -396,7 +392,6 @@ func (p *ConfigPageCache) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 	// Handle Prune Result locally to show Modal
 	if res, ok := msg.(ops.OpResultMsg); ok && res.Op == "prune" && res.Err == nil {
-		t := theme.Current()
 		title := "Prune Complete"
 		body := "Cache is clean."
 
@@ -404,29 +399,12 @@ func (p *ConfigPageCache) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 			if stats.Count == 0 {
 				body = "Nothing to prune.\nYour cache is already efficient."
 			} else {
-				// We still need to import "github.com/Josepavese/nido/v4/internal/image" if we want FormatBytes
-				// But we can rely on wiring.go for logging, and just show simple text here?
-				// Or better, let's just show raw numbers or simple format if we don't want to add import.
-				// Wait, "image" package is not imported in this file.
-				// I'll stick to simple formatting to avoid import cycle or mess, or I can add the import.
-				// Actually, `wiring.go` uses `image.FormatBytes`.
-				// Let's assume we can add the import or use a simple string.
-				// Check imports at top of file.
-				// It does NOT import `internal/image`.
-				// I'll add the import in a separate edit if needed, or just format simply.
-				// Since I'm in `ConfigPageCache.Update`, I can't easily add import in this block.
-				// I will use a simple "bytes" suffix or similar.
-				// Wait, I can use `theme.FormatBytes` if it existed? It was removed/didn't exist.
-				// I'll use simple integer division for MB if large enough, or just show bytes.
-				// Or I can add the import. Let's add the import first in a separate step to be clean.
-				// For now, I'll place a placeholder and fix import in next step.
-				mb := float64(stats.Reclaimed) / 1024 / 1024
-				body = fmt.Sprintf("Removed %d images.\nReclaimed %.2f MB.", stats.Count, mb)
+				body = fmt.Sprintf("Removed %d images.\nReclaimed %s.", stats.Count, image.FormatBytes(stats.Reclaimed))
 			}
 		}
 
 		p.ResultModal = widget.NewAlertModal(title, body, nil)
-		p.ResultModal.BorderColor = t.Palette.Success
+		p.ResultModal.SetLevel(widget.ModalLevelSuccess)
 		p.ResultModal.Show()
 		return p, nil
 	}
@@ -482,11 +460,8 @@ func (p *ConfigPageCache) Focusable() bool {
 }
 
 func (p *ConfigPageCache) Shortcuts() []fv.Shortcut {
-	if p.ResultModal != nil && p.ResultModal.IsActive() {
-		return []fv.Shortcut{
-			{Key: "enter", Label: "ok"},
-			{Key: "esc", Label: "close"},
-		}
+	if overlay := p.Parent.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 	return []fv.Shortcut{
 		{Key: "enter", Label: "purge"},
@@ -528,7 +503,8 @@ func NewConfigPageDoctor(parent *Config) *ConfigPageDoctor {
 		return ops.RunDoctor()
 	})
 
-	p.Form = widget.NewForm(p.RunButton)
+	p.Form = widget.NewForm(widget.NewCard(theme.IconDoctor, "Health", "Keep the nest in good shape."), p.RunButton)
+	p.Form.Spacing = 0
 	return p
 }
 
@@ -556,7 +532,6 @@ func (p *ConfigPageDoctor) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 		if p.Err == nil && len(p.Reports) > 0 {
 			// Create Result Modal
-			t := theme.Current()
 			passed := 0
 			for _, r := range p.Reports {
 				if r.Passed {
@@ -580,9 +555,9 @@ func (p *ConfigPageDoctor) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 			p.Modal = widget.NewAlertModal("System Health Report", summary, func() tea.Cmd {
 				return func() tea.Msg { return FocusSidebarMsg{} }
 			})
-			p.Modal.BorderColor = t.Palette.Success
+			p.Modal.SetLevel(widget.ModalLevelSuccess)
 			if integrity < 100 {
-				p.Modal.BorderColor = t.Palette.Error
+				p.Modal.SetLevel(widget.ModalLevelDanger)
 			}
 			p.Modal.MessageAlign = lipgloss.Left
 			p.Modal.Show()
@@ -622,11 +597,8 @@ func (p *ConfigPageDoctor) Focusable() bool {
 }
 
 func (p *ConfigPageDoctor) Shortcuts() []fv.Shortcut {
-	if p.IsModalActive() {
-		return []fv.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
+	if overlay := p.Parent.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 	return []fv.Shortcut{
 		{Key: "enter", Label: "scan"},
@@ -714,12 +686,10 @@ func NewConfigPageAppearance(parent *Config) *ConfigPageAppearance {
 			// However, to see it, we might want to apply it.
 			theme.SetTheme(name)
 
-			// Also update the parent config field so it gets saved on "SAVE"
-			parent.cfg.Theme = name
-
 			return func() tea.Msg { return FocusSidebarMsg{} } // Return valid command or msg
 		},
 		func() tea.Cmd {
+			theme.SetTheme(p.SelectTheme.Value)
 			return nil
 		},
 	)
@@ -872,19 +842,8 @@ func (p *ConfigPageAppearance) Focusable() bool {
 }
 
 func (p *ConfigPageAppearance) Shortcuts() []fv.Shortcut {
-	if p.IsModalActive() {
-		// If list modal is active, arrow keys are relevant
-		if p.ThemeModal != nil && p.ThemeModal.IsActive() {
-			return []fv.Shortcut{
-				{Key: "↑/↓", Label: "nav"},
-				{Key: "enter", Label: "select"},
-				{Key: "esc", Label: "cancel"},
-			}
-		}
-		return []fv.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
+	if overlay := p.Parent.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 	return []fv.Shortcut{
 		{Key: "tab", Label: "glide"},
@@ -929,7 +888,7 @@ func NewConfigPageUninstall(parent *Config) *ConfigPageUninstall {
 	)
 	p.Modal.SetWidth(60)
 	// Make the modal scary
-	p.Modal.BorderColor = theme.Current().Palette.Error
+	p.Modal.SetLevel(widget.ModalLevelDanger)
 
 	p.UninstallButton = widget.NewSubmitButton("", "UNINSTALL NIDO", func() tea.Cmd {
 		p.Modal.Show()
@@ -1004,11 +963,8 @@ func (p *ConfigPageUninstall) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewle
 }
 
 func (p *ConfigPageUninstall) Shortcuts() []fv.Shortcut {
-	if p.IsModalActive() {
-		return []fv.Shortcut{
-			{Key: "enter", Label: "confirm destruction"},
-			{Key: "esc", Label: "abort"},
-		}
+	if overlay := p.Parent.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 	return []fv.Shortcut{
 		{Key: "enter", Label: "initiate"},

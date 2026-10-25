@@ -6,6 +6,7 @@ import (
 
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -63,6 +64,7 @@ func NewAlertModal(title, message string, onDismiss func() tea.Cmd) *Modal {
 		Message:      message,
 		OnConfirm:    onDismiss, // We treat Dismiss as Confirm (OK) behavior
 		SingleButton: true,
+		Level:        ModalLevelDanger,
 		width:        layout.AlertWidth, // Slightly wider for error messages
 		height:       layout.ModalHeight,
 		MessageAlign: lipgloss.Center,
@@ -151,7 +153,7 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 	color := m.BorderColor
 	if color == nil {
 		color = t.Palette.Accent
-		if m.Level == ModalLevelDanger || (m.SingleButton && m.Level == ModalLevelNormal) {
+		if m.Level == ModalLevelDanger {
 			color = t.Palette.Error
 		}
 		if m.Level == ModalLevelSuccess {
@@ -182,7 +184,7 @@ func (m *Modal) View(parentWidth, parentHeight int) string {
 		buttons = confirm + strings.Repeat(" ", layout.DialogButtonGap) + cancel
 	}
 	messageH := max(0, d.inner.Height-layout.DialogHeadingHeight-layout.DialogControlsHeight)
-	body := m.messageView.Render(d.inner.Width, messageH, t.Styles.TextDim.Render(message), layout.Rect{})
+	body := m.messageView.Render(d.inner.Width, messageH, lipgloss.NewStyle().Width(d.inner.Width).Align(m.MessageAlign).Render(t.Styles.TextDim.Render(message)), layout.Rect{})
 	content := lipgloss.JoinVertical(lipgloss.Center, layout.Center(d.inner.Width, title), body, layout.Center(d.inner.Width, buttons))
 	btnX := d.inner.X + (d.inner.Width-lipgloss.Width(buttons))/2
 	btnY := d.inner.Y + d.inner.Height - 1
@@ -217,4 +219,11 @@ func (m *Modal) HandleMouse(x, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
 		}
 	}
 	return nil, true
+}
+
+func (m *Modal) Shortcuts() []view.Shortcut {
+	if m.SingleButton {
+		return []view.Shortcut{{Key: "enter/esc", Label: "close"}, {Key: "pgup/pgdn", Label: "scroll"}}
+	}
+	return []view.Shortcut{{Key: "tab", Label: "choose"}, {Key: "enter", Label: "select"}, {Key: "esc", Label: "cancel"}, {Key: "pgup/pgdn", Label: "scroll"}}
 }

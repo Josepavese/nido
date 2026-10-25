@@ -12,10 +12,10 @@ import termios
 import signal
 import re
 import codecs
+import html
 
 ANSI_CSI = re.compile(rb"\x1b\[[0-?]*[ -/]*[@-~]")
 
-BINARY = str(pathlib.Path(os.environ['NIDO_TEST_BINARY']).resolve())
 TIMEOUT = 8
 
 class TUI:
@@ -24,7 +24,8 @@ class TUI:
         self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
         self.master, slave = pty.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', size[1], size[0], 0, 0))
-        self.process = subprocess.Popen([BINARY, 'gui'], env=environment, cwd=cwd,
+        binary = str(pathlib.Path(os.environ['NIDO_TEST_BINARY']).resolve())
+        self.process = subprocess.Popen([binary, 'gui'], env=environment, cwd=cwd,
                                         stdin=slave, stdout=slave, stderr=slave,
                                         start_new_session=True)
         os.close(slave)
@@ -78,3 +79,42 @@ class TUI:
             self.thread.join(timeout=TIMEOUT)
             os.close(self.master)
         assert self.process.returncode == 0, self.output.decode(errors='replace')[-2000:]
+
+
+class Observer:
+    def __init__(self):
+        import pyte
+        self.light = os.environ.get("NIDO_TUI_TEST_THEME") == "light"
+        self.screen = pyte.Screen(120, 36)
+        self.stream = pyte.Stream(self.screen)
+
+    def feed(self, data):
+        self.stream.feed(data)
+
+    def snapshot(self, name):
+        rows = []
+        colors = dict(black='000000', white='eeeeee', red='cc3333', green='33cc77',
+                      yellow='eecc55', blue='4488ff', magenta='cc66ee', cyan='66dddd',
+                      brown='cc9955', brightblack='666666', brightwhite='ffffff')
+        for y in range(self.screen.lines):
+            line = []
+            previous_style, run = None, []
+            for x in range(self.screen.columns):
+                cell = self.screen.buffer[y][x]
+                if not cell.data:
+                    continue
+                fg = colors.get(cell.fg, cell.fg) if cell.fg != 'default' else ('1a1a1a' if self.light else 'cdd6f4')
+                bg = colors.get(cell.bg, cell.bg) if cell.bg != 'default' else ('ffffff' if self.light else '0f1216')
+                style = f'color:#{fg};background:#{bg};'
+                if cell.bold:
+                    style += 'font-weight:bold;'
+                if style != previous_style and run:
+                    line.append(f'<span style="{previous_style}">{html.escape("".join(run))}</span>')
+                    run = []
+                previous_style = style
+                run.append(cell.data)
+            if run:
+                line.append(f'<span style="{previous_style}">{html.escape("".join(run))}</span>')
+            rows.append(''.join(line))
+        title = f'{name} | {self.screen.columns}x{self.screen.lines}'
+        return f'<h2>{html.escape(title)}</h2><pre>' + '\n'.join(rows) + '</pre>'

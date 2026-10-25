@@ -3,6 +3,7 @@ package widget
 import (
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -153,15 +154,12 @@ func (m *ListModal) View(parentWidth, parentHeight int) string {
 		borderColor = m.BorderColor
 	}
 
-	// 2.5 Update Paginator Styles (Reactive)
-	m.List.Paginator.ActiveDot = lipgloss.NewStyle().Foreground(t.Palette.Accent).Render("•")
-	m.List.Paginator.InactiveDot = lipgloss.NewStyle().Foreground(t.Palette.SurfaceHighlight).Render("•")
-
-	dbox := measureDialog(parentWidth, parentHeight, m.Width, m.Height)
+	naturalHeight := max(1, len(m.List.Items())) + layout.DialogHeadingHeight + layout.DialogBorder + 2*layout.DialogPaddingY
+	dbox := measureDialog(parentWidth, parentHeight, m.Width, min(m.Height, naturalHeight))
 	title := layout.Fit(dbox.inner.Width, 1, t.Styles.Title.Render(m.Title))
-	m.List.SetSize(dbox.inner.Width, max(1, dbox.inner.Height-layout.DialogHeadingHeight))
+	resizeList(&m.List, dbox.inner.Width, max(1, dbox.inner.Height-layout.DialogHeadingHeight))
 	m.listRect = layout.NewRect(dbox.inner.X, dbox.inner.Y+layout.DialogHeadingHeight, dbox.inner.Width, dbox.inner.Height-layout.DialogHeadingHeight)
-	content := title + "\n" + m.List.View()
+	content := title + "\n" + renderList(&m.List, dbox.inner.Width, m.listRect.Height)
 	return dbox.render(parentWidth, parentHeight, content, borderColor)
 }
 
@@ -173,3 +171,7 @@ func (i SimpleListItem) Title() string       { return string(i) }
 func (i SimpleListItem) Description() string { return "" }
 func (i SimpleListItem) Icon() string        { return "" }
 func (i SimpleListItem) IsAction() bool      { return false }
+
+func (m *ListModal) Shortcuts() []view.Shortcut {
+	return []view.Shortcut{{Key: "↑/↓", Label: "choose"}, {Key: "enter", Label: "select"}, {Key: "esc", Label: "cancel"}}
+}

@@ -130,11 +130,15 @@ func TestTabPixelsAndHitsHaveOneGeometry(t *testing.T) {
 }
 func TestFooterKeepsWholeHintsAndExit(t *testing.T) {
 	bar := NewStatusBar(40, StatusBarStyles{})
-	bar.SetItems([]StatusBarItem{{Key: "←/→", Label: "flow"}, {Key: "enter", Label: "open"}, {Key: "long-binding", Label: "too long"}, {Key: "^C", Label: "quit"}})
+	bar.SetItems([]StatusBarItem{{Key: "←/→", Label: "flow"}, {Key: "enter", Label: "open"}, {Key: "enter", Label: "duplicate"}, {Key: "long-binding", Label: "too long"}, {Key: "^C", Label: "quit"}})
 	text := ansi.Strip(bar.View())
 	assertFits(t, text, 40, 1)
-	if !strings.Contains(text, "^C quit") || !strings.Contains(text, "enter open") || strings.Contains(text, "long-binding") {
+	if !strings.Contains(text, "^C quit") || !strings.Contains(text, "enter open") || strings.Contains(text, "long-binding") || strings.Contains(text, "duplicate") {
 		t.Fatalf("bad hints %q", text)
+	}
+	bar.SetWidth(120)
+	if strings.Count(ansi.Strip(bar.View()), "enter") != 1 {
+		t.Fatal("duplicate shortcut survived in wide footer")
 	}
 }
 func TestSplitViewSinglePaneAndPreference(t *testing.T) {
@@ -156,5 +160,92 @@ func TestSplitViewSinglePaneAndPreference(t *testing.T) {
 	split.Resize(layout.NewRect(0, 0, 90, 18))
 	if !split.SinglePane() {
 		t.Fatal("theme preference bypassed adaptive pane policy")
+	}
+}
+
+func TestShortViewportShowsFocusedValueInsteadOfItsBorder(t *testing.T) {
+	input := NewInput("Name", "", nil)
+	input.SetValue("visible-draft")
+	form := NewForm(NewCard(theme.IconNest, "Header", ""), input)
+	form.Focus()
+	for _, height := range []int{1, 2, 4, 12, 2} {
+		rendered := ansi.Strip(form.Viewport(32, height))
+		if !strings.Contains(rendered, "visible-draft") {
+			t.Fatalf("focused value hidden at height %d: %q", height, rendered)
+		}
+	}
+}
+
+func TestCompactListKeepsChoicesAndPagination(t *testing.T) {
+	choices := NewListModal("Choices", []list.Item{SimpleListItem("First"), SimpleListItem("Second"), SimpleListItem("Third"), SimpleListItem("Fourth"), SimpleListItem("Fifth")}, 60, 20, nil, nil)
+	choices.Show()
+	rendered := ansi.Strip(choices.View(40, 8))
+	if !strings.Contains(rendered, "First") || !strings.Contains(rendered, "Second") {
+		t.Fatalf("pagination consumed choices: %s", rendered)
+	}
+	choices.List.Select(4)
+	rendered = ansi.Strip(choices.View(40, 8))
+	if !strings.Contains(rendered, "Fifth") {
+		t.Fatal("last choice disappeared after resize")
+	}
+}
+
+func TestActionButtonsReflowByTheirContent(t *testing.T) {
+	confirm := NewSubmitButton("", "CONFIRM", nil)
+	cancel := NewButton("", "Cancel", nil)
+	cancel.Centered = true
+	row := NewRow(confirm, cancel)
+	if lipgloss.Height(row.View(32)) != 3 {
+		t.Fatal("short buttons unnecessarily stacked")
+	}
+	cancel.Focus()
+	row.View(32)
+	if rect := elementAnchor(row, 32); rect.X == 0 {
+		t.Fatal("focus geometry disagrees with horizontal action row")
+	}
+}
+
+func TestEmptyStateKeepsItsInvitation(t *testing.T) {
+	for _, size := range [][2]int{{120, 32}, {40, 8}} {
+		rendered := RenderEmptyState(theme.IconNest, "Ready to hatch?", "Select a source to begin incubation.", size[0], size[1])
+		assertFits(t, rendered, size[0], size[1])
+		if !strings.Contains(ansi.Strip(rendered), "Ready to hatch?") {
+			t.Fatal("empty invitation lost")
+		}
+	}
+}
+
+func TestCardBalancesLongDescriptionAndTitle(t *testing.T) {
+	card := NewCard(theme.IconSelfDestruct, "Self Destruct", strings.Repeat("Long description ", 10))
+	for _, width := range []int{1, 8, 40, 60, 120} {
+		content := card.View(width)
+		assertFits(t, content, width, 3)
+		if width >= 40 && !strings.Contains(ansi.Strip(content), "Self Destruct") {
+			t.Fatal("description squeezed out page title")
+		}
+	}
+}
+
+type sectionItem string
+
+func (s sectionItem) FilterValue() string { return string(s) }
+func (s sectionItem) Title() string       { return string(s) }
+func (s sectionItem) Icon() string        { return "" }
+func (s sectionItem) IsAction() bool      { return false }
+func (s sectionItem) Selectable() bool    { return false }
+
+func TestSidebarSectionsDoNotTakeFocus(t *testing.T) {
+	sidebar := NewSidebarList([]SidebarItem{sectionItem("First header"), SidebarItemString("First"), sectionItem("Second header"), SidebarItemString("Second"), sectionItem("Trailing header")}, 40, SidebarStyles{}, "")
+	sidebar.Resize(layout.NewRect(0, 0, 40, 3))
+	sidebar.Focus()
+	sidebar.Select(1)
+	for _, step := range []struct {
+		key      tea.KeyType
+		expected int
+	}{{tea.KeyDown, 3}, {tea.KeyDown, 3}, {tea.KeyUp, 1}, {tea.KeyUp, 1}, {tea.KeyEnd, 3}, {tea.KeyHome, 1}} {
+		sidebar.Update(tea.KeyMsg{Type: step.key})
+		if sidebar.Index() != step.expected {
+			t.Fatalf("%v selected section %d", step.key, sidebar.Index())
+		}
 	}
 }

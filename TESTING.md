@@ -116,3 +116,23 @@ with color and Unicode. Inspect them visually in the browser, including the
 minimum-size form, confirmation, theme picker and expanded recovery. Retain only
 the useful bounded evidence and retire the private home, observer and binaries
 after their last consumer. A passing trace or unit test alone is not visual QA.
+
+The same journey also traverses all six System pages and the template and port
+forwarding forms, including their final actions. It cancels destructive dialogs
+and asserts that no spawn action was activated.
+
+For offline states that would otherwise require provider failures or destructive
+operations, export the real page renderers with deterministic operation results:
+
+```sh
+NIDO_TUI_GALLERY_JSON="$scratch/gallery.json" go test ./internal/tui/app -run TestScreenGallery -count=1
+PYTHONPATH="$observer" python3 -B tests/tui_gallery.py "$scratch/gallery.json" "$scratch/gallery"
+```
+
+Inspect every gallery page: each state includes 120x36, 80x24, 60x15 and 40x10.
+The test also renders the wide recovery and checks geometry and footer contracts.
+The gallery covers all routes, System details, confirmation/form/list dialogs,
+errors, diagnostic/update/cache results, and background progress. It never runs
+operation commands; these offline views complement the actual PTY journey and
+are not evidence that an update, removal or diagnostic operation succeeded.
+`NIDO_THEME=light` with `NIDO_TUI_TEST_THEME=light` exports a light-theme gallery.

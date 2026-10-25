@@ -73,6 +73,7 @@ func NewSidebarList(items []SidebarItem, width int, styles SidebarStyles, noIcon
 	l.SetSize(width, 10)
 
 	sl := &SidebarList{}
+	sl.height = l.Height()
 	sl.Model = new(list.Model)
 	*sl.Model = l
 	sl.noIconPadding = noIconPadding
@@ -185,6 +186,14 @@ func (s *SidebarList) Update(msg tea.Msg) (viewlet.Viewlet, tea.Cmd) {
 	var cmd tea.Cmd
 	newModel, cmd := s.Model.Update(msg)
 	*s.Model = newModel
+	if key, ok := msg.(tea.KeyMsg); ok {
+		backwards := false
+		switch key.String() {
+		case "up", "k", "pgup", "end", "G":
+			backwards = true
+		}
+		s.skipSections(backwards, oldIdx)
+	}
 
 	if s.Index() != oldIdx {
 		// Selection changed!
@@ -203,6 +212,7 @@ func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, 
 		} else {
 			s.Model.CursorDown()
 		}
+		s.skipSections(msg.Button == tea.MouseButtonWheelUp, old)
 		if old != s.Index() {
 			return s, func() tea.Msg { return viewlet.SelectionMsg{Index: s.Index(), Item: s.SelectedItem()} }, true
 		}
@@ -237,6 +247,9 @@ func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, 
 	targetIdx := (page * perPage) + y
 
 	if targetIdx >= 0 && targetIdx < len(s.Model.Items()) {
+		if !selectable(s.Model.Items()[targetIdx]) {
+			return s, nil, true
+		}
 		// Auto-Focus on Click
 		s.Focus()
 		s.Model.Select(targetIdx)
@@ -251,13 +264,13 @@ func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, 
 }
 
 // Dummy methods to satisfy Viewlet interface if needed
-func (s *SidebarList) Resize(r layout.Rect) { s.Model.SetSize(r.Width, r.Height) }
+func (s *SidebarList) Resize(r layout.Rect) { s.ListView.Resize(r) }
 func (s *SidebarList) Focus() tea.Cmd       { s.focused = true; return nil }
 func (s *SidebarList) Blur()                { s.focused = false }
 func (s *SidebarList) Focused() bool        { return s.focused }
 func (s *SidebarList) View() string {
 	s.UpdateStyles()
-	return s.Model.View()
+	return s.ListView.View()
 }
 
 func (s *SidebarList) UpdateStyles() {
@@ -278,3 +291,24 @@ func (s *SidebarList) IsModalActive() bool      { return false }
 func (s *SidebarList) HasActiveTextInput() bool { return false }
 func (s *SidebarList) HasActiveFocus() bool     { return s.focused }
 func (s *SidebarList) Focusable() bool          { return true }
+
+// Informational list sections stay visible but do not consume selection.
+func selectable(item list.Item) bool {
+	if item, ok := item.(interface{ Selectable() bool }); ok {
+		return item.Selectable()
+	}
+	return true
+}
+func (s *SidebarList) skipSections(backwards bool, previous int) {
+	for range len(s.Model.Items()) {
+		if item := s.Model.SelectedItem(); item == nil || selectable(item) {
+			return
+		}
+		if backwards {
+			s.Model.CursorUp()
+		} else {
+			s.Model.CursorDown()
+		}
+	}
+	s.Model.Select(previous)
+}

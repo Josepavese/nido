@@ -203,6 +203,15 @@ func (r *Registry) rebuildSidebar() {
 			return
 		}
 	}
+	if selected.Name == "" {
+		for index, item := range items {
+			if candidate, ok := item.(RegistryItem); ok {
+				r.Sidebar.Select(index)
+				r.DetailView.UpdateItem(candidate)
+				return
+			}
+		}
+	}
 	r.DetailView.UpdateItem(RegistryItem{})
 }
 
@@ -325,10 +334,7 @@ func (r *Registry) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, tea.Cm
 
 func (r *Registry) Shortcuts() []view.Shortcut {
 	if r.ConfirmDelete.IsActive() {
-		return []view.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
+		return r.ConfirmDelete.Shortcuts()
 	}
 
 	s := r.MasterDetail.Shortcuts()
@@ -460,6 +466,9 @@ func (d *RegistryDetail) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, 
 }
 
 func (d *RegistryDetail) View() string {
+	if d.Item.Name == "" {
+		return widget.RenderEmptyState(theme.IconRegistry, "Explore the library", "Select a cached image or a remote image to see its details.", d.Width(), d.Height())
+	}
 	return d.Form.Viewport(layout.FormWidth(d.Width(), theme.Inset.TotalContent), d.Height())
 }
 
@@ -494,3 +503,5 @@ func (d *RegistryDetail) pullSelected() tea.Cmd {
 	ref := fmt.Sprintf("%s:%s", d.Item.Name, d.Item.Version)
 	return func() tea.Msg { return ops.RequestPullMsg{Image: ref} }
 }
+
+func (SectionHeader) Selectable() bool { return false }

@@ -3,8 +3,10 @@ package widget
 import (
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // ValidatorFunc returns an error if the input is invalid.
@@ -198,11 +200,6 @@ func (m *FormModal) Update(msg tea.Msg) (*FormModal, tea.Cmd) {
 		switch msg.String() {
 		case "esc":
 			return m, m.cancel()
-		case "q":
-			// Quit app if not typing
-			if !m.form.HasActiveTextInput() {
-				return m, tea.Quit
-			}
 		}
 	}
 
@@ -230,8 +227,8 @@ func (m *FormModal) View(parentWidth, parentHeight int) string {
 	}
 	d = measureDialog(parentWidth, parentHeight, m.width, naturalH)
 	heading := t.Styles.Title.Render(m.Title)
-	if m.Description != "" && d.inner.Height > layout.MinHeight {
-		heading += "\n" + t.Styles.TextDim.Render(m.Description)
+	if m.Description != "" && d.inner.Height >= 2*layout.DialogHeadingHeight+layout.TaskCardHeight+layout.ScrollHintHeight {
+		heading += "\n" + t.Styles.TextDim.Render(ansi.Truncate(m.Description, d.inner.Width, "…"))
 	}
 	heading = layout.Fit(d.inner.Width, lipgloss.Height(heading), heading)
 	formHeight := max(0, d.inner.Height-lipgloss.Height(heading))
@@ -247,4 +244,8 @@ func (m *FormModal) HandleMouse(x, y int, msg tea.MouseMsg) (tea.Cmd, bool) {
 		return m.form.HandleMouse(x-m.formRect.X, y-m.formRect.Y, msg)
 	}
 	return nil, true
+}
+
+func (m *FormModal) Shortcuts() []view.Shortcut {
+	return []view.Shortcut{{Key: "tab", Label: "next"}, {Key: "esc", Label: "cancel"}, {Key: "enter", Label: "action"}}
 }

@@ -52,6 +52,10 @@ func (n *NidoApp) Init() tea.Cmd {
 
 // Update intercepts messages to handle Nido domain logic.
 func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if key, ok := msg.(tea.KeyMsg); ok && (key.String() == "ctrl+c" || key.String() == "ctrl+q") {
+		_, cmd := n.App.Update(msg)
+		return n, cmd
+	}
 	if n.Shell.Width > 0 && !layout.IsViable(n.Shell.Width, n.Shell.Height) && view.IsInputMessage(msg) {
 		_, cmd := n.App.Update(msg)
 		return n, cmd
@@ -123,6 +127,11 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	// 0. Modal Interception
 	if n.ErrorModal.IsActive() && view.IsInputMessage(msg) {
+		if mouse, ok := msg.(tea.MouseMsg); ok {
+			n.Shell.Overlay = n.ErrorModal
+			_, _, _, cmd, _ := n.Shell.HandleMouse(mouse)
+			return n, cmd
+		}
 		newModal, cmd := n.ErrorModal.Update(msg)
 		n.ErrorModal = newModal
 		return n, cmd
@@ -380,12 +389,7 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View delegates to Shell but overlays global modals
 func (n *NidoApp) View() string {
-	if !layout.IsViable(n.Shell.Width, n.Shell.Height) {
-		return n.App.View()
-	}
-	if n.ErrorModal.IsActive() {
-		return n.ErrorModal.View(n.Shell.Width, n.Shell.Height)
-	}
+	n.Shell.Overlay = n.ErrorModal
 	return n.App.View()
 }
 
@@ -450,6 +454,7 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config, sour
 
 	// 7. Initialize Global Modal
 	nidoApp.ErrorModal = widget.NewAlertModal("Error", "", nil)
+	nidoApp.Shell.Overlay = nidoApp.ErrorModal
 
 	// 8. Run
 	p := tea.NewProgram(nidoApp, tea.WithContext(ctx), tea.WithAltScreen(), tea.WithMouseCellMotion())

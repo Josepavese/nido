@@ -524,18 +524,8 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 }
 
 func (f *Fleet) View() string {
-	// Overlay Modals (Full-screen)
-	if f.ConfirmDelete.IsActive() {
-		return f.ConfirmDelete.View(f.Width(), f.Height())
-	}
-	if f.ErrorModal.IsActive() {
-		return f.ErrorModal.View(f.Width(), f.Height())
-	}
-	if f.TemplateModal.IsActive() {
-		return f.TemplateModal.View(f.Width(), f.Height())
-	}
-	if f.ModalAccel.IsActive() {
-		return f.ModalAccel.View(f.Width(), f.Height())
+	if overlay := f.activeOverlay(); overlay != nil {
+		return overlay.View(f.Width(), f.Height())
 	}
 	return f.MasterDetail.View()
 }
@@ -550,11 +540,8 @@ func (f *Fleet) Focus() tea.Cmd {
 }
 
 func (f *Fleet) Shortcuts() []view.Shortcut {
-	if f.IsModalActive() {
-		return []view.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
+	if overlay := f.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 
 	shortcuts := []view.Shortcut{{Key: "↑/↓", Label: "glide"}}
@@ -602,18 +589,8 @@ func (f *Fleet) Shortcuts() []view.Shortcut {
 }
 
 func (f *Fleet) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, tea.Cmd, bool) {
-	for _, modal := range []*widget.Modal{f.ConfirmDelete, f.ErrorModal} {
-		if modal.IsActive() {
-			cmd, handled := modal.HandleMouse(x, y, msg)
-			return f, cmd, handled
-		}
-	}
-	if f.TemplateModal.IsActive() {
-		cmd, handled := f.TemplateModal.Modal.HandleMouse(x, y, msg)
-		return f, cmd, handled
-	}
-	if f.ModalAccel.IsActive() {
-		cmd, handled := f.ModalAccel.HandleMouse(x, y, msg)
+	if overlay := f.activeOverlay(); overlay != nil {
+		cmd, handled := overlay.HandleMouse(x, y, msg)
 		return f, cmd, handled
 	}
 
@@ -909,6 +886,9 @@ func (c *ComponentsDetail) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet
 }
 
 func (c *ComponentsDetail) View() string {
+	if c.Parent.detail.Name == "" {
+		return widget.RenderEmptyState(theme.IconNest, "Room for a new bird", "Select a VM from your fleet, or visit Hatchery to grow the nest.", c.Width(), c.Height())
+	}
 	return c.Form.Viewport(layout.FormWidth(c.Width(), theme.Inset.TotalContent), c.Height())
 }
 
@@ -1018,3 +998,7 @@ func (f *Fleet) ObserveEvent(e events.Event) {
 }
 
 func (f *Fleet) HasActiveFocus() bool { return f.MasterDetail.HasActiveFocus() }
+
+func (f *Fleet) activeOverlay() widget.Overlay {
+	return widget.ActiveOverlay(f.ConfirmDelete, f.ErrorModal, f.TemplateModal.Modal, f.ModalAccel)
+}

@@ -207,7 +207,7 @@ func (r *Row) rectangles(width int) []layout.Rect {
 			widths[i] = remaining
 		}
 		remaining -= widths[i]
-		stacked = stacked || widths[i] < layout.FieldMinWidth
+		stacked = stacked || widths[i] < elementMinWidth(r.Elements[i])
 	}
 	rects := make([]layout.Rect, count)
 	x, y := 0, 0
@@ -280,4 +280,12 @@ func elementAnchor(el Element, width int) layout.Rect {
 		}
 	}
 	return layout.NewRect(0, 0, width, lipgloss.Height(el.View(width)))
+}
+
+// Buttons need their label and frame, not the editing space of a text field.
+func elementMinWidth(el Element) int {
+	if button, ok := el.(*Button); ok && (button.Centered || button.Role == RoleSubmit) {
+		return min(layout.FieldMinWidth, lipgloss.Width(button.Text)+layout.FieldFrameWidth)
+	}
+	return layout.FieldMinWidth
 }

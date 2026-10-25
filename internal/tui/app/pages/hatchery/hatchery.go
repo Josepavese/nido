@@ -316,7 +316,7 @@ func (i *Incubator) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 func (i *Incubator) View() string {
 	if i.SelectedSource == nil {
-		return layout.Center(i.Width(), "Select a source to begin incubation.")
+		return widget.RenderEmptyState(theme.IconPackage, "Ready to hatch?", "Select a source to begin incubation.", i.Width(), i.Height())
 	}
 	return i.Form.Viewport(layout.FormWidth(i.Width(), theme.Inset.TotalContent), i.Height())
 }
@@ -810,25 +810,8 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 }
 
 func (h *Hatchery) View() string {
-	if h.ConfirmDelete.IsActive() {
-		return h.ConfirmDelete.View(h.Width(), h.Height())
-	}
-	if h.ConfirmDeletePort.IsActive() {
-		return h.ConfirmDeletePort.View(h.Width(), h.Height())
-	}
-	if h.ModalAddPort.IsActive() {
-		// Render content dim/blurred behind?
-		// For now just plain overlay logic from kit
-		// But MasterDetail should be rendered as "background"
-		// h.MasterDetail.View() // Ideally we render this to buffer if needed for overlay effects
-		return h.ModalAddPort.View(h.Width(), h.Height())
-		// NOTE: Ideally FormModal.View takes a "background" string to overlay properly
-		// if utilizing lipgloss.PlaceOverlay correctly, but here we pass dims.
-		// If FormModal uses PlaceOverlay, it pads with whitespace.
-		// TODO: Advanced Overlay support in Kit.
-	}
-	if h.ModalAccel.IsActive() {
-		return h.ModalAccel.View(h.Width(), h.Height())
+	if overlay := h.activeOverlay(); overlay != nil {
+		return overlay.View(h.Width(), h.Height())
 	}
 	return h.MasterDetail.View()
 }
@@ -839,20 +822,11 @@ func (h *Hatchery) Resize(r layout.Rect) {
 }
 
 func (h *Hatchery) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, tea.Cmd, bool) {
-	for _, modal := range []*widget.Modal{h.ConfirmDelete, h.ConfirmDeletePort} {
-		if modal.IsActive() {
-			cmd, handled := modal.HandleMouse(x, y, msg)
-			return h, cmd, handled
-		}
-	}
-	if h.ModalAddPort.IsActive() {
-		cmd, handled := h.ModalAddPort.HandleMouse(x, y, msg)
+	if overlay := h.activeOverlay(); overlay != nil {
+		cmd, handled := overlay.HandleMouse(x, y, msg)
 		return h, cmd, handled
 	}
-	if h.ModalAccel.IsActive() {
-		cmd, handled := h.ModalAccel.HandleMouse(x, y, msg)
-		return h, cmd, handled
-	}
+
 	_, cmd, handled := h.MasterDetail.HandleMouse(x, y, msg)
 	return h, cmd, handled
 }
@@ -862,25 +836,8 @@ func (h *Hatchery) Focus() tea.Cmd {
 }
 
 func (h *Hatchery) Shortcuts() []fv.Shortcut {
-	if h.ConfirmDelete.IsActive() || h.ConfirmDeletePort.IsActive() {
-		return []fv.Shortcut{
-			{Key: "enter", Label: "engage"},
-			{Key: "esc", Label: "back"},
-		}
-	}
-	if h.ModalAddPort.IsActive() {
-		return []fv.Shortcut{
-			{Key: "tab", Label: "next"},
-			{Key: "enter", Label: "add"},
-			{Key: "esc", Label: "cancel"},
-		}
-	}
-	if h.ModalAccel.IsActive() {
-		return []fv.Shortcut{
-			{Key: "↑/↓", Label: "select"},
-			{Key: "enter", Label: "confirm"},
-			{Key: "esc", Label: "cancel"},
-		}
+	if overlay := h.activeOverlay(); overlay != nil {
+		return overlay.Shortcuts()
 	}
 
 	shortcuts := h.MasterDetail.Shortcuts()
@@ -944,4 +901,8 @@ func (i *Incubator) markSourceUnavailable() {
 	i.sourceUnavailable = true
 	i.spawnBtn.Disabled = true
 	i.header.Subtitle = "Source removed; select an available source"
+}
+
+func (h *Hatchery) activeOverlay() widget.Overlay {
+	return widget.ActiveOverlay(h.ConfirmDelete, h.ConfirmDeletePort, h.ModalAddPort, h.ModalAccel)
 }
