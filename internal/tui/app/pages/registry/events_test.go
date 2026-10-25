@@ -1,6 +1,8 @@
 package registry
 
 import (
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 	"testing"
 
 	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
@@ -22,5 +24,46 @@ func TestBackgroundRemovalKeepsConfirmedImageIdentity(t *testing.T) {
 	}
 	if msg := cmd().(ops.RequestDeleteImageMsg); msg.Name != "original" || msg.Version != "1" {
 		t.Fatal("confirmation switched image", msg)
+	}
+}
+
+func TestRegistryOpenAndPullRemainDistinct(t *testing.T) {
+	r := NewRegistry(nil)
+	r.DetailView.UpdateItem(RegistryItem{Name: "bird", Version: "1"})
+	r.Resize(layout.NewRect(0, 0, 120, 30))
+	_, cmd := r.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil || cmd().(ops.RequestPullMsg).Image != "bird:1" {
+		t.Fatal("wide Enter lost its pull action")
+	}
+	r.Resize(layout.NewRect(0, 0, 60, 13))
+	_, cmd = r.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if r.MasterDetail.ActiveFocus != widget.FocusDetail {
+		t.Fatal("compact Enter did not open detail")
+	}
+	if cmd != nil {
+		if _, pull := cmd().(ops.RequestPullMsg); pull {
+			t.Fatal("opening detail also pulled an image")
+		}
+	}
+	_, cmd = r.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	// The command is batched by MasterDetail, so inspect its children.
+	found := false
+	var inspect func(tea.Cmd)
+	inspect = func(c tea.Cmd) {
+		if c == nil {
+			return
+		}
+		switch msg := c().(type) {
+		case ops.RequestPullMsg:
+			found = msg.Image == "bird:1"
+		case tea.BatchMsg:
+			for _, child := range msg {
+				inspect(child)
+			}
+		}
+	}
+	inspect(cmd)
+	if !found {
+		t.Fatal("detail Enter did not pull")
 	}
 }

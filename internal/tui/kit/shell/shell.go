@@ -19,7 +19,6 @@ type MouseZone int
 const (
 	ZoneNone MouseZone = iota
 	ZoneHeader
-	ZoneSubHeader
 	ZoneBody
 	ZoneFooter
 )
@@ -34,11 +33,9 @@ type Route struct {
 
 // ShellStyles defines the appearance of the shell widget.
 type ShellStyles struct {
-	Header           lipgloss.Style
-	SubHeaderContext lipgloss.Style
-	SubHeaderNav     lipgloss.Style
-	StatusBar        widget.StatusBarStyles
-	BorderColor      lipgloss.TerminalColor
+	Header      lipgloss.Style
+	StatusBar   widget.StatusBarStyles
+	BorderColor lipgloss.TerminalColor
 }
 
 // Shell is the generic container for the TUI.
@@ -47,9 +44,8 @@ type Shell struct {
 	Height int
 
 	// Chrome Content (set these directly)
-	HeaderContent    string
-	SubHeaderContent string
-	FooterContent    string
+	HeaderContent string
+	FooterContent string
 
 	// Viewlet Management
 	routes        []Route
@@ -75,9 +71,7 @@ type Shell struct {
 func (s *Shell) UpdateStyles() {
 	t := theme.Current()
 	s.Styles = ShellStyles{
-		Header:           lipgloss.NewStyle().Background(t.Palette.Surface).Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(t.Palette.SurfaceSubtle),
-		SubHeaderContext: t.Styles.Label.Bold(true),
-		SubHeaderNav:     t.Styles.Label,
+		Header: lipgloss.NewStyle().Background(t.Palette.Surface).Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(t.Palette.SurfaceSubtle),
 		StatusBar: widget.StatusBarStyles{
 			Key:    t.Styles.Label.Bold(true),
 			Label:  t.Styles.Label,
@@ -313,64 +307,21 @@ func (s *Shell) Resize(w, h int) {
 func (s *Shell) View() string {
 	s.UpdateStyles()
 
-	if s.Width == 0 || s.Height == 0 {
-		return "Initializing Shell..."
+	if s.Width <= 0 || s.Height <= 0 {
+		return ""
+	}
+	if !layout.IsViable(s.Width, s.Height) {
+		return widget.RenderResizeNotice(s.Width, s.Height)
 	}
 
 	// 1. Render Chrome
 	// We use the cached grid from Resize()
 	header := place(s.grid.Header, s.renderHeader())
-	// SubHeader removed as per design change (Height=0)
 
-	// Action Stack
+	// Action stack owns its rendering; the shell only assigns a rectangle.
 	var stack string
 	if s.grid.ActionStack.Height > 0 {
-		// SMART WIDTH CALCULATION:
-		// User wants the global loader to match the content width (Sidebar + Detail Form).
-		// We calculate what that width would be based on the current terminal width.
-
-		// 1. Sidebar Width (Dynamic based on total width)
-		// We replicate the logic from widget/split_view.go (via layout.Calculate)
-		sidebarW := layout.Calculate(s.Width, s.Height, 25, theme.Width.Sidebar, theme.Width.SidebarWide).SidebarWidth
-
-		// 2. Detail Form Width (Max 60 + Padding)
-		// Available width for detail = Total - Sidebar - SplitDivider(1)
-		availDetail := s.Width - sidebarW - 1
-		padding := theme.Current().Layout.ContainerPadding // 2
-
-		// Logic from registry.go / hatchery.go / fleet.go:
-		// safeWidth := w - (2 * padding)
-		formW := availDetail - (2 * padding)
-
-		// Apply constraints matches viewlets
-		if formW > 60 {
-			formW = 60
-		}
-		if formW < 40 {
-			// Even if available is small, we clamp to min form width
-			// But if avail is REALLY small, we shouldn't overflow?
-			// Viewlets clamp to 40. We should match them.
-			formW = 40
-		}
-
-		// If clamped > available, we must cap at available to avoid overflow artifacts?
-		// Note form logic: if safeWidth < 40 { safeWidth = 40 }. So it forces 40.
-		// If total width is tiny, layout breaks anyway. We stick to matching logic.
-
-		// 3. Target Width
-		// Visual Width = Sidebar + Divider + FormWidth
-		// We do NOT add padding back because viewlets don't render it (flush left),
-		// or if they do (Visual Gap), the user wants the CARD to match the CONTENT, not the whitespace.
-		// The screenshot showed the card being wider than the form.
-		// My previous code added +4 padding.
-		// Removing it should fix "un po piu lunga".
-		targetW := sidebarW + 1 + formW
-
-		if targetW > s.Width {
-			targetW = s.Width
-		}
-
-		stack = place(s.grid.ActionStack, s.ActionStack.View(targetW))
+		stack = place(s.grid.ActionStack, s.ActionStack.Viewport(s.grid.ActionStack.Width, s.grid.ActionStack.Height))
 	}
 
 	footer := place(s.grid.Footer, s.renderFooter())
@@ -385,51 +336,32 @@ func (s *Shell) View() string {
 	}
 	body := place(s.grid.Body, bodyContent)
 
-	// 3. Stack them
-	return lipgloss.JoinVertical(lipgloss.Left,
-		header,
-		stack,
-		body,
-		footer,
-	)
+	// Empty zones must not contribute phantom newline rows.
+	var zones []string
+	for _, zone := range []string{header, stack, body, footer} {
+		if zone != "" {
+			zones = append(zones, zone)
+		}
+	}
+	return layout.Fit(s.Width, s.Height, lipgloss.JoinVertical(lipgloss.Left, zones...))
 }
 
-func (s *Shell) renderHeader() string {
+func (s *Shell) tabs() widget.TabBar {
 	var titles []string
-	var activeIndex int
-
+	activeIndex := 0
 	for i, r := range s.routes {
 		titles = append(titles, r.Title)
 		if r.Key == s.activeKey {
 			activeIndex = i
 		}
 	}
-
-	// Canonical Styles: use matching palette colors
 	t := theme.Current()
-	borderColor := t.Palette.SurfaceHighlight
-
-	// Active: Accent (Bright), Inactive: TextDim (Grey)
-	activeFg := t.Palette.Accent
-	inactiveFg := t.Palette.TextDim
-
-	// Use the new widget for canonical rendering
-	content := widget.RenderTabs(widget.TabsRenderOptions{
-		Routes:         titles,
-		ActiveIndex:    activeIndex,
-		Width:          s.Width,
-		HighlightColor: activeFg,
-		InactiveColor:  inactiveFg,
-		BorderColor:    borderColor,
+	return widget.RenderTabs(widget.TabsRenderOptions{
+		Routes: titles, ActiveIndex: activeIndex, Width: s.Width, Height: s.grid.Header.Height,
+		HighlightColor: t.Palette.Accent, InactiveColor: t.Palette.TextDim, BorderColor: t.Palette.SurfaceHighlight,
 	})
-
-	// Wrap in a height-4 container to match grid allocation
-	container := lipgloss.NewStyle().
-		Height(4).
-		MaxHeight(4)
-
-	return container.Render(content)
 }
+func (s *Shell) renderHeader() string { return s.tabs().Content }
 
 func (s *Shell) renderFooter() string {
 	if s.FooterContent != "" {
@@ -445,13 +377,7 @@ func (s *Shell) renderFooter() string {
 		sb.SetStatus("")
 	}
 
-	// 1. Global Navigation Shortcuts
 	var sbItems []widget.StatusBarItem
-	sbItems = append(sbItems, widget.StatusBarItem{
-		Key:   "←/→",
-		Label: "flow",
-	})
-
 	// 2. Viewlet Shortcuts
 	if s.activeViewlet != nil {
 		for _, sc := range s.activeViewlet.Shortcuts() {
@@ -462,10 +388,11 @@ func (s *Shell) renderFooter() string {
 		}
 	}
 
+	sbItems = append(sbItems, widget.StatusBarItem{Key: s.navigationKey(), Label: "flow"})
 	// 3. System Exit (Always last)
 	sbItems = append(sbItems, widget.StatusBarItem{
-		Key:   "⎋/q",
-		Label: "exhale",
+		Key:   "^C",
+		Label: "quit",
 	})
 
 	sb.SetItems(sbItems)
@@ -506,36 +433,19 @@ func prettifyKey(k string) string {
 // It returns the hit zone, localized coordinates within that zone, a command,
 // and a boolean indicating if the active viewlet handled the event.
 func (s *Shell) HandleMouse(msg tea.MouseMsg) (MouseZone, int, int, tea.Cmd, bool) {
-	if s.grid.Header.Contains(msg.X, msg.Y) {
+	if s.grid.Header.Contains(msg.X, msg.Y) && (s.activeViewlet == nil || !s.activeViewlet.IsModalActive()) {
 		lx := msg.X - s.grid.Header.X
 		ly := msg.Y - s.grid.Header.Y
 
-		// Tab Click Detection (Left Aligned)
 		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
-			cursorX := 0
-			for _, r := range s.routes {
-				// Match style logic from renderHeader
-				style := lipgloss.NewStyle().Padding(0, 1)
-				if r.Key == s.activeKey {
-					style = style.Bold(true)
-				}
-				w := lipgloss.Width(style.Render(r.Key))
-
-				if lx >= cursorX && lx < cursorX+w {
-					s.SwitchTo(r.Key)
+			for i, hit := range s.tabs().Hits {
+				if hit.Contains(lx, ly) {
+					s.SwitchTo(s.routes[i].Key)
 					return ZoneHeader, lx, ly, nil, true
 				}
-				cursorX += w
 			}
 		}
-
 		return ZoneHeader, lx, ly, nil, false
-	}
-
-	if s.grid.SubHeader.Contains(msg.X, msg.Y) {
-		lx := msg.X - s.grid.SubHeader.X
-		ly := msg.Y - s.grid.SubHeader.Y
-		return ZoneSubHeader, lx, ly, nil, false
 	}
 
 	if s.grid.Body.Contains(msg.X, msg.Y) {
@@ -566,14 +476,7 @@ func place(r layout.Rect, content string) string {
 		return ""
 	}
 
-	// Use Lipgloss to size it exactly.
-	style := lipgloss.NewStyle().
-		Width(r.Width).
-		Height(r.Height).
-		MaxHeight(r.Height).
-		MaxWidth(r.Width)
-
-	return style.Render(content)
+	return layout.Fit(r.Width, r.Height, content)
 }
 
 // DebugPlace helps visualize layout bounds
@@ -597,4 +500,11 @@ func (s *Shell) RouteCount() int {
 // GridHeaderHeight returns the calculated grid header height (Debug).
 func (s *Shell) GridHeaderHeight() int {
 	return s.grid.Header.Height
+}
+
+func (s *Shell) navigationKey() string {
+	if s.activeViewlet != nil && s.activeViewlet.HasActiveTextInput() {
+		return "ctrl+←/→"
+	}
+	return "←/→"
 }

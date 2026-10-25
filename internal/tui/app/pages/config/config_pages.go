@@ -77,8 +77,8 @@ func NewConfigPageGlobalForm(parent *Config) *ConfigPageGlobalForm {
 	})
 
 	p.Form = widget.NewForm(
-		p.InputSSHUser,
-		p.ToggleLinkedClones,
+		p.Header,
+		widget.NewRow(p.InputSSHUser, p.ToggleLinkedClones),
 		p.InputBackupDir,
 		p.InputImageDir,
 		p.SubmitButton,
@@ -109,10 +109,7 @@ func (p *ConfigPageGlobalForm) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 func (p *ConfigPageGlobalForm) View() string {
 	w := p.Width()
-	safeWidth := w - 4
-	if safeWidth > 60 {
-		safeWidth = 60
-	}
+	safeWidth := layout.FormWidth(w, theme.Inset.TotalContent)
 	p.Form.Width = safeWidth
 
 	// Parent handles modal rendering globally
@@ -120,18 +117,7 @@ func (p *ConfigPageGlobalForm) View() string {
 		return ""
 	}
 
-	// Custom Layout: Header + Horizontal Row + Rest
-	rowUser := p.InputSSHUser.View(safeWidth/2 - 1)
-	rowClone := p.ToggleLinkedClones.View(safeWidth/2 - 1)
-	row := layout.HStack(2, rowUser, rowClone)
-
-	return layout.VStack(0,
-		p.Header.View(safeWidth),
-		row,
-		p.InputBackupDir.View(safeWidth),
-		p.InputImageDir.View(safeWidth),
-		p.SubmitButton.View(safeWidth),
-	)
+	return p.Form.Viewport(safeWidth, p.Height())
 }
 func (p *ConfigPageGlobalForm) Focus() tea.Cmd {
 	p.BaseViewlet.Focus()
@@ -146,7 +132,8 @@ func (p *ConfigPageGlobalForm) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewl
 		cmd, handled := p.Modal.HandleMouse(x, y, msg)
 		return p, cmd, handled
 	}
-	return p, nil, false
+	cmd, handled := p.Form.HandleMouse(x, y, msg)
+	return p, cmd, handled
 }
 
 func (p *ConfigPageGlobalForm) IsModalActive() bool {
@@ -320,12 +307,9 @@ func (p *ConfigPageUpdate) View() string {
 		return "" // Parent handles rendering
 	}
 	w := p.Width()
-	safeWidth := w - 4
-	if safeWidth > 60 {
-		safeWidth = 60
-	}
+	safeWidth := layout.FormWidth(w, theme.Inset.TotalContent)
 	p.Form.Width = safeWidth
-	return p.Form.View(safeWidth)
+	return p.Form.Viewport(safeWidth, p.Height())
 }
 func (p *ConfigPageUpdate) IsModalActive() bool {
 	return (p.ConfirmModal != nil && p.ConfirmModal.IsActive()) || (p.ResultModal != nil && p.ResultModal.IsActive())
@@ -339,7 +323,8 @@ func (p *ConfigPageUpdate) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, 
 		cmd, handled := p.ConfirmModal.HandleMouse(x, y, msg)
 		return p, cmd, handled
 	}
-	return p, nil, false
+	cmd, handled := p.Form.HandleMouse(x, y, msg)
+	return p, cmd, handled
 }
 
 func (p *ConfigPageUpdate) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
@@ -464,10 +449,7 @@ func (p *ConfigPageCache) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 func (p *ConfigPageCache) View() string {
 	w := p.Width()
-	safeWidth := w - 4
-	if safeWidth > 60 {
-		safeWidth = 60
-	}
+	safeWidth := layout.FormWidth(w, theme.Inset.TotalContent)
 	p.Form.Width = safeWidth
 
 	if p.ResultModal != nil && p.ResultModal.IsActive() {
@@ -480,7 +462,7 @@ func (p *ConfigPageCache) View() string {
 		return ""
 	}
 
-	return p.Form.View(safeWidth)
+	return p.Form.Viewport(safeWidth, p.Height())
 }
 func (p *ConfigPageCache) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
 func (p *ConfigPageCache) Blur()          { p.BaseViewlet.Blur(); p.Form.Blur() }
@@ -522,7 +504,8 @@ func (p *ConfigPageCache) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, t
 		cmd, handled := p.ResultModal.HandleMouse(x, y, msg)
 		return p, cmd, handled
 	}
-	return p, nil, false
+	cmd, handled := p.Form.HandleMouse(x, y, msg)
+	return p, cmd, handled
 }
 
 // --- Doctor Page ---
@@ -565,6 +548,11 @@ func (p *ConfigPageDoctor) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 	case ops.DoctorResultMsg:
 		p.Reports = msg.Reports
 		p.Err = msg.Err
+		if p.Err != nil {
+			p.Modal = widget.NewAlertModal("Diagnostics failed", p.Err.Error(), func() tea.Cmd { return func() tea.Msg { return FocusSidebarMsg{} } })
+			p.Modal.Show()
+			return p, nil
+		}
 
 		if p.Err == nil && len(p.Reports) > 0 {
 			// Create Result Modal
@@ -611,20 +599,10 @@ func (p *ConfigPageDoctor) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 }
 func (p *ConfigPageDoctor) View() string {
 	w := p.Width()
-	safeWidth := w - 4
-	if safeWidth > 60 {
-		safeWidth = 60
-	}
+	safeWidth := layout.FormWidth(w, theme.Inset.TotalContent)
 	p.Form.Width = safeWidth
 
-	base := p.Form.View(safeWidth)
-
-	if p.Err != nil {
-		errStyle := lipgloss.NewStyle().Foreground(theme.Current().Palette.Error).Padding(1, 2)
-		base = layout.VStack(0, base, errStyle.Render("Critical failure: "+p.Err.Error()))
-	}
-
-	return base
+	return p.Form.Viewport(safeWidth, p.Height())
 }
 func (p *ConfigPageDoctor) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
 func (p *ConfigPageDoctor) Blur()          { p.BaseViewlet.Blur(); p.Form.Blur() }
@@ -663,7 +641,8 @@ func (p *ConfigPageDoctor) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, 
 		cmd, handled := p.Modal.HandleMouse(x, y, msg)
 		return p, cmd, handled
 	}
-	return p, nil, false
+	cmd, handled := p.Form.HandleMouse(x, y, msg)
+	return p, cmd, handled
 }
 
 // --- Appearance Page ---
@@ -807,10 +786,8 @@ func NewConfigPageAppearance(parent *Config) *ConfigPageAppearance {
 	p.Form = widget.NewForm(
 		p.Header,
 		p.SelectTheme, // Added first
-		p.InputSidebarWidth,
-		p.InputSidebarWideWidth,
-		p.InputTabMinWidth,
-		p.InputGapScale,
+		widget.NewRow(p.InputSidebarWidth, p.InputSidebarWideWidth),
+		widget.NewRow(p.InputTabMinWidth, p.InputGapScale),
 		p.SubmitButton,
 	)
 	p.Form.Spacing = 0
@@ -845,10 +822,7 @@ func (p *ConfigPageAppearance) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 func (p *ConfigPageAppearance) View() string {
 	w := p.Width()
-	safeWidth := w - 4
-	if safeWidth > 60 {
-		safeWidth = 60
-	}
+	safeWidth := layout.FormWidth(w, theme.Inset.TotalContent)
 
 	// Render Modals on top
 	if p.ThemeModal.IsActive() {
@@ -872,25 +846,7 @@ func (p *ConfigPageAppearance) View() string {
 
 	p.Form.Width = safeWidth
 
-	// Custom Layout for Appearance
-	// Row 1: Sidebar W | Wide W
-	rowSidebar := layout.HStack(2,
-		p.InputSidebarWidth.View((safeWidth/2)-1),
-		p.InputSidebarWideWidth.View((safeWidth/2)-1),
-	)
-	// Row 2: Tab Min W | Gap Scale
-	rowOther := layout.HStack(2,
-		p.InputTabMinWidth.View((safeWidth/2)-1),
-		p.InputGapScale.View((safeWidth/2)-1),
-	)
-
-	return layout.VStack(0,
-		p.Header.View(safeWidth),
-		p.SelectTheme.View(safeWidth), // Theme Select full width
-		rowSidebar,
-		rowOther,
-		p.SubmitButton.View(safeWidth),
-	)
+	return p.Form.Viewport(safeWidth, p.Height())
 }
 
 func (p *ConfigPageAppearance) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
@@ -942,16 +898,8 @@ func (p *ConfigPageAppearance) HandleMouse(x int, y int, msg tea.MouseMsg) (fv.V
 		return p, nil, true
 	}
 
-	headerContent := p.Header.View(p.Width() - 4)
-	headerHeight := lipgloss.Height(headerContent)
-
-	if y >= headerHeight {
-		formY := y - headerHeight
-		cmd, handled := p.Form.HandleMouse(x, formY, msg)
-		return p, cmd, handled
-	}
-
-	return p, nil, false
+	cmd, handled := p.Form.HandleMouse(x, y, msg)
+	return p, cmd, handled
 }
 
 // --- Uninstall Page (Danger Zone) ---
@@ -1015,17 +963,14 @@ func (p *ConfigPageUninstall) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 func (p *ConfigPageUninstall) View() string {
 	w := p.Width()
-	safeWidth := w - 4
-	if safeWidth > 60 {
-		safeWidth = 60
-	}
+	safeWidth := layout.FormWidth(w, theme.Inset.TotalContent)
 	p.Form.Width = safeWidth
 
 	if p.Modal.IsActive() {
 		return ""
 	}
 
-	return p.Form.View(safeWidth)
+	return p.Form.Viewport(safeWidth, p.Height())
 }
 
 func (p *ConfigPageUninstall) Focus() tea.Cmd { p.BaseViewlet.Focus(); return p.Form.Focus() }
@@ -1054,7 +999,8 @@ func (p *ConfigPageUninstall) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewle
 		cmd, handled := p.Modal.HandleMouse(x, y, msg)
 		return p, cmd, handled
 	}
-	return p, nil, false
+	cmd, handled := p.Form.HandleMouse(x, y, msg)
+	return p, cmd, handled
 }
 
 func (p *ConfigPageUninstall) Shortcuts() []fv.Shortcut {

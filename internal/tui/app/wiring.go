@@ -13,6 +13,7 @@ import (
 	"github.com/Josepavese/nido/v4/internal/provider"
 
 	"github.com/Josepavese/nido/v4/internal/tui/kit/app"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/shell"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
@@ -51,6 +52,10 @@ func (n *NidoApp) Init() tea.Cmd {
 
 // Update intercepts messages to handle Nido domain logic.
 func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if n.Shell.Width > 0 && !layout.IsViable(n.Shell.Width, n.Shell.Height) && view.IsInputMessage(msg) {
+		_, cmd := n.App.Update(msg)
+		return n, cmd
+	}
 	// Background invalidations must flow even while a modal owns keyboard input.
 	if batch, ok := msg.(ops.EventBatchMsg); ok {
 		resources := map[string]bool{}
@@ -375,6 +380,9 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View delegates to Shell but overlays global modals
 func (n *NidoApp) View() string {
+	if !layout.IsViable(n.Shell.Width, n.Shell.Height) {
+		return n.App.View()
+	}
 	if n.ErrorModal.IsActive() {
 		return n.ErrorModal.View(n.Shell.Width, n.Shell.Height)
 	}
@@ -402,10 +410,7 @@ func Run(ctx context.Context, prov provider.VMProvider, cfg *config.Config, sour
 	kitApp.Shell.HeaderContent = ""
 	kitApp.Shell.Styles = shell.ShellStyles{
 		// Header: Deep background, subtle bottom border in the same grey palette
-		Header:           lipgloss.NewStyle().Background(t.Palette.Surface).Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(t.Palette.SurfaceSubtle),
-		SubHeaderContext: t.Styles.Label.Bold(true),
-		// SubHeaderNav: subtle grey
-		SubHeaderNav: t.Styles.Label,
+		Header: lipgloss.NewStyle().Background(t.Palette.Surface).Border(lipgloss.NormalBorder(), false, false, true, false).BorderForeground(t.Palette.SurfaceSubtle),
 		StatusBar: widget.StatusBarStyles{
 			Key:    t.Styles.Label.Bold(true),
 			Label:  t.Styles.Label,

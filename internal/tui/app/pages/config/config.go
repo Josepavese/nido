@@ -14,7 +14,12 @@ import (
 )
 
 func (c *Config) HandleMouse(x, y int, msg tea.MouseMsg) (fv.Viewlet, tea.Cmd, bool) {
-	return c.MasterDetail.HandleMouse(x, y, msg)
+	if overlay := c.activeOverlay(); overlay != nil {
+		cmd, handled := overlay.HandleMouse(x, y, msg)
+		return c, cmd, handled
+	}
+	_, cmd, handled := c.MasterDetail.HandleMouse(x, y, msg)
+	return c, cmd, handled
 }
 
 // ConfigItem represents a configurable setting or menu item.
@@ -308,54 +313,47 @@ func (c *Config) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 }
 
 func (c *Config) View() string {
-	base := c.MasterDetail.View()
+	if overlay := c.activeOverlay(); overlay != nil {
+		return overlay.View(c.Width(), c.Height())
+	}
+	return c.MasterDetail.View()
+}
 
-	// If a modal is active in any page, overlay it on EVERYTHING
-	if c.IsModalActive() {
-		if p := c.Pages.ActivePage(); p != nil {
-			// This is slightly tricky: we need a way to get the modal from the page
-			// For now, we know only these two have it.
-			var modal *widget.Modal
-			if pf, ok := p.(*ConfigPageGlobalForm); ok {
-				modal = pf.Modal
-			} else if pa, ok := p.(*ConfigPageAppearance); ok {
-				if pa.Modal != nil && pa.Modal.IsActive() {
-					modal = pa.Modal
-				}
-			} else if pd, ok := p.(*ConfigPageDoctor); ok {
-				modal = pd.Modal
-			} else if pu, ok := p.(*ConfigPageUpdate); ok {
-				if pu.ResultModal != nil && pu.ResultModal.IsActive() {
-					modal = pu.ResultModal
-				} else {
-					modal = pu.ConfirmModal
-				}
-			} else if pun, ok := p.(*ConfigPageUninstall); ok {
-				modal = pun.Modal
-			} else if pc, ok := p.(*ConfigPageCache); ok {
-				modal = pc.ResultModal
-			}
-
-			if modal != nil {
-				return modal.View(c.Width(), c.Height())
-			}
-
-			// Special Case: ListModal (ThemeModal)
-			if pa, ok := p.(*ConfigPageAppearance); ok {
-				if pa.ThemeModal != nil && pa.ThemeModal.IsActive() {
-					// We need to render ListModal manually here because it doesn't match widget.Modal interface?
-					// Or we just return what the Page returned?
-					// Wait, Config.View logic is: "If modal active, return modal view INSTEAD of page view".
-					// The Page.View() ALREADY returns the modal if active (lines 721-734 in config_pages.go).
-					// BUT Config.View (lines 305-337) overrides this!
-
-					return pa.ThemeModal.View(c.Width(), c.Height())
-				}
-			}
+// Overlays belong to the full page, never to the detail pane behind them.
+func (c *Config) activeOverlay() widget.Overlay {
+	switch p := c.Pages.ActivePage().(type) {
+	case *ConfigPageGlobalForm:
+		if p.Modal != nil && p.Modal.IsActive() {
+			return p.Modal
+		}
+	case *ConfigPageAppearance:
+		if p.ThemeModal != nil && p.ThemeModal.IsActive() {
+			return p.ThemeModal
+		}
+		if p.Modal != nil && p.Modal.IsActive() {
+			return p.Modal
+		}
+	case *ConfigPageDoctor:
+		if p.Modal != nil && p.Modal.IsActive() {
+			return p.Modal
+		}
+	case *ConfigPageUpdate:
+		if p.ResultModal != nil && p.ResultModal.IsActive() {
+			return p.ResultModal
+		}
+		if p.ConfirmModal != nil && p.ConfirmModal.IsActive() {
+			return p.ConfirmModal
+		}
+	case *ConfigPageUninstall:
+		if p.Modal != nil && p.Modal.IsActive() {
+			return p.Modal
+		}
+	case *ConfigPageCache:
+		if p.ResultModal != nil && p.ResultModal.IsActive() {
+			return p.ResultModal
 		}
 	}
-
-	return base
+	return nil
 }
 
 func (c *Config) Resize(r layout.Rect) {
@@ -390,6 +388,9 @@ func (c *Config) HasActiveTextInput() bool {
 }
 
 func (c *Config) HasActiveFocus() bool {
+	if c.MasterDetail != nil && c.MasterDetail.ActiveFocus == widget.FocusDetail {
+		return true
+	}
 	if c.MasterDetail != nil {
 		return c.MasterDetail.HasActiveFocus()
 	}

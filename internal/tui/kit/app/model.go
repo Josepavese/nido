@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/shell"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	tea "github.com/charmbracelet/bubbletea"
@@ -40,6 +41,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if !layout.IsViable(a.Shell.Width, a.Shell.Height) && a.Shell.Width > 0 {
+			if msg.String() != "ctrl+c" && msg.String() != "ctrl+q" {
+				return a, nil
+			}
+		}
 		switch msg.String() {
 		case "ctrl+c", "ctrl+q":
 			if a.OnQuit != nil {
@@ -47,13 +53,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, tea.Quit
 		// GLOBAL NAV: Intercept Arrow Keys for Tab Switching
-		case "right":
-			if !blocking {
+		case "right", "ctrl+right":
+			if !blocking && (msg.String() == "ctrl+right" || a.Shell.ActiveViewlet() == nil || !a.Shell.ActiveViewlet().HasActiveTextInput()) {
 				a.Shell.NextTab()
 				return a, nil
 			}
-		case "left":
-			if !blocking {
+		case "left", "ctrl+left":
+			if !blocking && (msg.String() == "ctrl+left" || a.Shell.ActiveViewlet() == nil || !a.Shell.ActiveViewlet().HasActiveTextInput()) {
 				a.Shell.PrevTab()
 				return a, nil
 			}
@@ -77,6 +83,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, tea.Quit
 		}
+	case tea.MouseMsg:
+		if !layout.IsViable(a.Shell.Width, a.Shell.Height) {
+			return a, nil
+		}
+		_, _, _, mouseCmd, _ := a.Shell.HandleMouse(msg)
+		return a, mouseCmd
 	case tea.WindowSizeMsg:
 		a.Shell.Resize(msg.Width, msg.Height)
 		// We might need to repaint explicitly if View() relies on it,

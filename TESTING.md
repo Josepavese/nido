@@ -93,3 +93,26 @@ The validator's `event-stream` scenario exercises the CLI NDJSON envelope,
 another process's config change and rejected arguments in its own fixture home.
 Use the validator from a disposable environment as documented above; its general
 cleanup scenario is not a permission to sweep an existing user's resources.
+
+## TUI resize and visual inspection
+
+Build the candidate once outside the repository, then run the shared native PTY
+regression on a private fixture home:
+
+```sh
+NIDO_TEST_BINARY="$scratch/nido" NIDO_TEST_STORAGE="$scratch" python3 tests/tui_resize.py
+```
+
+It exercises wide/compact/minimum sizes, the resting state, safe detail opening,
+field traversal, caret editing, mouse routes, modal cancellation and draft
+recovery. Fixture disk, state and configuration hashes must remain unchanged.
+The shared PTY driver also backs `events_integration.py`.
+
+For visual acceptance, install `pyte` into an owned observer scratch if it is not
+already available (it is not a product dependency), then set
+`NIDO_TUI_VISUAL_DIR="$scratch/visual"` for the same command. The resulting
+`index.html` and individual frames contain rendered cells from the real PTY,
+with color and Unicode. Inspect them visually in the browser, including the
+minimum-size form, confirmation, theme picker and expanded recovery. Retain only
+the useful bounded evidence and retire the private home, observer and binaries
+after their last consumer. A passing trace or unit test alone is not visual QA.

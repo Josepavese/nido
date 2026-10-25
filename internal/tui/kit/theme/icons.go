@@ -35,6 +35,7 @@ const (
 	// Fleet States
 	IconBird   = "🐦" // Running
 	IconSleep  = "💤" // Stopped
+	IconNest   = "🪺" // Resting state / resize
 	IconLayout = "🎨" // Appearance / Rice
 )
 

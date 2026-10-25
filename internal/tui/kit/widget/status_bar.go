@@ -1,7 +1,11 @@
 package widget
 
 import (
+	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
+	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+	"strings"
 )
 
 // StatusBarStyles defines the appearance of the status bar.
@@ -51,27 +55,36 @@ func (s *StatusBar) SetWidth(w int) {
 
 // View renders the status bar.
 func (s StatusBar) View() string {
-	// Build keymap section
-	var keymap string
-	for i, item := range s.items {
-		if i > 0 {
-			keymap += "  "
+	if s.width <= 0 {
+		return ""
+	}
+	render := func(item StatusBarItem) string {
+		return s.styles.Key.Render(item.Key) + " " + s.styles.Label.Render(item.Label)
+	}
+	gap := strings.Repeat(" ", theme.Space.SM)
+	// The last hint is the persistent escape route. Earlier hints are contextual.
+	var exit string
+	items := s.items
+	if len(items) > 0 {
+		exit = render(items[len(items)-1])
+		items = items[:len(items)-1]
+	}
+	available := max(0, s.width-lipgloss.Width(exit)-lipgloss.Width(gap))
+	var hints []string
+	for _, item := range items {
+		candidate := strings.Join(append(append([]string{}, hints...), render(item)), gap)
+		if lipgloss.Width(candidate) > available {
+			continue
 		}
-		keymap += s.styles.Key.Render(item.Key) + " " + s.styles.Label.Render(item.Label)
+		hints = append(hints, render(item))
 	}
-
-	// Build status section
-	statusRendered := s.styles.Status.Render(s.status)
-
-	// Calculate spacing
-	keymapWidth := lipgloss.Width(keymap)
-	statusWidth := lipgloss.Width(statusRendered)
-	spacerWidth := s.width - keymapWidth - statusWidth - 2
-	if spacerWidth < 1 {
-		spacerWidth = 1
+	left := strings.Join(hints, gap)
+	if s.status != "" {
+		space := available - lipgloss.Width(left) - lipgloss.Width(gap)
+		if space > 0 {
+			left += gap + s.styles.Status.Render(ansi.Truncate(s.status, space, "…"))
+		}
 	}
-
-	spacer := lipgloss.NewStyle().Width(spacerWidth).Render("")
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, keymap, spacer, statusRendered)
+	spacer := strings.Repeat(" ", max(0, s.width-lipgloss.Width(left)-lipgloss.Width(exit)))
+	return layout.Fit(s.width, 1, left+spacer+exit)
 }

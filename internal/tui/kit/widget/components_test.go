@@ -58,9 +58,9 @@ func TestSplitView_Resize(t *testing.T) {
 	}
 
 	// Allow for border variation (0, 1, or 2)
-	expectedMain := 100 - 20 - sv.BorderStyle.GetHorizontalFrameSize()
+	expectedMain := 100 - 20 - layout.PaneDividerWidth
 	if main.width != expectedMain {
-		t.Errorf("expected main width %d, got %d (border frame size: %d)", expectedMain, main.width, sv.BorderStyle.GetHorizontalFrameSize())
+		t.Errorf("expected main width %d, got %d (border frame size: %d)", expectedMain, main.width, layout.PaneDividerWidth)
 	}
 }
 
@@ -79,8 +79,8 @@ func TestSplitView_Resize_Narrow(t *testing.T) {
 		t.Errorf("expected narrow sidebar width 30, got %d", sidebar.width)
 	}
 	// 80 - 30 = 50 (border is 0 for NewStyle)
-	if main.width != 50 {
-		t.Errorf("expected main width 50, got %d", main.width)
+	if main.width != 49 {
+		t.Errorf("expected main width 49, got %d", main.width)
 	}
 }
 

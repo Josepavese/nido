@@ -23,6 +23,9 @@ type SplitView struct {
 	// internal state
 	resolvedSidebarWidth int
 	height               int
+	width                int
+	singlePane           bool
+	ShowMain             bool
 }
 
 // NewSplitView creates a new SplitView with a specific border style for the sidebar separator.
@@ -52,69 +55,33 @@ func (s *SplitView) Update(msg tea.Msg) (viewlet.Viewlet, tea.Cmd) {
 
 // View renders the sidebar and main content side-by-side.
 func (s *SplitView) View() string {
-	sidebarView := s.Sidebar.View()
-	mainView := s.Main.View()
-
-	if s.resolvedSidebarWidth <= 0 {
-		return mainView
+	if s.singlePane {
+		if s.ShowMain {
+			return layout.Fit(s.width, s.height, s.Main.View())
+		}
+		return layout.Fit(s.width, s.height, s.Sidebar.View())
 	}
-
-	sidebarStyled := lipgloss.NewStyle().
-		Width(s.resolvedSidebarWidth).
-		Render(sidebarView)
-
-	sepStyle := theme.Current().Styles.Border.
-		Border(lipgloss.NormalBorder(), false, false, false, true). // Left only
-		Height(s.height)
-
-	separator := sepStyle.Render("")
-
-	return lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		sidebarStyled,
-		separator,
-		mainView,
-	)
+	sidebarView := layout.Fit(s.resolvedSidebarWidth, s.height, s.Sidebar.View())
+	mainW := s.width - s.resolvedSidebarWidth - layout.PaneDividerWidth
+	separator := s.BorderStyle.Border(lipgloss.NormalBorder(), false, false, false, true).Height(s.height).Render("")
+	return layout.Fit(s.width, s.height, lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, separator, layout.Fit(mainW, s.height, s.Main.View())))
 }
 
-// Resize calculates the layout for sidebar and main content.
 func (s *SplitView) Resize(r layout.Rect) {
-	s.height = r.Height
-
-	sw := s.SidebarWidth
-	if sw <= 0 {
-		dim := layout.Calculate(r.Width, r.Height, 30, theme.Width.Sidebar, theme.Width.SidebarWide)
-		sw = dim.SidebarWidth
-	}
-
-	if sw == 0 && r.Width > 30 {
-		sw = 30
-	}
-
+	s.width, s.height = r.Width, r.Height
+	sw := layout.SidebarWidth(r.Width, s.SidebarWidth, theme.Width.Sidebar, theme.Width.SidebarWide)
+	s.singlePane = layout.SinglePane(r.Width, sw)
 	s.resolvedSidebarWidth = sw
-
-	if sw <= 0 {
+	if s.singlePane {
+		s.Sidebar.Resize(r)
 		s.Main.Resize(r)
-		s.Sidebar.Resize(layout.NewRect(0, 0, 0, 0))
 		return
 	}
-
-	sidebarWidth := sw
-	borderW := s.BorderStyle.GetHorizontalFrameSize()
-	sidebarRect := layout.NewRect(r.X, r.Y, sidebarWidth, r.Height)
-
-	mainX := r.X + sidebarWidth + borderW
-	mainW := r.Width - sidebarWidth - borderW
-
-	if mainW < 0 {
-		mainW = 0
-	}
-
-	mainRect := layout.NewRect(mainX, r.Y, mainW, r.Height)
-
-	s.Sidebar.Resize(sidebarRect)
-	s.Main.Resize(mainRect)
+	s.Sidebar.Resize(layout.NewRect(r.X, r.Y, sw, r.Height))
+	s.Main.Resize(layout.NewRect(r.X+sw+layout.PaneDividerWidth, r.Y, r.Width-sw-layout.PaneDividerWidth, r.Height))
 }
+
+func (s *SplitView) SinglePane() bool { return s.singlePane }
 
 func (s *SplitView) Init() tea.Cmd { return nil }
 
@@ -125,7 +92,15 @@ func (s *SplitView) Focused() bool  { return false }
 func (s *SplitView) Shortcuts() []viewlet.Shortcut { return nil }
 
 func (s *SplitView) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, tea.Cmd, bool) {
-	borderW := s.BorderStyle.GetHorizontalFrameSize()
+	if s.singlePane {
+		target := s.Sidebar
+		if s.ShowMain {
+			target = s.Main
+		}
+		_, cmd, handled := target.HandleMouse(x, y, msg)
+		return s, cmd, handled
+	}
+	borderW := layout.PaneDividerWidth
 
 	if x < s.resolvedSidebarWidth {
 		_, cmd, handled := s.Sidebar.HandleMouse(x, y, msg)
@@ -173,4 +148,12 @@ func (s *SplitView) HasActiveFocus() bool {
 
 func (s *SplitView) Focusable() bool {
 	return false
+}
+
+// MainAt resolves mouse focus with the same geometry used by View/HandleMouse.
+func (s *SplitView) MainAt(x int) bool {
+	if s.singlePane {
+		return s.ShowMain
+	}
+	return x >= s.resolvedSidebarWidth+layout.PaneDividerWidth
 }
