@@ -9,9 +9,14 @@ on:
       version:
         description: 'Version to build (e.g., v4.4.1)'
         required: true
+      packages_only:
+        description: 'Republish APT/DNF from existing release assets only'
+        type: boolean
+        default: false
 
 jobs:
   release:
+    if: github.event_name != 'workflow_dispatch' || !inputs.packages_only
     name: Create Release
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -696,7 +701,7 @@ jobs:
   publish-packages:
     name: Publish APT/DNF repositories
     needs: [release]
-    if: needs.release.result == 'success'
+    if: always() && (needs.release.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.packages_only))
     runs-on: ubuntu-latest
     continue-on-error: true
     permissions:
@@ -742,8 +747,9 @@ jobs:
         run: |
           set -euo pipefail
           site_dir="$(mktemp -d)"
+          trap 'rm -rf "$site_dir"' EXIT
+          rsync -a build/packages-site/ "$site_dir/"
           git -C "$site_dir" init -q -b gh-pages
-          rsync -a --delete build/packages-site/ "$site_dir/"
           git -C "$site_dir" add -A
           if git -C "$site_dir" diff --cached --quiet; then
             echo "Packages are already up to date"

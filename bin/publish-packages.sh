@@ -26,7 +26,11 @@ if [ -z "$VERSION_INPUT" ]; then
   echo "usage: $0 <version, e.g. v4.8.7>" >&2
   exit 2
 fi
-TAG="v${VERSION_INPUT#v}"
+if [[ ! "$VERSION_INPUT" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "expected an immutable release tag vX.Y.Z" >&2
+  exit 2
+fi
+TAG="$VERSION_INPUT"
 VERSION="${TAG#v}"
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -39,7 +43,7 @@ KEEP_VERSIONS=${KEEP_VERSIONS:-5}
 SIGNED=0
 GPG_FINGERPRINT=""
 
-for tool in "$NFPM" apt-ftparchive gzip python3; do
+for tool in "$NFPM" apt-ftparchive gzip python3 sha256sum; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "missing required tool: $tool" >&2
     exit 1
@@ -66,11 +70,18 @@ if [ -n "${PACKAGES_GPG_KEY:-}" ]; then
 fi
 
 echo "==> Downloading release assets for $TAG"
+gh release download "$TAG" --pattern SHA256SUMS --dir "$DIST_DIR" --clobber
 for arch in amd64 arm64; do
   asset="nido-linux-$arch.tar.gz"
   if [ ! -f "$DIST_DIR/$asset" ]; then
     gh release download "$TAG" --pattern "$asset" --dir "$DIST_DIR"
   fi
+  checksum=$(awk -v asset="$asset" '$2 == asset || $2 == "*" asset { print $1 }' "$DIST_DIR/SHA256SUMS")
+  if [[ ! "$checksum" =~ ^[[:xdigit:]]{64}$ ]]; then
+    echo "missing or ambiguous SHA256SUMS entry for $asset" >&2
+    exit 1
+  fi
+  printf '%s  %s\n' "$checksum" "$DIST_DIR/$asset" | sha256sum --check --status
   mkdir -p "$WORK_DIR/$arch"
   tar -xzf "$DIST_DIR/$asset" -C "$WORK_DIR/$arch" --strip-components=1
 done
