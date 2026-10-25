@@ -23,9 +23,9 @@ repositories' cron jobs.
 | Homebrew tap | full (cron) | 6 h poll | none | none |
 | Nix flake | full CI build on flake/Go changes | push / PR | none | none |
 | Scoop bucket | full (cron) | 4 h poll | none | none |
-| AUR `nido-bin` | wired, activates with secrets | release | AUR account + SSH key | **one-off:** register when AUR reopens, then add 3 secrets |
-| WinGet | wired (`WINGET_TOKEN`) | after first merge | classic PAT | **one-off:** Microsoft moderator merges [PR #460843](https://github.com/microsoft/winget-pkgs/pull/460843) |
-| Glama | auto-index + crawler | crawler | GitHub OAuth | Ownership claimed; hosted auto-release stays off. Withdrawal of the prior hosted release is pending; see `DISTRIBUTION.md` §1.6. Discovery and local setup only |
+| AUR `nido-bin` | wired, activates with secrets | release | AUR account + SSH key | Upstream registration is closed with no manual queue; no account exists. After reopening: account/email verification, SSH public key and release secrets. Nothing for the maintainer to do now |
+| WinGet | wired (`WINGET_TOKEN`) | after first merge | classic PAT | All 10 checks and CLA pass for 4.9.0; only a Microsoft moderator can merge [PR #460843](https://github.com/microsoft/winget-pkgs/pull/460843). No maintainer action now |
+| Glama | auto-index + crawler | crawler | GitHub OAuth | Ownership claimed; hosted auto-release stays off. Support acknowledged the withdrawal ticket; completion remains pending. See `DISTRIBUTION.md` §1.6. Discovery and local setup only |
 | mcpdir.dev / MCP Hub / PulseMCP / MCP Central | full (crawl) | crawler | none | none |
 | awesome lists (mcp-servers, agent sandboxes, agent runtime, awesome-go) | submissions opened | – | GitHub account | **one-off:** shepherd the open PRs/issues |
 | Manual directory forms (mcp.so, mcpservers.org, MCP Market, Product Hunt) | none | – | per-site accounts | **one-off:** submit with the content in `installers/README.md` |
@@ -35,7 +35,7 @@ repositories' cron jobs.
 
 | When | Action | Where the state lives |
 | --- | --- | --- |
-| Once, now | await the WinGet moderator merge; reconcile the pending Glama hosted withdrawal; submit directory forms if separately authorized; configure AUR when an account is available | links in `DISTRIBUTION.md` §2.7–§2.9 |
+| Once, now | await the WinGet moderator and Glama support; register AUR only after reopening. Account verification is the remaining personal action, when available | links in `DISTRIBUTION.md` §2.7–§2.9 |
 | Every release | inspect per-job results and read the published versions back; container/package smoke checks are non-blocking, so warnings need explicit reconciliation | Actions run for the tag |
 | Quarterly | re-read `DISTRIBUTION.md` §3 (dropped channels), check PAT/secret expiry, confirm Pages and keyring are live, close stale submission PRs | this file + `DISTRIBUTION.md` |
 | Before 2029-10-24 | rotate the package signing key: new key, new keyring file name, update `signed-by=`/`gpgkey=` and `PACKAGES_GPG_KEY`, keep the old keyring published for one cycle | `DISTRIBUTION.md` §2.10 |

@@ -515,11 +515,38 @@ jobs:
     continue-on-error: true
     env:
       VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+      WINGET_IDENTIFIER: Josepavese.Nido
     steps:
+      - name: Check initial upstream package
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_API_URL: ${{ github.api_url }}
+        run: |
+          set -euo pipefail
+          publisher="${WINGET_IDENTIFIER%%.*}"
+          package="${WINGET_IDENTIFIER#*.}"
+          partition="${publisher:0:1}"
+          path="manifests/${partition,,}/${publisher}/${package}"
+          status=$(curl --silent --show-error --location \
+            --output "$RUNNER_TEMP/winget-upstream.json" --write-out '%{http_code}' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            "$GH_API_URL/repos/microsoft/winget-pkgs/contents/$path")
+          case "$status" in
+            200) echo 'ready=true' >> "$GITHUB_OUTPUT" ;;
+            404)
+              echo 'ready=false' >> "$GITHUB_OUTPUT"
+              echo '::notice::WinGet initial package awaits Microsoft moderation; no update was published.'
+              echo 'WinGet: initial upstream package pending. See docs/DISTRIBUTION.md section 2.5; no maintainer action is required.' >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *) echo "WinGet upstream check failed: HTTP $status" >&2; exit 1 ;;
+          esac
+
       - name: Update WinGet manifest
+        if: steps.upstream.outputs.ready == 'true'
         uses: vedantmgoyal9/winget-releaser@v2
         with:
-          identifier: Josepavese.Nido
+          identifier: ${{ env.WINGET_IDENTIFIER }}
           installers-regex: '\.zip$'
           max-versions-to-keep: 5
           fork-user: Josepavese
