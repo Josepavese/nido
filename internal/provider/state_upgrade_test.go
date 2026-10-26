@@ -3,6 +3,7 @@ package provider
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -127,5 +128,23 @@ func TestAutomaticStatePreparationRefusesUnknownSchemaAndPreservesRawImports(t *
 	data, _ := os.ReadFile(marker)
 	if string(data) != "future-schema\n" {
 		t.Fatal("future marker changed")
+	}
+}
+
+func TestAutomaticStatePreparationRefusesAmbiguousLivePID(t *testing.T) {
+	p, state, _ := legacyStateFixture(t)
+	original := []byte(fmt.Sprintf(`{"name":"legacy","pid":%d}`, os.Getpid()))
+	if err := os.WriteFile(state, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.PrepareState(context.Background()); err == nil {
+		t.Fatal("live PID treated as stopped without ownership proof")
+	}
+	data, _ := os.ReadFile(state)
+	if !bytes.Equal(data, original) {
+		t.Fatal("live state modified")
+	}
+	if _, err := os.Stat(filepath.Join(p.RootDir, stateSchemaFile)); !os.IsNotExist(err) {
+		t.Fatal("live state marked complete")
 	}
 }

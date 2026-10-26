@@ -72,8 +72,10 @@ func (p *QemuProvider) migrateArchitecture(adoptUnidentified bool) (int, error) 
 		}
 		var pid int
 		_ = json.Unmarshal(state["pid"], &pid)
-		if p.isVMProcess(name, pid) {
-			return 0, fmt.Errorf("stop VM %s before architecture migration", name)
+		// Missing process-inspection permission cannot prove quiescence. A
+		// reused or inaccessible live PID must be resolved before conversion.
+		if processAlive(pid) {
+			return 0, fmt.Errorf("stop VM %s or resolve its live PID %d before architecture migration", name, pid)
 		}
 		arch, err := image.ReadArchitecture(disk)
 		if os.IsNotExist(err) {
