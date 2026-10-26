@@ -86,6 +86,7 @@ jobs:
           trap 'rm -rf "$scratch"' EXIT
           NIDO_TEST_BINARY="$GITHUB_WORKSPACE/nido" NIDO_TEST_STORAGE="$scratch" python3 -B tests/events_integration.py
           NIDO_TEST_BINARY="$GITHUB_WORKSPACE/nido" NIDO_TEST_STORAGE="$scratch" python3 -B tests/architectures_integration.py
+          NIDO_TEST_BINARY="$GITHUB_WORKSPACE/nido" NIDO_TEST_STORAGE="$scratch" python3 -B tests/upgrade_integration.py
 
       - name: Run go vet
         run: go vet ./...

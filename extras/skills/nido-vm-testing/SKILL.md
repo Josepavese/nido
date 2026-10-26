@@ -40,9 +40,12 @@ Do not treat an ARM guest emulated on x86 as native ARM hardware qualification.
 Templates inherit their declared ISA and reject explicit conflicts. Verify the
 guest with `uname -m` over SSH, separately from QEMU process state. A missing
 image variant is an error, not permission to substitute a foreign guest.
-For a pre-architecture installation, follow the explicit `nido migrate` procedure
-in the [architecture guide](https://github.com/Josepavese/nido/blob/main/docs/architectures.md);
-preserve disks and backing paths.
+For a pre-architecture installation, stop legacy VMs and close old clients before
+updating. State conversion is automatic during current updates/installers, or
+at the first invocation after an older updater/package manager. Do not run a
+manual migration as a routine upgrade step. Preserve disks and backing paths;
+follow the [architecture guide](https://github.com/Josepavese/nido/blob/main/docs/architectures.md)
+for preparation failures and explicit recovery/adoption of unidentified imports.
 
 ## Observe through CLI or MCP
 

@@ -17,6 +17,10 @@ import (
 // chains, changes identities or relabels an already declared architecture.
 // Stop other Nido clients first. Re-running after interruption is safe.
 func (p *QemuProvider) MigrateArchitecture() (int, error) {
+	return p.migrateArchitecture(true)
+}
+
+func (p *QemuProvider) migrateArchitecture(adoptUnidentified bool) (int, error) {
 	cfg := p.configSnapshot()
 	roots := []string{filepath.Join(p.RootDir, "vms"), filepath.Join(p.RootDir, "images"), filepath.Join(p.RootDir, "backups")}
 	if cfg != nil {
@@ -33,6 +37,7 @@ func (p *QemuProvider) MigrateArchitecture() (int, error) {
 		mode os.FileMode
 	}
 	var changes []change
+	legacyState := false
 	known := map[string]string{}
 	files, err := filepath.Glob(filepath.Join(p.RootDir, "run", "*.json"))
 	if err != nil {
@@ -70,7 +75,15 @@ func (p *QemuProvider) MigrateArchitecture() (int, error) {
 		if p.isVMProcess(name, pid) {
 			return 0, fmt.Errorf("stop VM %s before architecture migration", name)
 		}
-		state["arch"], _ = json.Marshal(machine.AMD64)
+		arch, err := image.ReadArchitecture(disk)
+		if os.IsNotExist(err) {
+			legacyState = true
+			arch = machine.AMD64
+		} else if err != nil {
+			return 0, err
+		}
+		known[disk] = arch
+		state["arch"], _ = json.Marshal(arch)
 		next, err := json.MarshalIndent(state, "", "  ")
 		if err != nil {
 			return 0, err
@@ -104,6 +117,12 @@ func (p *QemuProvider) MigrateArchitecture() (int, error) {
 			seen[path] = true
 			if _, err := image.ReadArchitecture(path); os.IsNotExist(err) {
 				arch := known[path]
+				// A new/current installation can contain raw foreign imports.
+				// Only explicit adoption or an actual legacy fleet establishes
+				// the old AMD64-only contract for otherwise unidentified files.
+				if arch == "" && !legacyState && !adoptUnidentified {
+					continue
+				}
 				if arch == "" {
 					arch = machine.AMD64
 					for _, candidate := range machine.Architectures() {
@@ -119,10 +138,19 @@ func (p *QemuProvider) MigrateArchitecture() (int, error) {
 		}
 	}
 	count := 0
+	// Publish additive artifact metadata first. A legacy VM record remains
+	// discoverable until all artifacts are ready, so automatic retry needs no
+	// second journal or heuristic after an interrupted state conversion.
+	for _, path := range disks {
+		if err := image.WriteArchitecture(path.path, path.arch); err != nil {
+			return count, err
+		}
+		count++
+	}
 	for _, c := range changes {
 		// Preserve the original small state, including credentials and unknown keys.
 		backup := c.path + ".pre-architecture"
-		if _, err := os.Stat(backup); os.IsNotExist(err) {
+		if info, err := os.Stat(backup); os.IsNotExist(err) {
 			data, err := os.ReadFile(c.path)
 			if err != nil {
 				return count, err
@@ -130,14 +158,12 @@ func (p *QemuProvider) MigrateArchitecture() (int, error) {
 			if err := sysutil.WriteFile(backup, data, c.mode); err != nil {
 				return count, err
 			}
+		} else if err != nil {
+			return count, err
+		} else if !info.Mode().IsRegular() {
+			return count, fmt.Errorf("original metadata backup is not a regular file: %s", backup)
 		}
 		if err := sysutil.WriteFile(c.path, c.data, c.mode); err != nil {
-			return count, err
-		}
-		count++
-	}
-	for _, path := range disks {
-		if err := image.WriteArchitecture(path.path, path.arch); err != nil {
 			return count, err
 		}
 		count++

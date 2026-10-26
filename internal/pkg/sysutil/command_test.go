@@ -25,6 +25,9 @@ func TestCommandHelper(t *testing.T) {
 	}
 	args := os.Args[index+1:]
 	switch args[0] {
+	case "env":
+		json.NewEncoder(os.Stdout).Encode(os.Getenv(args[1]))
+		os.Exit(0)
 	case "argv":
 		json.NewEncoder(os.Stdout).Encode(args[1:])
 		os.Exit(0)
@@ -38,6 +41,17 @@ func TestCommandHelper(t *testing.T) {
 		}
 	}
 	os.Exit(2)
+}
+
+func TestCommandEnvironmentOverrideIsConfinedToChild(t *testing.T) {
+	const key = "NIDO_PAL_ENV_FIXTURE"
+	t.Setenv(key, "parent")
+	executable, args := helper(t, "env", key)
+	data, err := NewCommandWithEnvironment(context.Background(), map[string]string{key: "child"}, executable, args...).Output()
+	var value string
+	if err != nil || json.Unmarshal(data, &value) != nil || value != "child" || os.Getenv(key) != "parent" {
+		t.Fatalf("environment confinement: %s %v", data, err)
+	}
 }
 func helper(t *testing.T, args ...string) (string, []string) {
 	t.Helper()

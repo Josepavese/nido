@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
 	clijson "github.com/Josepavese/nido/v4/internal/cli"
+	"github.com/Josepavese/nido/v4/internal/lifecycle"
 )
 
 func main() {
@@ -13,6 +15,12 @@ func main() {
 	}
 
 	app := newAppContext()
+	ctx, cancel := context.WithTimeout(context.Background(), lifecycle.StatePreparationTimeout)
+	err := app.Provider.PrepareState(ctx)
+	cancel()
+	if err != nil {
+		exitCLIError(fmt.Errorf("automatic state preparation: %w", err))
+	}
 	root, err := newRootCommand(app)
 	if err != nil {
 		exitCLIError(fmt.Errorf("failed to initialize CLI: %w", err))

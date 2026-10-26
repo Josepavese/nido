@@ -44,7 +44,7 @@ func newAppContext() *appContext {
 		ConfigPath: cfgPath,
 		Config:     cfg,
 		Provider:   qemu,
-		Updater:    lifecycle.NewUpdater(nil),
+		Updater:    lifecycle.NewUpdater(lifecycle.UpdaterOptions{}),
 	}
 }
 

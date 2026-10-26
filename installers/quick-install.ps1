@@ -104,6 +104,14 @@ try {
     if (-not (Test-Path $packageBinary)) {
         throw "Release archive does not contain nido.exe"
     }
+    $previousHome = $env:NIDO_HOME
+    try {
+        $env:NIDO_HOME = $nidoHome
+        & $packageBinary version --json | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Automatic state preparation failed; existing installation preserved" }
+    } finally {
+        $env:NIDO_HOME = $previousHome
+    }
     Copy-Item -LiteralPath $packageBinary -Destination $targetPath -Force
     $packageValidator = Join-Path $packageDir "nido-validator.exe"
     if (Test-Path $packageValidator) {

@@ -32,23 +32,50 @@ type UpdateResult struct {
 type Updater interface {
 	Update(context.Context, UpdateRequest) (UpdateResult, error)
 }
-type nativeUpdater struct{ client sysutil.HTTPClient }
+type nativeUpdater struct {
+	client  sysutil.HTTPClient
+	prepare func(context.Context, string, string) error
+}
+
+type UpdaterOptions struct {
+	Client sysutil.HTTPClient
+	// Prepare runs the candidate's bounded state bootstrap before replacement.
+	// Nil selects the native process adapter.
+	Prepare func(context.Context, string, string) error
+}
 
 const (
 	updateMetadataTimeout  = 30 * time.Second
 	updateDownloadTimeout  = 15 * time.Minute
 	updateDownloadAttempts = 3
+	// StatePreparationTimeout bounds the same bootstrap in startup and update.
+	StatePreparationTimeout = 2 * time.Minute
 )
 
 // NewUpdater owns the network policy for every update surface. Injected clients
 // must allow streaming bodies; request contexts bound metadata and downloads.
-func NewUpdater(client sysutil.HTTPClient) Updater {
+func NewUpdater(options UpdaterOptions) Updater {
+	client := options.Client
 	if client == nil {
 		transport := http.DefaultTransport.(*http.Transport).Clone()
 		transport.ResponseHeaderTimeout = updateMetadataTimeout
 		client = &http.Client{Transport: transport}
 	}
-	return &nativeUpdater{client: client}
+	prepare := options.Prepare
+	if prepare == nil {
+		prepare = prepareUpdateCandidate
+	}
+	return &nativeUpdater{client: client, prepare: prepare}
+}
+
+func prepareUpdateCandidate(ctx context.Context, executable, home string) error {
+	ctx, cancel := context.WithTimeout(ctx, StatePreparationTimeout)
+	defer cancel()
+	output, err := sysutil.NewCommandWithEnvironment(ctx, map[string]string{"NIDO_HOME": home}, executable, "version", "--json").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("prepare updated state: %w: %s", err, output)
+	}
+	return nil
 }
 
 func getURL(ctx context.Context, client sysutil.HTTPClient, url string) (*http.Response, error) {
@@ -109,6 +136,11 @@ func (u *nativeUpdater) Update(ctx context.Context, request UpdateRequest) (resu
 	if err != nil {
 		return result, err
 	}
+	lease, err := sysutil.AcquireResource(target + ".update.lock")
+	if err != nil {
+		return result, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, lease.Close()) }()
 	backup := target + ".bak"
 	if _, err := os.Lstat(backup); err == nil {
 		return result, fmt.Errorf("previous binary %s is still present; retire it only after its consumers close", backup)
@@ -136,6 +168,9 @@ func (u *nativeUpdater) Update(ctx context.Context, request UpdateRequest) (resu
 		return result, err
 	}
 	if err := sysutil.MakeExecutable(candidate); err != nil {
+		return result, err
+	}
+	if err := u.prepare(ctx, candidate, request.NidoDir); err != nil {
 		return result, err
 	}
 	if err := ctx.Err(); err != nil {

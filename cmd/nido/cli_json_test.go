@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"github.com/Josepavese/nido/v4/internal/events"
 	"github.com/Josepavese/nido/v4/internal/hardware"
@@ -483,3 +484,5 @@ func TestSpawnArchitectureFlag(t *testing.T) {
 		}
 	}
 }
+
+func (m fakeProvider) PrepareState(context.Context) error { return nil }
