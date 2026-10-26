@@ -226,10 +226,15 @@ Partial downloads are resumed within the same update invocation only.
 An older executable still uses its original updater: publishing a new release
 cannot change that timeout in place. If it times out, use the original package
 manager or rerun the binary installer above, preserving the same Nido data
-directory. Never uninstall to repair a download timeout. When crossing from the
-previous AMD64-only metadata to 4.10, follow the explicit
-[architecture migration](../docs/architectures.md) before reopening the fleet;
-the conversion preserves existing VM disks and backs up original metadata.
+directory. Never uninstall to repair a download timeout.
+
+From 4.10.3, self-update and binary installers automatically prepare old state
+before replacing the executable. Older updaters and package managers complete
+the same conversion at the first invocation of the new binary. No manual
+`nido migrate` is required. Stop legacy VMs and close old clients before crossing
+the architecture metadata boundary: preparation never stops VMs automatically.
+The resumable conversion preserves disks, backing paths and original metadata;
+see [automatic state preparation](../docs/architectures.md#disks-templates-and-upgrades).
 
 Read the [changelog](../CHANGELOG.md) for upgrade notes, especially host PCI
 recovery records. Reconnect MCP clients after an executable upgrade so they

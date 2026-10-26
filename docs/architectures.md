@@ -97,9 +97,14 @@ port an operating-system installer.
 When upgrading from the earlier AMD64-only Nido:
 
 1. Stop the VMs with the old binary and close other Nido CLI/TUI/MCP sessions.
-2. Install the new binary, keeping the existing state directories and disks.
-3. Run `nido migrate` once, then reopen clients. MCP clients can explicitly call
-   `nido_system` with `action: migrate` instead.
+2. Update normally, keeping the existing state directories and disks. From
+   4.10.3, self-update and binary installers prepare metadata automatically
+   before replacing the executable. A preparation failure keeps the previous
+   executable installed.
+3. Reopen clients. If the upgrade was performed by an older updater or a
+   package manager, the first invocation of the new binary finalizes the same
+   conversion automatically, before CLI/TUI/MCP can use the fleet. No manual
+   migration command is required.
 
 The resumable conversion adds AMD64 declarations to old records and preserves
 already declared ARM guests. It saves each original VM state beside it as
@@ -109,6 +114,15 @@ credentials. Existing image filenames remain valid disk paths and backing
 references. New catalog acquisitions use ISA-qualified names; preserved old
 cache files remain usable as explicit image paths or template sources.
 Review and retain the state backups according to your normal backup policy.
+
+The `.state-schema` completion marker is written last. Concurrent first starts
+wait on a cross-process reservation; subsequent starts use the current schema
+without repeating conversion. Invalid metadata, unknown markers or active VMs
+with legacy state stop preparation explicitly; Nido never stops a VM to complete
+an upgrade. After resolving the cause, retry the update or new binary normally.
+The explicit `nido migrate` operation remains available for deliberate adoption
+or recovery of untyped artifacts; ordinary upgrades do not require it. New or
+current installations do not silently assign AMD64 to unidentified raw imports.
 
 `NIDO_HOME` selects a separate application-state root for containers and isolated
 tests. It does not change the user's operating-system home. Keep custom image

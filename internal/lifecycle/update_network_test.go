@@ -59,9 +59,9 @@ func TestUpdaterSlowConnectionBeyondFormerTimeout(t *testing.T) {
 	}))
 	defer server.Close()
 	fixture.metadata.Assets[0].URL = server.URL + "/archive"
-	client := NewUpdater(nil).(*nativeUpdater).client
+	client := NewUpdater(UpdaterOptions{}).(*nativeUpdater).client
 	started := time.Now()
-	result, err := NewUpdater(updateHTTPFixture{fixture, client}).Update(context.Background(), request)
+	result, err := fixtureUpdater(updateHTTPFixture{fixture, client}).Update(context.Background(), request)
 	if err != nil || result.RegistryError != nil {
 		t.Fatalf("slow update: %+v %v", result, err)
 	}
@@ -111,7 +111,7 @@ func TestUpdaterInterruptedTransferResumesOrSafelyRestarts(t *testing.T) {
 			}))
 			defer server.Close()
 			fixture.metadata.Assets[0].URL = server.URL + "/archive"
-			result, err := NewUpdater(updateHTTPFixture{fixture, server.Client()}).Update(context.Background(), request)
+			result, err := fixtureUpdater(updateHTTPFixture{fixture, server.Client()}).Update(context.Background(), request)
 			failure := mode == "invalid range" || mode == "repeated disconnect"
 			if failure != (err != nil) {
 				t.Fatalf("update: %+v %v", result, err)
@@ -152,7 +152,7 @@ func TestUpdaterCancellationDuringStreamingPreservesInstallation(t *testing.T) {
 	}))
 	defer server.Close()
 	fixture.metadata.Assets[0].URL = server.URL
-	_, err := NewUpdater(updateHTTPFixture{fixture, server.Client()}).Update(ctx, request)
+	_, err := fixtureUpdater(updateHTTPFixture{fixture, server.Client()}).Update(ctx, request)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation: %v", err)
 	}

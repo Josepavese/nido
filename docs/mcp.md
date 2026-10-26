@@ -88,6 +88,14 @@ well as mutations:
 | `nido_blueprint` | `list`, `info`, `build` |
 | `nido_system` | `doctor`, `version`, `update_check`, `update`, `config_get`, `config_set`, `accel_list`, `register`, `completion`, `build_image`, `uninstall` |
 
+State preparation is automatic before the server accepts requests after an
+upgrade. A client using `nido_system` / `update` shares the same candidate
+preparation as CLI/TUI; reconnect after the executable changes. Old updater or
+package-manager installations finalize conversion at the first new server
+start. The explicit `migrate` action is a recovery/adoption tool, not a required
+upgrade step. Disk payloads and original metadata are preserved; see the
+[architecture upgrade guide](architectures.md#disks-templates-and-upgrades).
+
 `nido mcp-help` emits the current machine-readable guide with schemas, examples,
 resources and routing rules. `nido mcp --help` is its human-readable entry point.
 The `nido_task_router` prompt helps clients choose resources and tool actions.

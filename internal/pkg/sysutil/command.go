@@ -23,6 +23,19 @@ type Command interface {
 	SetStdout(io.Writer)
 	SetStderr(io.Writer)
 }
+
+// NewCommandWithEnvironment overrides named environment entries for one owned
+// child without changing the caller's process-wide environment.
+func NewCommandWithEnvironment(ctx context.Context, environment map[string]string, name string, args ...string) Command {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Env = os.Environ()
+	for key, value := range environment {
+		// os/exec keeps the last occurrence, including Windows key semantics.
+		cmd.Env = append(cmd.Env, key+"="+value)
+	}
+	return &nativeCommand{command: cmd}
+}
+
 type CommandError struct {
 	Code  int
 	cause error

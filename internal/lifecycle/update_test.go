@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/Josepavese/nido/v4/internal/build"
 	"github.com/Josepavese/nido/v4/internal/events"
+	"github.com/Josepavese/nido/v4/internal/pkg/sysutil"
 	"io"
 	"net/http"
 	"os"
@@ -94,7 +95,7 @@ func TestUpdaterFailurePreservesInstalledBinaryAndRetiresScratch(t *testing.T) {
 				ctx, cancel = context.WithCancel(ctx)
 				cancel()
 			}
-			if _, err := NewUpdater(client).Update(ctx, request); err == nil {
+			if _, err := fixtureUpdater(client).Update(ctx, request); err == nil {
 				t.Fatal("failure reported success")
 			}
 			if len(observed) != 2 || observed[1].Kind != events.Failed {
@@ -126,7 +127,7 @@ func TestUpdaterInstallsVerifiedArtifactAndPreservesData(t *testing.T) {
 		os.MkdirAll(filepath.Dir(p), 0755)
 		os.WriteFile(p, []byte("KEEP"), 0600)
 	}
-	result, err := NewUpdater(client).Update(context.Background(), request)
+	result, err := fixtureUpdater(client).Update(context.Background(), request)
 	if err != nil || result.RegistryError != nil || result.Version != "v99.0.0" {
 		t.Fatalf("update: %+v %v", result, err)
 	}
@@ -159,5 +160,47 @@ func TestUnsafeUninstallEmitsFailureWithoutTouchingData(t *testing.T) {
 	err := Uninstall("/", "", func(e events.Event) { got = append(got, e) })
 	if err == nil || len(got) != 2 || got[0].Kind != events.Started || got[1].Kind != events.Failed {
 		t.Fatalf("unsafe uninstall: %v %+v", err, got)
+	}
+}
+
+func fixtureUpdater(client sysutil.HTTPClient) Updater {
+	return NewUpdater(UpdaterOptions{Client: client, Prepare: func(context.Context, string, string) error { return nil }})
+}
+
+func TestUpdaterPreparesCandidateBeforeReplacingExecutable(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(fmt.Sprint(fail), func(t *testing.T) {
+			client, request := updaterFixture(t)
+			calls := 0
+			updater := NewUpdater(UpdaterOptions{Client: client, Prepare: func(ctx context.Context, candidate, home string) error {
+				calls++
+				if lease, err := sysutil.AcquireResource(request.Executable + ".update.lock"); err == nil {
+					lease.Close()
+					t.Fatal("candidate preparation ran without exclusive update ownership")
+				}
+				old, _ := os.ReadFile(request.Executable)
+				next, _ := os.ReadFile(candidate)
+				if string(old) != "OLD EXECUTABLE" || string(next) != "NEW EXECUTABLE" || home != request.NidoDir {
+					t.Fatal("preparation identity/order invalid")
+				}
+				if fail {
+					return fmt.Errorf("fixture migration failed")
+				}
+				return nil
+			}})
+			_, err := updater.Update(context.Background(), request)
+			if (err != nil) != fail || calls != 1 {
+				t.Fatalf("prepare: %d %v", calls, err)
+			}
+			if fail {
+				data, _ := os.ReadFile(request.Executable)
+				if string(data) != "OLD EXECUTABLE" {
+					t.Fatal("replaced binary after preparation failed")
+				}
+				if _, err := os.Stat(request.Executable + ".bak"); !os.IsNotExist(err) {
+					t.Fatal("moved previous executable")
+				}
+			}
+		})
 	}
 }

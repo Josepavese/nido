@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [4.10.3] - 2026-10-26 "Seamless Wings"
+
 ### Fixed
+
+- Prepare existing state automatically before self-update or binary installer
+  replacement. Older updaters and package managers finalize the same one-time
+  conversion at the first invocation of the new binary, without `nido migrate`.
+- Serialize concurrent first starts, preserve original metadata and recover
+  interrupted conversions before publishing the current schema marker. Refuse
+  unknown schemas and active legacy VMs without replacing the installed binary
+  in the new updater. Disk payloads, paths and backing chains are preserved.
 
 - Preserve AMD64 RPM packages alongside ARM64 when retaining repository
   versions. Repair the signed 4.10.2 package repository without changing

@@ -180,4 +180,6 @@ VM list/detail and catalog entries include `arch` (`amd64` or `arm64`). VM detai
 includes `virtualization_capability` with the HAL accelerator and CPU model;
 this is capability information, not a runtime QMP observation. Native image
 resolution accepts omitted/`auto` architecture; explicit variants never silently
-fall back to another ISA. `migrate --json` reports the number of records converted.
+fall back to another ISA. Automatic state preparation is silent on success and
+preserves the normal JSON/MCP protocol. `migrate --json` remains an explicit
+adoption/recovery operation and reports the number of records it converts.

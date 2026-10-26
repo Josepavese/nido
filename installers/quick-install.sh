@@ -127,6 +127,8 @@ mkdir -p "${NIDO_HOME}/run"
 mkdir -p "${NIDO_HOME}/images"
 mkdir -p "${NIDO_HOME}/registry"
 
+# The verified candidate prepares old state before replacing an existing binary.
+NIDO_HOME="${NIDO_HOME}" "${PKG_DIR}/nido" version --json >/dev/null
 install -m 0755 "${PKG_DIR}/nido" "${NIDO_HOME}/bin/nido"
 if [ -x "${PKG_DIR}/nido-validator" ]; then
   install -m 0755 "${PKG_DIR}/nido-validator" "${NIDO_HOME}/bin/nido-validator"

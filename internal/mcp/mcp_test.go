@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/Josepavese/nido/v4/internal/events"
 	"github.com/Josepavese/nido/v4/internal/hardware"
@@ -491,3 +492,5 @@ func TestVMCreatePropagatesArchitecture(t *testing.T) {
 		}
 	}
 }
+
+func (m *mockProvider) PrepareState(context.Context) error { return nil }

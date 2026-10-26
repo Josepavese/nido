@@ -2,17 +2,41 @@ package sysutil
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 var ErrResourceBusy = errors.New("resource is owned by another operation")
 
 const resourceMarker = "nido-resource-lock-v1\n"
+const resourceRetryInterval = 50 * time.Millisecond
+
+// AcquireResourceContext waits for another owner's bounded operation, without
+// masking invalid reservations or changing the nonblocking primitive's policy.
+func AcquireResourceContext(ctx context.Context, path string) (ResourceLease, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		lease, err := AcquireResource(path)
+		if !errors.Is(err, ErrResourceBusy) {
+			return lease, err
+		}
+		timer := time.NewTimer(resourceRetryInterval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
 
 type ResourceLease interface{ Close() error }
 type resourceLease struct {
@@ -40,6 +64,9 @@ func AcquireResource(path string) (ResourceLease, error) {
 	}
 	file, err := openResourceFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("%w: reservation was retired during acquisition", ErrResourceBusy)
+		}
 		return nil, err
 	}
 	valid := false
@@ -63,7 +90,10 @@ func AcquireResource(path string) (ResourceLease, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !info.Mode().IsRegular() || !named.Mode().IsRegular() || !os.SameFile(info, named) || links != 1 {
+	if !os.SameFile(info, named) {
+		return nil, fmt.Errorf("%w: reservation identity changed", ErrResourceBusy)
+	}
+	if !info.Mode().IsRegular() || !named.Mode().IsRegular() || links != 1 {
 		return nil, fmt.Errorf("invalid resource reservation identity")
 	}
 	data, err := io.ReadAll(io.LimitReader(file, int64(len(resourceMarker)+1)))
