@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [4.10.4] - 2026-10-27 "Steady Perch"
+
+### Fixed
+
+- Keep the Registry selection on the highlighted image during background
+  catalog/cache refreshes, including distinct architecture and provider variants.
+- Snapshot sidebar selection notifications in the shared TUI kit and keep late
+  notifications from restoring older Registry details during rapid navigation.
+
 ## [4.10.3] - 2026-10-26 "Seamless Wings"
 
 ### Fixed

@@ -170,7 +170,7 @@ func (r *Registry) Init() tea.Cmd {
 }
 
 func (r *Registry) rebuildSidebar() {
-	selected := r.DetailView.Item
+	selected, _ := r.Sidebar.SelectedItem().(RegistryItem)
 	var items []widget.SidebarItem
 
 	// 1. Local Cache Section
@@ -198,7 +198,7 @@ func (r *Registry) rebuildSidebar() {
 	r.Sidebar.SetItems(items)
 
 	for index, item := range items {
-		if candidate, ok := item.(RegistryItem); ok && candidate.Name == selected.Name && candidate.Version == selected.Version && candidate.IsLocal == selected.IsLocal {
+		if candidate, ok := item.(RegistryItem); ok && candidate == selected {
 			r.Sidebar.Select(index)
 			r.DetailView.UpdateItem(candidate)
 			return
@@ -227,9 +227,9 @@ func (r *Registry) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
-	// Sidebar Selection
+	// Selection commands may arrive after later input or a catalog refresh.
 	case view.SelectionMsg:
-		if item, ok := msg.Item.(RegistryItem); ok {
+		if item, ok := r.Sidebar.SelectedItem().(RegistryItem); ok {
 			r.DetailView.UpdateItem(item)
 		} else {
 			// Header selected? Clear detail

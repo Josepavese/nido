@@ -8,6 +8,7 @@ import (
 
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
+	viewlet "github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -247,5 +248,16 @@ func TestSidebarSectionsDoNotTakeFocus(t *testing.T) {
 		if sidebar.Index() != step.expected {
 			t.Fatalf("%v selected section %d", step.key, sidebar.Index())
 		}
+	}
+}
+
+func TestSidebarNotificationsSnapshotTheirSelection(t *testing.T) {
+	sidebar := NewSidebarList([]SidebarItem{SidebarItemString("first"), SidebarItemString("second"), SidebarItemString("third")}, 40, SidebarStyles{}, "")
+	sidebar.Focus()
+	_, first := sidebar.Update(tea.KeyMsg{Type: tea.KeyDown})
+	sidebar.Update(tea.KeyMsg{Type: tea.KeyDown})
+	message := first().(viewlet.SelectionMsg)
+	if message.Index != 1 || message.Item != SidebarItemString("second") {
+		t.Fatalf("queued notification read a later selection: %#v", message)
 	}
 }
