@@ -116,11 +116,14 @@ func TestScreenGallery(t *testing.T) {
 	r.Update(ops.RegistryListMsg{Images: []ops.RegistryImage{{Name: "ubuntu", Version: "24.04", Registry: "nido", Description: strings.Repeat("A useful image. ", 20)}}})
 	capture("Registry catalog", "REGISTRY")
 	r.MasterDetail.SetFocus(widget.FocusDetail)
-	r.Update(view.SelectionMsg{Item: registry.RegistryItem{Name: "ubuntu", Version: "24.04", Provider: "nido"}})
 	capture("Registry detail", "REGISTRY")
 	r.Update(ops.CacheListMsg{Items: []ops.CacheItem{{Name: "cached-bird", Version: "1", Kind: "cloud"}}})
-	r.Update(view.SelectionMsg{Item: registry.RegistryItem{Name: "cached-bird", Version: "1", IsLocal: true}})
+	r.Sidebar.Select(1) // First cached image, after its section heading.
+	r.Update(view.SelectionMsg{})
 	r.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	if !r.ConfirmDelete.IsActive() {
+		t.Fatal("registry gallery did not open the delete confirmation")
+	}
 	capture("Delete image", "REGISTRY")
 	r.ConfirmDelete.Hide()
 	for _, key := range []string{"SETTINGS", "APPEARANCE", "UPDATE", "DOCTOR", "CACHE", "UNINSTALL"} {

@@ -197,9 +197,7 @@ func (s *SidebarList) Update(msg tea.Msg) (viewlet.Viewlet, tea.Cmd) {
 
 	if s.Index() != oldIdx {
 		// Selection changed!
-		cmd = tea.Batch(cmd, func() tea.Msg {
-			return viewlet.SelectionMsg{Index: s.Index(), Item: s.SelectedItem()}
-		})
+		cmd = tea.Batch(cmd, s.selectionCmd())
 	}
 	return s, cmd
 }
@@ -214,7 +212,7 @@ func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, 
 		}
 		s.skipSections(msg.Button == tea.MouseButtonWheelUp, old)
 		if old != s.Index() {
-			return s, func() tea.Msg { return viewlet.SelectionMsg{Index: s.Index(), Item: s.SelectedItem()} }, true
+			return s, s.selectionCmd(), true
 		}
 		return s, nil, true
 	}
@@ -253,14 +251,17 @@ func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, 
 		// Auto-Focus on Click
 		s.Focus()
 		s.Model.Select(targetIdx)
-		item := s.Model.SelectedItem()
 
-		return s, func() tea.Msg {
-			return viewlet.SelectionMsg{Index: targetIdx, Item: item}
-		}, true
+		return s, s.selectionCmd(), true
 	}
 
 	return s, nil, false
+}
+
+// Snapshot selection on the UI loop; commands run asynchronously.
+func (s *SidebarList) selectionCmd() tea.Cmd {
+	selection := viewlet.SelectionMsg{Index: s.Index(), Item: s.SelectedItem()}
+	return func() tea.Msg { return selection }
 }
 
 // Dummy methods to satisfy Viewlet interface if needed

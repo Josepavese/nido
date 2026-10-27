@@ -2,6 +2,7 @@ package registry
 
 import (
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
+	view "github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 	"testing"
 
@@ -12,7 +13,7 @@ import (
 func TestBackgroundRemovalKeepsConfirmedImageIdentity(t *testing.T) {
 	r := NewRegistry(nil)
 	a := RegistryItem{Name: "original", Version: "1", IsLocal: true}
-	r.DetailView.UpdateItem(a)
+	r.Update(ops.CacheListMsg{Items: []ops.CacheItem{{Name: a.Name, Version: a.Version}}})
 	r.Update(tea.KeyMsg{Type: tea.KeyDelete})
 	r.Update(ops.CacheListMsg{Items: []ops.CacheItem{{Name: "replacement", Version: "2"}}})
 	if len(r.localItems) != 1 || r.DetailView.Item.Name != "" {
@@ -65,5 +66,49 @@ func TestRegistryOpenAndPullRemainDistinct(t *testing.T) {
 	inspect(cmd)
 	if !found {
 		t.Fatal("detail Enter did not pull")
+	}
+}
+
+func TestRefreshPreservesSelectedArchitectureAndProvider(t *testing.T) {
+	r := NewRegistry(nil)
+	r.remoteItems = []RegistryItem{
+		{Name: "bird", Version: "1", Arch: "amd64", Provider: "official"},
+		{Name: "bird", Version: "1", Arch: "arm64", Provider: "official"},
+		{Name: "bird", Version: "1", Arch: "arm64", Provider: "nido"},
+	}
+	r.rebuildSidebar()
+	for index, item := range r.Sidebar.Items() {
+		candidate, ok := item.(RegistryItem)
+		if !ok {
+			continue
+		}
+		r.Sidebar.Select(index)
+		r.DetailView.UpdateItem(candidate)
+		r.Update(ops.CacheListMsg{})
+		if got := r.Sidebar.SelectedItem(); got != candidate || r.DetailView.Item != candidate {
+			t.Fatalf("refresh replaced %#v with %#v (detail %#v)", candidate, got, r.DetailView.Item)
+		}
+	}
+}
+
+func TestRefreshDuringNavigationUsesHighlightedItem(t *testing.T) {
+	r := NewRegistry(nil)
+	r.remoteItems = []RegistryItem{{Name: "first"}, {Name: "second"}, {Name: "third"}}
+	r.rebuildSidebar()
+	r.Resize(layout.NewRect(0, 0, 120, 30))
+	r.Focus()
+	r.Update(tea.KeyMsg{Type: tea.KeyDown}) // Selection notification is still queued.
+	selected := r.Sidebar.SelectedItem().(RegistryItem)
+	if selected.Name != "second" {
+		t.Fatalf("Down did not select second: %v", selected)
+	}
+	r.Update(ops.CacheListMsg{})
+	if r.Sidebar.SelectedItem() != selected || r.DetailView.Item != selected {
+		t.Fatal("background refresh moved selection backwards")
+	}
+	// An older asynchronous notification must not replace the current detail.
+	r.Update(view.SelectionMsg{Item: r.remoteItems[0]})
+	if r.DetailView.Item != selected {
+		t.Fatal("late selection notification replaced current detail")
 	}
 }
