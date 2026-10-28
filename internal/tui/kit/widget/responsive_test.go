@@ -8,7 +8,6 @@ import (
 
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
-	viewlet "github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -229,6 +228,7 @@ func TestCardBalancesLongDescriptionAndTitle(t *testing.T) {
 
 type sectionItem string
 
+func (s sectionItem) SelectionID() string { return string(s) }
 func (s sectionItem) FilterValue() string { return string(s) }
 func (s sectionItem) Title() string       { return string(s) }
 func (s sectionItem) Icon() string        { return "" }
@@ -251,13 +251,87 @@ func TestSidebarSectionsDoNotTakeFocus(t *testing.T) {
 	}
 }
 
-func TestSidebarNotificationsSnapshotTheirSelection(t *testing.T) {
+func TestSidebarNotificationsRejectObsoleteSelections(t *testing.T) {
 	sidebar := NewSidebarList([]SidebarItem{SidebarItemString("first"), SidebarItemString("second"), SidebarItemString("third")}, 40, SidebarStyles{}, "")
-	sidebar.Focus()
-	_, first := sidebar.Update(tea.KeyMsg{Type: tea.KeyDown})
-	sidebar.Update(tea.KeyMsg{Type: tea.KeyDown})
-	message := first().(viewlet.SelectionMsg)
-	if message.Index != 1 || message.Item != SidebarItemString("second") {
-		t.Fatalf("queued notification read a later selection: %#v", message)
+	first := sidebar.Select(1)
+	second := sidebar.Select(2)
+	if _, current := sidebar.CurrentSelection(first().(SelectionMsg)); current {
+		t.Fatal("accepted notification from an older selection")
+	}
+	if item, current := sidebar.CurrentSelection(second().(SelectionMsg)); !current || item != SidebarItemString("third") {
+		t.Fatal("lost current selection", item)
+	}
+	sidebar.SetItems([]SidebarItem{SidebarItemString("third"), SidebarItemString("first")})
+	if item, current := sidebar.CurrentSelection(second().(SelectionMsg)); !current || item.SelectionID() != "third" {
+		t.Fatal("refresh invalidated a pending notification for the same identity")
+	}
+	sidebar.SetItems([]SidebarItem{SidebarItemString("first")})
+	if _, current := sidebar.CurrentSelection(second().(SelectionMsg)); current {
+		t.Fatal("accepted notification for a removed selection")
+	}
+	other := NewSidebarList([]SidebarItem{SidebarItemString("third")}, 40, SidebarStyles{}, "")
+	if _, current := sidebar.CurrentSelection(other.Select(0)().(SelectionMsg)); current {
+		t.Fatal("accepted notification from another list")
+	}
+}
+
+type refreshItem struct{ id, label string }
+
+func (i refreshItem) SelectionID() string { return i.id }
+func (i refreshItem) Title() string       { return i.label }
+func (i refreshItem) Icon() string        { return "" }
+func (i refreshItem) IsAction() bool      { return false }
+func (i refreshItem) FilterValue() string { return i.label }
+
+func TestSidebarRefreshPreservesIdentityAcrossReorderAndResize(t *testing.T) {
+	sidebar := NewSidebarList([]SidebarItem{sectionItem("heading"), refreshItem{"a", "same label"}, refreshItem{"b", "same label"}}, 40, SidebarStyles{}, "")
+	sidebar.Select(2)
+	for _, size := range [][2]int{{40, 20}, {20, 2}, {40, 20}} {
+		sidebar.Resize(layout.NewRect(0, 0, size[0], size[1]))
+		if !sidebar.SetItems([]SidebarItem{refreshItem{"b", "new label"}, sectionItem("new heading"), refreshItem{"a", "same label"}}) || sidebar.SelectedItem().SelectionID() != "b" {
+			t.Fatal("refresh lost selected identity")
+		}
+	}
+	if sidebar.SetItems([]SidebarItem{sectionItem("heading"), refreshItem{"a", "same label"}}) {
+		t.Fatal("removed item reported as retained")
+	}
+	if sidebar.SelectedItem().SelectionID() != "a" {
+		t.Fatal("fallback selected a section")
+	}
+	sidebar.SetItems([]SidebarItem{sectionItem("heading")})
+	if sidebar.SelectedItem() != nil {
+		t.Fatal("informational row became selectable")
+	}
+}
+
+func TestDialogRefreshKeepsHighlightedIdentity(t *testing.T) {
+	modal := NewListModal("Choose", []list.Item{refreshItem{"a", "same"}, refreshItem{"b", "same"}}, 40, 15, nil, nil)
+	modal.List.Select(1)
+	modal.Show()
+	modal.Update(tea.KeyMsg{Type: tea.KeyUp})
+	modal.Update(tea.KeyMsg{Type: tea.KeyDown})
+	modal.SetItems([]list.Item{refreshItem{"b", "renamed"}, refreshItem{"a", "same"}})
+	for _, size := range [][2]int{{120, 36}, {40, 10}, {120, 36}} {
+		modal.View(size[0], size[1])
+		if selected := modal.List.SelectedItem().(refreshItem); selected.id != "b" || selected.label != "renamed" {
+			t.Fatal("dialog refresh reset selection", selected)
+		}
+	}
+}
+
+func TestMasterDetailIgnoresStaleAndForeignSelections(t *testing.T) {
+	sidebar := NewSidebarList([]SidebarItem{SidebarItemString("a"), SidebarItemString("b")}, 40, SidebarStyles{}, "")
+	pages := NewPageManager()
+	master := NewMasterDetail(NewBoxedSidebar(NewCard("", "Test", ""), sidebar), pages, lipgloss.NewStyle())
+	old := sidebar.Select(0)
+	master.Update(sidebar.Select(1)())
+	master.Update(old())
+	if pages.Active != "b" {
+		t.Fatal("master/detail switched backwards", pages.Active)
+	}
+	foreign := NewSidebarList([]SidebarItem{SidebarItemString("foreign")}, 40, SidebarStyles{}, "")
+	master.Update(foreign.Select(0)())
+	if pages.Active != "b" {
+		t.Fatal("foreign list switched master/detail")
 	}
 }

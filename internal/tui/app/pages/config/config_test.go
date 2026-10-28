@@ -6,7 +6,6 @@ import (
 	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/theme"
-	fv "github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -16,7 +15,7 @@ import (
 
 func TestCacheSelectionUsesApplicationMessage(t *testing.T) {
 	model := NewConfig(&appconfig.Config{}, nil)
-	_, command := model.Update(fv.SelectionMsg{Item: ConfigItem{Key: "CACHE"}})
+	_, command := model.Update(model.Sidebar.Select(4)())
 	if command == nil {
 		t.Fatal("cache selection did not request stats")
 	}
@@ -109,5 +108,21 @@ func TestThemePreviewCancelRestoresDraftWithoutChangingConfig(t *testing.T) {
 	p.ThemeModal.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if p.SelectTheme.Value != "light" || cfg.Theme != "dark" {
 		t.Fatal("theme selection escaped the unsaved form")
+	}
+}
+
+func TestDelayedSelectionCannotSwitchSystemPageBack(t *testing.T) {
+	model := NewConfig(&appconfig.Config{}, nil)
+	old := model.Sidebar.Select(1)
+	current := model.Sidebar.Select(4)
+	model.Update(current())
+	model.Update(old())
+	if model.Pages.Active != "CACHE" {
+		t.Fatal("late event switched System backwards", model.Pages.Active)
+	}
+	model.RefreshItems()
+	model.Update(old())
+	if model.Pages.Active != "CACHE" || model.Sidebar.SelectedItem().(ConfigItem).Key != "CACHE" {
+		t.Fatal("refresh reset System selection")
 	}
 }

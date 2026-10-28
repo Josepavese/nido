@@ -24,6 +24,9 @@ type RegistryItem struct {
 	DeleteVersion string
 }
 
+func (i RegistryItem) SelectionID() string {
+	return fmt.Sprintf("%t/%q/%q/%q/%q", i.IsLocal, i.Provider, i.Name, i.Version, i.Arch)
+}
 func (i RegistryItem) Title() string {
 	return fmt.Sprintf("%s:%s [%s]", i.Name, i.Version, i.Arch)
 }
@@ -66,6 +69,7 @@ type SectionHeader struct {
 	TitleStr string
 }
 
+func (s SectionHeader) SelectionID() string { return s.TitleStr }
 func (s SectionHeader) Title() string       { return s.TitleStr }
 func (s SectionHeader) Description() string { return "" }
 func (s SectionHeader) FilterValue() string { return "" }
@@ -170,7 +174,6 @@ func (r *Registry) Init() tea.Cmd {
 }
 
 func (r *Registry) rebuildSidebar() {
-	selected, _ := r.Sidebar.SelectedItem().(RegistryItem)
 	var items []widget.SidebarItem
 
 	// 1. Local Cache Section
@@ -195,22 +198,10 @@ func (r *Registry) rebuildSidebar() {
 		items = append(items, SectionHeader{TitleStr: "  loading..."})
 	}
 
-	r.Sidebar.SetItems(items)
-
-	for index, item := range items {
-		if candidate, ok := item.(RegistryItem); ok && candidate == selected {
-			r.Sidebar.Select(index)
-			r.DetailView.UpdateItem(candidate)
+	if r.Sidebar.SetItems(items) {
+		if selected, ok := r.Sidebar.SelectedItem().(RegistryItem); ok {
+			r.DetailView.UpdateItem(selected)
 			return
-		}
-	}
-	if selected.Name == "" {
-		for index, item := range items {
-			if candidate, ok := item.(RegistryItem); ok {
-				r.Sidebar.Select(index)
-				r.DetailView.UpdateItem(candidate)
-				return
-			}
 		}
 	}
 	r.DetailView.UpdateItem(RegistryItem{})
@@ -228,8 +219,12 @@ func (r *Registry) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	// Selection commands may arrive after later input or a catalog refresh.
-	case view.SelectionMsg:
-		if item, ok := r.Sidebar.SelectedItem().(RegistryItem); ok {
+	case widget.SelectionMsg:
+		selected, current := r.Sidebar.CurrentSelection(msg)
+		if !current {
+			return r, nil
+		}
+		if item, ok := selected.(RegistryItem); ok {
 			r.DetailView.UpdateItem(item)
 		} else {
 			// Header selected? Clear detail

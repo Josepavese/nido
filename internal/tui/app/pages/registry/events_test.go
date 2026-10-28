@@ -2,7 +2,6 @@ package registry
 
 import (
 	"github.com/Josepavese/nido/v4/internal/tui/kit/layout"
-	view "github.com/Josepavese/nido/v4/internal/tui/kit/view"
 	"github.com/Josepavese/nido/v4/internal/tui/kit/widget"
 	"testing"
 
@@ -97,6 +96,7 @@ func TestRefreshDuringNavigationUsesHighlightedItem(t *testing.T) {
 	r.rebuildSidebar()
 	r.Resize(layout.NewRect(0, 0, 120, 30))
 	r.Focus()
+	old := r.Sidebar.Select(r.Sidebar.Index())
 	r.Update(tea.KeyMsg{Type: tea.KeyDown}) // Selection notification is still queued.
 	selected := r.Sidebar.SelectedItem().(RegistryItem)
 	if selected.Name != "second" {
@@ -107,7 +107,7 @@ func TestRefreshDuringNavigationUsesHighlightedItem(t *testing.T) {
 		t.Fatal("background refresh moved selection backwards")
 	}
 	// An older asynchronous notification must not replace the current detail.
-	r.Update(view.SelectionMsg{Item: r.remoteItems[0]})
+	r.Update(old())
 	if r.DetailView.Item != selected {
 		t.Fatal("late selection notification replaced current detail")
 	}

@@ -28,6 +28,7 @@ type SourceItem struct {
 	Display string
 }
 
+func (i SourceItem) SelectionID() string { return i.Type + "\x00" + i.Label }
 func (i SourceItem) Title() string {
 	if i.Display != "" {
 		return i.Display
@@ -41,13 +42,15 @@ func (i SourceItem) Icon() string {
 	// Use centralized theme icons
 	return theme.IconForType(i.Type)
 }
-func (i SourceItem) IsAction() bool { return false }
+func (i SourceItem) IsAction() bool   { return false }
+func (i SourceItem) Selectable() bool { return i.Type != "INFO" && i.Type != "ERROR" }
 
 // AccelItem adapts hardware.Accelerator to the List interface.
 type AccelItem struct {
 	Acc hardware.Accelerator
 }
 
+func (i AccelItem) SelectionID() string { return i.Acc.ID }
 func (i AccelItem) Title() string {
 	// [ID] Class (Vendor:Device)
 	return fmt.Sprintf("[%s] %s", i.Acc.ID, i.Acc.Class)
@@ -682,13 +685,16 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 		}
 
 	case ops.AcceleratorListMsg:
+		if msg.VMName != "" {
+			return h, nil
+		}
 		if msg.Err != nil {
 			// TODO: Error modal?
 			return h, nil
 		}
 		fItems := make([]list.Item, len(msg.Items))
 		copy(fItems, msg.Items)
-		h.ModalAccel.List.SetItems(fItems)
+		h.ModalAccel.SetItems(fItems)
 		h.ModalAccel.Show()
 		return h, nil
 
@@ -754,27 +760,21 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 				}
 			}
 			if len(items) > 0 {
-				h.Sidebar.SetItems(items)
-
-				target := h.PendingSelection
-				targetType := ""
-				if target == "" && h.Incubator.SelectedSource != nil {
-					target = h.Incubator.SelectedSource.Label
-					targetType = h.Incubator.SelectedSource.Type
-				}
-				selectedIndex := -1
-				for index, item := range items {
-					source := item.(SourceItem)
-					if target == "" || source.Label == target && (targetType == "" || source.Type == targetType) {
-						selectedIndex = index
-						break
+				requested := h.PendingSelection != ""
+				retained := h.Sidebar.SetItems(items)
+				if h.PendingSelection != "" {
+					retained = false
+					for index, item := range items {
+						if source := item.(SourceItem); source.Label == h.PendingSelection {
+							h.Sidebar.Select(index)
+							h.PendingSelection = ""
+							retained = true
+							break
+						}
 					}
 				}
-				if selectedIndex >= 0 {
-					h.Sidebar.Select(selectedIndex)
-					selected := items[selectedIndex].(SourceItem)
+				if selected, ok := h.Sidebar.SelectedItem().(SourceItem); retained && ok && (requested || !h.Incubator.sourceUnavailable) {
 					h.Incubator.SetSource(&selected)
-					h.PendingSelection = ""
 				} else {
 					h.Incubator.markSourceUnavailable()
 				}
@@ -789,13 +789,20 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 			}
 		}
 
-	case fv.SelectionMsg:
-		if item, ok := msg.Item.(SourceItem); ok {
+	case widget.SelectionMsg:
+		selected, current := h.Sidebar.CurrentSelection(msg)
+		if !current {
+			return h, nil
+		}
+		if item, ok := selected.(SourceItem); ok {
 			h.Incubator.SetSource(&item)
 		}
 
 	case tea.KeyMsg:
 		if h.Sidebar.Focused() && msg.String() == "enter" {
+			if selected, ok := h.Sidebar.SelectedItem().(SourceItem); ok {
+				h.Incubator.SetSource(&selected)
+			}
 			cmds = append(cmds, h.MasterDetail.SetFocus(widget.FocusDetail))
 			return h, tea.Batch(cmds...)
 		}
