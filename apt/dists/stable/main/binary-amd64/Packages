@@ -1,0 +1,99 @@
+Package: nido
+Architecture: amd64
+Version: 4.10.1
+Priority: optional
+Section: utils
+Maintainer: Josepavese <pvsjso@gmail.com>
+Installed-Size: 23669
+Filename: pool/main/n/nido/nido_4.10.1_amd64.deb
+Size: 12912144
+MD5sum: 0721ea9e9fe12f8dd680f496a1b2fab3
+SHA1: f46c02b5a19c4a1c473529da423cf4bb696cc81a
+SHA256: 0b28f8648cb4e84d9ee1e7df79035c8428df05ca0e90654782e253fe683a529b
+SHA512: 59356eeb9bd55eb5e5ff9933e6fb44a5e3ca30980f2c547b52c3e8bc7a03732b4ef5aa3463e6d16337cb0d580877e5a88c341a2bf838befac87219521083a499
+Homepage: https://github.com/Josepavese/nido
+Description: Nido is a local VM manager for AI agents. It creates, boots and controls
+ QEMU/KVM virtual machines through a CLI, a TUI and a native Model Context
+ Protocol (MCP) server, with linked clones, cloud images, templates, SSH and
+ port forwarding. QEMU must be installed separately on the host; run
+ `nido doctor` after installation to check the prerequisites.
+
+Package: nido
+Architecture: amd64
+Version: 4.10.2
+Priority: optional
+Section: utils
+Maintainer: Josepavese <pvsjso@gmail.com>
+Installed-Size: 23680
+Filename: pool/main/n/nido/nido_4.10.2_amd64.deb
+Size: 12919484
+MD5sum: 9b10e69f891bad2716d7a1f23410b106
+SHA1: d68e8b1789e2a3893d64bc10522bf9abf5c09eac
+SHA256: 146b6c6d9342ff34c8d0fa3bcd8cf7c7b914dca06b663863587a44a0edffb0a9
+SHA512: bccba6b85a17d3f29cac5b4b59f4f20224d5bcf06e7d496a6f09a4b5d37cf823a162cdcc2c2783f32cb9afaf329214df687d72924a07e47bf5492bc7debd418d
+Homepage: https://github.com/Josepavese/nido
+Description: Nido is a local VM manager for AI agents. It creates, boots and controls
+ QEMU/KVM virtual machines through a CLI, a TUI and a native Model Context
+ Protocol (MCP) server, with linked clones, cloud images, templates, SSH and
+ port forwarding. QEMU must be installed separately on the host; run
+ `nido doctor` after installation to check the prerequisites.
+
+Package: nido
+Architecture: amd64
+Version: 4.10.3
+Priority: optional
+Section: utils
+Maintainer: Josepavese <pvsjso@gmail.com>
+Installed-Size: 23693
+Filename: pool/main/n/nido/nido_4.10.3_amd64.deb
+Size: 12925342
+MD5sum: 74152e5b1a411fc12adeca091845ff25
+SHA1: 85673f9ba9ee2f4f9b98eaa555493bac4f7a2880
+SHA256: 81d14f51c7e64461b108372862b54f9207d488cf3cd921abb9dd3257e71fddad
+SHA512: 1bbb0199d94302fead109172a24166cd7c1d2321ac135b2bc1969dfba6b215f4e8f0d8f8752470464968dc96bdfa6b217d84330dea784775078cdc62bcad9f75
+Homepage: https://github.com/Josepavese/nido
+Description: Nido is a local VM manager for AI agents. It creates, boots and controls
+ QEMU/KVM virtual machines through a CLI, a TUI and a native Model Context
+ Protocol (MCP) server, with linked clones, cloud images, templates, SSH and
+ port forwarding. QEMU must be installed separately on the host; run
+ `nido doctor` after installation to check the prerequisites.
+
+Package: nido
+Architecture: amd64
+Version: 4.10.4
+Priority: optional
+Section: utils
+Maintainer: Josepavese <pvsjso@gmail.com>
+Installed-Size: 23688
+Filename: pool/main/n/nido/nido_4.10.4_amd64.deb
+Size: 12923346
+MD5sum: b10ba089f2d610911642424dd8993b1b
+SHA1: 5a08717dc4b91052ed55eba300b7ee39785ded24
+SHA256: 468699d249627ad432267fb521ed297766db3b7626d4788b127bafcece5cf3c5
+SHA512: d30cc1b011e39c0f87db1b6d23f5ee669f9feca726e603c88c0f22042bab4ed01e551acc1427cdad72aa69e5fa1587fcfc851a47f24cae445941b9e6301ae383
+Homepage: https://github.com/Josepavese/nido
+Description: Nido is a local VM manager for AI agents. It creates, boots and controls
+ QEMU/KVM virtual machines through a CLI, a TUI and a native Model Context
+ Protocol (MCP) server, with linked clones, cloud images, templates, SSH and
+ port forwarding. QEMU must be installed separately on the host; run
+ `nido doctor` after installation to check the prerequisites.
+
+Package: nido
+Architecture: amd64
+Version: 4.10.5
+Priority: optional
+Section: utils
+Maintainer: Josepavese <pvsjso@gmail.com>
+Installed-Size: 23718
+Filename: pool/main/n/nido/nido_4.10.5_amd64.deb
+Size: 12933346
+MD5sum: cc9427047762419bb1228f5a83b796c6
+SHA1: 183bf06c55b3abb3bebc925f01c60aaf11233d4a
+SHA256: 29e643d1e1ee5bd04e724ce005fe6917dc8a2eda287c4ff739318b60c6874b18
+SHA512: c638f838d3c4134e53a3c3951d9bd66f597f57bd57d01f8939d7f64a945df409ec9740121a46fe544a2e9b55718e5428b18938d3cf0f4060bfe7e6d0e3f6675c
+Homepage: https://github.com/Josepavese/nido
+Description: Nido is a local VM manager for AI agents. It creates, boots and controls
+ QEMU/KVM virtual machines through a CLI, a TUI and a native Model Context
+ Protocol (MCP) server, with linked clones, cloud images, templates, SSH and
+ port forwarding. QEMU must be installed separately on the host; run
+ `nido doctor` after installation to check the prerequisites.

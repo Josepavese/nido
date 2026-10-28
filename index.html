@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nido package repositories</title>
+<style>
+  body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; max-width: 52rem; margin: 3rem auto; padding: 0 1rem; line-height: 1.5; color: #1b1b1b; }
+  pre { background: #f4f4f4; padding: 0.75rem 1rem; overflow-x: auto; border-radius: 6px; }
+  h1 { font-size: 1.4rem; } h2 { font-size: 1.05rem; margin-top: 2rem; }
+  code { background: #f4f4f4; padding: 0.1rem 0.25rem; border-radius: 3px; }
+</style>
+<h1>Nido 4.10.5 — APT and DNF repositories</h1>
+<p>Packages for the <a href="https://github.com/Josepavese/nido">Nido local VM manager</a>.
+QEMU is a host prerequisite; run <code>nido doctor</code> after installing.</p>
+<h2>Debian / Ubuntu (APT)</h2>
+<pre>sudo install -d -m 0755 /etc/apt/keyrings
+sudo curl -fsSL https://josepavese.github.io/nido/nido-archive-keyring.asc -o /etc/apt/keyrings/nido.asc
+echo "deb [signed-by=/etc/apt/keyrings/nido.asc] https://josepavese.github.io/nido/apt/ stable main" | sudo tee /etc/apt/sources.list.d/nido.list
+sudo apt-get update
+sudo apt-get install nido</pre>
+<h2>Fedora / RHEL (DNF)</h2>
+<pre>sudo curl -fsSL https://josepavese.github.io/nido/rpm/nido.repo -o /etc/yum.repos.d/nido.repo
+sudo dnf install nido</pre>
+<p>The repositories are signed with the Nido package archive key
+(fingerprint DBB87CB63A94ABA50B33C7B919C6A95C9D280B64, expires 2029-10-24);
+the public keyring is served as <code>/nido-archive-keyring.asc</code>.</p>
+</html>
