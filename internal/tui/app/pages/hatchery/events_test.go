@@ -1,6 +1,7 @@
 package hatchery
 
 import (
+	tea "github.com/charmbracelet/bubbletea"
 	"testing"
 
 	"github.com/Josepavese/nido/v4/internal/tui/app/ops"
@@ -49,5 +50,22 @@ func TestSourceRefreshUsesHighlightAndRejectsLateNotifications(t *testing.T) {
 	h.Update(ops.SourcesLoadedMsg{Sources: []string{"[CLOUD] second", "[TEMPLATE] second\tnew title"}})
 	if h.Incubator.input.Value() != "keep-my-draft" || h.Incubator.SelectedSource.Display != "new title" {
 		t.Fatal("label refresh reset draft")
+	}
+}
+
+func TestRepeatedSourceRefreshCannotReplaceRemovedSourceDraft(t *testing.T) {
+	h := NewHatchery(nil)
+	h.Update(ops.SourcesLoadedMsg{Sources: []string{"[TEMPLATE] selected", "[TEMPLATE] other"}})
+	h.Incubator.input.SetValue("keep-draft")
+	for range 2 {
+		h.Update(ops.SourcesLoadedMsg{Sources: []string{"[TEMPLATE] other"}})
+	}
+	if h.Incubator.input.Value() != "keep-draft" || !h.Incubator.spawnBtn.Disabled {
+		t.Fatal("refresh selected a fallback and discarded the removed source draft")
+	}
+	h.Sidebar.Focus()
+	h.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if h.Incubator.SelectedSource.Label != "other" || h.Incubator.spawnBtn.Disabled {
+		t.Fatal("explicitly opening the available source did not select it")
 	}
 }

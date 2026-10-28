@@ -760,6 +760,7 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 				}
 			}
 			if len(items) > 0 {
+				requested := h.PendingSelection != ""
 				retained := h.Sidebar.SetItems(items)
 				if h.PendingSelection != "" {
 					retained = false
@@ -772,7 +773,7 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 						}
 					}
 				}
-				if selected, ok := h.Sidebar.SelectedItem().(SourceItem); retained && ok {
+				if selected, ok := h.Sidebar.SelectedItem().(SourceItem); retained && ok && (requested || !h.Incubator.sourceUnavailable) {
 					h.Incubator.SetSource(&selected)
 				} else {
 					h.Incubator.markSourceUnavailable()
@@ -799,6 +800,9 @@ func (h *Hatchery) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if h.Sidebar.Focused() && msg.String() == "enter" {
+			if selected, ok := h.Sidebar.SelectedItem().(SourceItem); ok {
+				h.Incubator.SetSource(&selected)
+			}
 			cmds = append(cmds, h.MasterDetail.SetFocus(widget.FocusDetail))
 			return h, tea.Batch(cmds...)
 		}
