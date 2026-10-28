@@ -90,7 +90,7 @@ func TestScreenGallery(t *testing.T) {
 	f.ErrorModal.Show()
 	capture("Fleet error", "FLEET")
 	f.ErrorModal.Hide()
-	f.ModalAccel.List.SetItems([]list.Item{widget.SimpleListItem("None"), widget.SimpleListItem("GPU - città 🐦 device with long name")})
+	f.ModalAccel.SetItems([]list.Item{widget.SimpleListItem("None"), widget.SimpleListItem("GPU - città 🐦 device with long name")})
 	f.ModalAccel.Show()
 	capture("Fleet accelerator", "FLEET")
 	f.ModalAccel.Hide()
@@ -118,8 +118,7 @@ func TestScreenGallery(t *testing.T) {
 	r.MasterDetail.SetFocus(widget.FocusDetail)
 	capture("Registry detail", "REGISTRY")
 	r.Update(ops.CacheListMsg{Items: []ops.CacheItem{{Name: "cached-bird", Version: "1", Kind: "cloud"}}})
-	r.Sidebar.Select(1) // First cached image, after its section heading.
-	r.Update(view.SelectionMsg{})
+	r.Update(r.Sidebar.Select(1)()) // First cached image, after its section heading.
 	r.Update(tea.KeyMsg{Type: tea.KeyDelete})
 	if !r.ConfirmDelete.IsActive() {
 		t.Fatal("registry gallery did not open the delete confirmation")

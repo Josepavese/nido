@@ -94,6 +94,7 @@ type RequestApplyUpdateMsg struct{}
 
 // AcceleratorListMsg contains the list of accelerators for the UI.
 type AcceleratorListMsg struct {
-	Items []list.Item
-	Err   error
+	VMName string // Empty for Hatchery; otherwise the Fleet request target.
+	Items  []list.Item
+	Err    error
 }

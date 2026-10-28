@@ -35,6 +35,7 @@ type FleetItem struct {
 	SpinnerFrame  string // New: frame from fleet's spinner
 }
 
+func (i FleetItem) SelectionID() string { return i.Name }
 func (i FleetItem) Title() string       { return i.Name }
 func (i FleetItem) Description() string { return i.State }
 func (i FleetItem) FilterValue() string { return i.Name }
@@ -212,15 +213,12 @@ func (f *Fleet) Init() tea.Cmd {
 }
 
 func (f *Fleet) OpenAcceleratorModal(vmName string) tea.Cmd {
+	f.pendingAccelVM = vmName
 	return func() tea.Msg {
-		// Set context
-		f.pendingAccelVM = vmName
-
 		// Fetch accelerators dynamically
 		devs, err := f.provider.ListAccelerators()
 		if err != nil {
-			// Show error modal?
-			return ops.AcceleratorListMsg{Err: err}
+			return ops.AcceleratorListMsg{VMName: vmName, Err: err}
 		}
 
 		var items []list.Item
@@ -233,9 +231,7 @@ func (f *Fleet) OpenAcceleratorModal(vmName string) tea.Cmd {
 			items = append(items, AccelItem{Acc: d})
 		}
 
-		f.ModalAccel.List.SetItems(items)
-		f.ModalAccel.Show()
-		return nil
+		return ops.AcceleratorListMsg{VMName: vmName, Items: items}
 	}
 }
 func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
@@ -263,14 +259,32 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	// Sidebar Selection
-	case view.SelectionMsg:
-		if item, ok := msg.Item.(FleetItem); ok {
+	case widget.SelectionMsg:
+		selected, current := f.Sidebar.CurrentSelection(msg)
+		if !current {
+			return f, nil
+		}
+		if item, ok := selected.(FleetItem); ok {
 			// User selected a VM in the sidebar
 			// Request details for it
 			cmds = append(cmds, func() tea.Msg {
 				return ops.VMDetailRequestMsg{Name: item.Name}
 			})
 		}
+
+	case ops.AcceleratorListMsg:
+		if msg.VMName == "" || msg.VMName != f.pendingAccelVM {
+			return f, nil
+		}
+		if msg.Err != nil {
+			f.ErrorModal.Title = "Accelerator list unavailable"
+			f.ErrorModal.Message = msg.Err.Error()
+			f.ErrorModal.Show()
+		} else {
+			f.ModalAccel.SetItems(msg.Items)
+			f.ModalAccel.Show()
+		}
+		return f, nil
 
 	// Data Updates
 	case ops.VMListMsg:
@@ -284,16 +298,8 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 			}
 		}
 		if msg.Err == nil {
-			// 1. Capture current selection to restore it
-			var targetName string
-			if sel := f.Sidebar.SelectedItem(); sel != nil {
-				targetName = sel.Title()
-			}
-
-			// 2. Update list
 			newItems := make([]widget.SidebarItem, len(msg.Items))
 			f.items = make([]FleetItem, len(msg.Items))
-			targetIndex := 0 // Default to first
 
 			for i, v := range msg.Items {
 				// Spinner Logic:
@@ -312,24 +318,14 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 				}
 				newItems[i] = fi
 				f.items[i] = fi
-
-				// Check if this is our previously selected one
-				if v.Name == targetName {
-					targetIndex = i
-				}
 			}
 			f.Sidebar.SetItems(newItems)
 
-			// 3. Restore Selection & Refresh Detail
-			if len(newItems) > 0 {
-				f.Sidebar.Select(targetIndex)
-
-				// Always fetch fresh detail for the active item (status might have changed)
-				if selected, ok := newItems[targetIndex].(FleetItem); ok {
-					cmds = append(cmds, func() tea.Msg {
-						return ops.VMDetailRequestMsg{Name: selected.Name}
-					})
-				}
+			// Refresh detail for the kit's current selection.
+			if selected, ok := f.Sidebar.SelectedItem().(FleetItem); ok {
+				cmds = append(cmds, func() tea.Msg {
+					return ops.VMDetailRequestMsg{Name: selected.Name}
+				})
 			}
 		}
 

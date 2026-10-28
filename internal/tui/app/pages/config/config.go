@@ -31,7 +31,8 @@ type ConfigItem struct {
 	Type  string // "setting", "page"
 }
 
-func (i ConfigItem) String() string { return i.Key }
+func (i ConfigItem) SelectionID() string { return i.Key }
+func (i ConfigItem) String() string      { return i.Key }
 func (i ConfigItem) Title() string {
 	if i.Label != "" {
 		return i.Label
@@ -239,8 +240,12 @@ func (c *Config) Update(msg tea.Msg) (fv.Viewlet, tea.Cmd) {
 		return c, cmd
 
 	// Sidebar Selection -> Switch Page
-	case fv.SelectionMsg:
-		if item, ok := msg.Item.(ConfigItem); ok {
+	case widget.SelectionMsg:
+		selected, current := c.Sidebar.CurrentSelection(msg)
+		if !current {
+			return c, nil
+		}
+		if item, ok := selected.(ConfigItem); ok {
 			c.Pages.SwitchTo(item.Key)
 
 			// Trigger loads for special pages

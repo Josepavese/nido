@@ -33,3 +33,21 @@ func TestBackgroundRefreshPreservesDraftAndPinsTemplateConfirmation(t *testing.T
 		t.Fatal("modal blocked background fleet validation")
 	}
 }
+
+func TestSourceRefreshUsesHighlightAndRejectsLateNotifications(t *testing.T) {
+	h := NewHatchery(nil)
+	h.Update(ops.SourcesLoadedMsg{Sources: []string{"[TEMPLATE] first", "[CLOUD] second", "[TEMPLATE] second"}})
+	old := h.Sidebar.Select(0)
+	h.Sidebar.Select(2) // The detail notification has not run yet.
+	h.Update(ops.SourcesLoadedMsg{Sources: []string{"[TEMPLATE] second\trenamed", "[TEMPLATE] first", "[CLOUD] second"}})
+	h.Update(old())
+	selected := h.Sidebar.SelectedItem().(SourceItem)
+	if selected.Type != "TEMPLATE" || selected.Label != "second" || h.Incubator.SelectedSource.Type != selected.Type || h.Incubator.SelectedSource.Label != selected.Label {
+		t.Fatal("refresh or late notification selected the wrong source", selected, h.Incubator.SelectedSource)
+	}
+	h.Incubator.input.SetValue("keep-my-draft")
+	h.Update(ops.SourcesLoadedMsg{Sources: []string{"[CLOUD] second", "[TEMPLATE] second\tnew title"}})
+	if h.Incubator.input.Value() != "keep-my-draft" || h.Incubator.SelectedSource.Display != "new title" {
+		t.Fatal("label refresh reset draft")
+	}
+}

@@ -55,12 +55,20 @@ func (m *MasterDetail) Update(msg tea.Msg) (viewlet.Viewlet, tea.Cmd) {
 
 	// Orchestration: Listen for SelectionMsg
 	if m.AutoSwitch {
-		if selMsg, ok := msg.(viewlet.SelectionMsg); ok {
+		if selMsg, ok := msg.(SelectionMsg); ok {
+			source, ok := m.Sidebar.(interface {
+				CurrentSelection(SelectionMsg) (SidebarItem, bool)
+			})
+			if !ok {
+				return m, nil
+			}
+			item, current := source.CurrentSelection(selMsg)
+			if !current {
+				return m, nil
+			}
 			key := ""
-			if keyed, ok := selMsg.Item.(interface{ Key() string }); ok {
-				key = keyed.Key()
-			} else if sidebarItem, ok := selMsg.Item.(SidebarItem); ok {
-				key = sidebarItem.Title()
+			if item != nil {
+				key = item.SelectionID()
 			}
 
 			if key != "" && key != m.Pages.Active {

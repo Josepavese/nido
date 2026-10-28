@@ -107,3 +107,7 @@ func (s *BoxedSidebar) Blur() {
 func (s *BoxedSidebar) Focused() bool {
 	return s.Sidebar.Focused()
 }
+
+func (s *BoxedSidebar) CurrentSelection(msg SelectionMsg) (SidebarItem, bool) {
+	return s.Sidebar.CurrentSelection(msg)
+}

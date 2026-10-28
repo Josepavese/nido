@@ -13,6 +13,7 @@ type AccelItem struct {
 	Acc hardware.Accelerator
 }
 
+func (i AccelItem) SelectionID() string { return i.Acc.ID }
 func (i AccelItem) Title() string {
 	return fmt.Sprintf("[%s] %s", i.Acc.ID, i.Acc.Class)
 }

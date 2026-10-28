@@ -79,3 +79,31 @@ func renderList(model *list.Model, width, height int) string {
 	}
 	return layout.Fit(width, height, content)
 }
+
+// replaceListItems is the shared identity restoration path for sidebars and
+// selection dialogs. Presentation state and item order do not define identity.
+func replaceListItems(model *list.Model, items []list.Item) bool {
+	previous, _ := model.SelectedItem().(SidebarItem)
+	if previous != nil && !selectable(previous) {
+		previous = nil
+	}
+	first, selected := -1, -1
+	for index, item := range items {
+		if !selectable(item) {
+			continue
+		}
+		if first < 0 {
+			first = index
+		}
+		if candidate, ok := item.(SidebarItem); ok && previous != nil && candidate.SelectionID() == previous.SelectionID() {
+			selected = index
+		}
+	}
+	model.SetItems(items)
+	retained := selected >= 0
+	if !retained {
+		selected = first
+	}
+	model.Select(selected)
+	return previous == nil || retained
+}

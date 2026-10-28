@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [4.10.5] - 2026-10-28 "Steady Flock"
+
+### Fixed
+
+- Keep Hatchery navigation on the highlighted source during background refreshes.
+  Restore selection by stable identity in the shared TUI kit, including Fleet,
+  Registry, System and refreshed list dialogs.
+- Reject obsolete and foreign-list selection notifications before they can
+  restore old details or switch System pages backwards.
+- Publish accelerator list results back to the UI loop and keep late Fleet
+  responses from retargeting a newer dialog request.
+
 ## [4.10.4] - 2026-10-27 "Steady Perch"
 
 ### Fixed

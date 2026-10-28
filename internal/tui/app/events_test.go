@@ -83,3 +83,19 @@ func TestGlobalOverlayUsesShellGeometry(t *testing.T) {
 		}
 	}
 }
+
+func TestAcceleratorResultsReachTheirOwnerBehindAnotherRoute(t *testing.T) {
+	f, h := fleet.NewFleet(nil), hatchery.NewHatchery(nil)
+	f.OpenAcceleratorModal("bird") // Capture request context without executing I/O.
+	model := &NidoApp{App: kit.NewApp(), Fleet: f, Hatchery: h, ErrorModal: widget.NewAlertModal("fixture", "", nil)}
+	model.AddRoute("HATCHERY", "Hatchery", "", h)
+	model.Update(ops.AcceleratorListMsg{VMName: "bird"})
+	if !f.ModalAccel.IsActive() || h.ModalAccel.IsActive() {
+		t.Fatal("Fleet accelerator response reached another route")
+	}
+	f.ModalAccel.Hide()
+	model.Update(ops.AcceleratorListMsg{})
+	if f.ModalAccel.IsActive() || !h.ModalAccel.IsActive() {
+		t.Fatal("Hatchery accelerator response reached another route")
+	}
+}

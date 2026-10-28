@@ -54,6 +54,16 @@ func NewListModal(title string, items []list.Item, width, height int, onSelect f
 	}
 }
 
+// SetItems keeps the highlighted identity when dialog options refresh.
+func (m *ListModal) SetItems(items []list.Item) {
+	retained := replaceListItems(&m.List, items)
+	if !retained && m.Active && m.OnHighlight != nil {
+		if item := m.List.SelectedItem(); item != nil && selectable(item) {
+			m.OnHighlight(item)
+		}
+	}
+}
+
 func (m *ListModal) Show() {
 	m.Active = true
 }
@@ -166,6 +176,7 @@ func (m *ListModal) View(parentWidth, parentHeight int) string {
 // SimpleListItem is a helper for simple string lists
 type SimpleListItem string
 
+func (i SimpleListItem) SelectionID() string { return string(i) }
 func (i SimpleListItem) FilterValue() string { return string(i) }
 func (i SimpleListItem) Title() string       { return string(i) }
 func (i SimpleListItem) Description() string { return "" }

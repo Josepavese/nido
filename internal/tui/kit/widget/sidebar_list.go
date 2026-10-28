@@ -18,6 +18,8 @@ import (
 type SidebarItem interface {
 	list.Item
 	Title() string
+	// SelectionID is stable across refreshes, labels and transient state changes.
+	SelectionID() string
 	// Icon returns a short emoji or symbol for the item. Return empty string if none.
 	Icon() string
 	// IsAction returns true if this item represents an action (e.g. "Create New") rather than a data item.
@@ -28,6 +30,7 @@ type SidebarItem interface {
 // SidebarItemString is a simple wrapper for using strings as SidebarItems.
 type SidebarItemString string
 
+func (s SidebarItemString) SelectionID() string { return string(s) }
 func (s SidebarItemString) Title() string       { return string(s) }
 func (s SidebarItemString) Description() string { return "" }
 func (s SidebarItemString) FilterValue() string { return string(s) }
@@ -45,9 +48,10 @@ type SidebarStyles struct {
 // SidebarList is a standardized list component for sidebars.
 // It enforces strict layout but accepts framework-agnostic styling.
 type SidebarList struct {
-	ListView      // Embeds adapter logic
-	focused       bool
-	noIconPadding string
+	ListView         // Embeds adapter logic
+	focused          bool
+	noIconPadding    string
+	selectionVersion uint64 // Owned by the UI loop, never read by asynchronous commands.
 }
 
 // NewSidebarList creates a new SidebarList with provided configuration.
@@ -77,6 +81,7 @@ func NewSidebarList(items []SidebarItem, width int, styles SidebarStyles, noIcon
 	sl.Model = new(list.Model)
 	*sl.Model = l
 	sl.noIconPadding = noIconPadding
+	sl.SetItems(items)
 	return sl
 }
 
@@ -112,7 +117,7 @@ func (d SidebarDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 		prefix = theme.RenderIcon(item.Icon())
 	}
 	style := d.Styles.Normal
-	if index == m.Index() {
+	if index == m.Index() && selectable(item) {
 		style = d.Styles.Selected
 	}
 	if item.IsAction() {
@@ -128,18 +133,25 @@ func (d SidebarDelegate) Render(w io.Writer, m list.Model, index int, listItem l
 
 // Helper for type assertion
 func (s *SidebarList) SelectedItem() SidebarItem {
-	if s.Model.SelectedItem() == nil {
+	item, _ := s.Model.SelectedItem().(SidebarItem)
+	if item == nil || !selectable(item) {
 		return nil
 	}
-	return s.Model.SelectedItem().(SidebarItem)
+	return item
 }
 
-func (s *SidebarList) SetItems(items []SidebarItem) {
+// SetItems preserves the highlighted identity, independent of delayed detail
+// updates. It returns false when a previously selected item was removed.
+func (s *SidebarList) SetItems(items []SidebarItem) bool {
 	listItems := make([]list.Item, len(items))
-	for i, it := range items {
-		listItems[i] = it
+	for i, item := range items {
+		listItems[i] = item
 	}
-	s.Model.SetItems(listItems)
+	retained := replaceListItems(s.Model, listItems)
+	if !retained {
+		s.selectionVersion++
+	}
+	return retained
 }
 
 // Shortcuts returns standard navigation shortcuts
@@ -155,17 +167,14 @@ func (s *SidebarList) Index() int {
 	return s.Model.Index()
 }
 
-func (s *SidebarList) Select(index int) {
+// Select changes selection on the UI loop and returns its notification command.
+func (s *SidebarList) Select(index int) tea.Cmd {
 	s.Model.Select(index)
+	return s.selectionCmd()
 }
 
 func (s *SidebarList) Items() []list.Item {
 	return s.Model.Items()
-}
-
-// SetItemsGeneric allows setting items from generic list.Item slice,
-func (s *SidebarList) SetItemsGeneric(items []list.Item) {
-	s.Model.SetItems(items)
 }
 
 func (s *SidebarList) Paginator() *paginator.Model {
@@ -258,10 +267,23 @@ func (s *SidebarList) HandleMouse(x, y int, msg tea.MouseMsg) (viewlet.Viewlet, 
 	return s, nil, false
 }
 
-// Snapshot selection on the UI loop; commands run asynchronously.
+// SelectionMsg identifies a selection change without exposing stale item data.
+// Its immutable stamp can safely cross the asynchronous command boundary.
+type SelectionMsg struct {
+	source  *SidebarList
+	version uint64
+}
+
 func (s *SidebarList) selectionCmd() tea.Cmd {
-	selection := viewlet.SelectionMsg{Index: s.Index(), Item: s.SelectedItem()}
+	s.selectionVersion++
+	selection := SelectionMsg{source: s, version: s.selectionVersion}
 	return func() tea.Msg { return selection }
+}
+
+// CurrentSelection rejects obsolete notifications and messages from other lists.
+// Call only on the UI loop, which owns both selection and list replacement.
+func (s *SidebarList) CurrentSelection(msg SelectionMsg) (SidebarItem, bool) {
+	return s.SelectedItem(), msg.source == s && msg.version == s.selectionVersion
 }
 
 // Dummy methods to satisfy Viewlet interface if needed

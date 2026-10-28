@@ -11,6 +11,7 @@ type ThemeItem struct {
 	PrimaryColor lipgloss.TerminalColor
 }
 
+func (i ThemeItem) SelectionID() string { return i.Name }
 func (i ThemeItem) Title() string       { return i.Name }
 func (i ThemeItem) Description() string { return "" }
 func (i ThemeItem) FilterValue() string { return i.Name }

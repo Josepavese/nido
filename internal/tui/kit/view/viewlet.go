@@ -135,12 +135,6 @@ func DefaultShortcuts() []Shortcut {
 	return nil
 }
 
-// SelectionMsg is emitted by components (like SidebarList) when their selection changes.
-type SelectionMsg struct {
-	Index int
-	Item  interface{}
-}
-
 // SwitchTabMsg is emitted by viewlets to request a tab change.
 type SwitchTabMsg struct {
 	TabIndex int

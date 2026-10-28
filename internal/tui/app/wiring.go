@@ -107,6 +107,18 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return n, tea.Batch(cmds...)
 	}
+	// Deliver asynchronous list results to the page that requested them.
+	if result, ok := msg.(ops.AcceleratorListMsg); ok {
+		if result.VMName != "" && n.Fleet != nil {
+			_, cmd := n.Fleet.Update(result)
+			return n, cmd
+		}
+		if result.VMName == "" && n.Hatchery != nil {
+			_, cmd := n.Hatchery.Update(result)
+			return n, cmd
+		}
+		return n, nil
+	}
 	// Feed fleet data even when another route is active or a modal is open.
 	if list, ok := msg.(ops.VMListMsg); ok {
 		if list.RequestedAt.Before(n.latestFleetRead) {

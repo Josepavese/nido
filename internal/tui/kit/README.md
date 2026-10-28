@@ -91,7 +91,15 @@ A blocking overlay dialog for confirmations or alerts.
 
 A scrollable list component optimized for navigation sidebars.
 
-* Supports generic items via `SidebarItem` interface.
+* Items implement `SidebarItem.SelectionID()` with a stable domain identity,
+  separate from labels, spinner frames and other transient presentation state.
+* `SetItems` preserves the highlighted identity across refresh/reorder and returns
+  false when a selected item disappears. Pages retain their own removal policy.
+* `Select` returns a notification command. Keyboard and mouse use the same path.
+  Handle `widget.SelectionMsg` only through `Sidebar.CurrentSelection(msg)`;
+  it rejects superseded events and events from other lists on the UI loop.
+* Selection dialogs share identity restoration through `ListModal.SetItems`.
+  Do not replace a dialog's embedded Bubbles items directly.
 * Customizable icons and styling.
 * Handles selection state and filtering (search).
 
