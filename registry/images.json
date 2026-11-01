@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-10-30T14:45:43.860118678Z",
+  "updated_at": "2026-11-01T14:40:23.093615083Z",
   "images": [
     {
       "name": "ubuntu",
@@ -141,19 +141,19 @@
       "homepage": "https://get.opensuse.org/tumbleweed/",
       "versions": [
         {
-          "version": "Snapshot20261028",
+          "version": "Snapshot20261030",
           "aliases": [
             "Latest"
           ],
           "arch": "amd64",
-          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261028.qcow2",
+          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261030.qcow2",
           "checksum_type": "sha256",
-          "checksum": "07889ffa0651e2055e8bf50e221d6cac0a5962d59cbb730f785ec3365b6ae72e",
-          "size_bytes": 316966400,
-          "size": "302.3 MB",
+          "checksum": "7ef2123cb5941f3ee806eef93dfa26bf29121dd593bf9c873d5e346489e435dd",
+          "size_bytes": 317088768,
+          "size": "302.4 MB",
           "format": "qcow2",
-          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261028.qcow2.sha256",
-          "checksum_regex": "^07889ffa0651e2055e8bf50e221d6cac0a5962d59cbb730f785ec3365b6ae72e$"
+          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261030.qcow2.sha256",
+          "checksum_regex": "^7ef2123cb5941f3ee806eef93dfa26bf29121dd593bf9c873d5e346489e435dd$"
         }
       ]
     },
@@ -298,18 +298,6 @@
           "format": "qcow2",
           "checksum_url": "https://dl-cdn.alpinelinux.org/alpine/v3.22/releases/cloud/generic_alpine-3.22.5-x86_64-bios-cloudinit-r0.qcow2.sha512",
           "checksum_regex": "^463f44e95fca714a84d37f9725337f99f54fe4b210488848489584910d8a33afcc8d67ff89737467e099781a09c0d798309fd661ef8e7173cd31a01b47d81705$"
-        },
-        {
-          "version": "3.21",
-          "arch": "amd64",
-          "url": "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/cloud/nocloud_alpine-3.21.7-x86_64-bios-cloudinit-r0.qcow2",
-          "checksum_type": "sha512",
-          "checksum": "5b22a46e9aa6bbacf585c055e87362c8be1993e53c121bdaf74203ac3490c70bdbbf714df4276eef36184ea8c11fd7cd3b28c9ccc74f6a9a82c430d441fa2f95",
-          "size_bytes": 172032000,
-          "size": "164.1 MB",
-          "format": "qcow2",
-          "checksum_url": "https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/cloud/nocloud_alpine-3.21.7-x86_64-bios-cloudinit-r0.qcow2.sha512",
-          "checksum_regex": "^5b22a46e9aa6bbacf585c055e87362c8be1993e53c121bdaf74203ac3490c70bdbbf714df4276eef36184ea8c11fd7cd3b28c9ccc74f6a9a82c430d441fa2f95$"
         }
       ]
     },
