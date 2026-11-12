@@ -92,7 +92,7 @@ flags:
   timeout:
     type: int
     long: timeout
-    usage: "Maximum wait in seconds"
+    usage: "Maximum wait or shutdown timeout in seconds"
     default: 180
 
 commands:
@@ -179,7 +179,7 @@ commands:
     use: stop <name>
     group: vm
     short: "Stop a VM"
-    long: "Stop the managed VM process and wait for exit. Guest OS poweroff is a separate guest operation."
+    long: "Stop the managed VM process and wait for exit. This is a forced host-process stop; use shutdown for a guest-requested poweroff."
     flags:
       - name: json
     args:
@@ -187,6 +187,24 @@ commands:
       max: 1
     positional_completions: ["vms"]
     action: vm.stop
+
+  - id: vm.shutdown
+    use: shutdown <name>
+    group: vm
+    short: "Ask the guest OS to power off cleanly"
+    long: "Request guest OS poweroff over SSH, wait for the owned VM process to exit, and never force-terminate. On timeout the VM remains running; use stop only when the guest cannot complete shutdown."
+    examples:
+      - "nido shutdown agent-01"
+      - "nido shutdown agent-01 --timeout 120 --json"
+    flags:
+      - name: json
+      - name: timeout
+        default: 60
+    args:
+      min: 1
+      max: 1
+    positional_completions: ["vms"]
+    action: vm.shutdown
 
   - id: vm.wait
     use: wait <name>
@@ -199,6 +217,7 @@ commands:
     flags:
       - name: json
       - name: timeout
+        default: 180
     args:
       min: 1
       max: 1
@@ -283,6 +302,58 @@ commands:
           max: 1
         positional_completions: ["templates"]
         action: template.delete
+
+  - id: snapshot
+    use: snapshot
+    group: storage
+    short: "Manage disk snapshots"
+    long: "Create, list, restore, and delete disk-only internal snapshots of stopped VMs. Guest memory is not captured; restore returns the disk to the snapshot contents."
+    commands:
+      - id: snapshot.create
+        use: create <vm> <snapshot>
+        short: "Create a disk snapshot"
+        examples:
+          - "nido snapshot create agent-01 before-upgrade"
+        flags:
+          - name: json
+        args:
+          min: 2
+          max: 2
+        positional_completions: ["vms", ""]
+        action: snapshot.create
+      - id: snapshot.list
+        use: list <vm>
+        aliases: ["ls"]
+        short: "List disk snapshots"
+        flags:
+          - name: json
+        args:
+          min: 1
+          max: 1
+        positional_completions: ["vms"]
+        action: snapshot.list
+      - id: snapshot.restore
+        use: restore <vm> <snapshot>
+        short: "Restore a disk snapshot"
+        long: "Restore the VM disk to a snapshot. The VM must be stopped; guest memory and runtime state are not restored."
+        flags:
+          - name: json
+        args:
+          min: 2
+          max: 2
+        positional_completions: ["vms", ""]
+        action: snapshot.restore
+      - id: snapshot.delete
+        use: delete <vm> <snapshot>
+        aliases: ["rm"]
+        short: "Delete a disk snapshot"
+        flags:
+          - name: json
+        args:
+          min: 2
+          max: 2
+        positional_completions: ["vms", ""]
+        action: snapshot.delete
 
   - id: cache
     use: cache

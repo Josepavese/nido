@@ -2,7 +2,7 @@ Nido Validation Suite
 =====================
 
 Overview
-- `nido-validator` exercises Nido CLI and MCP flows end-to-end: version/doctor, images/cache/templates, VM lifecycle (spawn/info/list/ssh/start/stop/delete/prune), template workflows (create/delete, cache-hit expectation), auxiliary commands (help/completion/register/mcp-help), and cleanup. GUI/update remain opt-in.
+- `nido-validator` exercises Nido CLI and MCP flows end-to-end: version/doctor, images/cache/templates, VM lifecycle (spawn/info/list/ssh/wait/shutdown/start/stop/delete/prune), disk snapshots (create/list/restore/delete and running-VM rejection), template workflows (create/delete, cache-hit expectation), auxiliary commands (help/completion/register/mcp-help), and cleanup. GUI/update remain opt-in.
 - Shared workflows are defined once in YAML (`internal/validator/workflows/default.yaml`) and executed via both CLI and MCP tools to keep a single source of truth.
 - Auto-picks the smallest image/template when none are provided, and cleans up validator-owned VMs/templates/cache entries after runs.
 - Cleanup is best-effort even on fail-fast, panic, or interrupt: validator-owned VMs/templates are swept on normal exit and on signal handling unless `--keep-artifacts` is enabled.
@@ -34,7 +34,8 @@ What it validates (high level)
 - Version/doctor JSON schema and success.
 - Images/cache/templates list endpoints (JSON parsable, presence of fields).
 - Image pool: pull configured image, cache populated, spawn from image uses cache/backing.
-- VM lifecycle: spawn with port mapping, info/list consistency, direct SSH command succeeds (`ssh echo ok` with retries), start/stop/delete/prune behavior.
+- VM lifecycle: spawn with port mapping, info/list consistency, direct SSH command succeeds (`ssh echo ok` with retries), guest shutdown, start/stop/delete/prune behavior.
+- Disk snapshots: create/list/restore/delete on a stopped VM, plus rejection when the VM is running.
 - Port forwarding connectivity: optional host dial of forwarded port when dummy server is started via SSH.
 - Cloud-init marker: optional check that user-data marker file exists in guest.
 - Template workflow: template create/delete succeeds; second spawn from template runs; MCP mirrors these actions.

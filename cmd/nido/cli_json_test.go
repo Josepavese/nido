@@ -23,6 +23,11 @@ func TestJSONCommandsProduceSingleJSONAndNoStderr(t *testing.T) {
 		{"ls", "--json"},
 		{"info", "vm-a", "--json"},
 		{"template", "list", "--json"},
+		{"snapshot", "list", "vm-a", "--json"},
+		{"snapshot", "create", "vm-a", "before-test", "--json"},
+		{"snapshot", "restore", "vm-a", "before-test", "--json"},
+		{"snapshot", "delete", "vm-a", "before-test", "--json"},
+		{"shutdown", "vm-a", "--json"},
 		{"cache", "info", "--json"},
 		{"blueprint", "list", "--json"},
 		{"doctor", "--json"},
@@ -289,7 +294,18 @@ type fakeProvider struct{}
 func (fakeProvider) Spawn(name string, opts provider.VMOptions) error { return nil }
 func (fakeProvider) Start(name string, opts provider.VMOptions) error { return nil }
 func (fakeProvider) Stop(name string) error                           { return nil }
-func (fakeProvider) Delete(name string) error                         { return nil }
+func (fakeProvider) Shutdown(ctx context.Context, name string, timeout time.Duration) (provider.ShutdownResult, error) {
+	return provider.ShutdownResult{Name: name, Mode: "guest", PID: 123}, nil
+}
+func (fakeProvider) SnapshotCreate(ctx context.Context, name, snapshot string) (provider.DiskSnapshot, error) {
+	return provider.DiskSnapshot{Name: snapshot, ID: 1}, nil
+}
+func (fakeProvider) SnapshotList(ctx context.Context, name string) ([]provider.DiskSnapshot, error) {
+	return []provider.DiskSnapshot{{ID: 1, Name: "before-test"}}, nil
+}
+func (fakeProvider) SnapshotRestore(ctx context.Context, name, snapshot string) error { return nil }
+func (fakeProvider) SnapshotDelete(ctx context.Context, name, snapshot string) error  { return nil }
+func (fakeProvider) Delete(name string) error                                         { return nil }
 func (fakeProvider) List() ([]provider.VMStatus, error) {
 	return []provider.VMStatus{{Name: "vm-a", State: "running", PID: 123, SSHPort: 50022, VNCPort: 59000, SSHUser: "vmuser"}}, nil
 }

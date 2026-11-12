@@ -82,7 +82,7 @@ well as mutations:
 | Tool | Actions |
 | --- | --- |
 | `nido_events` | `status`, `subscribe`, `unsubscribe`, `mute`, `unmute` (session controls) |
-| `nido_vm` | `list`, `info`, `create`, `start`, `stop`, `wait`, `delete`, `ssh`, `prune`, `config_update`, `port_forward`, `port_unforward`, `port_list` |
+| `nido_vm` | `list`, `info`, `create`, `start`, `stop`, `shutdown`, `wait`, `delete`, `ssh`, `prune`, `config_update`, `port_forward`, `port_unforward`, `port_list`, `snapshot_create`, `snapshot_list`, `snapshot_restore`, `snapshot_delete` |
 | `nido_image` | `list`, `info`, `pull`, `remove`, `refresh_catalog`, `cache_list`, `cache_info`, `cache_remove`, `cache_prune` |
 | `nido_template` | `list`, `create`, `delete` |
 | `nido_blueprint` | `list`, `info`, `build` |
@@ -123,6 +123,29 @@ defaults to 60 seconds and is capped at 300; when the guest is not ready the too
 returns the observation instead of blocking indefinitely. `nido://vm/{name}`,
 `nido://fleet/vms` and `info` show the last observation while the process is
 alive. Readiness is advisory: a later guest failure is still possible.
+
+To stop a guest cleanly, use `action=shutdown`; it requests guest OS poweroff and
+never force-terminates:
+
+```json
+{"action":"shutdown","name":"test-lab","timeout_seconds":120}
+```
+
+The timeout defaults to 60 seconds and is capped at 300. On failure the VM stays
+running and the tool returns an error; use `action=stop` only as the explicit
+forced host-process fallback. Disk snapshots use the same stopped-VM contract:
+
+```json
+{"action":"snapshot_create","name":"test-lab","snapshot_name":"before-upgrade"}
+{"action":"snapshot_list","name":"test-lab"}
+{"action":"snapshot_restore","name":"test-lab","snapshot_name":"before-upgrade"}
+{"action":"snapshot_delete","name":"test-lab","snapshot_name":"before-upgrade"}
+```
+
+Snapshots capture disk contents only, require the VM to be stopped, and return
+`ERR_SNAPSHOT_FAILED` if it is running. They are not guest-memory checkpoints and
+do not add a new resource URI; use `nido://vm/{name}` to observe the VM after an
+operation.
 
 Persistent raw QEMU settings follow replacement semantics:
 

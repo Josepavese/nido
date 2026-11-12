@@ -92,9 +92,9 @@ After provisioning a disposable source VM, shut down the guest cleanly before
 saving its disk as a template:
 
 ```bash
-nido ssh build-lab sudo poweroff
+nido shutdown build-lab --timeout 60
 nido info build-lab
-# After the guest has exited:
+# After shutdown confirms the process has exited:
 nido template create build-lab build-base
 nido spawn test-next build-base
 ```
@@ -159,13 +159,20 @@ Linux-guest workflow, not a portable Nido shared-folder API or a Windows share.
 Prefer guest shutdown for filesystem consistency:
 
 ```bash
-nido ssh test-lab sudo poweroff
+nido shutdown test-lab
 nido info test-lab
 ```
 
+`nido shutdown` requests guest OS poweroff over SSH before the managed process
+exits. It never falls back to a forced process kill: if the guest cannot
+complete its shutdown before `--timeout` (default 60 seconds, maximum 300), the
+command exits non-zero and leaves the VM running so data is not silently
+discarded. The request needs a reachable SSH service and the Nido-managed guest
+user's passwordless sudo, as in Nido-created cloud guests.
+
 If you need to terminate the managed VM process, `nido stop test-lab` verifies its
-identity and waits for exit. It does not send a guest ACPI shutdown request.
-After preserving useful data, delete only the VM you own:
+identity and waits for exit. It is a forced host-process stop and does not claim
+a clean guest shutdown. After preserving useful data, delete only the VM you own:
 
 ```bash
 nido delete test-lab
@@ -175,6 +182,30 @@ nido delete test-lab
 `nido uninstall` removes installation data and is not an upgrade procedure.
 Use `nido cache ls` and dependency-aware cache removal to manage downloaded images.
 Do not manually delete backing files used by VM disks or templates.
+
+## Snapshot a stopped VM
+
+Snapshots are disk-only internal QCOW2 snapshots. They are useful before an
+upgrade or a risky test when you want a rollback point, and they deliberately do
+not capture guest RAM or a live process:
+
+```bash
+nido shutdown test-lab
+nido snapshot create test-lab before-upgrade
+nido snapshot list test-lab
+# mutate the stopped or restarted disk...
+nido shutdown test-lab
+nido snapshot restore test-lab before-upgrade
+nido snapshot delete test-lab before-upgrade
+```
+
+Create, list, restore and delete require a stopped VM; attempting them while the
+VM is running returns `ERR_SNAPSHOT_FAILED` rather than modifying an open image.
+Restoring reverts the disk to the snapshot contents, clears the previous
+readiness observation, and leaves the VM stopped. Snapshot deletion frees the
+snapshot metadata logically, but the QCOW2 file itself may not shrink until the
+disk is rewritten or converted. Snapshots are local to one VM's overlay disk and
+do not replace templates or a full backup.
 
 ## Isolation and storage
 

@@ -26,9 +26,18 @@ with `nido doctor` when needed and select an available image with `nido images l
    for a later command.
 5. Transfer only the intended test inputs, run the test and export useful logs
    and artifacts before cleanup. Keep secrets out of reusable templates.
-6. Delete only the exact resources created by this run, using a trap or CI
-   cleanup. Reconcile a failed spawn's partial effects before retrying or deleting;
-   preserve unrelated resources and retained debugging evidence.
+6. Stop the exact VM with `nido shutdown <name> --timeout 60` before deletion
+   when its filesystem matters; shutdown requests a guest poweroff and never
+   force-terminates. If the guest cannot complete shutdown, inspect it or use
+   `nido stop` as the explicit forced fallback. Delete only the exact resources
+   created by this run, using a trap or CI cleanup. Reconcile a failed spawn's
+   partial effects before retrying or deleting; preserve unrelated resources and
+   retained debugging evidence.
+
+For a disk-only rollback point before a risky test, stop the VM and use
+`nido snapshot create <vm> <name>`; restore and delete snapshots only while the
+VM is stopped. Snapshots do not capture guest memory. They are not a substitute
+for exporting useful artifacts.
 
 For a complete shell workflow, inspect or adapt
 [scripts/nido-ephemeral-test.sh](scripts/nido-ephemeral-test.sh). It calls

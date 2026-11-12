@@ -169,6 +169,18 @@ type VMProvider interface {
 	// It does not claim guest ACPI shutdown; an already stopped VM is a no-op.
 	Stop(name string) error
 
+	// Shutdown asks the running guest OS to power off, waits for the owned
+	// process to exit, and never force-terminates it. Use Stop for forced
+	// termination or when the guest cannot complete a shutdown.
+	Shutdown(ctx context.Context, name string, timeout time.Duration) (ShutdownResult, error)
+
+	// Snapshot operations manage disk-only internal qcow2 snapshots. They
+	// require a stopped VM and never capture guest memory.
+	SnapshotCreate(ctx context.Context, name, snapshot string) (DiskSnapshot, error)
+	SnapshotList(ctx context.Context, name string) ([]DiskSnapshot, error)
+	SnapshotRestore(ctx context.Context, name, snapshot string) error
+	SnapshotDelete(ctx context.Context, name, snapshot string) error
+
 	// Delete permanently removes a VM and its disk image.
 	Delete(name string) error
 

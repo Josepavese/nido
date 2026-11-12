@@ -93,12 +93,13 @@ func ToolsCatalog() []map[string]interface{} {
 		eventToolCatalog(),
 		{
 			"name":        "nido_vm",
-			"description": "Operate the VM fleet through a single high-power tool. Use actions such as list, info, create, start, stop, wait, delete, ssh, prune, config_update, port_forward, port_unforward, and port_list. Prefer resources like nido://fleet/vms or nido://vm/{name} for inspection when your client supports resources; use this tool for mutations or as a universal fallback.",
+			"description": "Operate the VM fleet through a single high-power tool. Use actions such as list, info, create, start, stop, shutdown, wait, delete, ssh, prune, config_update, port_forward, port_unforward, port_list, snapshot_create, snapshot_list, snapshot_restore, and snapshot_delete. shutdown asks the guest to power off and never force-terminates; stop is the forced host-process stop. Snapshots are disk-only, require a stopped VM, and never capture guest memory. Prefer resources like nido://fleet/vms or nido://vm/{name} for inspection when your client supports resources; use this tool for mutations or as a universal fallback.",
 			"inputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"action":          map[string]interface{}{"type": "string", "enum": []string{"list", "info", "create", "start", "stop", "wait", "delete", "ssh", "prune", "config_update", "port_forward", "port_unforward", "port_list"}},
+					"action":          map[string]interface{}{"type": "string", "enum": []string{"list", "info", "create", "start", "stop", "shutdown", "wait", "delete", "ssh", "prune", "config_update", "port_forward", "port_unforward", "port_list", "snapshot_create", "snapshot_list", "snapshot_restore", "snapshot_delete"}},
 					"name":            map[string]interface{}{"type": "string", "description": "VM name for any action that targets a specific VM."},
+					"snapshot_name":   map[string]interface{}{"type": "string", "description": "Disk snapshot name for snapshot_create, snapshot_restore, or snapshot_delete."},
 					"template":        map[string]interface{}{"type": "string", "description": "Template name for action=create."},
 					"arch":            map[string]interface{}{"type": "string", "enum": append([]string{machine.Auto}, machine.Architectures()...), "description": "Guest ISA; omitted or auto selects the native host architecture."},
 					"image":           map[string]interface{}{"type": "string", "description": "Image tag like ubuntu:24.04 for action=create."},
@@ -113,7 +114,7 @@ func ToolsCatalog() []map[string]interface{} {
 					"mapping":         map[string]interface{}{"type": "string", "description": "Single port mapping used by action=port_forward."},
 					"guest_port":      map[string]interface{}{"type": "integer", "description": "Guest port used by action=port_unforward."},
 					"protocol":        map[string]interface{}{"type": "string", "description": "Protocol used by action=port_unforward, typically tcp or udp."},
-					"timeout_seconds": map[string]interface{}{"type": "integer", "description": "For action=wait: maximum seconds to wait for the guest (default 60, max 300)."},
+					"timeout_seconds": map[string]interface{}{"type": "integer", "description": "For action=wait or shutdown: maximum seconds to wait (default 60, max 300)."},
 					"ssh_port":        map[string]interface{}{"type": "integer"},
 					"vnc_port":        map[string]interface{}{"type": "integer"},
 					"ssh_user":        map[string]interface{}{"type": "string"},
@@ -241,6 +242,8 @@ func HelpPayload() map[string]interface{} {
 			"Prefer resources for read-only inspection because they are cheaper and easier for agents to plan around.",
 			"Use tools only for mutations or when your MCP client cannot read resources.",
 			"Use nido_vm for VM lifecycle, inspection fallback, config changes, and port operations.",
+			"Use nido_vm action=shutdown to request guest poweroff; reserve action=stop for explicit forced host-process termination.",
+			"Use nido_vm snapshot_* only on stopped VMs. Snapshots are disk-only, not guest-memory checkpoints.",
 			"Use nido_template for template lifecycle.",
 			"Use nido_image for catalog and cache operations.",
 			"Use nido_blueprint for blueprint list, inspection, and image builds.",
@@ -447,6 +450,7 @@ func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 		Arch           string   `json:"arch"`
 		Action         string   `json:"action"`
 		Name           string   `json:"name"`
+		SnapshotName   string   `json:"snapshot_name"`
 		Template       string   `json:"template"`
 		Image          string   `json:"image"`
 		UserData       string   `json:"user_data"`
@@ -554,6 +558,56 @@ func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 			return nil, err
 		}
 		return map[string]interface{}{"action": "stop", "name": args.Name, "status": "stopped"}, nil
+	case "shutdown":
+		if args.Name == "" {
+			return nil, fmt.Errorf("name is required for action=shutdown")
+		}
+		timeout := provider.DefaultShutdownTimeout
+		if args.TimeoutSeconds < 0 || time.Duration(args.TimeoutSeconds)*time.Second > provider.MaxShutdownTimeout {
+			return nil, fmt.Errorf("timeout_seconds must be between 1 and %d", int(provider.MaxShutdownTimeout/time.Second))
+		}
+		if args.TimeoutSeconds > 0 {
+			timeout = time.Duration(args.TimeoutSeconds) * time.Second
+		}
+		result, err := s.Provider.Shutdown(context.Background(), args.Name, timeout)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "shutdown", "name": args.Name, "status": "stopped", "shutdown": result}, nil
+	case "snapshot_create":
+		if args.Name == "" || args.SnapshotName == "" {
+			return nil, fmt.Errorf("name and snapshot_name are required for action=snapshot_create")
+		}
+		result, err := s.Provider.SnapshotCreate(context.Background(), args.Name, args.SnapshotName)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "snapshot_create", "name": args.Name, "snapshot": result}, nil
+	case "snapshot_list":
+		if args.Name == "" {
+			return nil, fmt.Errorf("name is required for action=snapshot_list")
+		}
+		snapshots, err := s.Provider.SnapshotList(context.Background(), args.Name)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "snapshot_list", "name": args.Name, "snapshots": snapshots}, nil
+	case "snapshot_restore":
+		if args.Name == "" || args.SnapshotName == "" {
+			return nil, fmt.Errorf("name and snapshot_name are required for action=snapshot_restore")
+		}
+		if err := s.Provider.SnapshotRestore(context.Background(), args.Name, args.SnapshotName); err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "snapshot_restore", "name": args.Name, "snapshot_name": args.SnapshotName, "status": "restored"}, nil
+	case "snapshot_delete":
+		if args.Name == "" || args.SnapshotName == "" {
+			return nil, fmt.Errorf("name and snapshot_name are required for action=snapshot_delete")
+		}
+		if err := s.Provider.SnapshotDelete(context.Background(), args.Name, args.SnapshotName); err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "snapshot_delete", "name": args.Name, "snapshot_name": args.SnapshotName, "status": "deleted"}, nil
 	case "delete":
 		if err := s.Provider.Delete(args.Name); err != nil {
 			return nil, err

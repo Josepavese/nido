@@ -751,35 +751,30 @@ func (p *QemuProvider) Stop(name string) (resultErr error) {
 	if err := identifier.Validate(name); err != nil {
 		return err
 	}
-	runDir := filepath.Join(p.RootDir, "run")
-	pidFile := filepath.Join(runDir, name+".pid")
-	pidData, _ := os.ReadFile(pidFile)
-	pid := 0
-	fmt.Sscanf(string(pidData), "%d", &pid)
-	if pid == 0 {
-		if state, err := p.loadState(name); err == nil {
-			pid = state.PID
-		}
-	}
-
+	pid := p.runningPID(name)
 	if pid > 0 && processAlive(pid) {
 		if err := p.stopVMProcess(name, pid); err != nil {
 			return err
 		}
 	}
+	return p.releaseStoppedVM(name)
+}
 
-	os.Remove(pidFile)
+// releaseStoppedVM reconciles the artifacts and host devices that are only
+// valid while the owned QEMU process is alive. It is shared by forced Stop and
+// guest-requested Shutdown so both paths leave one stopped-state model.
+func (p *QemuProvider) releaseStoppedVM(name string) error {
+	runDir := filepath.Join(p.RootDir, "run")
+	os.Remove(filepath.Join(runDir, name+".pid"))
 	os.Remove(filepath.Join(runDir, name+".qmp"))
 	os.Remove(filepath.Join(sysutil.EventsDirectory(p.RootDir), name+qemuEventSuffix))
 
 	p.clearReadiness(name)
-	if state, err := p.loadState(name); err == nil {
+	state, err := p.loadState(name)
+	if err == nil {
 		_ = p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators, state.Arch)
-	}
 
-	// RESTORE ACCELERATORS (Start of Double Fix)
-	// We must release any VFIO devices back to the host
-	if state, err := p.loadState(name); err == nil {
+		// We must release any VFIO devices back to the host.
 		for _, acc := range state.Accelerators {
 			if !strings.Contains(acc, ":") || strings.Contains(acc, "virtual") {
 				continue

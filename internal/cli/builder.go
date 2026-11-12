@@ -70,6 +70,9 @@ func (b *Builder) buildCommand(spec CommandSpec) (*cobra.Command, error) {
 
 	for _, ref := range spec.Flags {
 		flagSpec := b.Manifest.Flags[ref.Name]
+		if ref.Default != nil {
+			flagSpec.Default = ref.Default
+		}
 		if err := bindFlag(cmd.Flags(), flagSpec); err != nil {
 			return nil, fmt.Errorf("command %s flag %s: %w", spec.ID, ref.Name, err)
 		}

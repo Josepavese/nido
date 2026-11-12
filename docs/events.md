@@ -172,6 +172,12 @@ terminal outcome, `operation.completed` or `operation.failed`, correlated by
 | `system.update` | Version and catalogs; reconnect to execute the new binary |
 | `system.uninstall` | Core resources; removing the endpoint may end delivery before its terminal event |
 
+Guest-requested shutdown is the same state transition as a forced stop, so it
+reuses the `vm.stop` operation action rather than minting a second event kind.
+Callers that need to distinguish the mechanism use the CLI JSON/MCP shutdown
+result (`mode=guest` or `already_stopped`); the event stream remains advisory
+and never claims guest filesystem durability.
+
 | Observation kinds | Interpretation |
 | --- | --- |
 | `vm.running`, `vm.stopped` | Owned process observed alive or confirmed absent; running does not attest guest readiness |

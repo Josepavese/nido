@@ -16,6 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   existing resource invalidation and MCP subscriptions stay authoritative; no
   new event kind, service or schema migration is introduced.
 - Add validator coverage for a ready guest and for a stopped-VM wait failure.
+- Add explicit guest shutdown: `nido shutdown` and MCP `nido_vm action=shutdown`
+  request guest OS poweroff over SSH, wait for the owned process to exit, and
+  never force-terminate. The operation exposes `guest` versus `already_stopped`
+  outcomes, leaves the VM running on timeout, and keeps forced `stop` distinct.
+- Add disk-only snapshots for stopped VMs: `nido snapshot create|list|restore|delete`
+  and matching `nido_vm` MCP actions. Snapshot operations reject running VMs,
+  restore clears stale readiness, and the MCP/CLI JSON contracts include
+  `ERR_SNAPSHOT_FAILED`. No new event kind, daemon, schema version or migration
+  is introduced; shutdown reuses the existing `vm.stop` operation event.
+- Add validator coverage for guest shutdown, snapshot lifecycle, running-VM
+  snapshot rejection and stopped-VM boundary behavior.
 
 ## [4.10.5] - 2026-10-28 "Steady Flock"
 

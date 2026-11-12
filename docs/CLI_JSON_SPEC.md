@@ -64,7 +64,12 @@ Fields:
 ### Error Codes (Initial Set)
 
 - `ERR_INVALID_ARGS`
+- `ERR_INVALID_ARGUMENT`
 - `ERR_NOT_FOUND`
+- `ERR_NOT_READY`
+- `ERR_WAIT_FAILED`
+- `ERR_SHUTDOWN_FAILED`
+- `ERR_SNAPSHOT_FAILED`
 - `ERR_IO`
 - `ERR_DEPENDENCY`
 - `ERR_PERMISSION`
@@ -80,8 +85,10 @@ The following commands support `--json`:
 - `spawn`
 - `start`
 - `stop`
+- `shutdown`
 - `delete`
 - `prune`
+- `snapshot create|list|restore|delete`
 - `template list|create|delete`
 - `image list|pull|info|remove|update`
 - `blueprint list|info|build`
@@ -118,6 +125,37 @@ infrastructure failure uses `ERR_WAIT_FAILED`.
 ### `spawn|start|stop|delete|prune`
 
 `data.action` or `data.removed_count`
+
+### `shutdown`
+
+`data.action`: name and result (`stopped`).
+`data.shutdown`: `name`, `mode` (`guest` or `already_stopped`), optional `pid`,
+and `duration_ms`.
+
+`mode=guest` means the guest completed a requested poweroff and the owned QEMU
+process exited. `already_stopped` means there was no running guest to ask.
+Timeout or guest failure is `status: error` with code `ERR_SHUTDOWN_FAILED`; the
+VM is not force-terminated. An invalid timeout uses `ERR_INVALID_ARGUMENT`.
+
+```bash
+nido shutdown agent-01 --timeout 120 --json
+```
+
+### `snapshot create|list|restore|delete`
+
+All snapshot operations require a stopped VM and return code
+`ERR_SNAPSHOT_FAILED` otherwise.
+
+- `snapshot create`: `data.action` with `name`, `snapshot` and `result`
+  (`created`); `data.snapshot` is the created `{id,name,vm_size,created_at}`.
+- `snapshot list`: `data.action` and `data.snapshots[]`; each entry has `id`,
+  `name`, optional `vm_size` and `created_at`. Empty lists are encoded as `[]`.
+- `snapshot restore`: `data.action` with `result=restored`.
+- `snapshot delete`: `data.action` with `result=deleted`.
+
+`created_at` is `qemu-img`'s local date/time string. Snapshot IDs and dates are
+informational; use the snapshot `name` for restore and delete. Snapshots are
+disk-only and do not include guest memory or runtime metadata.
 
 ### `template list`
 

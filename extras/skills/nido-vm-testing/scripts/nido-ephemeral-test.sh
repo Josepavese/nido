@@ -82,6 +82,10 @@ cleanup() {
   if [[ "$NIDO_KEEP_VM" == "1" ]]; then
     echo "Keeping VM for inspection: $NIDO_VM_NAME" >&2
   elif [[ "$VM_CREATED" == "1" ]]; then
+    # Ask the guest to power off before deleting so an ephemeral test does not
+    # discard guest filesystem metadata. If shutdown cannot complete, delete
+    # still uses the explicit forced-stop fallback.
+    "$NIDO_BIN" shutdown "$NIDO_VM_NAME" --timeout 30 --json >/dev/null 2>&1 || true
     "$NIDO_BIN" delete "$NIDO_VM_NAME" --json >/dev/null 2>&1 || true
   fi
   if [[ "$USER_DATA_OWNED" == "1" ]]; then

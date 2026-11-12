@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Josepavese/nido/v4/internal/builder"
 	clijson "github.com/Josepavese/nido/v4/internal/cli"
@@ -440,6 +442,57 @@ func actionVMStop(app *appContext) func(cmd *cobra.Command, args []string) {
 			return
 		}
 		ui.Success("VM %s stopped.", args[0])
+	}
+}
+
+func actionVMShutdown(app *appContext) func(cmd *cobra.Command, args []string) {
+	return func(cmd *cobra.Command, args []string) {
+		jsonOut := jsonEnabled(cmd)
+		timeoutSeconds, _ := cmd.Flags().GetInt("timeout")
+		if !cmd.Flags().Changed("timeout") {
+			timeoutSeconds = int(provider.DefaultShutdownTimeout / time.Second)
+		}
+		maxSeconds := int(provider.MaxShutdownTimeout / time.Second)
+		if timeoutSeconds <= 0 || timeoutSeconds > maxSeconds {
+			message := fmt.Sprintf("timeout must be between 1 and %d seconds", maxSeconds)
+			if jsonOut {
+				_ = clijson.PrintJSON(clijson.NewResponseError("shutdown", "ERR_INVALID_ARGUMENT", "Invalid timeout", message, "Use a timeout within the supported range.", nil))
+			} else {
+				ui.Error("%s", message)
+			}
+			os.Exit(1)
+		}
+
+		if !jsonOut {
+			ui.Step("Requesting guest shutdown for %s (up to %ds)...", args[0], timeoutSeconds)
+		}
+		result, err := app.Provider.Shutdown(context.Background(), args[0], time.Duration(timeoutSeconds)*time.Second)
+		if err != nil {
+			if jsonOut {
+				_ = clijson.PrintJSON(clijson.NewResponseError("shutdown", "ERR_SHUTDOWN_FAILED", "Shutdown failed", err.Error(),
+					"The guest did not complete a clean shutdown; inspect it or use stop to terminate only when necessary.", nil))
+			} else {
+				ui.Error("Guest shutdown failed for %s: %v", args[0], err)
+				ui.Info("The VM is still running. Use 'nido stop %s' only as a forced fallback.", args[0])
+			}
+			os.Exit(1)
+		}
+
+		if jsonOut {
+			_ = clijson.PrintJSON(clijson.NewResponseOK("shutdown", map[string]interface{}{
+				"action": map[string]interface{}{
+					"name":   args[0],
+					"result": "stopped",
+				},
+				"shutdown": result,
+			}))
+			return
+		}
+		if result.Mode == "already_stopped" {
+			ui.Success("VM %s is already stopped.", args[0])
+			return
+		}
+		ui.Success("VM %s stopped after guest shutdown in %s.", args[0], (time.Duration(result.DurationMS) * time.Millisecond).Round(time.Millisecond))
 	}
 }
 

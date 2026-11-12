@@ -136,18 +136,34 @@ take additional time; `nido wait` observes that readiness instead of relying on
 a fixed sleep. It exits non-zero with a classified failure when the guest is not
 ready before the timeout.
 
-When you have saved the work you need, shut down inside the guest and remove
-**only your disposable VM**:
+When you have saved the work you need, ask the guest to power off cleanly and
+remove **only your disposable VM**:
 
 ```bash
-nido ssh agent-lab sudo poweroff
+nido shutdown agent-lab
 # After shutdown, confirm its state:
 nido info agent-lab
 nido delete agent-lab
 ```
 
-`nido stop` terminates the managed QEMU process and waits for exit. Use guest
-poweroff for a clean OS shutdown. VM data persists until you delete it.
+`nido shutdown` requests guest OS poweroff over SSH, waits for the managed QEMU
+process to exit, and never force-terminates the guest. On timeout the VM remains
+running. `nido stop` is the explicit forced host-process stop; use it only when
+the guest cannot complete shutdown. VM data persists until you delete it.
+
+For a disk-only checkpoint before risky guest work, stop or shut down the VM and
+use the snapshot contract:
+
+```bash
+nido snapshot create agent-lab before-upgrade
+nido snapshot list agent-lab
+# later, while stopped:
+nido snapshot restore agent-lab before-upgrade
+nido snapshot delete agent-lab before-upgrade
+```
+
+Snapshots capture disk contents only, not guest memory, and every snapshot
+operation requires a stopped VM. See [everyday workflows](docs/usage.md).
 
 [Provisioning, ports, templates and cleanup](docs/usage.md)
 

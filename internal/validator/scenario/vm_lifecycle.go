@@ -26,9 +26,14 @@ func VMLifecycle() Scenario {
 			sshCheck,
 			waitReadyVM,
 			cmdlineTest,
-			stopVM,
+			shutdownVM,
 			waitStoppedVM,
+			snapshotCreateVM,
+			snapshotListVM,
+			snapshotRestoreVM,
+			snapshotDeleteVM,
 			startVM,
+			snapshotRunningRejected,
 			deleteVM,
 			pruneVM,
 		},
@@ -292,7 +297,130 @@ func waitStoppedVM(ctx *Context) report.StepResult {
 	} else {
 		addAssertion(&res, "json_parse", false, err.Error())
 	}
+	finalizeExpectedFailure(&res)
+	return res
+}
+
+const validatorSnapshotName = "validator-baseline"
+
+func snapshotCreateVM(ctx *Context) report.StepResult {
+	vmName, ok := getVar(ctx, "vm_primary")
+	if !ok {
+		return skipResult(ctx.Config.NidoBin, []string{"snapshot"}, "vm_primary not set")
+	}
+	args := []string{"snapshot", "create", vmName, validatorSnapshotName, "--json"}
+	res := runNido(ctx, "snapshot-create", args, 60*time.Second)
+	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
+	if payload, err := parseJSON(res.Stdout); err == nil {
+		addAssertion(&res, "json_parse", true, "")
+		addAssertion(&res, "status_ok", payload["status"] == "ok", "")
+		if data, ok := payload["data"].(map[string]interface{}); ok {
+			if action, ok := data["action"].(map[string]interface{}); ok {
+				addAssertion(&res, "action_created", action["result"] == "created", fmt.Sprintf("%v", action["result"]))
+			}
+			if snapshot, ok := data["snapshot"].(map[string]interface{}); ok {
+				addAssertion(&res, "snapshot_name", snapshot["name"] == validatorSnapshotName, fmt.Sprintf("%v", snapshot["name"]))
+			} else {
+				addAssertion(&res, "snapshot_present", false, "data.snapshot missing")
+			}
+		}
+	} else {
+		addAssertion(&res, "json_parse", false, err.Error())
+	}
 	finalize(&res)
+	return res
+}
+
+func snapshotListVM(ctx *Context) report.StepResult {
+	vmName, ok := getVar(ctx, "vm_primary")
+	if !ok {
+		return skipResult(ctx.Config.NidoBin, []string{"snapshot"}, "vm_primary not set")
+	}
+	args := []string{"snapshot", "list", vmName, "--json"}
+	res := runNido(ctx, "snapshot-list", args, 60*time.Second)
+	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
+	listed := false
+	if payload, err := parseJSON(res.Stdout); err == nil {
+		addAssertion(&res, "json_parse", true, "")
+		if data, ok := payload["data"].(map[string]interface{}); ok {
+			if snapshots, ok := data["snapshots"].([]interface{}); ok {
+				for _, entry := range snapshots {
+					if snapshot, ok := entry.(map[string]interface{}); ok && snapshot["name"] == validatorSnapshotName {
+						listed = true
+					}
+				}
+			}
+		}
+	} else {
+		addAssertion(&res, "json_parse", false, err.Error())
+	}
+	addAssertion(&res, "snapshot_listed", listed, "snapshot missing from list")
+	finalize(&res)
+	return res
+}
+
+func snapshotRestoreVM(ctx *Context) report.StepResult {
+	vmName, ok := getVar(ctx, "vm_primary")
+	if !ok {
+		return skipResult(ctx.Config.NidoBin, []string{"snapshot"}, "vm_primary not set")
+	}
+	args := []string{"snapshot", "restore", vmName, validatorSnapshotName, "--json"}
+	res := runNido(ctx, "snapshot-restore", args, 60*time.Second)
+	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
+	if payload, err := parseJSON(res.Stdout); err == nil {
+		addAssertion(&res, "json_parse", true, "")
+		if data, ok := payload["data"].(map[string]interface{}); ok {
+			if action, ok := data["action"].(map[string]interface{}); ok {
+				addAssertion(&res, "action_restored", action["result"] == "restored", fmt.Sprintf("%v", action["result"]))
+			}
+		}
+	} else {
+		addAssertion(&res, "json_parse", false, err.Error())
+	}
+	finalize(&res)
+	return res
+}
+
+func snapshotDeleteVM(ctx *Context) report.StepResult {
+	vmName, ok := getVar(ctx, "vm_primary")
+	if !ok {
+		return skipResult(ctx.Config.NidoBin, []string{"snapshot"}, "vm_primary not set")
+	}
+	args := []string{"snapshot", "delete", vmName, validatorSnapshotName, "--json"}
+	res := runNido(ctx, "snapshot-delete", args, 60*time.Second)
+	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
+	if payload, err := parseJSON(res.Stdout); err == nil {
+		addAssertion(&res, "json_parse", true, "")
+		if data, ok := payload["data"].(map[string]interface{}); ok {
+			if action, ok := data["action"].(map[string]interface{}); ok {
+				addAssertion(&res, "action_deleted", action["result"] == "deleted", fmt.Sprintf("%v", action["result"]))
+			}
+		}
+	} else {
+		addAssertion(&res, "json_parse", false, err.Error())
+	}
+	finalize(&res)
+	return res
+}
+
+func snapshotRunningRejected(ctx *Context) report.StepResult {
+	vmName, ok := getVar(ctx, "vm_primary")
+	if !ok {
+		return skipResult(ctx.Config.NidoBin, []string{"snapshot"}, "vm_primary not set")
+	}
+	args := []string{"snapshot", "create", vmName, "running-probe", "--json"}
+	res := runNido(ctx, "snapshot-running", args, 60*time.Second)
+	addAssertion(&res, "exit_nonzero", res.ExitCode != 0, res.Stderr)
+	if payload, err := parseJSON(res.Stdout); err == nil {
+		addAssertion(&res, "json_parse", true, "")
+		addAssertion(&res, "status_error", payload["status"] == "error", fmt.Sprintf("%v", payload["status"]))
+		if problem, ok := payload["error"].(map[string]interface{}); ok {
+			addAssertion(&res, "error_snapshot", problem["code"] == "ERR_SNAPSHOT_FAILED", fmt.Sprintf("%v", problem["code"]))
+		}
+	} else {
+		addAssertion(&res, "json_parse", false, err.Error())
+	}
+	finalizeExpectedFailure(&res)
 	return res
 }
 
@@ -465,14 +593,34 @@ func validatorSSHKeyArgs() []string {
 	return []string{"-i", keyPath}
 }
 
-func stopVM(ctx *Context) report.StepResult {
+func shutdownVM(ctx *Context) report.StepResult {
 	vmName, ok := getVar(ctx, "vm_primary")
 	if !ok {
-		return skipResult(ctx.Config.NidoBin, []string{"stop"}, "vm_primary not set")
+		return skipResult(ctx.Config.NidoBin, []string{"shutdown"}, "vm_primary not set")
 	}
-	args := []string{"stop", vmName, "--json"}
-	res := runNido(ctx, "stop", args, 30*time.Second)
+	waitTimeout := ctx.Config.BootTimeout
+	if waitTimeout <= 0 {
+		waitTimeout = 2 * time.Minute
+	}
+	args := []string{"shutdown", vmName, "--json"}
+	res := runNido(ctx, "shutdown", args, waitTimeout)
 	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
+	if payload, err := parseJSON(res.Stdout); err == nil {
+		addAssertion(&res, "json_parse", true, "")
+		addAssertion(&res, "status_ok", payload["status"] == "ok", "")
+		if data, ok := payload["data"].(map[string]interface{}); ok {
+			if action, ok := data["action"].(map[string]interface{}); ok {
+				addAssertion(&res, "action_stopped", action["result"] == "stopped", fmt.Sprintf("%v", action["result"]))
+			}
+			if shutdown, ok := data["shutdown"].(map[string]interface{}); ok {
+				addAssertion(&res, "guest_mode", shutdown["mode"] == "guest", fmt.Sprintf("%v", shutdown["mode"]))
+			} else {
+				addAssertion(&res, "guest_mode", false, "missing shutdown result")
+			}
+		}
+	} else {
+		addAssertion(&res, "json_parse", false, err.Error())
+	}
 	finalize(&res)
 	return res
 }

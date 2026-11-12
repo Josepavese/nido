@@ -152,6 +152,23 @@ previous boot is hidden. CLI `nido wait`, MCP `nido_vm action=wait`, `info`,
 retry loops. Readiness is advisory observed state, not a runtime event family,
 and its diagnostics are bounded without raw guest console output.
 
+## Guest shutdown and disk snapshot ownership
+
+`provider.VMProvider.Shutdown` owns the guest-requested poweroff path: it builds
+the provider-owned SSH arguments, requests a guest OS shutdown, waits for the
+owned process to exit, and returns a classified `guest` or `already_stopped`
+outcome. It has no implicit force fallback; `Stop` remains the explicit
+host-process termination contract. Shutdown reuses the existing `vm.stop`
+operation event because it produces the same state transition.
+
+`provider.VMProvider.SnapshotCreate`, `SnapshotList`, `SnapshotRestore` and
+`SnapshotDelete` own the offline QCOW2 disk-snapshot contract. They require a
+stopped VM, invoke `qemu-img snapshot`, parse its bounded output, and never
+modify a running image. Snapshot names are scoped to one VM disk; snapshot state
+lives in the disk image, not in VM metadata, so no second state model or schema
+migration is introduced. Guest RAM, runtime state and templates remain outside
+this contract.
+
 ## Guest architecture ownership
 
 `internal/machine` owns the supported ISA vocabulary and QEMU board/CPU/console
