@@ -20,10 +20,11 @@ nido info "ci-$RUN_ID" --json
 ```
 
 For cloud images, Nido supplies its SSH key alongside the user-data. Discover the
-SSH user/port from `data.vm`, wait for SSH with a deadline, then check
-`sudo cloud-init status --wait` with a bounded timeout and verify the service or
-command the test actually needs. A successful spawn or `vm.running` describes
-host/process progress, not completed provisioning. Collect guest logs such as
+SSH user/port from `data.vm`, run `nido wait "$RUN_ID" --timeout 180 --json`
+instead of retrying SSH manually, then verify the service or command the test
+actually needs. A successful spawn or `vm.running` describes host/process
+progress, not completed provisioning. The wait result is a bounded observation,
+not a guarantee for later commands. Collect guest logs such as
 `/var/log/cloud-init-output.log`, service journals and test results before deleting
 the owned VM.
 

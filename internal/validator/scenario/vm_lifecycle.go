@@ -24,8 +24,10 @@ func VMLifecycle() Scenario {
 			infoVM,
 			listVM,
 			sshCheck,
+			waitReadyVM,
 			cmdlineTest,
 			stopVM,
+			waitStoppedVM,
 			startVM,
 			deleteVM,
 			pruneVM,
@@ -236,6 +238,60 @@ func sshCheck(ctx *Context) report.StepResult {
 		}
 	}
 	res.DurationMs = time.Since(start).Milliseconds()
+	finalize(&res)
+	return res
+}
+
+func waitReadyVM(ctx *Context) report.StepResult {
+	vmName, ok := getVar(ctx, "vm_primary")
+	if !ok {
+		return skipResult(ctx.Config.NidoBin, []string{"wait"}, "vm_primary not set")
+	}
+	args := []string{"wait", vmName, "--timeout", "180", "--json"}
+	res := runNido(ctx, "wait", args, ctx.Config.BootTimeout)
+	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
+	if payload, err := parseJSON(res.Stdout); err == nil {
+		addAssertion(&res, "json_parse", true, "")
+		addAssertion(&res, "status_ok", payload["status"] == "ok", "")
+		if data, ok := payload["data"].(map[string]interface{}); ok {
+			if action, ok := data["action"].(map[string]interface{}); ok {
+				addAssertion(&res, "action_ready", action["result"] == "ready", fmt.Sprintf("%v", action["result"]))
+			}
+			if readiness, ok := data["readiness"].(map[string]interface{}); ok {
+				addAssertion(&res, "readiness_ready", readiness["ready"] == true, fmt.Sprintf("%v", readiness["ready"]))
+				addAssertion(&res, "readiness_phase", readiness["phase"] == "ready", fmt.Sprintf("%v", readiness["phase"]))
+			} else {
+				addAssertion(&res, "readiness_present", false, "data.readiness missing")
+			}
+		}
+	} else {
+		addAssertion(&res, "json_parse", false, err.Error())
+	}
+	finalize(&res)
+	return res
+}
+
+func waitStoppedVM(ctx *Context) report.StepResult {
+	vmName, ok := getVar(ctx, "vm_primary")
+	if !ok {
+		return skipResult(ctx.Config.NidoBin, []string{"wait"}, "vm_primary not set")
+	}
+	args := []string{"wait", vmName, "--timeout", "5", "--json"}
+	res := runNido(ctx, "wait-stopped", args, 30*time.Second)
+	addAssertion(&res, "exit_nonzero", res.ExitCode != 0, res.Stderr)
+	if payload, err := parseJSON(res.Stdout); err == nil {
+		addAssertion(&res, "json_parse", true, "")
+		addAssertion(&res, "status_error", payload["status"] == "error", fmt.Sprintf("%v", payload["status"]))
+		if problem, ok := payload["error"].(map[string]interface{}); ok {
+			addAssertion(&res, "error_not_ready", problem["code"] == "ERR_NOT_READY", fmt.Sprintf("%v", problem["code"]))
+			if details, ok := problem["details"].(map[string]interface{}); ok {
+				addAssertion(&res, "failure_classified", details["failure"] == "vm_not_running", fmt.Sprintf("%v", details["failure"]))
+				addAssertion(&res, "no_false_ready", details["ready"] == false, fmt.Sprintf("%v", details["ready"]))
+			}
+		}
+	} else {
+		addAssertion(&res, "json_parse", false, err.Error())
+	}
 	finalize(&res)
 	return res
 }

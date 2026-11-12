@@ -64,10 +64,11 @@ Flow:
 
 1. spawn a VM;
 2. run first-boot provisioning;
-3. discover SSH and forwarded app ports from `nido info --json`;
-4. upload the current project;
-5. run the test command inside the guest;
-6. delete the VM on exit.
+3. wait for SSH and cloud-init with a bounded `nido wait --json`;
+4. discover SSH and forwarded app ports from `nido info --json`;
+5. upload the current project;
+6. run the test command inside the guest;
+7. delete the VM on exit.
 
 Set `NIDO_KEEP_VM=1` to keep the VM for debugging after a failure.
 

@@ -70,6 +70,7 @@ type FleetDetail struct {
 	BackingMissing bool
 	Forwarding     []provider.PortForward
 	Accelerators   []string // New: Accelerators for PASSTHROUGH
+	Readiness      *provider.GuestReadiness
 }
 
 // Fleet implements the Viewlet interface using MasterDetail
@@ -356,6 +357,7 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 				BackingMissing: msg.Detail.BackingMissing,
 				Forwarding:     msg.Detail.Forwarding,
 				Accelerators:   msg.Detail.Accelerators,
+				Readiness:      msg.Detail.Readiness,
 			}
 			f.DetailView.UpdateDetail(f.detail)
 
@@ -753,6 +755,19 @@ func (c *ComponentsDetail) rebuildForm() {
 	c.Form.Spacing = 0
 }
 
+func readinessSubtitle(readiness *provider.GuestReadiness) string {
+	if readiness == nil {
+		return ""
+	}
+	if readiness.Ready {
+		return "READY"
+	}
+	if readiness.Failure != "" {
+		return "NOT READY (" + strings.ToUpper(string(readiness.Failure)) + ")"
+	}
+	return strings.ToUpper(string(readiness.State))
+}
+
 func (c *ComponentsDetail) UpdateDetail(d FleetDetail) {
 	if d.Name == "" {
 		// No VM selected
@@ -779,6 +794,9 @@ func (c *ComponentsDetail) UpdateDetail(d FleetDetail) {
 	c.header.Icon = icon
 	c.header.Title = d.Name
 	c.header.Subtitle = status + " | " + d.Arch
+	if label := readinessSubtitle(d.Readiness); label != "" {
+		c.header.Subtitle += " | " + label
+	}
 
 	// Update fields
 

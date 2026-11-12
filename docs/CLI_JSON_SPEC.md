@@ -96,11 +96,24 @@ The following commands support `--json`:
 
 ### `ls`
 
-`data.vms[]`: name, state, pid, ssh_port, vnc_port, ssh_user
+`data.vms[]`: name, state, pid, ssh_port, vnc_port, ssh_user, readiness (optional observed guest state)
 
 ### `info`
 
-`data.vm`: name, state, ip, ssh_user, ssh_port, vnc_port, raw_qemu_args
+`data.vm`: name, state, ip, ssh_user, ssh_port, vnc_port, raw_qemu_args, readiness (optional observed guest state)
+
+### `wait`
+
+`data.action`: name and result (`ready`).
+`data.readiness`: `ready` (boolean), `state`, `phase`, `pid`, `attempts`,
+`provisioning` (`absent`, `running`, `done`, `degraded` or `error`), optional
+`failure`, optional bounded `detail`, `checked_at` (RFC 3339 UTC) and
+`duration_ms`.
+
+A guest that is not ready before the timeout is reported as `status: error` with
+code `ERR_NOT_READY`; the readiness observation is in `error.details` and the
+command exits non-zero. An invalid timeout uses `ERR_INVALID_ARGUMENT`; an
+infrastructure failure uses `ERR_WAIT_FAILED`.
 
 ### `spawn|start|stop|delete|prune`
 

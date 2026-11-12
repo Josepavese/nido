@@ -93,31 +93,32 @@ func ToolsCatalog() []map[string]interface{} {
 		eventToolCatalog(),
 		{
 			"name":        "nido_vm",
-			"description": "Operate the VM fleet through a single high-power tool. Use actions such as list, info, create, start, stop, delete, ssh, prune, config_update, port_forward, port_unforward, and port_list. Prefer resources like nido://fleet/vms or nido://vm/{name} for inspection when your client supports resources; use this tool for mutations or as a universal fallback.",
+			"description": "Operate the VM fleet through a single high-power tool. Use actions such as list, info, create, start, stop, wait, delete, ssh, prune, config_update, port_forward, port_unforward, and port_list. Prefer resources like nido://fleet/vms or nido://vm/{name} for inspection when your client supports resources; use this tool for mutations or as a universal fallback.",
 			"inputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"action":        map[string]interface{}{"type": "string", "enum": []string{"list", "info", "create", "start", "stop", "delete", "ssh", "prune", "config_update", "port_forward", "port_unforward", "port_list"}},
-					"name":          map[string]interface{}{"type": "string", "description": "VM name for any action that targets a specific VM."},
-					"template":      map[string]interface{}{"type": "string", "description": "Template name for action=create."},
-					"arch":          map[string]interface{}{"type": "string", "enum": append([]string{machine.Auto}, machine.Architectures()...), "description": "Guest ISA; omitted or auto selects the native host architecture."},
-					"image":         map[string]interface{}{"type": "string", "description": "Image tag like ubuntu:24.04 for action=create."},
-					"user_data":     map[string]interface{}{"type": "string", "description": "Cloud-init user-data content for action=create."},
-					"gui":           map[string]interface{}{"type": "boolean"},
-					"cmdline":       map[string]interface{}{"type": "string"},
-					"memory_mb":     map[string]interface{}{"type": "integer"},
-					"vcpus":         map[string]interface{}{"type": "integer"},
-					"ports":         map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Port rules like [\"http:80:30080/tcp\"]."},
-					"raw_qemu_args": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "For config_update: replace saved arguments in order; omit to preserve, or send [] to clear. Takes effect on next start."},
-					"accelerators":  map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
-					"mapping":       map[string]interface{}{"type": "string", "description": "Single port mapping used by action=port_forward."},
-					"guest_port":    map[string]interface{}{"type": "integer", "description": "Guest port used by action=port_unforward."},
-					"protocol":      map[string]interface{}{"type": "string", "description": "Protocol used by action=port_unforward, typically tcp or udp."},
-					"ssh_port":      map[string]interface{}{"type": "integer"},
-					"vnc_port":      map[string]interface{}{"type": "integer"},
-					"ssh_user":      map[string]interface{}{"type": "string"},
-					"web":           map[string]interface{}{"type": "boolean", "description": "Expose HTTP and HTTPS defaults for action=create."},
-					"ftp":           map[string]interface{}{"type": "boolean", "description": "Expose FTP default port for action=create."},
+					"action":          map[string]interface{}{"type": "string", "enum": []string{"list", "info", "create", "start", "stop", "wait", "delete", "ssh", "prune", "config_update", "port_forward", "port_unforward", "port_list"}},
+					"name":            map[string]interface{}{"type": "string", "description": "VM name for any action that targets a specific VM."},
+					"template":        map[string]interface{}{"type": "string", "description": "Template name for action=create."},
+					"arch":            map[string]interface{}{"type": "string", "enum": append([]string{machine.Auto}, machine.Architectures()...), "description": "Guest ISA; omitted or auto selects the native host architecture."},
+					"image":           map[string]interface{}{"type": "string", "description": "Image tag like ubuntu:24.04 for action=create."},
+					"user_data":       map[string]interface{}{"type": "string", "description": "Cloud-init user-data content for action=create."},
+					"gui":             map[string]interface{}{"type": "boolean"},
+					"cmdline":         map[string]interface{}{"type": "string"},
+					"memory_mb":       map[string]interface{}{"type": "integer"},
+					"vcpus":           map[string]interface{}{"type": "integer"},
+					"ports":           map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "Port rules like [\"http:80:30080/tcp\"]."},
+					"raw_qemu_args":   map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}, "description": "For config_update: replace saved arguments in order; omit to preserve, or send [] to clear. Takes effect on next start."},
+					"accelerators":    map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+					"mapping":         map[string]interface{}{"type": "string", "description": "Single port mapping used by action=port_forward."},
+					"guest_port":      map[string]interface{}{"type": "integer", "description": "Guest port used by action=port_unforward."},
+					"protocol":        map[string]interface{}{"type": "string", "description": "Protocol used by action=port_unforward, typically tcp or udp."},
+					"timeout_seconds": map[string]interface{}{"type": "integer", "description": "For action=wait: maximum seconds to wait for the guest (default 60, max 300)."},
+					"ssh_port":        map[string]interface{}{"type": "integer"},
+					"vnc_port":        map[string]interface{}{"type": "integer"},
+					"ssh_user":        map[string]interface{}{"type": "string"},
+					"web":             map[string]interface{}{"type": "boolean", "description": "Expose HTTP and HTTPS defaults for action=create."},
+					"ftp":             map[string]interface{}{"type": "boolean", "description": "Expose FTP default port for action=create."},
 				},
 				"required": []string{"action"},
 			},
@@ -443,27 +444,28 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) {
 
 func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 	var args struct {
-		Arch         string   `json:"arch"`
-		Action       string   `json:"action"`
-		Name         string   `json:"name"`
-		Template     string   `json:"template"`
-		Image        string   `json:"image"`
-		UserData     string   `json:"user_data"`
-		Gui          bool     `json:"gui"`
-		Cmdline      string   `json:"cmdline"`
-		MemoryMB     int      `json:"memory_mb"`
-		VCPUs        int      `json:"vcpus"`
-		Ports        []string `json:"ports"`
-		RawQemuArgs  []string `json:"raw_qemu_args"`
-		Accelerators []string `json:"accelerators"`
-		Mapping      string   `json:"mapping"`
-		GuestPort    int      `json:"guest_port"`
-		Protocol     string   `json:"protocol"`
-		SSHPort      *int     `json:"ssh_port"`
-		VNCPort      *int     `json:"vnc_port"`
-		SSHUser      *string  `json:"ssh_user"`
-		Web          bool     `json:"web"`
-		FTP          bool     `json:"ftp"`
+		Arch           string   `json:"arch"`
+		Action         string   `json:"action"`
+		Name           string   `json:"name"`
+		Template       string   `json:"template"`
+		Image          string   `json:"image"`
+		UserData       string   `json:"user_data"`
+		Gui            bool     `json:"gui"`
+		Cmdline        string   `json:"cmdline"`
+		MemoryMB       int      `json:"memory_mb"`
+		VCPUs          int      `json:"vcpus"`
+		Ports          []string `json:"ports"`
+		RawQemuArgs    []string `json:"raw_qemu_args"`
+		Accelerators   []string `json:"accelerators"`
+		Mapping        string   `json:"mapping"`
+		GuestPort      int      `json:"guest_port"`
+		Protocol       string   `json:"protocol"`
+		SSHPort        *int     `json:"ssh_port"`
+		VNCPort        *int     `json:"vnc_port"`
+		SSHUser        *string  `json:"ssh_user"`
+		Web            bool     `json:"web"`
+		FTP            bool     `json:"ftp"`
+		TimeoutSeconds int      `json:"timeout_seconds"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return nil, err
@@ -620,6 +622,26 @@ func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 			return nil, err
 		}
 		return map[string]interface{}{"action": "port_list", "name": args.Name, "forwarding": list}, nil
+	case "wait":
+		if args.Name == "" {
+			return nil, fmt.Errorf("name is required for action=wait")
+		}
+		const (
+			defaultWait = 60 * time.Second
+			maxWait     = 5 * time.Minute
+		)
+		timeout := defaultWait
+		if args.TimeoutSeconds < 0 || time.Duration(args.TimeoutSeconds)*time.Second > maxWait {
+			return nil, fmt.Errorf("timeout_seconds must be between 1 and %d", int(maxWait/time.Second))
+		}
+		if args.TimeoutSeconds > 0 {
+			timeout = time.Duration(args.TimeoutSeconds) * time.Second
+		}
+		readiness, err := s.Provider.WaitReady(context.Background(), args.Name, timeout)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "wait", "name": args.Name, "ready": readiness.Ready, "readiness": readiness}, nil
 	default:
 		return nil, fmt.Errorf("unsupported nido_vm action %q", args.Action)
 	}

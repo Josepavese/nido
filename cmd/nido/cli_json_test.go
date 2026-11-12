@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Josepavese/nido/v4/internal/config"
 	"github.com/Josepavese/nido/v4/internal/provider"
@@ -322,6 +323,15 @@ func (fakeProvider) CacheRemove(name, version, arch string) error   { return nil
 func (fakeProvider) SSHArgs(name string) ([]string, error) {
 	return []string{"ssh", "-p", "50022", "vmuser@127.0.0.1"}, nil
 }
+func (fakeProvider) WaitReady(ctx context.Context, name string, timeout time.Duration) (provider.GuestReadiness, error) {
+	return provider.GuestReadiness{
+		Ready:     true,
+		State:     provider.ReadinessReady,
+		Phase:     provider.ReadinessPhaseReady,
+		PID:       123,
+		CheckedAt: time.Now().UTC(),
+	}, nil
+}
 func (fakeProvider) PortForward(name string, pf provider.PortForward) (provider.PortForward, error) {
 	return pf, nil
 }
@@ -482,6 +492,45 @@ func TestSpawnArchitectureFlag(t *testing.T) {
 		if p.opts.Arch != arch || stderr != "" || !strings.Contains(stdout, `"status":"ok"`) {
 			t.Fatalf("lost architecture: %s %s %#v", stdout, stderr, p.opts)
 		}
+	}
+}
+
+func TestWaitJSONReady(t *testing.T) {
+	app := testAppContext(t)
+	root, err := newRootCommand(app)
+	if err != nil {
+		t.Fatalf("newRootCommand failed: %v", err)
+	}
+
+	stdout, stderr := captureProcessIO(t, func() {
+		root.SetArgs([]string{"wait", "vm-a", "--json"})
+		if err := root.Execute(); err != nil {
+			t.Fatalf("Execute(wait) failed: %v", err)
+		}
+	})
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	assertSingleJSON(t, stdout)
+
+	var payload struct {
+		Status string `json:"status"`
+		Data   struct {
+			Action struct {
+				Name   string `json:"name"`
+				Result string `json:"result"`
+			} `json:"action"`
+			Readiness struct {
+				Ready bool   `json:"ready"`
+				State string `json:"state"`
+			} `json:"readiness"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("decode wait payload: %v\n%s", err, stdout)
+	}
+	if payload.Status != "ok" || payload.Data.Action.Result != "ready" || !payload.Data.Readiness.Ready || payload.Data.Readiness.State != "ready" {
+		t.Fatalf("unexpected wait payload: %s", stdout)
 	}
 }
 

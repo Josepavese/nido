@@ -6,6 +6,7 @@ import (
 	"github.com/Josepavese/nido/v4/internal/events"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Josepavese/nido/v4/internal/config"
 	"github.com/Josepavese/nido/v4/internal/hardware"
@@ -54,6 +55,8 @@ type VMStatus struct {
 	SSHUser    string
 	Cmdline    string
 	Forwarding []PortForward
+	// Readiness is the last observed guest readiness, or nil when unknown or stale.
+	Readiness *GuestReadiness `json:"readiness,omitempty"`
 }
 
 // PortForward represents a specific Guest to Host port mapping.
@@ -115,6 +118,8 @@ type VMDetail struct {
 	RawQemuArgs []string `json:"raw_qemu_args,omitempty"`
 	// Accelerators active
 	Accelerators []string `json:"accelerators,omitempty"`
+	// Readiness is the last observed guest readiness, or nil when unknown or stale.
+	Readiness *GuestReadiness `json:"readiness,omitempty"`
 	// StateMissing reports an existing disk without persistent runtime state.
 	StateMissing bool `json:"state_missing,omitempty"`
 	// DiskPath is the absolute path to the VM disk image.
@@ -229,6 +234,11 @@ type VMProvider interface {
 
 	// SSHArgs returns a complete argv, preserving argument boundaries.
 	SSHArgs(name string) ([]string, error)
+
+	// WaitReady observes guest readiness until ready, timeout, or context
+	// cancellation. A terminal observation that is not ready is returned in
+	// GuestReadiness, while invalid input or unreadable state is an error.
+	WaitReady(ctx context.Context, name string, timeout time.Duration) (GuestReadiness, error)
 
 	// Health checks
 

@@ -25,25 +25,27 @@ func actionVMList(app *appContext) func(cmd *cobra.Command, args []string) {
 			}
 
 			type vmJSON struct {
-				Arch    string `json:"arch"`
-				Name    string `json:"name"`
-				State   string `json:"state"`
-				PID     int    `json:"pid"`
-				SSHPort int    `json:"ssh_port"`
-				VNCPort int    `json:"vnc_port"`
-				SSHUser string `json:"ssh_user,omitempty"`
+				Arch      string                   `json:"arch"`
+				Name      string                   `json:"name"`
+				State     string                   `json:"state"`
+				PID       int                      `json:"pid"`
+				SSHPort   int                      `json:"ssh_port"`
+				VNCPort   int                      `json:"vnc_port"`
+				SSHUser   string                   `json:"ssh_user,omitempty"`
+				Readiness *provider.GuestReadiness `json:"readiness,omitempty"`
 			}
 
 			items := make([]vmJSON, 0, len(vms))
 			for _, vm := range vms {
 				items = append(items, vmJSON{
-					Arch:    vm.Arch,
-					Name:    vm.Name,
-					State:   vm.State,
-					PID:     vm.PID,
-					SSHPort: vm.SSHPort,
-					VNCPort: vm.VNCPort,
-					SSHUser: vm.SSHUser,
+					Arch:      vm.Arch,
+					Name:      vm.Name,
+					State:     vm.State,
+					PID:       vm.PID,
+					SSHPort:   vm.SSHPort,
+					VNCPort:   vm.VNCPort,
+					SSHUser:   vm.SSHUser,
+					Readiness: vm.Readiness,
 				})
 			}
 
@@ -104,6 +106,7 @@ func actionVMInfo(app *appContext) func(cmd *cobra.Command, args []string) {
 					"forwarding":                info.Forwarding,
 					"raw_qemu_args":             info.RawQemuArgs,
 					"accelerators":              info.Accelerators,
+					"readiness":                 info.Readiness,
 					"disk_path":                 info.DiskPath, "disk_missing": info.DiskMissing, "state_missing": info.StateMissing, "backing_path": info.BackingPath, "backing_missing": info.BackingMissing,
 				},
 			}))
@@ -113,6 +116,9 @@ func actionVMInfo(app *appContext) func(cmd *cobra.Command, args []string) {
 		ui.Header("VM Details")
 		ui.FancyLabel("Name", info.Name)
 		ui.FancyLabel("State", info.State)
+		if info.Readiness != nil {
+			ui.FancyLabel("Readiness", formatGuestReadiness(info.Readiness))
+		}
 		if info.StateMissing {
 			ui.Warn("Persistent state is missing; only the existing disk was found.")
 		}

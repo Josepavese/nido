@@ -11,14 +11,21 @@ consumer what changed; they do not execute commands or become a second VM DB.
 | --- | --- | --- |
 | Nido operations | started, completed, failed for VM create/start/stop/delete/configure/port changes/disk creation, templates, cache, catalog refresh, global config, image acquisition, blueprint builds, self-update and uninstall | A correlated intent and terminal API outcome. Failure can follow partial effects. Completion does not imply guest OS/SSH/application readiness. TUI refreshes at terminal outcome; MCP omits starts. |
 | Nido acquisition/configuration | image acquisition, blueprint build, global configuration changes | Terminal core resource changes, without byte progress, URLs, scripts, credentials or configuration values. |
-| Runtime observations | process running/stopped; QMP pause, resume, reset, shutdown, suspend, wakeup, guest panic, watchdog and block I/O error | Enrich lifecycle state. QMP SHUTDOWN means shutdown announced, not process termination. A VM disk disappearing is a resource removal, never proof that its process stopped. Only verified process identity establishes stopped. No guest boot/readiness claim. |
-| Persistent resource invalidation | VM metadata/PID, disk create/remove/rename, template publication/removal, image/catalog/config publication | External or other-process changes invalidate the same resources. Native watcher backend is confined to PAL. Disk content writes, staging/partial download writes and unrelated files are excluded. |
+| Runtime observations | process running/stopped; QMP pause, resume, reset, shutdown, suspend, wakeup, guest panic, watchdog and block I/O error | Enrich lifecycle state. QMP SHUTDOWN means shutdown announced, not process termination. A VM disk disappearing is a resource removal, never proof that its process stopped. Only verified process identity establishes stopped. No guest boot/readiness claim in the event itself. |
+| Persistent resource invalidation | VM metadata/PID and readiness observations, disk create/remove/rename, template publication/removal, image/catalog/config publication | External or other-process changes invalidate the same resources. Native watcher backend is confined to PAL. Disk content writes, staging/partial download writes and unrelated files are excluded. |
 | Stream control | resync, unavailable | The consumer must refresh its projection or show degraded connectivity. Reconnect/new owner has a new epoch. Missing observations are never a successful state. |
 
 Excluded: SSH output, guest logs/telemetry, terminal transcripts, tool arguments,
 passwords, QMP raw payloads, display/network activity and high-frequency progress.
 Read-only calls are not events. PCI operations remain under the existing HAL;
 this feature neither detaches hardware nor invents hardware success events.
+
+Guest readiness (`nido wait`, MCP `nido_vm action=wait`) is a provider
+observation persisted in VM metadata, not a new event family. Writing the
+observation invalidates the existing Fleet and named-VM resources, so
+subscribers re-read authoritative state through the normal URI-only
+notification path. No guest console output, command output or credentials are
+stored in the event stream.
 
 ## Transport and lifetime
 

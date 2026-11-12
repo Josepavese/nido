@@ -19,8 +19,11 @@ with `nido doctor` when needed and select an available image with `nido images l
 3. Spawn with automatic host ports, then read `nido info <name> --json`.
    Its VM object is `data.vm`; discover `ssh_port`, `ssh_user` and labeled
    `forwarding` entries there instead of guessing ports or users.
-4. Wait for SSH with a bounded deadline, then check cloud-init and the actual
-   service/test readiness. Process-running events do not prove guest readiness.
+4. Run `nido wait <name> --timeout <seconds>` (or MCP `nido_vm` action
+   `wait`) instead of retrying SSH by hand: it observes SSH and cloud-init
+   together and returns a classified failure. Process-running events do not
+   prove guest readiness, and a successful observation is still not a guarantee
+   for a later command.
 5. Transfer only the intended test inputs, run the test and export useful logs
    and artifacts before cleanup. Keep secrets out of reusable templates.
 6. Delete only the exact resources created by this run, using a trap or CI
@@ -28,9 +31,10 @@ with `nido doctor` when needed and select an available image with `nido images l
    preserve unrelated resources and retained debugging evidence.
 
 For a complete shell workflow, inspect or adapt
-[scripts/nido-ephemeral-test.sh](scripts/nido-ephemeral-test.sh). It waits separately
-for SSH and cloud-init, uploads `NIDO_PROJECT_DIR` and deletes its successful spawn
-on exit. `NIDO_KEEP_VM=1` retains the VM on exit, including after test failure.
+[scripts/nido-ephemeral-test.sh](scripts/nido-ephemeral-test.sh). It calls
+`nido wait` once for SSH and cloud-init, uploads `NIDO_PROJECT_DIR` and deletes
+its successful spawn on exit. `NIDO_KEEP_VM=1` retains the VM on exit, including
+after test failure.
 
 ## Choose the guest architecture
 

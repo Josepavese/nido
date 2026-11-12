@@ -141,6 +141,17 @@ through a resync barrier; VM state files remain authoritative. No permanent
 service, per-consumer fleet polling or durable event log is installed. See
 [events](events.md) for the catalog, safety semantics and qualification scope.
 
+## Guest readiness ownership
+
+`provider.VMProvider.WaitReady` owns the staged readiness observation: process
+liveness, then SSH authentication through the provider-owned SSH arguments, then
+cloud-init when the image provides it. The latest observation is persisted in the
+existing VM metadata, with a process identity so a stale observation from a
+previous boot is hidden. CLI `nido wait`, MCP `nido_vm action=wait`, `info`,
+`ls --json` and the TUI compose that contract; they do not implement their own
+retry loops. Readiness is advisory observed state, not a runtime event family,
+and its diagnostics are bounded without raw guest console output.
+
 ## Guest architecture ownership
 
 `internal/machine` owns the supported ISA vocabulary and QEMU board/CPU/console

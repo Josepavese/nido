@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Add an authoritative guest-readiness handshake: the provider exposes a staged
+  SSH/cloud-init observation, `nido wait` reports it in text or JSON, the MCP
+  `nido_vm` tool gains `action=wait`, and `info`, `ls --json` and the TUI expose
+  the last observation. The state is written to existing VM metadata, so
+  existing resource invalidation and MCP subscriptions stay authoritative; no
+  new event kind, service or schema migration is introduced.
+- Add validator coverage for a ready guest and for a stopped-VM wait failure.
+
 ## [4.10.5] - 2026-10-28 "Steady Flock"
 
 ### Fixed

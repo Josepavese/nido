@@ -75,8 +75,8 @@ providing the chosen emulator and ARM EDK2 code/variables. Nido reports missing
 firmware explicitly. `nido doctor` checks the host-native emulator and firmware;
 starting a foreign guest validates that guest's dependencies separately.
 `virtualization_capability` in VM info describes host capability, not a runtime
-measurement or a guest-readiness guarantee. Verify guest readiness through SSH
-and workload checks; a running QEMU process alone is insufficient.
+measurement or a guest-readiness guarantee. Verify guest readiness through
+`nido wait` and workload checks; a running QEMU process alone is insufficient.
 
 ## Disks, templates and upgrades
 

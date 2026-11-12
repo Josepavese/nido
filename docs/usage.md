@@ -16,10 +16,12 @@ nido images update
 nido images info ubuntu:lts
 nido spawn test-lab --image ubuntu:lts --memory 2048 --cpus 2
 nido info test-lab --json
+nido wait test-lab
 nido ssh test-lab
 ```
 
 Spawn starts QEMU; SSH becomes available after guest boot and cloud-init.
+`nido wait` observes that readiness instead of relying on a fixed sleep.
 Nido injects its SSH key into supported cloud images. The login user comes from
 image metadata or configuration, and is shown by `nido info`. Do not assume
 `root`. Supported Linux cloud-init guests receive administrator access through
@@ -37,12 +39,28 @@ packages:
 
 ```bash
 nido spawn build-lab --image ubuntu:lts --user-data provision.yaml
-nido ssh build-lab cloud-init status --wait
+nido wait build-lab
 ```
 
 CLI `--user-data` takes a **file path**; MCP `user_data` takes the **file content**.
 Cloud-config YAML and shell-script support depend on the guest. CirrOS accepts
 shell user-data, not the full cloud-config feature set.
+
+## Wait for the guest
+
+`nido wait <name>` observes the guest through the same SSH channel used by
+`nido ssh`: first the process, then SSH authentication, then cloud-init when the
+image provides it. `--timeout` bounds the wait (default 180 seconds) and
+`--json` returns the shared readiness object. Failures are classified
+(`vm_not_running`, `process_exited`, `ssh_auth_failed`, `provisioning_error`,
+`timeout`, ...) and the command exits non-zero. While the VM process is alive,
+`nido info`, `nido ls --json` and the TUI show the last observation; a stale
+observation from a previous process is hidden.
+
+Readiness is an observation, not a guarantee: a later guest failure can still
+occur. Use it to avoid retry loops and fixed sleeps, then handle SSH errors on
+the actual guest operation. MCP exposes the same contract as
+`nido_vm action=wait`; see [MCP](mcp.md).
 
 ## Forward a service port
 

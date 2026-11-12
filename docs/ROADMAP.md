@@ -33,7 +33,6 @@ These directions need design and acceptance criteria before implementation:
 
 | Direction | Gap to resolve |
 | --- | --- |
-| First-boot feedback | Make guest readiness and provisioning failures easier to observe |
 | Remote agent transport | Authentication, permissions and lifecycle for an HTTP/SSE service; current MCP is stdio only |
 | Stronger long-run qualification | Repeated lifecycle loops, GUI sessions and workload-specific host testing |
 | Flavour publishing experience | Keep recipes, large-asset distribution and reproducible builds easy to maintain |

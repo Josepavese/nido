@@ -89,6 +89,11 @@ flags:
     type: bool
     long: force
     usage: "Force the operation"
+  timeout:
+    type: int
+    long: timeout
+    usage: "Maximum wait in seconds"
+    default: 180
 
 commands:
   - id: system.migrate
@@ -182,6 +187,23 @@ commands:
       max: 1
     positional_completions: ["vms"]
     action: vm.stop
+
+  - id: vm.wait
+    use: wait <name>
+    group: vm
+    short: "Wait until a VM guest is ready"
+    long: "Observe guest readiness until SSH works and cloud-init, when present, has finished. Reports the observed phase and a classified failure; exits non-zero when the guest is not ready before the timeout."
+    examples:
+      - "nido wait agent-01"
+      - "nido wait agent-01 --timeout 300 --json"
+    flags:
+      - name: json
+      - name: timeout
+    args:
+      min: 1
+      max: 1
+    positional_completions: ["vms"]
+    action: vm.wait
 
   - id: vm.ssh
     use: ssh <name> [ssh-args...]

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	climeta "github.com/Josepavese/nido/v4/internal/cli"
 	"github.com/Josepavese/nido/v4/internal/config"
@@ -51,6 +52,9 @@ func (m *mockProvider) CacheInfo() (provider.CacheInfoResult, error) {
 }
 func (m *mockProvider) CacheRemove(name, version, arch string) error { return nil }
 func (m *mockProvider) SSHArgs(name string) ([]string, error)        { return nil, nil }
+func (m *mockProvider) WaitReady(ctx context.Context, name string, timeout time.Duration) (provider.GuestReadiness, error) {
+	return provider.GuestReadiness{Ready: true, State: provider.ReadinessReady, Phase: provider.ReadinessPhaseReady}, nil
+}
 func (m *mockProvider) PortForward(name string, pf provider.PortForward) (provider.PortForward, error) {
 	return pf, nil
 }
@@ -146,6 +150,7 @@ func TestMCPActionsCoverCLIManifest(t *testing.T) {
 		"vm.spawn":                     {"nido_vm", "create"},
 		"vm.start":                     {"nido_vm", "start"},
 		"vm.stop":                      {"nido_vm", "stop"},
+		"vm.wait":                      {"nido_vm", "wait"},
 		"vm.ssh":                       {"nido_vm", "ssh"},
 		"vm.delete":                    {"nido_vm", "delete"},
 		"vm.prune":                     {"nido_vm", "prune"},
@@ -490,6 +495,31 @@ func TestVMCreatePropagatesArchitecture(t *testing.T) {
 		if p.spawnOpts.Arch != arch {
 			t.Fatalf("architecture lost: %q", p.spawnOpts.Arch)
 		}
+	}
+}
+
+func TestVMWaitReturnsObservation(t *testing.T) {
+	s := &Server{Provider: &mockProvider{}}
+	raw, _ := json.Marshal(map[string]interface{}{"action": "wait", "name": "vm-a", "timeout_seconds": 5})
+	result, err := s.callVMTool(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, ok := result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("wait result type = %T", result)
+	}
+	if payload["ready"] != true {
+		t.Fatalf("wait result = %#v, want ready", payload)
+	}
+	readiness, ok := payload["readiness"].(provider.GuestReadiness)
+	if !ok || readiness.State != provider.ReadinessReady {
+		t.Fatalf("wait readiness = %#v", payload["readiness"])
+	}
+
+	invalid, _ := json.Marshal(map[string]interface{}{"action": "wait", "name": "vm-a", "timeout_seconds": 301})
+	if _, err := s.callVMTool(invalid); err == nil {
+		t.Fatal("timeout_seconds above the bound must fail")
 	}
 }
 

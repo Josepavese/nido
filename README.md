@@ -124,14 +124,17 @@ nido images pull ubuntu:lts
 nido spawn agent-lab --image ubuntu:lts --memory 2048 --cpus 2
 nido info agent-lab --json
 
-# Once the guest has finished booting and SSH is ready:
+# Wait until SSH works and cloud-init provisioning is complete:
+nido wait agent-lab
 nido ssh agent-lab
 ```
 
 The first pull downloads the base image. Later VMs can reuse it. `ubuntu:lts`
 follows the catalog's supported LTS selection; use a numbered tag from
 `nido images list` when you need a specific OS release. Guest boot and cloud-init
-take additional time; creating the overlay is only one part of startup.
+take additional time; `nido wait` observes that readiness instead of relying on
+a fixed sleep. It exits non-zero with a classified failure when the guest is not
+ready before the timeout.
 
 When you have saved the work you need, shut down inside the guest and remove
 **only your disposable VM**:
