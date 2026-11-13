@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `n` opens a stopped-VM snapshot manager with create, restore and delete.
 - Add validator coverage for guest shutdown, ACPI fallback, snapshot lifecycle,
   space-containing tags, running-VM snapshot rejection and stopped-VM boundary
-  behavior. Add a real `shutdown-timeout` scenario (ACPI disabled, SSH masked)
+  behavior. Add a real `shutdown-timeout` scenario (ACPI disabled, SSH stopped)
   that proves timeout returns `ERR_SHUTDOWN_FAILED`, leaves the VM running and
   never force-terminates, plus an MCP durable-session scenario that exercises
   create, wait, snapshot, restore, restart and delete over real stdio.

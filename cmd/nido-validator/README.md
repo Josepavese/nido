@@ -35,7 +35,7 @@ What it validates (high level)
 - Images/cache/templates list endpoints (JSON parsable, presence of fields).
 - Image pool: pull configured image, cache populated, spawn from image uses cache/backing.
 - VM lifecycle: spawn with port mapping, info/list consistency, direct SSH command succeeds (`ssh echo ok` with retries), guest shutdown, start/stop/delete/prune behavior.
-- Shutdown timeout: a real guest booted with ACPI disabled and SSH masked must make `shutdown` return `ERR_SHUTDOWN_FAILED`, keep the VM running, and leave cleanup to the explicit forced `stop`.
+- Shutdown timeout: a real guest booted with ACPI disabled and SSH stopped must make `shutdown` return `ERR_SHUTDOWN_FAILED`, keep the VM running, and leave cleanup to the explicit forced `stop`.
 - Disk snapshots: create/list/restore/delete on a stopped VM, plus rejection when the VM is running.
 - MCP durable sessions: one `nido mcp` stdio process exercises create, wait, guest shutdown, snapshot create/list/restore/delete, restart, running-snapshot rejection, and delete; the step fails if any transport or contract assertion fails.
 - Port forwarding connectivity: optional host dial of forwarded port when dummy server is started via SSH.
@@ -49,7 +49,7 @@ Notes and gaps
   not enable real updates during a VM lifecycle qualification.
 - Forwarding dial and cloud-init checks depend on guest capabilities; enable only if image supports SSH and Python (for dummy server).
 
-- Shutdown timeout: `--scenario shutdown-timeout` boots a disposable x86 guest with `-no-acpi`, masks SSH, and proves timeout/no-force behavior before forced cleanup.
+- Shutdown timeout: `--scenario shutdown-timeout` boots a disposable x86 guest with `-no-acpi` (Ubuntu 24.04 when no image is configured), stops SSH, and proves timeout/no-force behavior before forced cleanup.
 - Durable sessions over MCP: `--scenario mcp-durable` runs the real stdio lifecycle and snapshot flow without reusing CLI state.
 - Event stream: `--scenario event-stream` verifies the streaming JSON contract,
   cross-process publication and invalid CLI arguments inside a private home.

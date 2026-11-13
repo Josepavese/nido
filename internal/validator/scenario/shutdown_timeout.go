@@ -10,7 +10,7 @@ import (
 )
 
 // ShutdownTimeout proves the negative shutdown contract with a real guest: a
-// VM started with ACPI disabled and with SSH masked cannot be asked to power
+// VM started with ACPI disabled and with SSH stopped cannot be asked to power
 // off. `shutdown` must time out, report an error, leave the VM running and never
 // force-terminate it; the explicit forced stop then cleans it up.
 func ShutdownTimeout() Scenario {
@@ -40,6 +40,10 @@ func shutdownTimeoutSpawn(ctx *Context) report.StepResult {
 		args = append(args, tpl)
 	} else if ctx.Config.BaseImage != "" {
 		args = append(args, "--image", ctx.Config.BaseImage)
+	} else {
+		// Standalone runs do not execute the image-pool scenario, so choose a
+		// known systemd guest instead of spawning from an empty source.
+		args = append(args, "--image", "ubuntu:24.04")
 	}
 	args = append(args, "--qemu-arg=-no-acpi", "--json")
 	res := runNido(ctx, "spawn-no-acpi", args, ctx.Config.BootTimeout)
@@ -67,11 +71,29 @@ func shutdownTimeoutDisableSSH(ctx *Context) report.StepResult {
 	if !ok {
 		return skipResult(ctx.Config.NidoBin, []string{"ssh"}, "vm_primary not set")
 	}
-	args := []string{"ssh", vmName, "--", "sudo", "-n", "systemctl", "mask", "--runtime", "--now", "ssh.socket", "ssh.service"}
-	res := runNido(ctx, "ssh-disable", args, 60*time.Second)
-	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
-	finalize(&res)
-	return res
+	// Try the common service managers with direct argv, avoiding nested shell
+	// quoting on minimal guests. Verification below is authoritative: stopping
+	// SSH can also close the command session with a non-zero status.
+	attempts := [][]string{
+		{"sudo", "-n", "systemctl", "mask", "--runtime", "--now", "ssh.socket", "ssh.service"},
+		{"sudo", "-n", "/etc/init.d/S50dropbear", "stop"},
+		{"sudo", "-n", "/etc/init.d/sshd", "stop"},
+		{"sudo", "-n", "pkill", "-9", "-f", "sshd"},
+	}
+	var last report.StepResult
+	timedOut := false
+	for _, remote := range attempts {
+		args := append([]string{"ssh", vmName, "--"}, remote...)
+		last = runNido(ctx, "ssh-disable", args, 20*time.Second)
+		if last.TimedOut {
+			timedOut = true
+			break
+		}
+	}
+	addAssertion(&last, "command_completed", !timedOut, last.Stderr)
+	time.Sleep(2 * time.Second)
+	finalizeExpectedFailure(&last)
+	return last
 }
 
 func shutdownTimeoutVerifySSHClosed(ctx *Context) report.StepResult {

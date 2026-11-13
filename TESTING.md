@@ -56,7 +56,7 @@ external scratch and reuse them throughout the run. Archive only useful bounded
 evidence; remove owned artifacts after their final consumer exits. The
 `vm-lifecycle` scenario covers forced stop, restart, guest shutdown and a
 space-containing snapshot tag; `shutdown-timeout` proves the negative shutdown
-contract with a real ACPI-disabled/SSH-masked guest; `mcp-durable` drives the
+contract with a real ACPI-disabled/SSH-stopped guest; `mcp-durable` drives the
 same durable core over a real MCP stdio subprocess, including the running-VM
 snapshot rejection.
 

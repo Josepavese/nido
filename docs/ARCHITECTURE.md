@@ -173,7 +173,7 @@ the CLI is interrupted by SIGINT mid-operation. Documentation and validator
 assertions therefore distinguish `stop` from `shutdown`; an uncertain stop is
 reconciled by inspecting `info` before retrying, never by claiming durability.
 The real `shutdown-timeout` validator scenario proves the timeout branch: an
-x86 guest with ACPI disabled and SSH masked returns `ERR_SHUTDOWN_FAILED`, stays
+x86 guest with ACPI disabled and SSH stopped returns `ERR_SHUTDOWN_FAILED`, stays
 running, and only the explicit forced `stop` terminates it.
 
 `provider.VMProvider.SnapshotCreate`, `SnapshotList`, `SnapshotRestore` and
