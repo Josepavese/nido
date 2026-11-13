@@ -1,0 +1,31 @@
+Architectures: amd64 arm64
+Codename: stable
+Components: main
+Date: Fri, 13 Nov 2026 14:06:03 +0000
+Label: Nido
+Origin: Nido
+Suite: stable
+MD5Sum:
+ a8a88912c3fa6cd0cffa6e7b735688fb              138 Release
+ 0ba622b14d7c8efd4d542ca5e41dd09a             4624 main/binary-amd64/Packages
+ c1111102541a5dbac9858013f945deeb             1458 main/binary-amd64/Packages.gz
+ 2afa3dd62b97b5ba0ae67305bcb4934d             4624 main/binary-arm64/Packages
+ 8472b85d06003a12948c57a32c09b78e             1467 main/binary-arm64/Packages.gz
+SHA1:
+ 844fa5804a43f1a3cd18a8aeeaffa8622cff6786              138 Release
+ ef5ca1746cacb01f705d903ae25af39dae24f9cd             4624 main/binary-amd64/Packages
+ 48303e598fe591897580d525a1a2bceb64b1ae8b             1458 main/binary-amd64/Packages.gz
+ c1c6f345e5a20f4922fb07aaa610a46779abfb51             4624 main/binary-arm64/Packages
+ bb8aaba45afefdd35c7e6cbc202fb7249a4c22b2             1467 main/binary-arm64/Packages.gz
+SHA256:
+ 2eb80b0d915fc6bc7e603ee0b01386ac8b1f49babe406757334b0a51ec7ec74e              138 Release
+ 87c30fde9168eb2532aad6916126869255698e42c40bfca1e98d9a9f7e571bc9             4624 main/binary-amd64/Packages
+ 18ac7c5e6d7302081c26ef27a1a83c8e5132625c026712de6a2ce65107f13255             1458 main/binary-amd64/Packages.gz
+ 5881548e64c06697057dddb6ce7005a61533d8628909d3cead79421cd43dbb88             4624 main/binary-arm64/Packages
+ 527bfb2f6cc7e5f612db1741c180449136c97b73e0c417421486358594bf5a8c             1467 main/binary-arm64/Packages.gz
+SHA512:
+ 4a14940c9823c422e60736fc3a4ca54591e23b60d65536275ac260297e018eb04b6f09cf1324a2973a39b357a7a95483ff81123a2eb96191941b193a96307c8d              138 Release
+ 0f6b6aef4037139ea897314a28950bf871d93c4758683cedd99c4f90142440552065894fb1d65e5e9b4aef2f775e6db97f34ee9c5378e81a4a6cc545d0cb396e             4624 main/binary-amd64/Packages
+ 4872d2604dff8938d72faa047c3f82657ec915fa09db9beac727e7003f4e9db32694f71f7aac40108cf30b59b65dcb9728c6903df64c15002d77ed0c5bbb6c63             1458 main/binary-amd64/Packages.gz
+ 6c0049617de772641e430bad186c1023c66fcf66a9bedd386aabf9eff9e337a62586f89b4d3c24fb98ab64ceae9f20f80ffe60a7c2ef1d3cb2af11ca0789e0a7             4624 main/binary-arm64/Packages
+ 6979a07b1fb36912863a9862627c1ca43b5979f64e12d4f6f25b8b1281be9ee15fdad00e0f71646820224e9c063c58dc183b274b36f5d72ca2bcd7361bec4354             1467 main/binary-arm64/Packages.gz
