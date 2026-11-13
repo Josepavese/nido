@@ -124,16 +124,24 @@ infrastructure failure uses `ERR_WAIT_FAILED`.
 
 ### `spawn|start|stop|delete|prune`
 
-`data.action` or `data.removed_count`
+`data.action` or `data.removed_count`. A `stop` action reports only
+`name`/`result=stopped`; it never includes the `shutdown` object used by a
+confirmed guest poweroff, because forced process termination provides no guest
+durability guarantee.
 
 ### `shutdown`
 
 `data.action`: name and result (`stopped`).
-`data.shutdown`: `name`, `mode` (`guest` or `already_stopped`), optional `pid`,
-and `duration_ms`.
+`data.shutdown`: `name`, `mode` (`guest` or `already_stopped`), optional
+`method` (`ssh` or `acpi`), optional `pid`, and `duration_ms`.
 
 `mode=guest` means the guest completed a requested poweroff and the owned QEMU
-process exited. `already_stopped` means there was no running guest to ask.
+process exited. `method` identifies the request channel; `acpi` is used only
+when SSH could not deliver the request and a provider-owned QMP control socket
+is available. Windows hosts do not expose that controllable endpoint, so
+`shutdown` is SSH-only there; a guest without reachable SSH cannot use this
+contract. `already_stopped` means there was no running guest to ask and has no
+`method`.
 Timeout or guest failure is `status: error` with code `ERR_SHUTDOWN_FAILED`; the
 VM is not force-terminated. An invalid timeout uses `ERR_INVALID_ARGUMENT`.
 
@@ -144,7 +152,10 @@ nido shutdown agent-01 --timeout 120 --json
 ### `snapshot create|list|restore|delete`
 
 All snapshot operations require a stopped VM and return code
-`ERR_SNAPSHOT_FAILED` otherwise.
+`ERR_SNAPSHOT_FAILED` otherwise. Tags may contain spaces (quote them in the
+shell), but leading/trailing whitespace, path separators, control characters and
+tags longer than 128 bytes are rejected with `ERR_SNAPSHOT_FAILED`. Concurrent
+Nido snapshot commands for the same VM return a busy error instead of queuing.
 
 - `snapshot create`: `data.action` with `name`, `snapshot` and `result`
   (`created`); `data.snapshot` is the created `{id,name,vm_size,created_at}`.

@@ -492,7 +492,11 @@ func actionVMShutdown(app *appContext) func(cmd *cobra.Command, args []string) {
 			ui.Success("VM %s is already stopped.", args[0])
 			return
 		}
-		ui.Success("VM %s stopped after guest shutdown in %s.", args[0], (time.Duration(result.DurationMS) * time.Millisecond).Round(time.Millisecond))
+		channel := "SSH"
+		if result.Method == "acpi" {
+			channel = "ACPI/QMP"
+		}
+		ui.Success("VM %s stopped after guest shutdown via %s in %s.", args[0], channel, (time.Duration(result.DurationMS) * time.Millisecond).Round(time.Millisecond))
 	}
 }
 

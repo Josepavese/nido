@@ -127,6 +127,87 @@ func TestRequestGuestShutdownRequiresSSHClient(t *testing.T) {
 	}
 }
 
+func TestRequestGuestShutdownFallsBackToACPIWhenSSHUnavailable(t *testing.T) {
+	alive := true
+	deps := testShutdownDeps(nil, func() bool { return alive })
+	deps.findSSH = func() (string, error) { return "", errors.New("not installed") }
+	qmpCalls := 0
+	qmp := func(context.Context) error {
+		qmpCalls++
+		alive = false
+		return nil
+	}
+
+	method, err := requestGuestShutdownWithFallback(context.Background(), shutdownTarget(), deps, qmp)
+	if err != nil {
+		t.Fatalf("fallback: %v", err)
+	}
+	if method != "acpi" || qmpCalls != 1 {
+		t.Fatalf("method=%q qmpCalls=%d, want acpi/1", method, qmpCalls)
+	}
+}
+
+func TestRequestGuestShutdownDoesNotFallbackAfterDeliveryTimeout(t *testing.T) {
+	deps := testShutdownDeps(func(_ context.Context, argv []string, _ time.Duration) ([]byte, []byte, error) {
+		if argv[len(argv)-1] == shutdownPOSIXDetection {
+			return []byte("Linux\n"), nil, nil
+		}
+		return nil, nil, nil
+	}, func() bool { return true })
+	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+	defer cancel()
+	qmpCalls := 0
+	_, err := requestGuestShutdownWithFallback(ctx, shutdownTarget(), deps, func(context.Context) error {
+		qmpCalls++
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "did not power off") {
+		t.Fatalf("expected delivery timeout, got %v", err)
+	}
+	if qmpCalls != 0 {
+		t.Fatalf("ACPI fallback ran after a delivered SSH request timed out: %d", qmpCalls)
+	}
+}
+
+func TestRequestGuestShutdownKeepsSSHAsPrimaryPath(t *testing.T) {
+	alive := true
+	deps := testShutdownDeps(func(_ context.Context, argv []string, _ time.Duration) ([]byte, []byte, error) {
+		if argv[len(argv)-1] == shutdownPOSIXDetection {
+			return []byte("Linux\n"), nil, nil
+		}
+		alive = false
+		return nil, nil, nil
+	}, func() bool { return alive })
+	qmpCalls := 0
+	method, err := requestGuestShutdownWithFallback(context.Background(), shutdownTarget(), deps, func(context.Context) error {
+		qmpCalls++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ssh shutdown: %v", err)
+	}
+	if method != "ssh" || qmpCalls != 0 {
+		t.Fatalf("method=%q qmpCalls=%d, want ssh/0", method, qmpCalls)
+	}
+}
+
+func TestRequestGuestShutdownTreatsTransportFailureAsUndelivered(t *testing.T) {
+	deps := testShutdownDeps(func(_ context.Context, argv []string, _ time.Duration) ([]byte, []byte, error) {
+		if argv[len(argv)-1] == shutdownPOSIXDetection {
+			return nil, []byte("ssh: connect to host 127.0.0.1 port 2222: Connection refused"), errors.New("exit status 255")
+		}
+		return nil, []byte("Connection closed by 127.0.0.1 port 2222"), errors.New("exit status 255")
+	}, func() bool { return true })
+	start := time.Now()
+	err := requestGuestShutdown(context.Background(), shutdownTarget(), deps)
+	if err == nil || !strings.Contains(err.Error(), "Connection closed") {
+		t.Fatalf("expected an undelivered transport error, got %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("transport failure waited for process exit: %s", elapsed)
+	}
+}
+
 func TestNormalizeShutdownTimeout(t *testing.T) {
 	if got, err := normalizeShutdownTimeout(0); err != nil || got != DefaultShutdownTimeout {
 		t.Fatalf("default timeout = %v, %v", got, err)

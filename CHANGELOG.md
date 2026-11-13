@@ -5,7 +5,7 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [4.11.0] - 2026-11-13 "Durable Wings"
 
 ### Added
 
@@ -20,13 +20,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request guest OS poweroff over SSH, wait for the owned process to exit, and
   never force-terminate. The operation exposes `guest` versus `already_stopped`
   outcomes, leaves the VM running on timeout, and keeps forced `stop` distinct.
+- Add an ACPI/QMP fallback to guest shutdown on Unix hosts: when SSH cannot
+  deliver the request, the provider sends `system_powerdown` over its QEMU
+  control socket and reports `method=acpi`; a delivered request that times out
+  is never retried. Windows remains SSH-only by documented limitation.
 - Add disk-only snapshots for stopped VMs: `nido snapshot create|list|restore|delete`
   and matching `nido_vm` MCP actions. Snapshot operations reject running VMs,
   restore clears stale readiness, and the MCP/CLI JSON contracts include
   `ERR_SNAPSHOT_FAILED`. No new event kind, daemon, schema version or migration
   is introduced; shutdown reuses the existing `vm.stop` operation event.
-- Add validator coverage for guest shutdown, snapshot lifecycle, running-VM
-  snapshot rejection and stopped-VM boundary behavior.
+- Accept space-containing snapshot tags, including external `qemu-img` tags,
+  while rejecting path-like, control-character and oversized names. Serialize
+  Nido snapshot commands per VM and map image-lock/space failures to clear
+  errors.
+- Add shutdown and snapshot parity to the TUI Fleet: `h` requests guest shutdown
+  and `n` opens a stopped-VM snapshot manager with create, restore and delete.
+- Add validator coverage for guest shutdown, ACPI fallback, snapshot lifecycle,
+  space-containing tags, running-VM snapshot rejection and stopped-VM boundary
+  behavior. Add a real `shutdown-timeout` scenario (ACPI disabled, SSH masked)
+  that proves timeout returns `ERR_SHUTDOWN_FAILED`, leaves the VM running and
+  never force-terminates, plus an MCP durable-session scenario that exercises
+  create, wait, snapshot, restore, restart and delete over real stdio.
 
 ## [4.10.5] - 2026-10-28 "Steady Flock"
 
@@ -789,6 +803,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[4.11.0]: https://github.com/Josepavese/nido/compare/v4.10.5...v4.11.0
 [4.3.0]: https://github.com/Josepavese/nido/compare/v4.2.0...v4.3.0
 [2.0.0]: https://github.com/Josepavese/nido/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/Josepavese/nido/releases/tag/v1.0.0

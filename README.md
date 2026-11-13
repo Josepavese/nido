@@ -146,10 +146,13 @@ nido info agent-lab
 nido delete agent-lab
 ```
 
-`nido shutdown` requests guest OS poweroff over SSH, waits for the managed QEMU
-process to exit, and never force-terminates the guest. On timeout the VM remains
-running. `nido stop` is the explicit forced host-process stop; use it only when
-the guest cannot complete shutdown. VM data persists until you delete it.
+`nido shutdown` asks the guest OS to power off over SSH, or on Unix hosts over
+the provider-owned ACPI/QMP control socket when SSH cannot deliver the request.
+It waits for the managed QEMU process to exit and never force-terminates the
+guest. On timeout the VM remains running. Windows hosts are SSH-only because
+they expose no controllable QMP endpoint. `nido stop` is the explicit forced
+host-process stop; use it only when the guest cannot complete shutdown. VM data
+persists until you delete it.
 
 For a disk-only checkpoint before risky guest work, stop or shut down the VM and
 use the snapshot contract:

@@ -131,21 +131,28 @@ never force-terminates:
 {"action":"shutdown","name":"test-lab","timeout_seconds":120}
 ```
 
-The timeout defaults to 60 seconds and is capped at 300. On failure the VM stays
-running and the tool returns an error; use `action=stop` only as the explicit
-forced host-process fallback. Disk snapshots use the same stopped-VM contract:
+The timeout defaults to 60 seconds and is capped at 300. `data.shutdown.method`
+is `ssh` or `acpi` when the VM stopped; ACPI is a Unix-host fallback used only
+when SSH cannot deliver the request. Windows hosts have no controllable QMP
+endpoint, so `shutdown` is SSH-only there and a guest with no reachable SSH
+service cannot use it. The tool never force-terminates, and a delivered request
+that times out is not retried. On failure the VM stays running
+and the tool returns an error; use `action=stop` only as the explicit forced
+host-process fallback. Disk snapshots use the same stopped-VM contract:
 
 ```json
-{"action":"snapshot_create","name":"test-lab","snapshot_name":"before-upgrade"}
+{"action":"snapshot_create","name":"test-lab","snapshot_name":"before upgrade"}
 {"action":"snapshot_list","name":"test-lab"}
-{"action":"snapshot_restore","name":"test-lab","snapshot_name":"before-upgrade"}
-{"action":"snapshot_delete","name":"test-lab","snapshot_name":"before-upgrade"}
+{"action":"snapshot_restore","name":"test-lab","snapshot_name":"before upgrade"}
+{"action":"snapshot_delete","name":"test-lab","snapshot_name":"before upgrade"}
 ```
 
 Snapshots capture disk contents only, require the VM to be stopped, and return
-`ERR_SNAPSHOT_FAILED` if it is running. They are not guest-memory checkpoints and
-do not add a new resource URI; use `nido://vm/{name}` to observe the VM after an
-operation.
+`ERR_SNAPSHOT_FAILED` if it is running. Tags may contain spaces; leading or
+trailing whitespace, path separators, control characters and tags longer than
+128 bytes are rejected. Concurrent snapshot commands for one VM return a busy
+error instead of queuing. They are not guest-memory checkpoints and do not add a
+new resource URI; use `nido://vm/{name}` to observe the VM after an operation.
 
 Persistent raw QEMU settings follow replacement semantics:
 

@@ -10,6 +10,8 @@ import hashlib
 import json
 import os
 import pathlib
+import shutil
+import subprocess
 import tempfile
 import time
 
@@ -34,7 +36,13 @@ def run():
         config = home/'config.env'
         config.write_text(f'SSH_USER=fixture\nIMAGE_DIR={home}/images\nBACKUP_DIR={home}/backups\n')
         disk = home/'vms/robin.qcow2'
-        disk.write_bytes(b'private metadata fixture; never boot')
+        qemu_img = shutil.which('qemu-img')
+        if qemu_img:
+            # A real empty qcow2 makes the read-only snapshot-list modal
+            # exercisable without booting or mutating a VM.
+            subprocess.run([qemu_img, 'create', '-q', '-f', 'qcow2', str(disk), '8M'], check=True)
+        else:
+            disk.write_bytes(b'private metadata fixture; never boot')
         state = home/'run/robin.json'
         state.write_text(json.dumps(dict(name='robin', arch='amd64', pid=0, memory_mb=512,
                                         vcpus=1, ssh_port=51022, ssh_user='fixture')))
@@ -70,6 +78,12 @@ def run():
         try:
             tui.text('robin')
             capture('Fleet - wide')
+            if qemu_img:
+                key(b'n')
+                tui.text('Snapshots')
+                capture('Fleet - snapshots')
+                key(b'\x1b')
+                capture('Fleet - snapshots closed')
             resize(80, 24, 'Fleet - compact')
             resize(60, 15, 'Fleet - list')
             key(b'\r')  # Compact Enter opens detail, never toggles power.
@@ -186,7 +200,7 @@ def run():
         for i, snapshot in enumerate(snapshots):
             (target/f'frame-{i:02}.html').write_text(style + links + snapshot)
         (target/'index.html').write_text(style + links + ''.join(f'<section>{s}</section>' for s in snapshots))
-    print('PASS: real PTY resize, caret, focus, mouse route, modal cancel, recovery; fixture bytes unchanged')
+    print('PASS: real PTY resize, caret, focus, mouse route, modal cancel, snapshot list, recovery; fixture bytes unchanged')
 
 
 if __name__ == '__main__':

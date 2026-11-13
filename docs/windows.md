@@ -20,6 +20,11 @@ Windows host support is smoke-tested on a real Windows VM. The latest validation
 
 This is enough to call the core workflow usable. It is not yet equivalent to the Linux/macOS path for heavy or long-running workloads. Keep testing intensive agent workloads, repeated lifecycle loops, GUI sessions, and large Windows blueprint builds before relying on it as the default production host.
 
+Guest shutdown on a Windows host is SSH-only because its QEMU launcher has no
+controllable QMP endpoint. If SSH cannot reach the guest, `nido shutdown` fails
+and leaves the VM running; `nido stop` is the explicit forced host-process
+fallback with the documented weaker durability contract.
+
 ## ARM64 prerequisites
 
 The ARM64 installer selects `nido-windows-arm64.zip`. Install native QEMU from

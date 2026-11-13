@@ -34,6 +34,11 @@ func VMLifecycle() Scenario {
 			snapshotDeleteVM,
 			startVM,
 			snapshotRunningRejected,
+			stopVM,
+			infoStoppedVM,
+			startVM,
+			waitReadyVM,
+			shutdownVM,
 			deleteVM,
 			pruneVM,
 		},
@@ -301,7 +306,7 @@ func waitStoppedVM(ctx *Context) report.StepResult {
 	return res
 }
 
-const validatorSnapshotName = "validator-baseline"
+const validatorSnapshotName = "validator baseline"
 
 func snapshotCreateVM(ctx *Context) report.StepResult {
 	vmName, ok := getVar(ctx, "vm_primary")
@@ -618,6 +623,53 @@ func shutdownVM(ctx *Context) report.StepResult {
 				addAssertion(&res, "guest_mode", false, "missing shutdown result")
 			}
 		}
+	} else {
+		addAssertion(&res, "json_parse", false, err.Error())
+	}
+	finalize(&res)
+	return res
+}
+
+func stopVM(ctx *Context) report.StepResult {
+	vmName, ok := getVar(ctx, "vm_primary")
+	if !ok {
+		return skipResult(ctx.Config.NidoBin, []string{"stop"}, "vm_primary not set")
+	}
+	args := []string{"stop", vmName, "--json"}
+	res := runNido(ctx, "stop", args, 30*time.Second)
+	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
+	if payload, err := parseJSON(res.Stdout); err == nil {
+		addAssertion(&res, "json_parse", true, "")
+		addAssertion(&res, "status_ok", payload["status"] == "ok", fmt.Sprintf("%v", payload["status"]))
+		data, _ := payload["data"].(map[string]interface{})
+		action, _ := data["action"].(map[string]interface{})
+		addAssertion(&res, "action_stopped", action["result"] == "stopped", fmt.Sprintf("%v", action["result"]))
+		// Forced stop must stay distinguishable from a confirmed guest shutdown.
+		_, reportedGuestShutdown := data["shutdown"]
+		addAssertion(&res, "no_guest_shutdown_claim", !reportedGuestShutdown, "forced stop reported a guest shutdown")
+	} else {
+		addAssertion(&res, "json_parse", false, err.Error())
+	}
+	finalize(&res)
+	return res
+}
+
+func infoStoppedVM(ctx *Context) report.StepResult {
+	vmName, ok := getVar(ctx, "vm_primary")
+	if !ok {
+		return skipResult(ctx.Config.NidoBin, []string{"info"}, "vm_primary not set")
+	}
+	args := []string{"info", vmName, "--json"}
+	res := runNido(ctx, "info-after-stop", args, 30*time.Second)
+	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
+	if payload, err := parseJSON(res.Stdout); err == nil {
+		data, _ := payload["data"].(map[string]interface{})
+		vm, _ := data["vm"].(map[string]interface{})
+		addAssertion(&res, "state_stopped", vm["state"] == "stopped", fmt.Sprintf("%v", vm["state"]))
+		// The info payload omits pid/readiness when they are zero/nil.
+		pid, hasPID := vm["pid"]
+		addAssertion(&res, "pid_zero", !hasPID || pid == float64(0), fmt.Sprintf("%v", pid))
+		addAssertion(&res, "readiness_cleared", vm["readiness"] == nil, fmt.Sprintf("%v", vm["readiness"]))
 	} else {
 		addAssertion(&res, "json_parse", false, err.Error())
 	}

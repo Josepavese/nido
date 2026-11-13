@@ -99,7 +99,7 @@ func ToolsCatalog() []map[string]interface{} {
 				"properties": map[string]interface{}{
 					"action":          map[string]interface{}{"type": "string", "enum": []string{"list", "info", "create", "start", "stop", "shutdown", "wait", "delete", "ssh", "prune", "config_update", "port_forward", "port_unforward", "port_list", "snapshot_create", "snapshot_list", "snapshot_restore", "snapshot_delete"}},
 					"name":            map[string]interface{}{"type": "string", "description": "VM name for any action that targets a specific VM."},
-					"snapshot_name":   map[string]interface{}{"type": "string", "description": "Disk snapshot name for snapshot_create, snapshot_restore, or snapshot_delete."},
+					"snapshot_name":   map[string]interface{}{"type": "string", "description": "Disk snapshot tag for snapshot_create, snapshot_restore, or snapshot_delete; spaces are allowed."},
 					"template":        map[string]interface{}{"type": "string", "description": "Template name for action=create."},
 					"arch":            map[string]interface{}{"type": "string", "enum": append([]string{machine.Auto}, machine.Architectures()...), "description": "Guest ISA; omitted or auto selects the native host architecture."},
 					"image":           map[string]interface{}{"type": "string", "description": "Image tag like ubuntu:24.04 for action=create."},

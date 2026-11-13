@@ -33,9 +33,11 @@ const (
 // ShutdownResult describes a guest-requested poweroff without implying that a
 // forced process stop occurred. Mode is "guest" when the guest completed the
 // request and "already_stopped" when there was no running process to ask.
+// Method records the request channel: "ssh" or "acpi".
 type ShutdownResult struct {
 	Name       string `json:"name"`
 	Mode       string `json:"mode"`
+	Method     string `json:"method,omitempty"`
 	PID        int    `json:"pid,omitempty"`
 	DurationMS int64  `json:"duration_ms"`
 }
@@ -123,12 +125,16 @@ func (p *QemuProvider) Shutdown(ctx context.Context, name string, timeout time.D
 
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	if err := requestGuestShutdown(waitCtx, guestShutdownTarget{
+	target := guestShutdownTarget{
 		name:    name,
 		pid:     pid,
 		sshPort: state.SSHPort,
 		sshUser: state.SSHUser,
-	}, deps); err != nil {
+	}
+	method, err := requestGuestShutdownWithFallback(waitCtx, target, deps, func(ctx context.Context) error {
+		return requestQEMUPowerdown(ctx, p.qmpControlPath(name))
+	})
+	if err != nil {
 		resultErr = err
 		return result, err
 	}
@@ -138,9 +144,37 @@ func (p *QemuProvider) Shutdown(ctx context.Context, name string, timeout time.D
 	}
 
 	result.Mode = shutdownModeGuest
+	result.Method = method
 	result.PID = pid
 	result.DurationMS = deps.now().Sub(start).Milliseconds()
 	return result, nil
+}
+
+// requestGuestShutdownWithFallback keeps the SSH path first, then uses the
+// provider-owned QMP control endpoint for an ACPI poweroff when SSH could not
+// even deliver the request. A timeout after delivery never falls back: the
+// caller must still see a running VM and choose an explicit stop.
+func requestGuestShutdownWithFallback(ctx context.Context, target guestShutdownTarget, deps shutdownDeps, qmpPowerdown func(context.Context) error) (string, error) {
+	if err := requestGuestShutdown(ctx, target, deps); err == nil {
+		return "ssh", nil
+	} else {
+		if ctx.Err() != nil {
+			return "", err
+		}
+		if qmpErr := qmpPowerdown(ctx); qmpErr != nil {
+			return "", fmt.Errorf("%v; ACPI/QMP fallback unavailable: %v", err, qmpErr)
+		}
+		if waitErr := waitVMExit(ctx, target, deps); waitErr != nil {
+			return "", fmt.Errorf("ACPI/QMP powerdown requested but %v", waitErr)
+		}
+		return "acpi", nil
+	}
+}
+
+// qmpControlPath returns the provider-owned control socket created by QEMU at
+// start. It is empty on hosts whose backend has no controllable QMP endpoint.
+func (p *QemuProvider) qmpControlPath(name string) string {
+	return qemuQMPPath(filepath.Join(p.RootDir, "run"), name)
 }
 
 // runningPID reads the same owned PID artifact Stop uses, falling back to the
@@ -179,10 +213,15 @@ func requestGuestShutdown(ctx context.Context, target guestShutdownTarget, deps 
 	}
 	if requestErr != nil {
 		// Authentication failure proves the request did not reach the guest.
-		// Other SSH errors may mean the connection closed as the guest began
-		// poweroff, so the process-exit wait remains authoritative.
+		// A transport failure before SSH could deliver the command is also an
+		// undelivered request; the caller may then use the provider-owned ACPI
+		// fallback. Other SSH errors may mean the connection closed as the guest
+		// began poweroff, so the process-exit wait remains authoritative.
 		switch classifySSHAttempt(requestErr, stderr) {
 		case FailureSSHAuth, FailureSSHClientMissing:
+			return fmt.Errorf("guest shutdown request: %s", boundedReadinessDetail(string(stderr)))
+		}
+		if shutdownTransportFailure(string(stderr)) {
 			return fmt.Errorf("guest shutdown request: %s", boundedReadinessDetail(string(stderr)))
 		}
 	}
@@ -195,6 +234,23 @@ func requestGuestShutdown(ctx context.Context, target guestShutdownTarget, deps 
 		return err
 	}
 	return nil
+}
+
+// shutdownTransportFailure reports SSH failures that happened before a command
+// could be delivered. These are safe to retry through the local ACPI request;
+// a delivered command that later times out is not.
+func shutdownTransportFailure(stderr string) bool {
+	text := strings.ToLower(stderr)
+	for _, marker := range []string{
+		"connection closed", "connection refused", "connection reset",
+		"connection aborted", "connection timed out", "no route to host",
+		"network is unreachable", "broken pipe", "kex_exchange_identification",
+	} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func guestShutdownCommand(ctx context.Context, base []string, deps shutdownDeps) (string, error) {

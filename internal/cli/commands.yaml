@@ -307,7 +307,7 @@ commands:
     use: snapshot
     group: storage
     short: "Manage disk snapshots"
-    long: "Create, list, restore, and delete disk-only internal snapshots of stopped VMs. Guest memory is not captured; restore returns the disk to the snapshot contents."
+    long: "Create, list, restore, and delete disk-only internal snapshots of stopped VMs. Guest memory is not captured; restore returns the disk to the snapshot contents. Snapshot tags may contain spaces; concurrent commands for the same VM are reported as busy."
     commands:
       - id: snapshot.create
         use: create <vm> <snapshot>

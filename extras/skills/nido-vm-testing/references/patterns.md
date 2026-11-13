@@ -72,8 +72,9 @@ nido snapshot delete app-base before-risky-change
 
 All snapshot operations require a stopped VM. Restore reverts the disk, not a
 running process or guest RAM; export logs and artifacts before relying on a
-rollback. Keep snapshot names owned by the workflow and delete them when the
-debugging value is gone.
+rollback. Tags may contain spaces; quote them and expect a busy error if another
+Nido snapshot command is using the same VM. Keep snapshot names owned by the
+workflow and delete them when the debugging value is gone.
 
 ## Ports and multiple agents
 
