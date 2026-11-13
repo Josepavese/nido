@@ -6,12 +6,28 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
+// qmpTestSocket returns a short Unix socket path. macOS limits sun_path to 104
+// bytes, so t.TempDir() (which embeds the test name) is too long there.
+func qmpTestSocket(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("QMP uses a Unix socket; Windows shutdown remains SSH-only")
+	}
+	dir, err := os.MkdirTemp("", "nido-qmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return filepath.Join(dir, "qmp.sock")
+}
+
 func TestRequestQEMUPowerdownSendsCapabilitiesAndACPICommand(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "fixture.qmp")
+	path := qmpTestSocket(t)
 	listener, err := net.Listen("unix", path)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
@@ -60,7 +76,7 @@ func TestRequestQEMUPowerdownSendsCapabilitiesAndACPICommand(t *testing.T) {
 }
 
 func TestRequestQEMUPowerdownReportsGuestRefusal(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "fixture.qmp")
+	path := qmpTestSocket(t)
 	listener, err := net.Listen("unix", path)
 	if err != nil {
 		t.Fatalf("listen: %v", err)
