@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-11-12T16:30:24.900741657Z",
+  "updated_at": "2026-11-13T14:05:24.015308732Z",
   "images": [
     {
       "name": "ubuntu",
@@ -210,14 +210,14 @@
             "oldstable"
           ],
           "arch": "amd64",
-          "url": "https://cloud.debian.org/images/cloud/bookworm/20261026-2643/debian-12-genericcloud-amd64-20261026-2643.qcow2",
+          "url": "https://cloud.debian.org/images/cloud/bookworm/20261112-2660/debian-12-genericcloud-amd64-20261112-2660.qcow2",
           "checksum_type": "sha512",
-          "checksum": "0464b5d4ae3aa4f658468d88da83af7857b71548b30d46dcb6282770955a747fb95a983476db90d25afd0653af607224c7ebd05122ab71faa106fd712aaad652",
-          "size_bytes": 349831168,
-          "size": "333.6 MB",
+          "checksum": "485a390d1c5e3a9f57ebb903654c21044c5d5b5b94de126d28b9d0cd960112dc0536afd1217c45036c331659543c8c8acb5f56dff706c9530f9fe39e2908e512",
+          "size_bytes": 349110272,
+          "size": "332.9 MB",
           "format": "qcow2",
-          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/20261026-2643/SHA512SUMS",
-          "checksum_regex": "debian-12-genericcloud-amd64-20261026-2643\\.qcow2"
+          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/20261112-2660/SHA512SUMS",
+          "checksum_regex": "debian-12-genericcloud-amd64-20261112-2660\\.qcow2"
         },
         {
           "version": "13",
@@ -243,14 +243,14 @@
             "oldstable"
           ],
           "arch": "arm64",
-          "url": "https://cloud.debian.org/images/cloud/bookworm/20261026-2643/debian-12-genericcloud-arm64-20261026-2643.qcow2",
+          "url": "https://cloud.debian.org/images/cloud/bookworm/20261112-2660/debian-12-genericcloud-arm64-20261112-2660.qcow2",
           "checksum_type": "sha512",
-          "checksum": "f42866fe22b4baf9f0ed4f81d620064f2a4b86b18b92bfe3aaaa40babf6819d39cbf0caaaad13f4ae3e7c9f82cbd78b0c8cabadd8bc737ce13578e61fa86970c",
-          "size_bytes": 346030080,
-          "size": "330.0 MB",
+          "checksum": "8d2391939b0e411b00a47edd107cb802cafa86e271b632da472634828e06e0a1995c27bdaf426e8900e9425933ce6bfee355cbebef97b595ad07d913b17a4d58",
+          "size_bytes": 340197376,
+          "size": "324.4 MB",
           "format": "qcow2",
-          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/20261026-2643/SHA512SUMS",
-          "checksum_regex": "debian-12-genericcloud-arm64-20261026-2643\\.qcow2"
+          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/20261112-2660/SHA512SUMS",
+          "checksum_regex": "debian-12-genericcloud-arm64-20261112-2660\\.qcow2"
         }
       ]
     },
