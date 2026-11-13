@@ -58,14 +58,9 @@ type guestShutdownTarget struct {
 }
 
 func defaultShutdownDeps(p *QemuProvider) shutdownDeps {
-	readiness := defaultReadinessDeps(p)
-	return shutdownDeps{
-		findSSH: readiness.findSSH,
-		runSSH:  readiness.runSSH,
-		isAlive: readiness.isAlive,
-		now:     readiness.now,
-		sleep:   readiness.sleep,
-	}
+	// readinessDeps and shutdownDeps intentionally share the same guest
+	// observation functions; convert instead of copying every field.
+	return shutdownDeps(defaultReadinessDeps(p))
 }
 
 func normalizeShutdownTimeout(timeout time.Duration) (time.Duration, error) {
