@@ -25,7 +25,7 @@ const (
 	shutdownDetailLimit    = 256
 	shutdownAlreadyStopped = "already_stopped"
 	shutdownModeGuest      = "guest"
-	shutdownPOSIXCommand   = "sync; if [ \"$(id -u)\" = 0 ]; then shutdown -h now; elif command -v sudo >/dev/null 2>&1; then sudo -n shutdown -h now; else shutdown -h now; fi"
+	shutdownPOSIXCommand   = "sync; if [ \"$(id -u)\" = 0 ]; then prefix=; elif command -v sudo >/dev/null 2>&1; then prefix=\"sudo -n\"; else prefix=; fi; if command -v shutdown >/dev/null 2>&1; then $prefix shutdown -h now; else $prefix poweroff; fi"
 	shutdownWindowsCommand = "shutdown /s /t 0"
 	shutdownPOSIXDetection = "uname -s"
 )

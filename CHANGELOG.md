@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add an ACPI/QMP fallback to guest shutdown on Unix hosts: when SSH cannot
   deliver the request, the provider sends `system_powerdown` over its QEMU
   control socket and reports `method=acpi`; a delivered request that times out
-  is never retried. Windows remains SSH-only by documented limitation.
+  is never retried. Windows remains SSH-only by documented limitation. POSIX
+  guests without a `shutdown` utility use their `poweroff` command instead, so
+  minimal images remain usable.
 - Add disk-only snapshots for stopped VMs: `nido snapshot create|list|restore|delete`
   and matching `nido_vm` MCP actions. Snapshot operations reject running VMs,
   restore clears stale readiness, and the MCP/CLI JSON contracts include

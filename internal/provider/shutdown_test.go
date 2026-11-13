@@ -53,8 +53,8 @@ func TestRequestGuestShutdownUsesGuestPoweroffAndWaitsForExit(t *testing.T) {
 	if len(commands) != 2 {
 		t.Fatalf("expected detection and shutdown commands, got %v", commands)
 	}
-	if !strings.Contains(commands[1], "sudo -n shutdown -h now") {
-		t.Fatalf("expected a guest poweroff request, got %q", commands[1])
+	if !strings.Contains(commands[1], "shutdown -h now") || !strings.Contains(commands[1], "poweroff") {
+		t.Fatalf("expected shutdown with a poweroff fallback, got %q", commands[1])
 	}
 }
 
