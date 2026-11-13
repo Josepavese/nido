@@ -6,6 +6,7 @@ import (
 	"github.com/Josepavese/nido/v4/internal/events"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Josepavese/nido/v4/internal/config"
 	"github.com/Josepavese/nido/v4/internal/hardware"
@@ -54,6 +55,8 @@ type VMStatus struct {
 	SSHUser    string
 	Cmdline    string
 	Forwarding []PortForward
+	// Readiness is the last observed guest readiness, or nil when unknown or stale.
+	Readiness *GuestReadiness `json:"readiness,omitempty"`
 }
 
 // PortForward represents a specific Guest to Host port mapping.
@@ -115,6 +118,8 @@ type VMDetail struct {
 	RawQemuArgs []string `json:"raw_qemu_args,omitempty"`
 	// Accelerators active
 	Accelerators []string `json:"accelerators,omitempty"`
+	// Readiness is the last observed guest readiness, or nil when unknown or stale.
+	Readiness *GuestReadiness `json:"readiness,omitempty"`
 	// StateMissing reports an existing disk without persistent runtime state.
 	StateMissing bool `json:"state_missing,omitempty"`
 	// DiskPath is the absolute path to the VM disk image.
@@ -163,6 +168,18 @@ type VMProvider interface {
 	// Stop terminates the owned VM process and waits for exit before cleanup.
 	// It does not claim guest ACPI shutdown; an already stopped VM is a no-op.
 	Stop(name string) error
+
+	// Shutdown asks the running guest OS to power off, waits for the owned
+	// process to exit, and never force-terminates it. Use Stop for forced
+	// termination or when the guest cannot complete a shutdown.
+	Shutdown(ctx context.Context, name string, timeout time.Duration) (ShutdownResult, error)
+
+	// Snapshot operations manage disk-only internal qcow2 snapshots. They
+	// require a stopped VM and never capture guest memory.
+	SnapshotCreate(ctx context.Context, name, snapshot string) (DiskSnapshot, error)
+	SnapshotList(ctx context.Context, name string) ([]DiskSnapshot, error)
+	SnapshotRestore(ctx context.Context, name, snapshot string) error
+	SnapshotDelete(ctx context.Context, name, snapshot string) error
 
 	// Delete permanently removes a VM and its disk image.
 	Delete(name string) error
@@ -229,6 +246,11 @@ type VMProvider interface {
 
 	// SSHArgs returns a complete argv, preserving argument boundaries.
 	SSHArgs(name string) ([]string, error)
+
+	// WaitReady observes guest readiness until ready, timeout, or context
+	// cancellation. A terminal observation that is not ready is returned in
+	// GuestReadiness, while invalid input or unreadable state is an error.
+	WaitReady(ctx context.Context, name string, timeout time.Duration) (GuestReadiness, error)
 
 	// Health checks
 

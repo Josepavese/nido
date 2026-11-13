@@ -82,6 +82,10 @@ cleanup() {
   if [[ "$NIDO_KEEP_VM" == "1" ]]; then
     echo "Keeping VM for inspection: $NIDO_VM_NAME" >&2
   elif [[ "$VM_CREATED" == "1" ]]; then
+    # Ask the guest to power off before deleting so an ephemeral test does not
+    # discard guest filesystem metadata. If shutdown cannot complete, delete
+    # still uses the explicit forced-stop fallback.
+    "$NIDO_BIN" shutdown "$NIDO_VM_NAME" --timeout 30 --json >/dev/null 2>&1 || true
     "$NIDO_BIN" delete "$NIDO_VM_NAME" --json >/dev/null 2>&1 || true
   fi
   if [[ "$USER_DATA_OWNED" == "1" ]]; then
@@ -152,17 +156,8 @@ fi
 SSH_TARGET="${SSH_USER}@127.0.0.1"
 REMOTE_DIR_Q="$(shell_quote "$NIDO_REMOTE_DIR")"
 
-echo "Waiting for SSH on 127.0.0.1:$SSH_PORT"
-for ((attempt = 1; attempt <= 90; attempt++)); do
-  if ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "echo ready" >/dev/null 2>&1; then
-    break
-  fi
-  sleep 5
-done
-ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "echo ready" >/dev/null
-
-echo "Waiting for guest provisioning to finish"
-ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "if command -v cloud-init >/dev/null 2>&1; then if command -v timeout >/dev/null 2>&1; then sudo timeout 1800 cloud-init status --wait; else sudo cloud-init status --wait; fi; fi"
+echo "Waiting for guest readiness (SSH + cloud-init)"
+"$NIDO_BIN" wait "$NIDO_VM_NAME" --timeout 180
 
 echo "Uploading project to $NIDO_REMOTE_DIR"
 ssh "${SSH_OPTS[@]}" "$SSH_TARGET" "rm -rf -- $REMOTE_DIR_Q && mkdir -p -- $REMOTE_DIR_Q"

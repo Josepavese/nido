@@ -82,7 +82,7 @@ well as mutations:
 | Tool | Actions |
 | --- | --- |
 | `nido_events` | `status`, `subscribe`, `unsubscribe`, `mute`, `unmute` (session controls) |
-| `nido_vm` | `list`, `info`, `create`, `start`, `stop`, `delete`, `ssh`, `prune`, `config_update`, `port_forward`, `port_unforward`, `port_list` |
+| `nido_vm` | `list`, `info`, `create`, `start`, `stop`, `shutdown`, `wait`, `delete`, `ssh`, `prune`, `config_update`, `port_forward`, `port_unforward`, `port_list`, `snapshot_create`, `snapshot_list`, `snapshot_restore`, `snapshot_delete` |
 | `nido_image` | `list`, `info`, `pull`, `remove`, `refresh_catalog`, `cache_list`, `cache_info`, `cache_remove`, `cache_prune` |
 | `nido_template` | `list`, `create`, `delete` |
 | `nido_blueprint` | `list`, `info`, `build` |
@@ -110,7 +110,49 @@ These are **tool arguments**, not complete JSON-RPC messages:
 
 Send to `nido_vm`, then inspect `nido://vm/test-lab`. Image downloads and guest
 boot can take time. CLI `--user-data` reads a file; MCP `user_data` contains the
-actual provisioning text. VM creation does not guarantee immediate SSH readiness.
+actual provisioning text. VM creation does not guarantee immediate SSH readiness;
+observe it explicitly:
+
+```json
+{"action":"wait","name":"test-lab","timeout_seconds":120}
+```
+
+`action=wait` returns `ready` and a `readiness` object (state, phase,
+provisioning, optional classified `failure` and bounded `detail`). The timeout
+defaults to 60 seconds and is capped at 300; when the guest is not ready the tool
+returns the observation instead of blocking indefinitely. `nido://vm/{name}`,
+`nido://fleet/vms` and `info` show the last observation while the process is
+alive. Readiness is advisory: a later guest failure is still possible.
+
+To stop a guest cleanly, use `action=shutdown`; it requests guest OS poweroff and
+never force-terminates:
+
+```json
+{"action":"shutdown","name":"test-lab","timeout_seconds":120}
+```
+
+The timeout defaults to 60 seconds and is capped at 300. `data.shutdown.method`
+is `ssh` or `acpi` when the VM stopped; ACPI is a Unix-host fallback used only
+when SSH cannot deliver the request. Windows hosts have no controllable QMP
+endpoint, so `shutdown` is SSH-only there and a guest with no reachable SSH
+service cannot use it. The tool never force-terminates, and a delivered request
+that times out is not retried. On failure the VM stays running
+and the tool returns an error; use `action=stop` only as the explicit forced
+host-process fallback. Disk snapshots use the same stopped-VM contract:
+
+```json
+{"action":"snapshot_create","name":"test-lab","snapshot_name":"before upgrade"}
+{"action":"snapshot_list","name":"test-lab"}
+{"action":"snapshot_restore","name":"test-lab","snapshot_name":"before upgrade"}
+{"action":"snapshot_delete","name":"test-lab","snapshot_name":"before upgrade"}
+```
+
+Snapshots capture disk contents only, require the VM to be stopped, and return
+`ERR_SNAPSHOT_FAILED` if it is running. Tags may contain spaces; leading or
+trailing whitespace, path separators, control characters and tags longer than
+128 bytes are rejected. Concurrent snapshot commands for one VM return a busy
+error instead of queuing. They are not guest-memory checkpoints and do not add a
+new resource URI; use `nido://vm/{name}` to observe the VM after an operation.
 
 Persistent raw QEMU settings follow replacement semantics:
 
@@ -127,7 +169,9 @@ Updates take effect on the next start, not by hot-plugging a running VM.
 MCP `nido_vm` / `ssh` returns connection information, structured `argv` and a
 quoted command representation. It does **not** execute arbitrary guest commands
 for the client. The client needs an execution tool to use that connection.
-CLI `nido ssh <name> ...` executes the local SSH client.
+CLI `nido ssh <name> ...` executes the local SSH client. `action=wait` only runs
+a fixed, non-interactive readiness probe through that same SSH channel; it does
+not accept or execute client-provided guest commands.
 
 The server can mutate the user's VM state, cache, configuration and installation.
 `prune` affects all stopped VMs; `uninstall` requires `force=true`. Client approval
@@ -145,8 +189,11 @@ reduce specific risks; they do not replace a policy for untrusted agents.
   shell profile that writes banners to stdout.
 - **Old tool schemas after upgrade**: reconnect the client so it starts the
   current binary and reloads the catalog of tools.
-- **Guest not reachable**: inspect VM state and forwarded ports; allow cloud-init
-  to finish and check host prerequisites with `nido doctor`.
+- **Guest not reachable**: call `action=wait` to see the phase and classified
+  failure, inspect VM state and forwarded ports, and allow cloud-init to finish.
+  The host serial log remains available under the Nido run directory for deeper
+  diagnosis; readiness responses never include raw console output. Check host
+  prerequisites with `nido doctor`.
 
 ## Subscribe without notification noise
 
@@ -165,6 +212,9 @@ Repeated changes are coalesced; muted scopes remain quiet. Unmute asks the
 client to re-read once, recovering changes it suppressed. Subscriptions end with
 the MCP session. The client controls how notifications reach an agent; resource
 notifications do not themselves guarantee that a host wakes its language model.
+A readiness observation written by `action=wait` or another process invalidates
+the same Fleet/VM resources, so subscribers re-read it through the existing
+path; no additional event kind is emitted.
 
 Read `nido://system/events` for health, subscriptions and bounded recent
 interested events. On reconnect/resync, re-read resources: the stream is

@@ -16,10 +16,12 @@ nido images update
 nido images info ubuntu:lts
 nido spawn test-lab --image ubuntu:lts --memory 2048 --cpus 2
 nido info test-lab --json
+nido wait test-lab
 nido ssh test-lab
 ```
 
 Spawn starts QEMU; SSH becomes available after guest boot and cloud-init.
+`nido wait` observes that readiness instead of relying on a fixed sleep.
 Nido injects its SSH key into supported cloud images. The login user comes from
 image metadata or configuration, and is shown by `nido info`. Do not assume
 `root`. Supported Linux cloud-init guests receive administrator access through
@@ -37,12 +39,28 @@ packages:
 
 ```bash
 nido spawn build-lab --image ubuntu:lts --user-data provision.yaml
-nido ssh build-lab cloud-init status --wait
+nido wait build-lab
 ```
 
 CLI `--user-data` takes a **file path**; MCP `user_data` takes the **file content**.
 Cloud-config YAML and shell-script support depend on the guest. CirrOS accepts
 shell user-data, not the full cloud-config feature set.
+
+## Wait for the guest
+
+`nido wait <name>` observes the guest through the same SSH channel used by
+`nido ssh`: first the process, then SSH authentication, then cloud-init when the
+image provides it. `--timeout` bounds the wait (default 180 seconds) and
+`--json` returns the shared readiness object. Failures are classified
+(`vm_not_running`, `process_exited`, `ssh_auth_failed`, `provisioning_error`,
+`timeout`, ...) and the command exits non-zero. While the VM process is alive,
+`nido info`, `nido ls --json` and the TUI show the last observation; a stale
+observation from a previous process is hidden.
+
+Readiness is an observation, not a guarantee: a later guest failure can still
+occur. Use it to avoid retry loops and fixed sleeps, then handle SSH errors on
+the actual guest operation. MCP exposes the same contract as
+`nido_vm action=wait`; see [MCP](mcp.md).
 
 ## Forward a service port
 
@@ -74,9 +92,9 @@ After provisioning a disposable source VM, shut down the guest cleanly before
 saving its disk as a template:
 
 ```bash
-nido ssh build-lab sudo poweroff
+nido shutdown build-lab --timeout 60
 nido info build-lab
-# After the guest has exited:
+# After shutdown confirms the process has exited:
 nido template create build-lab build-base
 nido spawn test-next build-base
 ```
@@ -141,13 +159,36 @@ Linux-guest workflow, not a portable Nido shared-folder API or a Windows share.
 Prefer guest shutdown for filesystem consistency:
 
 ```bash
-nido ssh test-lab sudo poweroff
+nido shutdown test-lab
 nido info test-lab
 ```
 
+`nido shutdown` requests guest OS poweroff before the managed process exits. It
+normally uses SSH and the Nido-managed guest user's passwordless sudo, as in
+Nido-created cloud guests. On Unix hosts, when the SSH request cannot be
+delivered (for example the guest has no reachable SSH service), Nido asks the
+provider-owned QEMU control socket for an ACPI powerdown instead; Windows hosts
+have no controllable QMP endpoint and keep the SSH path. This is a documented
+limitation: on Windows a guest with no reachable SSH service cannot be stopped by
+`nido shutdown`; use the explicit forced `nido stop` only when its weaker
+durability contract is acceptable. The result records the channel as `method=ssh`
+or `method=acpi` when the VM was stopped.
+
+It never falls back to a forced process kill: if the guest cannot complete its
+shutdown before `--timeout` (default 60 seconds, maximum 300), the command exits
+non-zero and leaves the VM running so data is not silently discarded. A request
+that was already delivered but timed out is not retried over ACPI.
+
 If you need to terminate the managed VM process, `nido stop test-lab` verifies its
-identity and waits for exit. It does not send a guest ACPI shutdown request.
-After preserving useful data, delete only the VM you own:
+identity and waits for exit. It is a forced host-process stop and does not claim
+a clean guest shutdown. Guest metadata that was not persisted before the stop is not covered by a
+durability guarantee:
+the guest may replay or lose recently acknowledged but unsynced writes after the
+next boot. The stop JSON deliberately has no `shutdown` object; only
+`nido shutdown` reports a confirmed guest mode. If the CLI is interrupted while
+`stop` is running, inspect `nido info` before retrying; do not interpret a
+partially cleaned run directory as a clean guest shutdown. After preserving
+useful data, delete only the VM you own:
 
 ```bash
 nido delete test-lab
@@ -157,6 +198,41 @@ nido delete test-lab
 `nido uninstall` removes installation data and is not an upgrade procedure.
 Use `nido cache ls` and dependency-aware cache removal to manage downloaded images.
 Do not manually delete backing files used by VM disks or templates.
+
+## Snapshot a stopped VM
+
+Snapshots are disk-only internal QCOW2 snapshots. They are useful before an
+upgrade or a risky test when you want a rollback point, and they deliberately do
+not capture guest RAM or a live process:
+
+```bash
+nido shutdown test-lab
+nido snapshot create test-lab before-upgrade
+nido snapshot list test-lab
+# mutate the stopped or restarted disk...
+nido shutdown test-lab
+nido snapshot restore test-lab before-upgrade
+nido snapshot delete test-lab before-upgrade
+```
+
+Create, list, restore and delete require a stopped VM; attempting them while the
+VM is running returns `ERR_SNAPSHOT_FAILED` rather than modifying an open image.
+Snapshot tags may contain spaces, including tags created by an external
+`qemu-img snapshot`; Nido lists and can restore/delete those tags. Leading or
+trailing whitespace, path separators, control characters and tags longer than
+128 bytes are rejected because they are ambiguous or unsafe to round-trip. Quote
+tags containing spaces in the shell.
+
+Nido serializes its own snapshot commands per VM with a provider-owned lease and
+`qemu-img` also takes its own image lock. A concurrent operation is reported as
+busy, not queued; wait and retry. There is no speculative free-space threshold:
+`qemu-img` remains authoritative, and an out-of-space failure is reported as
+such rather than pretending the snapshot exists. Restoring reverts the disk to
+the snapshot contents, clears the previous readiness observation, and leaves the
+VM stopped. Snapshot deletion frees the snapshot metadata logically, but the
+QCOW2 file itself may not shrink until the disk is rewritten or converted.
+Snapshots are local to one VM's overlay disk and do not replace templates or a
+full backup.
 
 ## Isolation and storage
 

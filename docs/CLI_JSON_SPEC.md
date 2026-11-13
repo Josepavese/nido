@@ -64,7 +64,12 @@ Fields:
 ### Error Codes (Initial Set)
 
 - `ERR_INVALID_ARGS`
+- `ERR_INVALID_ARGUMENT`
 - `ERR_NOT_FOUND`
+- `ERR_NOT_READY`
+- `ERR_WAIT_FAILED`
+- `ERR_SHUTDOWN_FAILED`
+- `ERR_SNAPSHOT_FAILED`
 - `ERR_IO`
 - `ERR_DEPENDENCY`
 - `ERR_PERMISSION`
@@ -80,8 +85,10 @@ The following commands support `--json`:
 - `spawn`
 - `start`
 - `stop`
+- `shutdown`
 - `delete`
 - `prune`
+- `snapshot create|list|restore|delete`
 - `template list|create|delete`
 - `image list|pull|info|remove|update`
 - `blueprint list|info|build`
@@ -96,15 +103,70 @@ The following commands support `--json`:
 
 ### `ls`
 
-`data.vms[]`: name, state, pid, ssh_port, vnc_port, ssh_user
+`data.vms[]`: name, state, pid, ssh_port, vnc_port, ssh_user, readiness (optional observed guest state)
 
 ### `info`
 
-`data.vm`: name, state, ip, ssh_user, ssh_port, vnc_port, raw_qemu_args
+`data.vm`: name, state, ip, ssh_user, ssh_port, vnc_port, raw_qemu_args, readiness (optional observed guest state)
+
+### `wait`
+
+`data.action`: name and result (`ready`).
+`data.readiness`: `ready` (boolean), `state`, `phase`, `pid`, `attempts`,
+`provisioning` (`absent`, `running`, `done`, `degraded` or `error`), optional
+`failure`, optional bounded `detail`, `checked_at` (RFC 3339 UTC) and
+`duration_ms`.
+
+A guest that is not ready before the timeout is reported as `status: error` with
+code `ERR_NOT_READY`; the readiness observation is in `error.details` and the
+command exits non-zero. An invalid timeout uses `ERR_INVALID_ARGUMENT`; an
+infrastructure failure uses `ERR_WAIT_FAILED`.
 
 ### `spawn|start|stop|delete|prune`
 
-`data.action` or `data.removed_count`
+`data.action` or `data.removed_count`. A `stop` action reports only
+`name`/`result=stopped`; it never includes the `shutdown` object used by a
+confirmed guest poweroff, because forced process termination provides no guest
+durability guarantee.
+
+### `shutdown`
+
+`data.action`: name and result (`stopped`).
+`data.shutdown`: `name`, `mode` (`guest` or `already_stopped`), optional
+`method` (`ssh` or `acpi`), optional `pid`, and `duration_ms`.
+
+`mode=guest` means the guest completed a requested poweroff and the owned QEMU
+process exited. `method` identifies the request channel; `acpi` is used only
+when SSH could not deliver the request and a provider-owned QMP control socket
+is available. Windows hosts do not expose that controllable endpoint, so
+`shutdown` is SSH-only there; a guest without reachable SSH cannot use this
+contract. `already_stopped` means there was no running guest to ask and has no
+`method`.
+Timeout or guest failure is `status: error` with code `ERR_SHUTDOWN_FAILED`; the
+VM is not force-terminated. An invalid timeout uses `ERR_INVALID_ARGUMENT`.
+
+```bash
+nido shutdown agent-01 --timeout 120 --json
+```
+
+### `snapshot create|list|restore|delete`
+
+All snapshot operations require a stopped VM and return code
+`ERR_SNAPSHOT_FAILED` otherwise. Tags may contain spaces (quote them in the
+shell), but leading/trailing whitespace, path separators, control characters and
+tags longer than 128 bytes are rejected with `ERR_SNAPSHOT_FAILED`. Concurrent
+Nido snapshot commands for the same VM return a busy error instead of queuing.
+
+- `snapshot create`: `data.action` with `name`, `snapshot` and `result`
+  (`created`); `data.snapshot` is the created `{id,name,vm_size,created_at}`.
+- `snapshot list`: `data.action` and `data.snapshots[]`; each entry has `id`,
+  `name`, optional `vm_size` and `created_at`. Empty lists are encoded as `[]`.
+- `snapshot restore`: `data.action` with `result=restored`.
+- `snapshot delete`: `data.action` with `result=deleted`.
+
+`created_at` is `qemu-img`'s local date/time string. Snapshot IDs and dates are
+informational; use the snapshot `name` for restore and delete. Snapshots are
+disk-only and do not include guest memory or runtime metadata.
 
 ### `template list`
 

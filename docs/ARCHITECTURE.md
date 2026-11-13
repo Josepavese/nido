@@ -141,6 +141,53 @@ through a resync barrier; VM state files remain authoritative. No permanent
 service, per-consumer fleet polling or durable event log is installed. See
 [events](events.md) for the catalog, safety semantics and qualification scope.
 
+## Guest readiness ownership
+
+`provider.VMProvider.WaitReady` owns the staged readiness observation: process
+liveness, then SSH authentication through the provider-owned SSH arguments, then
+cloud-init when the image provides it. The latest observation is persisted in the
+existing VM metadata, with a process identity so a stale observation from a
+previous boot is hidden. CLI `nido wait`, MCP `nido_vm action=wait`, `info`,
+`ls --json` and the TUI compose that contract; they do not implement their own
+retry loops. Readiness is advisory observed state, not a runtime event family,
+and its diagnostics are bounded without raw guest console output.
+
+## Guest shutdown and disk snapshot ownership
+
+`provider.VMProvider.Shutdown` owns the guest-requested poweroff path: it builds
+the provider-owned SSH arguments, requests a guest OS shutdown, waits for the
+owned process to exit, and returns a classified `guest` or `already_stopped`
+outcome. When SSH cannot deliver the request, Unix backends may send an ACPI
+`system_powerdown` command over the provider-owned QMP control socket; the result
+records `method=ssh|acpi`. Windows backends do not expose a controllable QMP
+endpoint, so guest shutdown there remains SSH-only; this is a documented
+qualification limit, not a hidden force path. It has no implicit force fallback;
+`Stop` remains the explicit host-process termination contract. Shutdown reuses
+the existing
+`vm.stop` operation event because it produces the same state transition.
+
+The forced-stop contract stays deliberately narrower: `Stop` terminates only the
+verified owned process and reconciles PID/readiness/state. It provides no guest
+filesystem flush barrier and no confirmed-guest-shutdown result, including when
+the CLI is interrupted by SIGINT mid-operation. Documentation and validator
+assertions therefore distinguish `stop` from `shutdown`; an uncertain stop is
+reconciled by inspecting `info` before retrying, never by claiming durability.
+The real `shutdown-timeout` validator scenario proves the timeout branch: an
+x86 guest with ACPI disabled and SSH stopped returns `ERR_SHUTDOWN_FAILED`, stays
+running, and only the explicit forced `stop` terminates it.
+
+`provider.VMProvider.SnapshotCreate`, `SnapshotList`, `SnapshotRestore` and
+`SnapshotDelete` own the offline QCOW2 disk-snapshot contract. They require a
+stopped VM, invoke `qemu-img snapshot`, parse its bounded output, and never
+modify a running image. Snapshot tags are scoped to one VM disk; snapshot state
+lives in the disk image, not in VM metadata, so no second state model or schema
+migration is introduced. Tags may contain spaces (including tags created by an
+external `qemu-img`), while leading/trailing whitespace, path separators,
+control characters and tags over 128 bytes are rejected. Per-VM provider leases
+and the underlying QEMU image lock make concurrent Nido snapshot commands fail
+busy instead of racing the image. Guest RAM, runtime state and templates remain
+outside this contract.
+
 ## Guest architecture ownership
 
 `internal/machine` owns the supported ISA vocabulary and QEMU board/CPU/console

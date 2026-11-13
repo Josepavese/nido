@@ -53,7 +53,12 @@ not a reason to expose valuable user state to a qualification run.
 See the [validator guide](cmd/nido-validator/README.md) for flags, output,
 timeouts and cleanup behavior. Build `nido` and `nido-validator` into the same
 external scratch and reuse them throughout the run. Archive only useful bounded
-evidence; remove owned artifacts after their final consumer exits.
+evidence; remove owned artifacts after their final consumer exits. The
+`vm-lifecycle` scenario covers forced stop, restart, guest shutdown and a
+space-containing snapshot tag; `shutdown-timeout` proves the negative shutdown
+contract with a real ACPI-disabled/SSH-stopped guest; `mcp-durable` drives the
+same durable core over a real MCP stdio subprocess, including the running-VM
+snapshot rejection.
 
 ## Platform and hardware evidence
 
@@ -104,9 +109,10 @@ NIDO_TEST_BINARY="$scratch/nido" NIDO_TEST_STORAGE="$scratch" python3 tests/tui_
 ```
 
 It exercises wide/compact/minimum sizes, the resting state, safe detail opening,
-field traversal, caret editing, mouse routes, modal cancellation and draft
-recovery. Fixture disk, state and configuration hashes must remain unchanged.
-The shared PTY driver also backs `events_integration.py`.
+field traversal, caret editing, mouse routes, modal cancellation, the read-only
+snapshot manager when `qemu-img` is available, and draft recovery. Fixture disk,
+state and configuration hashes must remain unchanged. The shared PTY driver also
+backs `events_integration.py`.
 
 For visual acceptance, install `pyte` into an owned observer scratch if it is not
 already available (it is not a product dependency), then set

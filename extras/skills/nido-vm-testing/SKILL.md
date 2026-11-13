@@ -19,18 +19,35 @@ with `nido doctor` when needed and select an available image with `nido images l
 3. Spawn with automatic host ports, then read `nido info <name> --json`.
    Its VM object is `data.vm`; discover `ssh_port`, `ssh_user` and labeled
    `forwarding` entries there instead of guessing ports or users.
-4. Wait for SSH with a bounded deadline, then check cloud-init and the actual
-   service/test readiness. Process-running events do not prove guest readiness.
+4. Run `nido wait <name> --timeout <seconds>` (or MCP `nido_vm` action
+   `wait`) instead of retrying SSH by hand: it observes SSH and cloud-init
+   together and returns a classified failure. Process-running events do not
+   prove guest readiness, and a successful observation is still not a guarantee
+   for a later command.
 5. Transfer only the intended test inputs, run the test and export useful logs
    and artifacts before cleanup. Keep secrets out of reusable templates.
-6. Delete only the exact resources created by this run, using a trap or CI
-   cleanup. Reconcile a failed spawn's partial effects before retrying or deleting;
-   preserve unrelated resources and retained debugging evidence.
+6. Stop the exact VM with `nido shutdown <name> --timeout 60` before deletion
+   when its filesystem matters; shutdown requests a guest poweroff and never
+   force-terminates. It normally uses SSH; on Unix it may use ACPI/QMP when SSH
+   cannot deliver the request. Windows hosts are SSH-only, so a guest with no
+   reachable SSH needs the explicit forced `nido stop` fallback and its weaker
+   durability contract. If the guest cannot complete shutdown, inspect it or use
+   `nido stop`. Delete only the exact resources
+   created by this run, using a trap or CI cleanup. Reconcile a failed spawn's
+   partial effects before retrying or deleting; preserve unrelated resources and
+   retained debugging evidence.
+
+For a disk-only rollback point before a risky test, stop the VM and use
+`nido snapshot create <vm> <name>`; restore and delete snapshots only while the
+VM is stopped. Snapshot tags may contain spaces (quote them in a shell);
+concurrent snapshot commands return busy rather than queueing. Snapshots do not
+capture guest memory. They are not a substitute for exporting useful artifacts.
 
 For a complete shell workflow, inspect or adapt
-[scripts/nido-ephemeral-test.sh](scripts/nido-ephemeral-test.sh). It waits separately
-for SSH and cloud-init, uploads `NIDO_PROJECT_DIR` and deletes its successful spawn
-on exit. `NIDO_KEEP_VM=1` retains the VM on exit, including after test failure.
+[scripts/nido-ephemeral-test.sh](scripts/nido-ephemeral-test.sh). It calls
+`nido wait` once for SSH and cloud-init, uploads `NIDO_PROJECT_DIR` and deletes
+its successful spawn on exit. `NIDO_KEEP_VM=1` retains the VM on exit, including
+after test failure.
 
 ## Choose the guest architecture
 

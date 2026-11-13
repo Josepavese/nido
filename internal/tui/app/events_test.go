@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"strings"
@@ -59,6 +60,14 @@ func TestGlobalErrorStillAllowsExit(t *testing.T) {
 		if _, ok := cmd().(tea.QuitMsg); !ok {
 			t.Fatal("exit did not reach kit lifecycle")
 		}
+	}
+}
+
+func TestShutdownFailureStaysVisible(t *testing.T) {
+	model := &NidoApp{App: kit.NewApp(), Fleet: fleet.NewFleet(nil), ErrorModal: widget.NewAlertModal("fixture", "", nil)}
+	model.Update(ops.OpResultMsg{Op: ops.OpShutdown, Err: errors.New("guest did not power off")})
+	if !model.ErrorModal.IsActive() {
+		t.Fatal("shutdown failure was only a transient status line")
 	}
 }
 

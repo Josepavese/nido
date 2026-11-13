@@ -39,6 +39,43 @@ func TestLoadManifestAndBuildRoot(t *testing.T) {
 	}
 }
 
+func TestPerCommandFlagDefaults(t *testing.T) {
+	manifest, err := LoadManifest()
+	if err != nil {
+		t.Fatalf("LoadManifest failed: %v", err)
+	}
+	actions := map[string]ActionFunc{}
+	completions := map[string]CompletionFunc{}
+	collectManifestHandlers(manifest.Commands, manifest.Flags, actions, completions)
+	root, err := (&Builder{
+		Manifest:              manifest,
+		Actions:               actions,
+		FlagCompletions:       completions,
+		PositionalCompletions: completions,
+	}).BuildRoot()
+	if err != nil {
+		t.Fatalf("BuildRoot failed: %v", err)
+	}
+
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"shutdown", "60"},
+		{"wait", "180"},
+	}
+	for _, tc := range cases {
+		cmd, _, err := root.Find([]string{tc.path})
+		if err != nil || cmd == nil {
+			t.Fatalf("find %s: %v", tc.path, err)
+		}
+		flag := cmd.Flags().Lookup("timeout")
+		if flag == nil || flag.DefValue != tc.want {
+			t.Fatalf("%s timeout default = %v, want %s", tc.path, flag, tc.want)
+		}
+	}
+}
+
 func TestRootHelpIncludesGroupsAndCommands(t *testing.T) {
 	manifest, err := LoadManifest()
 	if err != nil {

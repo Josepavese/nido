@@ -4,6 +4,7 @@
 package ops
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/Josepavese/nido/v4/internal/events"
@@ -93,9 +94,10 @@ type VMDetailRequestMsg struct {
 
 // VM Operation Constants
 const (
-	OpStart  = "start"
-	OpStop   = "stop"
-	OpDelete = "delete"
+	OpStart    = "start"
+	OpStop     = "stop"
+	OpShutdown = "shutdown"
+	OpDelete   = "delete"
 )
 
 // RequestOpMsg requests a VM operation.
@@ -449,6 +451,15 @@ func StopVM(prov provider.VMProvider, name string) tea.Cmd {
 	return func() tea.Msg {
 		err := prov.Stop(name)
 		return OpResultMsg{Op: "stop", Err: err}
+	}
+}
+
+// ShutdownVM asks the guest to power off and waits for the owned process. It
+// never falls back to Stop; a timeout leaves the VM running.
+func ShutdownVM(prov provider.VMProvider, name string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := prov.Shutdown(context.Background(), name, provider.DefaultShutdownTimeout)
+		return OpResultMsg{Op: OpShutdown, Err: err}
 	}
 }
 

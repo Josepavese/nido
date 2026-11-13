@@ -94,6 +94,18 @@ func TestScreenGallery(t *testing.T) {
 	f.ModalAccel.Show()
 	capture("Fleet accelerator", "FLEET")
 	f.ModalAccel.Hide()
+	_, _ = f.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	f.Update(ops.SnapshotListMsg{VM: "robin-città-🐦-long-name", Snapshots: []provider.DiskSnapshot{{Name: "before-upgrade", ID: 1, VMSize: "0 B"}, {Name: "external before upgrade", ID: 2, VMSize: "16 MiB"}}})
+	capture("Fleet snapshots", "FLEET")
+	f.SnapshotList.Hide()
+	f.SnapshotCreate.Show()
+	capture("Create snapshot", "FLEET")
+	f.SnapshotCreate.Hide()
+	f.SnapshotConfirm.Message = "VM: robin\nSnapshot: before-upgrade\n\nRestore this disk snapshot?"
+	f.SnapshotConfirm.Title = "Restore Snapshot"
+	f.SnapshotConfirm.Show()
+	capture("Restore snapshot", "FLEET")
+	f.SnapshotConfirm.Hide()
 	capture("Hatchery loading", "HATCHERY")
 	h.Update(ops.SourcesLoadedMsg{Sources: []string{"[TEMPLATE] robin"}})
 	capture("Hatchery sources", "HATCHERY")

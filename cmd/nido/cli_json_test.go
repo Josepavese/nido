@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Josepavese/nido/v4/internal/config"
 	"github.com/Josepavese/nido/v4/internal/provider"
@@ -22,6 +23,11 @@ func TestJSONCommandsProduceSingleJSONAndNoStderr(t *testing.T) {
 		{"ls", "--json"},
 		{"info", "vm-a", "--json"},
 		{"template", "list", "--json"},
+		{"snapshot", "list", "vm-a", "--json"},
+		{"snapshot", "create", "vm-a", "before-test", "--json"},
+		{"snapshot", "restore", "vm-a", "before-test", "--json"},
+		{"snapshot", "delete", "vm-a", "before-test", "--json"},
+		{"shutdown", "vm-a", "--json"},
 		{"cache", "info", "--json"},
 		{"blueprint", "list", "--json"},
 		{"doctor", "--json"},
@@ -288,7 +294,18 @@ type fakeProvider struct{}
 func (fakeProvider) Spawn(name string, opts provider.VMOptions) error { return nil }
 func (fakeProvider) Start(name string, opts provider.VMOptions) error { return nil }
 func (fakeProvider) Stop(name string) error                           { return nil }
-func (fakeProvider) Delete(name string) error                         { return nil }
+func (fakeProvider) Shutdown(ctx context.Context, name string, timeout time.Duration) (provider.ShutdownResult, error) {
+	return provider.ShutdownResult{Name: name, Mode: "guest", PID: 123}, nil
+}
+func (fakeProvider) SnapshotCreate(ctx context.Context, name, snapshot string) (provider.DiskSnapshot, error) {
+	return provider.DiskSnapshot{Name: snapshot, ID: 1}, nil
+}
+func (fakeProvider) SnapshotList(ctx context.Context, name string) ([]provider.DiskSnapshot, error) {
+	return []provider.DiskSnapshot{{ID: 1, Name: "before-test"}}, nil
+}
+func (fakeProvider) SnapshotRestore(ctx context.Context, name, snapshot string) error { return nil }
+func (fakeProvider) SnapshotDelete(ctx context.Context, name, snapshot string) error  { return nil }
+func (fakeProvider) Delete(name string) error                                         { return nil }
 func (fakeProvider) List() ([]provider.VMStatus, error) {
 	return []provider.VMStatus{{Name: "vm-a", State: "running", PID: 123, SSHPort: 50022, VNCPort: 59000, SSHUser: "vmuser"}}, nil
 }
@@ -321,6 +338,15 @@ func (fakeProvider) CachePrune(unusedOnly bool) (int, int64, error) { return 1, 
 func (fakeProvider) CacheRemove(name, version, arch string) error   { return nil }
 func (fakeProvider) SSHArgs(name string) ([]string, error) {
 	return []string{"ssh", "-p", "50022", "vmuser@127.0.0.1"}, nil
+}
+func (fakeProvider) WaitReady(ctx context.Context, name string, timeout time.Duration) (provider.GuestReadiness, error) {
+	return provider.GuestReadiness{
+		Ready:     true,
+		State:     provider.ReadinessReady,
+		Phase:     provider.ReadinessPhaseReady,
+		PID:       123,
+		CheckedAt: time.Now().UTC(),
+	}, nil
 }
 func (fakeProvider) PortForward(name string, pf provider.PortForward) (provider.PortForward, error) {
 	return pf, nil
@@ -482,6 +508,45 @@ func TestSpawnArchitectureFlag(t *testing.T) {
 		if p.opts.Arch != arch || stderr != "" || !strings.Contains(stdout, `"status":"ok"`) {
 			t.Fatalf("lost architecture: %s %s %#v", stdout, stderr, p.opts)
 		}
+	}
+}
+
+func TestWaitJSONReady(t *testing.T) {
+	app := testAppContext(t)
+	root, err := newRootCommand(app)
+	if err != nil {
+		t.Fatalf("newRootCommand failed: %v", err)
+	}
+
+	stdout, stderr := captureProcessIO(t, func() {
+		root.SetArgs([]string{"wait", "vm-a", "--json"})
+		if err := root.Execute(); err != nil {
+			t.Fatalf("Execute(wait) failed: %v", err)
+		}
+	})
+	if stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", stderr)
+	}
+	assertSingleJSON(t, stdout)
+
+	var payload struct {
+		Status string `json:"status"`
+		Data   struct {
+			Action struct {
+				Name   string `json:"name"`
+				Result string `json:"result"`
+			} `json:"action"`
+			Readiness struct {
+				Ready bool   `json:"ready"`
+				State string `json:"state"`
+			} `json:"readiness"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("decode wait payload: %v\n%s", err, stdout)
+	}
+	if payload.Status != "ok" || payload.Data.Action.Result != "ready" || !payload.Data.Readiness.Ready || payload.Data.Readiness.State != "ready" {
+		t.Fatalf("unexpected wait payload: %s", stdout)
 	}
 }
 

@@ -20,10 +20,11 @@ nido info "ci-$RUN_ID" --json
 ```
 
 For cloud images, Nido supplies its SSH key alongside the user-data. Discover the
-SSH user/port from `data.vm`, wait for SSH with a deadline, then check
-`sudo cloud-init status --wait` with a bounded timeout and verify the service or
-command the test actually needs. A successful spawn or `vm.running` describes
-host/process progress, not completed provisioning. Collect guest logs such as
+SSH user/port from `data.vm`, run `nido wait "$RUN_ID" --timeout 180 --json`
+instead of retrying SSH manually, then verify the service or command the test
+actually needs. A successful spawn or `vm.running` describes host/process
+progress, not completed provisioning. The wait result is a bounded observation,
+not a guarantee for later commands. Collect guest logs such as
 `/var/log/cloud-init-output.log`, service journals and test results before deleting
 the owned VM.
 
@@ -40,7 +41,7 @@ Prepare and verify stable prerequisites once, then shut down the guest cleanly:
 ```bash
 nido spawn app-base --image ubuntu:24.04 --user-data provision.sh
 # After SSH, cloud-init and prerequisite checks pass:
-nido ssh app-base sudo poweroff
+nido shutdown app-base --timeout 60
 nido info app-base --json
 # After confirming the managed process is stopped:
 nido template create app-base app-ci-base
@@ -54,6 +55,26 @@ retain the template while clones depend on it. Reusing prepared storage saves
 setup work; guest boot and readiness still take time. Do not preserve changing
 source trees, environment-specific configuration or long-lived credentials in a
 shared base. Upload current inputs after spawning each clone.
+
+## Snapshot rollback for stopped guests
+
+A disk snapshot is a rollback point for one stopped VM, not a memory checkpoint:
+
+```bash
+nido shutdown app-base --timeout 60
+nido snapshot create app-base before-risky-change
+nido start app-base
+# run the risky guest change...
+nido shutdown app-base --timeout 60
+nido snapshot restore app-base before-risky-change
+nido snapshot delete app-base before-risky-change
+```
+
+All snapshot operations require a stopped VM. Restore reverts the disk, not a
+running process or guest RAM; export logs and artifacts before relying on a
+rollback. Tags may contain spaces; quote them and expect a busy error if another
+Nido snapshot command is using the same VM. Keep snapshot names owned by the
+workflow and delete them when the debugging value is gone.
 
 ## Ports and multiple agents
 

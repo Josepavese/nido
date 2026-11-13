@@ -43,6 +43,8 @@ type FlagSpec struct {
 type CommandFlagRef struct {
 	Name     string `yaml:"name"`
 	Required bool   `yaml:"required"`
+	// Default overrides the shared flag default for this command only.
+	Default any `yaml:"default,omitempty"`
 }
 
 type ArgsSpec struct {

@@ -250,10 +250,15 @@ func deleteConfigVM(ctx *Context) report.StepResult {
 		return skipResult(ctx.Config.NidoBin, []string{"delete"}, "vm_config not set")
 	}
 
+	// The config test persists a fake PCI accelerator. It was never bound, so
+	// restore it to the virtual GPU before deletion instead of asking the host
+	// device layer to restore an unowned binding.
+	resetRes := runNido(ctx, "config-cleanup", []string{"config", vmName, "--accel", "virtual:gpu", "--json"}, 10*time.Second)
 	res := runDeleteValidatorVM(ctx, vmName, 10*time.Second)
+	addAssertion(&res, "accelerator_reset", resetRes.ExitCode == 0, resetRes.Stderr)
 	addAssertion(&res, "exit_zero", res.ExitCode == 0, res.Stderr)
 
-	if res.Result == "PASS" {
+	if resetRes.ExitCode == 0 && res.ExitCode == 0 {
 		ctx.State.RemoveVM(vmName)
 	}
 

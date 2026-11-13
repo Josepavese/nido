@@ -33,8 +33,9 @@ Then restart the agent client so it can discover the new skill.
 
 The `nido-vm-testing` skill teaches an agent to:
 
-- use `nido doctor`, `nido images list`, `nido spawn`, `nido info --json`, `nido ssh`, `nido template`, and `nido delete`;
+- use `nido doctor`, `nido images list`, `nido spawn`, `nido info --json`, `nido wait`, `nido shutdown`, `nido snapshot`, `nido ssh`, `nido template`, and `nido delete`;
 - create disposable VMs for production-like tests;
+- request clean guest shutdown instead of relying on forced process termination, and keep disk snapshots as an explicit stopped-VM rollback tool;
 - provision prerequisites with `--user-data`;
 - upload software under test into the VM;
 - parse dynamically assigned SSH and service ports;
@@ -64,10 +65,11 @@ Flow:
 
 1. spawn a VM;
 2. run first-boot provisioning;
-3. discover SSH and forwarded app ports from `nido info --json`;
-4. upload the current project;
-5. run the test command inside the guest;
-6. delete the VM on exit.
+3. wait for SSH and cloud-init with a bounded `nido wait --json`;
+4. discover SSH and forwarded app ports from `nido info --json`;
+5. upload the current project;
+6. run the test command inside the guest;
+7. ask the guest to shut down cleanly before deleting the VM on exit.
 
 Set `NIDO_KEEP_VM=1` to keep the VM for debugging after a failure.
 
@@ -78,9 +80,9 @@ If provisioning is slow, build a base VM once:
 ```bash
 nido spawn app-base --image ubuntu:lts --user-data provision.sh --memory 4096 --cpus 2
 nido ssh app-base "command -v make && command -v git"
-nido ssh app-base sudo poweroff
+nido shutdown app-base --timeout 60
 nido info app-base
-# After the guest has exited:
+# After shutdown confirms the process has exited:
 nido template create app-base app-ci-base
 nido delete app-base
 ```

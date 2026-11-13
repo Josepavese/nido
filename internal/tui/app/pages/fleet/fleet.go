@@ -70,6 +70,7 @@ type FleetDetail struct {
 	BackingMissing bool
 	Forwarding     []provider.PortForward
 	Accelerators   []string // New: Accelerators for PASSTHROUGH
+	Readiness      *provider.GuestReadiness
 }
 
 // Fleet implements the Viewlet interface using MasterDetail
@@ -100,6 +101,14 @@ type Fleet struct {
 	ErrorModal        *widget.Modal
 	ModalAccel        *widget.ListModal // Accelerator Selection
 	pendingAccelVM    string            // Track which VM we are editing
+
+	// Disk snapshot manager (list -> create/restore/delete).
+	SnapshotList    *widget.ListModal
+	SnapshotCreate  *widget.FormModal
+	SnapshotConfirm *widget.Modal
+	snapshotVM      string
+	snapshotPending string
+	snapshotAction  string
 }
 
 // NewFleet creates the viewlet
@@ -205,6 +214,7 @@ func NewFleet(prov provider.VMProvider) *Fleet {
 	)
 	f.MasterDetail.AutoSwitch = false // We handle data updates manually
 
+	f.initSnapshotModals()
 	return f
 }
 
@@ -254,6 +264,32 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 	}
 	if uiInput && f.ModalAccel.IsActive() {
 		_, cmd := f.ModalAccel.Update(msg)
+		return f, cmd
+	}
+	if uiInput && f.SnapshotConfirm.IsActive() {
+		newConfirm, cmd := f.SnapshotConfirm.Update(msg)
+		f.SnapshotConfirm = newConfirm
+		return f, cmd
+	}
+	if uiInput && f.SnapshotCreate.IsActive() {
+		newCreate, cmd := f.SnapshotCreate.Update(msg)
+		f.SnapshotCreate = newCreate
+		return f, cmd
+	}
+	if uiInput && f.SnapshotList.IsActive() {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			switch key.String() {
+			case "c":
+				f.SnapshotList.Hide()
+				return f, f.SnapshotCreate.Show()
+			case "r":
+				return f, f.promptSnapshotAction("restore")
+			case "d":
+				return f, f.promptSnapshotAction("delete")
+			}
+		}
+		newList, cmd := f.SnapshotList.Update(msg)
+		f.SnapshotList = newList
 		return f, cmd
 	}
 
@@ -356,6 +392,7 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 				BackingMissing: msg.Detail.BackingMissing,
 				Forwarding:     msg.Detail.Forwarding,
 				Accelerators:   msg.Detail.Accelerators,
+				Readiness:      msg.Detail.Readiness,
 			}
 			f.DetailView.UpdateDetail(f.detail)
 
@@ -407,6 +444,12 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 		}
 
 	// Operation Results (Error Handling)
+	case ops.SnapshotListMsg:
+		return f, f.onSnapshotList(msg)
+
+	case ops.SnapshotResultMsg:
+		return f, f.onSnapshotResult(msg)
+
 	case ops.OpResultMsg:
 		// Clear transitioning state
 		if msg.Path == "" { // Use Path or Name? OpResultMsg currently lacks Name field...
@@ -486,6 +529,28 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 		case "v":
 			// VNC Shortcut
 			cmds = append(cmds, f.DetailView.openVNC())
+		case "h":
+			// Graceful guest shutdown (never the forced stop path)
+			if selectedItem := f.Sidebar.SelectedItem(); selectedItem != nil {
+				if item, ok := selectedItem.(FleetItem); ok && item.State == "running" {
+					cmds = append(cmds, func() tea.Msg {
+						return ops.RequestOpMsg{Op: ops.OpShutdown, Name: item.Name}
+					})
+				}
+			}
+		case "n":
+			// Snapshot manager (stopped VMs only).
+			if selectedItem := f.Sidebar.SelectedItem(); selectedItem != nil {
+				if item, ok := selectedItem.(FleetItem); ok {
+					if item.State == "running" {
+						f.ErrorModal.Title = "Snapshots Require a Stopped VM"
+						f.ErrorModal.Message = fmt.Sprintf("VM '%s' is running. Stop or shut it down before snapshot operations.", item.Name)
+						f.ErrorModal.Show()
+						return f, nil
+					}
+					return f, f.openSnapshotManager(item.Name)
+				}
+			}
 		case "t":
 			// Template Creation (Context: Selected VM)
 			if selectedItem := f.Sidebar.SelectedItem(); selectedItem != nil {
@@ -569,8 +634,10 @@ func (f *Fleet) Shortcuts() []view.Shortcut {
 				shortcuts = append(shortcuts, view.Shortcut{Key: "s", Label: "ssh"})
 				shortcuts = append(shortcuts, view.Shortcut{Key: "S", Label: "ssh (win)"})
 				shortcuts = append(shortcuts, view.Shortcut{Key: "v", Label: "vnc"})
+				shortcuts = append(shortcuts, view.Shortcut{Key: "h", Label: "shutdown"})
 			} else {
 				// Stopped specific
+				shortcuts = append(shortcuts, view.Shortcut{Key: "n", Label: "snapshots"})
 				shortcuts = append(shortcuts, view.Shortcut{Key: "t", Label: "template"})
 			}
 
@@ -598,7 +665,8 @@ func (f *Fleet) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, tea.Cmd, 
 
 // IsModalActive allows the App to block global navigation (tabs) when the modal is open.
 func (f *Fleet) IsModalActive() bool {
-	return f.ConfirmDelete.IsActive() || f.ErrorModal.IsActive() || f.TemplateModal.IsActive() || f.ModalAccel.IsActive()
+	return f.ConfirmDelete.IsActive() || f.ErrorModal.IsActive() || f.TemplateModal.IsActive() || f.ModalAccel.IsActive() ||
+		f.SnapshotList.IsActive() || f.SnapshotCreate.IsActive() || f.SnapshotConfirm.IsActive()
 }
 
 // --- Detail Component ---
@@ -753,6 +821,19 @@ func (c *ComponentsDetail) rebuildForm() {
 	c.Form.Spacing = 0
 }
 
+func readinessSubtitle(readiness *provider.GuestReadiness) string {
+	if readiness == nil {
+		return ""
+	}
+	if readiness.Ready {
+		return "READY"
+	}
+	if readiness.Failure != "" {
+		return "NOT READY (" + strings.ToUpper(string(readiness.Failure)) + ")"
+	}
+	return strings.ToUpper(string(readiness.State))
+}
+
 func (c *ComponentsDetail) UpdateDetail(d FleetDetail) {
 	if d.Name == "" {
 		// No VM selected
@@ -779,6 +860,9 @@ func (c *ComponentsDetail) UpdateDetail(d FleetDetail) {
 	c.header.Icon = icon
 	c.header.Title = d.Name
 	c.header.Subtitle = status + " | " + d.Arch
+	if label := readinessSubtitle(d.Readiness); label != "" {
+		c.header.Subtitle += " | " + label
+	}
 
 	// Update fields
 
@@ -998,5 +1082,5 @@ func (f *Fleet) ObserveEvent(e events.Event) {
 func (f *Fleet) HasActiveFocus() bool { return f.MasterDetail.HasActiveFocus() }
 
 func (f *Fleet) activeOverlay() widget.Overlay {
-	return widget.ActiveOverlay(f.ConfirmDelete, f.ErrorModal, f.TemplateModal.Modal, f.ModalAccel)
+	return widget.ActiveOverlay(f.ConfirmDelete, f.ErrorModal, f.TemplateModal.Modal, f.ModalAccel, f.SnapshotConfirm, f.SnapshotCreate, f.SnapshotList)
 }

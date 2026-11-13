@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Josepavese/nido/v4/internal/builder"
 	clijson "github.com/Josepavese/nido/v4/internal/cli"
@@ -25,25 +27,27 @@ func actionVMList(app *appContext) func(cmd *cobra.Command, args []string) {
 			}
 
 			type vmJSON struct {
-				Arch    string `json:"arch"`
-				Name    string `json:"name"`
-				State   string `json:"state"`
-				PID     int    `json:"pid"`
-				SSHPort int    `json:"ssh_port"`
-				VNCPort int    `json:"vnc_port"`
-				SSHUser string `json:"ssh_user,omitempty"`
+				Arch      string                   `json:"arch"`
+				Name      string                   `json:"name"`
+				State     string                   `json:"state"`
+				PID       int                      `json:"pid"`
+				SSHPort   int                      `json:"ssh_port"`
+				VNCPort   int                      `json:"vnc_port"`
+				SSHUser   string                   `json:"ssh_user,omitempty"`
+				Readiness *provider.GuestReadiness `json:"readiness,omitempty"`
 			}
 
 			items := make([]vmJSON, 0, len(vms))
 			for _, vm := range vms {
 				items = append(items, vmJSON{
-					Arch:    vm.Arch,
-					Name:    vm.Name,
-					State:   vm.State,
-					PID:     vm.PID,
-					SSHPort: vm.SSHPort,
-					VNCPort: vm.VNCPort,
-					SSHUser: vm.SSHUser,
+					Arch:      vm.Arch,
+					Name:      vm.Name,
+					State:     vm.State,
+					PID:       vm.PID,
+					SSHPort:   vm.SSHPort,
+					VNCPort:   vm.VNCPort,
+					SSHUser:   vm.SSHUser,
+					Readiness: vm.Readiness,
 				})
 			}
 
@@ -104,6 +108,7 @@ func actionVMInfo(app *appContext) func(cmd *cobra.Command, args []string) {
 					"forwarding":                info.Forwarding,
 					"raw_qemu_args":             info.RawQemuArgs,
 					"accelerators":              info.Accelerators,
+					"readiness":                 info.Readiness,
 					"disk_path":                 info.DiskPath, "disk_missing": info.DiskMissing, "state_missing": info.StateMissing, "backing_path": info.BackingPath, "backing_missing": info.BackingMissing,
 				},
 			}))
@@ -113,6 +118,9 @@ func actionVMInfo(app *appContext) func(cmd *cobra.Command, args []string) {
 		ui.Header("VM Details")
 		ui.FancyLabel("Name", info.Name)
 		ui.FancyLabel("State", info.State)
+		if info.Readiness != nil {
+			ui.FancyLabel("Readiness", formatGuestReadiness(info.Readiness))
+		}
 		if info.StateMissing {
 			ui.Warn("Persistent state is missing; only the existing disk was found.")
 		}
@@ -434,6 +442,61 @@ func actionVMStop(app *appContext) func(cmd *cobra.Command, args []string) {
 			return
 		}
 		ui.Success("VM %s stopped.", args[0])
+	}
+}
+
+func actionVMShutdown(app *appContext) func(cmd *cobra.Command, args []string) {
+	return func(cmd *cobra.Command, args []string) {
+		jsonOut := jsonEnabled(cmd)
+		timeoutSeconds, _ := cmd.Flags().GetInt("timeout")
+		if !cmd.Flags().Changed("timeout") {
+			timeoutSeconds = int(provider.DefaultShutdownTimeout / time.Second)
+		}
+		maxSeconds := int(provider.MaxShutdownTimeout / time.Second)
+		if timeoutSeconds <= 0 || timeoutSeconds > maxSeconds {
+			message := fmt.Sprintf("timeout must be between 1 and %d seconds", maxSeconds)
+			if jsonOut {
+				_ = clijson.PrintJSON(clijson.NewResponseError("shutdown", "ERR_INVALID_ARGUMENT", "Invalid timeout", message, "Use a timeout within the supported range.", nil))
+			} else {
+				ui.Error("%s", message)
+			}
+			os.Exit(1)
+		}
+
+		if !jsonOut {
+			ui.Step("Requesting guest shutdown for %s (up to %ds)...", args[0], timeoutSeconds)
+		}
+		result, err := app.Provider.Shutdown(context.Background(), args[0], time.Duration(timeoutSeconds)*time.Second)
+		if err != nil {
+			if jsonOut {
+				_ = clijson.PrintJSON(clijson.NewResponseError("shutdown", "ERR_SHUTDOWN_FAILED", "Shutdown failed", err.Error(),
+					"The guest did not complete a clean shutdown; inspect it or use stop to terminate only when necessary.", nil))
+			} else {
+				ui.Error("Guest shutdown failed for %s: %v", args[0], err)
+				ui.Info("The VM is still running. Use 'nido stop %s' only as a forced fallback.", args[0])
+			}
+			os.Exit(1)
+		}
+
+		if jsonOut {
+			_ = clijson.PrintJSON(clijson.NewResponseOK("shutdown", map[string]interface{}{
+				"action": map[string]interface{}{
+					"name":   args[0],
+					"result": "stopped",
+				},
+				"shutdown": result,
+			}))
+			return
+		}
+		if result.Mode == "already_stopped" {
+			ui.Success("VM %s is already stopped.", args[0])
+			return
+		}
+		channel := "SSH"
+		if result.Method == "acpi" {
+			channel = "ACPI/QMP"
+		}
+		ui.Success("VM %s stopped after guest shutdown via %s in %s.", args[0], channel, (time.Duration(result.DurationMS) * time.Millisecond).Round(time.Millisecond))
 	}
 }
 

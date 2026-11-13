@@ -320,6 +320,8 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return n, tea.Batch(cmd, ops.StartVM(n.prov, msg.Name))
 		case ops.OpStop:
 			return n, tea.Batch(cmd, ops.StopVM(n.prov, msg.Name))
+		case ops.OpShutdown:
+			return n, tea.Batch(cmd, ops.ShutdownVM(n.prov, msg.Name))
 		case ops.OpDelete:
 			return n, tea.Batch(cmd, ops.DeleteVM(n.prov, msg.Name))
 		}
@@ -345,7 +347,7 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			n.Shell.SetStatus(false, fmt.Sprintf("ERROR: %v", msg.Err), 0)
 			// Show prominent modal for failed dangerous ops
-			if msg.Op == "prune" || msg.Op == "delete-template" || strings.HasPrefix(msg.Op, "delete") || strings.HasPrefix(msg.Op, "pull") {
+			if msg.Op == "prune" || msg.Op == ops.OpShutdown || msg.Op == "delete-template" || strings.HasPrefix(msg.Op, "delete") || strings.HasPrefix(msg.Op, "pull") {
 				n.ErrorModal.Title = "Operation Failed"
 				n.ErrorModal.Message = fmt.Sprintf("Error during %s:\n%v", msg.Op, msg.Err)
 				n.ErrorModal.Show()

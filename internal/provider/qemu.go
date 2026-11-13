@@ -288,6 +288,7 @@ func (p *QemuProvider) Start(name string, opts VMOptions) (resultErr error) {
 	if status, err := p.Info(name); err == nil && status.State == "running" {
 		return nil // Already running
 	}
+	p.clearReadiness(name)
 
 	// 1. Prepare Paths
 	runDir := filepath.Join(p.RootDir, "run")
@@ -631,6 +632,7 @@ func (p *QemuProvider) List() ([]VMStatus, error) {
 				SSHUser:    vmState.SSHUser,
 				VNCPort:    vmState.VNCPort,
 				Forwarding: vmState.Forwarding,
+				Readiness:  visibleReadiness(vmState.Readiness, stateStr == "running", pid),
 			})
 		}
 	}
@@ -689,6 +691,7 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 		Forwarding:               state.Forwarding,
 		RawQemuArgs:              state.RawQemuArgs,
 		Accelerators:             state.Accelerators,
+		Readiness:                visibleReadiness(state.Readiness, liveness == "running", pid),
 		DiskPath:                 diskPath,
 		DiskMissing:              statErr != nil,
 		BackingPath:              backingPath,
@@ -748,34 +751,30 @@ func (p *QemuProvider) Stop(name string) (resultErr error) {
 	if err := identifier.Validate(name); err != nil {
 		return err
 	}
-	runDir := filepath.Join(p.RootDir, "run")
-	pidFile := filepath.Join(runDir, name+".pid")
-	pidData, _ := os.ReadFile(pidFile)
-	pid := 0
-	fmt.Sscanf(string(pidData), "%d", &pid)
-	if pid == 0 {
-		if state, err := p.loadState(name); err == nil {
-			pid = state.PID
-		}
-	}
-
+	pid := p.runningPID(name)
 	if pid > 0 && processAlive(pid) {
 		if err := p.stopVMProcess(name, pid); err != nil {
 			return err
 		}
 	}
+	return p.releaseStoppedVM(name)
+}
 
-	os.Remove(pidFile)
+// releaseStoppedVM reconciles the artifacts and host devices that are only
+// valid while the owned QEMU process is alive. It is shared by forced Stop and
+// guest-requested Shutdown so both paths leave one stopped-state model.
+func (p *QemuProvider) releaseStoppedVM(name string) error {
+	runDir := filepath.Join(p.RootDir, "run")
+	os.Remove(filepath.Join(runDir, name+".pid"))
 	os.Remove(filepath.Join(runDir, name+".qmp"))
 	os.Remove(filepath.Join(sysutil.EventsDirectory(p.RootDir), name+qemuEventSuffix))
 
-	if state, err := p.loadState(name); err == nil {
+	p.clearReadiness(name)
+	state, err := p.loadState(name)
+	if err == nil {
 		_ = p.saveState(name, 0, state.SSHPort, state.VNCPort, state.Gui, state.SSHUser, state.Forwarding, state.Cmdline, state.MemoryMB, state.VCPUs, state.RawQemuArgs, state.Accelerators, state.Arch)
-	}
 
-	// RESTORE ACCELERATORS (Start of Double Fix)
-	// We must release any VFIO devices back to the host
-	if state, err := p.loadState(name); err == nil {
+		// We must release any VFIO devices back to the host.
 		for _, acc := range state.Accelerators {
 			if !strings.Contains(acc, ":") || strings.Contains(acc, "virtual") {
 				continue
@@ -1047,19 +1046,20 @@ func (p *QemuProvider) findAvailablePort(start int, reserved map[int]bool) int {
 }
 
 type VMState struct {
-	Arch         string        `json:"arch"`
-	Name         string        `json:"name"`
-	PID          int           `json:"pid"`
-	SSHPort      int           `json:"ssh_port"`
-	VNCPort      int           `json:"vnc_port,omitempty"`
-	Gui          bool          `json:"gui,omitempty"`
-	SSHUser      string        `json:"ssh_user,omitempty"`
-	Forwarding   []PortForward `json:"forwarding,omitempty"`
-	Cmdline      string        `json:"cmdline,omitempty"`
-	MemoryMB     int           `json:"memory_mb,omitempty"`
-	VCPUs        int           `json:"vcpus,omitempty"`
-	RawQemuArgs  []string      `json:"raw_qemu_args,omitempty"`
-	Accelerators []string      `json:"accelerators,omitempty"`
+	Arch         string          `json:"arch"`
+	Name         string          `json:"name"`
+	PID          int             `json:"pid"`
+	SSHPort      int             `json:"ssh_port"`
+	VNCPort      int             `json:"vnc_port,omitempty"`
+	Gui          bool            `json:"gui,omitempty"`
+	SSHUser      string          `json:"ssh_user,omitempty"`
+	Forwarding   []PortForward   `json:"forwarding,omitempty"`
+	Cmdline      string          `json:"cmdline,omitempty"`
+	MemoryMB     int             `json:"memory_mb,omitempty"`
+	VCPUs        int             `json:"vcpus,omitempty"`
+	RawQemuArgs  []string        `json:"raw_qemu_args,omitempty"`
+	Accelerators []string        `json:"accelerators,omitempty"`
+	Readiness    *GuestReadiness `json:"readiness,omitempty"`
 }
 
 func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int, gui bool, sshUser string, fw []PortForward, cmdline string, memoryMB, vcpus int, rawArgs []string, accelerators []string, arch string) error {
@@ -1077,6 +1077,9 @@ func (p *QemuProvider) saveState(name string, pid int, sshPort int, vncPort int,
 		VCPUs:        vcpus,
 		RawQemuArgs:  rawArgs,
 		Accelerators: accelerators,
+	}
+	if previous, err := p.loadState(name); err == nil {
+		state.Readiness = previous.Readiness
 	}
 	data, _ := json.MarshalIndent(state, "", "  ")
 	path := filepath.Join(p.RootDir, "run", name+".json")
@@ -1201,13 +1204,17 @@ func (p *QemuProvider) SSHArgs(name string) ([]string, error) {
 	if info.SSHPort == 0 || info.State != "running" {
 		return nil, fmt.Errorf("VM '%s' is not running or has no network access", name)
 	}
+	return sshClientArgs(info.SSHPort, info.SSHUser, info.IP), nil
+}
+
+func sshClientArgs(sshPort int, sshUser, ip string) []string {
 	// Inject options to skip fingerprint check for ephemeral VMs.
 	opts := []string{"ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=" + sysutil.NullDevice()}
 	if keyPath := localNidoSSHKeyPath(); keyPath != "" {
 		opts = append(opts, "-i", keyPath)
 	}
-	opts = append(opts, "-p", fmt.Sprintf("%d", info.SSHPort), "-l", info.SSHUser, "--", info.IP)
-	return opts, nil
+	opts = append(opts, "-p", fmt.Sprintf("%d", sshPort), "-l", sshUser, "--", ip)
+	return opts
 }
 
 func (p *QemuProvider) ListTemplates() ([]string, error) {

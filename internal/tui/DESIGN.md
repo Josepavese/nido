@@ -76,6 +76,10 @@ The footer dynamically updates based on the active Viewlet:
   - **Storage**: Read-only Form field for Disk path (Red border if missing).
   - **Actions (Shortcuts)**:
     - `Space`: Toggle Power (Start/Stop).
+    - `h`: Guest shutdown (running VM; uses the same bounded `nido shutdown`
+      path as the CLI, never the forced stop fallback).
+    - `n`: Snapshot manager (stopped VM): list disk snapshots, `c` create,
+      `r` restore, `d` delete. Guest memory is never captured.
     - `s`: Open SSH.
     - `v`: Open VNC.
     - `Del`: Destroy VM (triggers Confirmation Modal).

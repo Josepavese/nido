@@ -115,6 +115,25 @@ func finalize(res *report.StepResult) {
 	}
 }
 
+// finalizeExpectedFailure is for steps whose contract is a non-zero exit and a
+// structured error. Assertions, not the exit code alone, decide PASS/FAIL.
+func finalizeExpectedFailure(res *report.StepResult) {
+	if res.Result == "SKIP" {
+		return
+	}
+	if res.TimedOut {
+		res.Result = "FAIL"
+		return
+	}
+	for _, ar := range res.Assertions {
+		if ar.Result == "FAIL" {
+			res.Result = "FAIL"
+			return
+		}
+	}
+	res.Result = "PASS"
+}
+
 func setVar(ctx *Context, key, val string) {
 	if ctx.Vars == nil {
 		ctx.Vars = map[string]string{}

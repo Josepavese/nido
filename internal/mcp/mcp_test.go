@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	climeta "github.com/Josepavese/nido/v4/internal/cli"
 	"github.com/Josepavese/nido/v4/internal/config"
@@ -51,6 +52,20 @@ func (m *mockProvider) CacheInfo() (provider.CacheInfoResult, error) {
 }
 func (m *mockProvider) CacheRemove(name, version, arch string) error { return nil }
 func (m *mockProvider) SSHArgs(name string) ([]string, error)        { return nil, nil }
+func (m *mockProvider) Shutdown(ctx context.Context, name string, timeout time.Duration) (provider.ShutdownResult, error) {
+	return provider.ShutdownResult{Name: name, Mode: "guest"}, nil
+}
+func (m *mockProvider) SnapshotCreate(ctx context.Context, name, snapshot string) (provider.DiskSnapshot, error) {
+	return provider.DiskSnapshot{Name: snapshot, ID: 1}, nil
+}
+func (m *mockProvider) SnapshotList(ctx context.Context, name string) ([]provider.DiskSnapshot, error) {
+	return []provider.DiskSnapshot{{ID: 1, Name: "before-test"}}, nil
+}
+func (m *mockProvider) SnapshotRestore(ctx context.Context, name, snapshot string) error { return nil }
+func (m *mockProvider) SnapshotDelete(ctx context.Context, name, snapshot string) error  { return nil }
+func (m *mockProvider) WaitReady(ctx context.Context, name string, timeout time.Duration) (provider.GuestReadiness, error) {
+	return provider.GuestReadiness{Ready: true, State: provider.ReadinessReady, Phase: provider.ReadinessPhaseReady}, nil
+}
 func (m *mockProvider) PortForward(name string, pf provider.PortForward) (provider.PortForward, error) {
 	return pf, nil
 }
@@ -146,12 +161,18 @@ func TestMCPActionsCoverCLIManifest(t *testing.T) {
 		"vm.spawn":                     {"nido_vm", "create"},
 		"vm.start":                     {"nido_vm", "start"},
 		"vm.stop":                      {"nido_vm", "stop"},
+		"vm.shutdown":                  {"nido_vm", "shutdown"},
+		"vm.wait":                      {"nido_vm", "wait"},
 		"vm.ssh":                       {"nido_vm", "ssh"},
 		"vm.delete":                    {"nido_vm", "delete"},
 		"vm.prune":                     {"nido_vm", "prune"},
 		"template.list":                {"nido_template", "list"},
 		"template.create":              {"nido_template", "create"},
 		"template.delete":              {"nido_template", "delete"},
+		"snapshot.create":              {"nido_vm", "snapshot_create"},
+		"snapshot.list":                {"nido_vm", "snapshot_list"},
+		"snapshot.restore":             {"nido_vm", "snapshot_restore"},
+		"snapshot.delete":              {"nido_vm", "snapshot_delete"},
 		"cache.list":                   {"nido_image", "cache_list"},
 		"cache.info":                   {"nido_image", "cache_info"},
 		"cache.remove":                 {"nido_image", "cache_remove"},
@@ -490,6 +511,75 @@ func TestVMCreatePropagatesArchitecture(t *testing.T) {
 		if p.spawnOpts.Arch != arch {
 			t.Fatalf("architecture lost: %q", p.spawnOpts.Arch)
 		}
+	}
+}
+
+func TestVMWaitReturnsObservation(t *testing.T) {
+	s := &Server{Provider: &mockProvider{}}
+	raw, _ := json.Marshal(map[string]interface{}{"action": "wait", "name": "vm-a", "timeout_seconds": 5})
+	result, err := s.callVMTool(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, ok := result.(map[string]interface{})
+	if !ok {
+		t.Fatalf("wait result type = %T", result)
+	}
+	if payload["ready"] != true {
+		t.Fatalf("wait result = %#v, want ready", payload)
+	}
+	readiness, ok := payload["readiness"].(provider.GuestReadiness)
+	if !ok || readiness.State != provider.ReadinessReady {
+		t.Fatalf("wait readiness = %#v", payload["readiness"])
+	}
+
+	invalid, _ := json.Marshal(map[string]interface{}{"action": "wait", "name": "vm-a", "timeout_seconds": 301})
+	if _, err := s.callVMTool(invalid); err == nil {
+		t.Fatal("timeout_seconds above the bound must fail")
+	}
+}
+
+func TestVMShutdownReturnsGuestMode(t *testing.T) {
+	s := &Server{Provider: &mockProvider{}}
+	raw, _ := json.Marshal(map[string]interface{}{"action": "shutdown", "name": "vm-a", "timeout_seconds": 5})
+	result, err := s.callVMTool(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, ok := result.(map[string]interface{})
+	if !ok || payload["action"] != "shutdown" || payload["status"] != "stopped" {
+		t.Fatalf("shutdown result = %#v", result)
+	}
+	shutdown, ok := payload["shutdown"].(provider.ShutdownResult)
+	if !ok || shutdown.Mode != "guest" {
+		t.Fatalf("shutdown detail = %#v", payload["shutdown"])
+	}
+
+	invalid, _ := json.Marshal(map[string]interface{}{"action": "shutdown", "name": "vm-a", "timeout_seconds": 301})
+	if _, err := s.callVMTool(invalid); err == nil {
+		t.Fatal("shutdown timeout above the bound must fail")
+	}
+}
+
+func TestVMSnapshotActionsUseStoppedDiskContract(t *testing.T) {
+	s := &Server{Provider: &mockProvider{}}
+	for _, action := range []string{"snapshot_create", "snapshot_list", "snapshot_restore", "snapshot_delete"} {
+		raw, _ := json.Marshal(map[string]interface{}{"action": action, "name": "vm-a", "snapshot_name": "before-test"})
+		result, err := s.callVMTool(raw)
+		if err != nil {
+			t.Fatalf("%s: %v", action, err)
+		}
+		payload, ok := result.(map[string]interface{})
+		if !ok {
+			t.Fatalf("%s result type = %T", action, result)
+		}
+		if payload["action"] != action {
+			t.Fatalf("%s result = %#v", action, payload)
+		}
+	}
+	missing, _ := json.Marshal(map[string]interface{}{"action": "snapshot_create", "name": "vm-a"})
+	if _, err := s.callVMTool(missing); err == nil {
+		t.Fatal("snapshot_create without snapshot_name must fail")
 	}
 }
 
