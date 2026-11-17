@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-11-16T17:49:05.363774285Z",
+  "updated_at": "2026-11-17T17:18:04.230447252Z",
   "images": [
     {
       "name": "ubuntu",
@@ -141,19 +141,19 @@
       "homepage": "https://get.opensuse.org/tumbleweed/",
       "versions": [
         {
-          "version": "Snapshot20261111",
+          "version": "Snapshot20261116",
           "aliases": [
             "Latest"
           ],
           "arch": "amd64",
-          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261111.qcow2",
+          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261116.qcow2",
           "checksum_type": "sha256",
-          "checksum": "d25ae6c4254a3f0d9971e98011040643394f79f660a153079c58ad9404564020",
-          "size_bytes": 317282816,
-          "size": "302.6 MB",
+          "checksum": "73607d37ed5fa1ce10877a9dcc0ae420241f2f3cffdf4d643256aa7c127a0fa7",
+          "size_bytes": 317442560,
+          "size": "302.7 MB",
           "format": "qcow2",
-          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261111.qcow2.sha256",
-          "checksum_regex": "^d25ae6c4254a3f0d9971e98011040643394f79f660a153079c58ad9404564020$"
+          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261116.qcow2.sha256",
+          "checksum_regex": "^73607d37ed5fa1ce10877a9dcc0ae420241f2f3cffdf4d643256aa7c127a0fa7$"
         }
       ]
     },
@@ -210,14 +210,14 @@
             "oldstable"
           ],
           "arch": "amd64",
-          "url": "https://cloud.debian.org/images/cloud/bookworm/20261112-2660/debian-12-genericcloud-amd64-20261112-2660.qcow2",
+          "url": "https://cloud.debian.org/images/cloud/bookworm/20261117-2665/debian-12-genericcloud-amd64-20261117-2665.qcow2",
           "checksum_type": "sha512",
-          "checksum": "485a390d1c5e3a9f57ebb903654c21044c5d5b5b94de126d28b9d0cd960112dc0536afd1217c45036c331659543c8c8acb5f56dff706c9530f9fe39e2908e512",
-          "size_bytes": 349110272,
-          "size": "332.9 MB",
+          "checksum": "946b917a37882f16e5b3b0b2cbe5744637d0cd36190b5b53cbb21d14a54557d5b45e9e523021b8f52c1707dbe470489f3515458e0680ded76ee2574b4a8daf1b",
+          "size_bytes": 350289920,
+          "size": "334.1 MB",
           "format": "qcow2",
-          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/20261112-2660/SHA512SUMS",
-          "checksum_regex": "debian-12-genericcloud-amd64-20261112-2660\\.qcow2"
+          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/20261117-2665/SHA512SUMS",
+          "checksum_regex": "debian-12-genericcloud-amd64-20261117-2665\\.qcow2"
         },
         {
           "version": "13",
@@ -243,14 +243,14 @@
             "oldstable"
           ],
           "arch": "arm64",
-          "url": "https://cloud.debian.org/images/cloud/bookworm/20261112-2660/debian-12-genericcloud-arm64-20261112-2660.qcow2",
+          "url": "https://cloud.debian.org/images/cloud/bookworm/20261117-2665/debian-12-genericcloud-arm64-20261117-2665.qcow2",
           "checksum_type": "sha512",
-          "checksum": "8d2391939b0e411b00a47edd107cb802cafa86e271b632da472634828e06e0a1995c27bdaf426e8900e9425933ce6bfee355cbebef97b595ad07d913b17a4d58",
-          "size_bytes": 340197376,
-          "size": "324.4 MB",
+          "checksum": "32d67577a3d5631839edb684da1c3b28018c3660285a73368b047321cc530a49f205b042373ff8b5852f6a43df2342014b1dbb260b7cd1289e44a367e699b9b0",
+          "size_bytes": 345047040,
+          "size": "329.1 MB",
           "format": "qcow2",
-          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/20261112-2660/SHA512SUMS",
-          "checksum_regex": "debian-12-genericcloud-arm64-20261112-2660\\.qcow2"
+          "checksum_url": "https://cloud.debian.org/images/cloud/bookworm/20261117-2665/SHA512SUMS",
+          "checksum_regex": "debian-12-genericcloud-arm64-20261117-2665\\.qcow2"
         }
       ]
     },
