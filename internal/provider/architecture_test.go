@@ -44,6 +44,42 @@ func TestSourceArchitectureConflictFailsBeforeDiskCreation(t *testing.T) {
 	}
 }
 
+func TestDeleteRemovesVMArchitectureMetadata(t *testing.T) {
+	root := t.TempDir()
+	vmDir := filepath.Join(root, "vms")
+	if err := os.Mkdir(vmDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	disk := filepath.Join(vmDir, "guest.qcow2")
+	backing := filepath.Join(root, "base.qcow2")
+	for _, path := range []string{disk, backing} {
+		if err := os.WriteFile(path, nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := image.WriteArchitecture(path, "amd64"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	p := NewQemuProvider(root, &config.Config{}, hardware.New())
+	for range 2 {
+		if err := p.Delete("guest"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, path := range []string{disk, image.MetadataPath(disk)} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("expected %s to be removed, stat returned %v", path, err)
+		}
+	}
+	if _, err := os.Stat(backing); err != nil {
+		t.Errorf("backing disk changed: %v", err)
+	}
+	if arch, err := image.ReadArchitecture(backing); err != nil || arch != "amd64" {
+		t.Errorf("backing architecture = %q, %v", arch, err)
+	}
+}
+
 func TestPruneRejectsUsedImageDeletionPolicy(t *testing.T) {
 	root := t.TempDir()
 	p := NewQemuProvider(root, &config.Config{}, hardware.New())

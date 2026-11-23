@@ -5,6 +5,13 @@ All notable changes to Nido will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.11.1] - 2026-11-23
+
+### Fixed
+
+- Remove the VM disk's architecture metadata when deleting a VM. Backing images
+  and their metadata are preserved.
+
 ## [4.11.0] - 2026-11-13 "Durable Wings"
 
 ### Added
@@ -805,6 +812,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[4.11.1]: https://github.com/Josepavese/nido/compare/v4.11.0...v4.11.1
 [4.11.0]: https://github.com/Josepavese/nido/compare/v4.10.5...v4.11.0
 [4.3.0]: https://github.com/Josepavese/nido/compare/v4.2.0...v4.3.0
 [2.0.0]: https://github.com/Josepavese/nido/compare/v1.0.0...v2.0.0
