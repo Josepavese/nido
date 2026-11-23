@@ -808,7 +808,10 @@ func (p *QemuProvider) Delete(name string) (resultErr error) {
 	if err := safeRemove(image.VariablesPath(diskPath)); err != nil {
 		return err
 	}
-	return safeRemove(diskPath)
+	if err := safeRemove(diskPath); err != nil {
+		return err
+	}
+	return safeRemove(image.MetadataPath(diskPath))
 }
 
 // CreateTemplate archives a VM into "cold storage" (a compressed qcow2).
