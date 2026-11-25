@@ -1,6 +1,6 @@
 {
   "schema_version": "1",
-  "updated_at": "2026-11-23T10:13:16.80646015Z",
+  "updated_at": "2026-11-25T18:21:21.619757937Z",
   "images": [
     {
       "name": "ubuntu",
@@ -141,19 +141,19 @@
       "homepage": "https://get.opensuse.org/tumbleweed/",
       "versions": [
         {
-          "version": "Snapshot20261121",
+          "version": "Snapshot20261124",
           "aliases": [
             "Latest"
           ],
           "arch": "amd64",
-          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261121.qcow2",
+          "url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261124.qcow2",
           "checksum_type": "sha256",
-          "checksum": "7ba3b9ed4ea8e86dbf5a5f538870f834d37a2ac30d763e0268f3186dd03ddb95",
-          "size_bytes": 317946880,
-          "size": "303.2 MB",
+          "checksum": "e3da29e223131fd464cdc4ca505255afa06562966630368dbd0d2b555af3fc4d",
+          "size_bytes": 317430784,
+          "size": "302.7 MB",
           "format": "qcow2",
-          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261121.qcow2.sha256",
-          "checksum_regex": "^7ba3b9ed4ea8e86dbf5a5f538870f834d37a2ac30d763e0268f3186dd03ddb95$"
+          "checksum_url": "https://download.opensuse.org/tumbleweed/appliances/openSUSE-Tumbleweed-Minimal-VM.x86_64-1.0.0-Cloud-Snapshot20261124.qcow2.sha256",
+          "checksum_regex": "^e3da29e223131fd464cdc4ca505255afa06562966630368dbd0d2b555af3fc4d$"
         }
       ]
     },
@@ -194,14 +194,14 @@
             "latest"
           ],
           "arch": "amd64",
-          "url": "https://cloud.debian.org/images/cloud/trixie/20261116-2664/debian-13-genericcloud-amd64-20261116-2664.qcow2",
+          "url": "https://cloud.debian.org/images/cloud/trixie/20261123-2671/debian-13-genericcloud-amd64-20261123-2671.qcow2",
           "checksum_type": "sha512",
-          "checksum": "37cb32b320820417eb04b335afcf489bfb4cecce4a957190d09cb2bffbe02b56a1cadd62d78c6ead92aa7839d5ea65e4260f994bbb4b54490df59fdf11ee1d97",
-          "size_bytes": 344260608,
-          "size": "328.3 MB",
+          "checksum": "76488ba3bea2349cc595fedad7748b8ba98d6b36da398eaf2bbbae3db896ba1017d4ff41cd277926784cef2c1c11145a0d600f9b4afde9b8f174d698db0cda03",
+          "size_bytes": 342622208,
+          "size": "326.8 MB",
           "format": "qcow2",
-          "checksum_url": "https://cloud.debian.org/images/cloud/trixie/20261116-2664/SHA512SUMS",
-          "checksum_regex": "debian-13-genericcloud-amd64-20261116-2664\\.qcow2"
+          "checksum_url": "https://cloud.debian.org/images/cloud/trixie/20261123-2671/SHA512SUMS",
+          "checksum_regex": "debian-13-genericcloud-amd64-20261123-2671\\.qcow2"
         },
         {
           "version": "12",
@@ -227,14 +227,14 @@
             "latest"
           ],
           "arch": "arm64",
-          "url": "https://cloud.debian.org/images/cloud/trixie/20261116-2664/debian-13-genericcloud-arm64-20261116-2664.qcow2",
+          "url": "https://cloud.debian.org/images/cloud/trixie/20261123-2671/debian-13-genericcloud-arm64-20261123-2671.qcow2",
           "checksum_type": "sha512",
-          "checksum": "ecbb14df864d2f8842539733c10d7251c58294f86b85a487b23b2c959a9b75f003df6b289deb20e1aee03ef65de2b1429818689e1fbc4b727d579c61b247fee9",
-          "size_bytes": 336592896,
-          "size": "321.0 MB",
+          "checksum": "3942cc527cb142f1cd8f5382b6411e9fe5e8f06b8f33cc2800faef9dff658fbdec4f0ac395a4eae02e8e1706f9dd71224ebbee8d5c5f763773d39e75a1321d81",
+          "size_bytes": 337444864,
+          "size": "321.8 MB",
           "format": "qcow2",
-          "checksum_url": "https://cloud.debian.org/images/cloud/trixie/20261116-2664/SHA512SUMS",
-          "checksum_regex": "debian-13-genericcloud-arm64-20261116-2664\\.qcow2"
+          "checksum_url": "https://cloud.debian.org/images/cloud/trixie/20261123-2671/SHA512SUMS",
+          "checksum_regex": "debian-13-genericcloud-arm64-20261123-2671\\.qcow2"
         },
         {
           "version": "12",
