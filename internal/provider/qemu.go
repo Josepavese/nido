@@ -592,11 +592,11 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 func (p *QemuProvider) List() ([]VMStatus, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), events.IOTimeout)
 	defer cancel()
-	return p.listVMs(ctx)
+	return p.listVMs(ctx, true)
 }
 
-// A nil probe context gives internal lifecycle consumers process liveness.
-func (p *QemuProvider) listVMs(probe context.Context) ([]VMStatus, error) {
+// Internal lifecycle consumers can request process liveness without QMP I/O.
+func (p *QemuProvider) listVMs(ctx context.Context, probeRuntime bool) ([]VMStatus, error) {
 	vmsDir := filepath.Join(p.RootDir, "vms")
 	files, err := os.ReadDir(vmsDir)
 	if err != nil {
@@ -620,8 +620,8 @@ func (p *QemuProvider) listVMs(probe context.Context) ([]VMStatus, error) {
 			stateStr := VMStopped
 			if p.isVMProcess(name, pid) {
 				stateStr = VMRunning
-				if probe != nil {
-					stateStr = p.runtimeState(probe, name, pid)
+				if probeRuntime {
+					stateStr = p.runtimeState(ctx, name, pid)
 				}
 			}
 
@@ -1242,7 +1242,7 @@ func (p *QemuProvider) ListTemplates() ([]string, error) {
 }
 
 func (p *QemuProvider) Prune() (int, error) {
-	vms, err := p.listVMs(nil)
+	vms, err := p.listVMs(context.Background(), false)
 	if err != nil {
 		return 0, err
 	}

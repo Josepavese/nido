@@ -100,7 +100,7 @@ func ObserveEvents(root, configPath string, host hardware.Host) events.Observer 
 				watchFailureReported = false
 			}
 
-			list, err := p.listVMs(nil)
+			list, err := p.listVMs(childCtx, false)
 			if err != nil {
 				healthy = false
 				emit(events.Event{Source: events.Service, Kind: events.Unavailable})
