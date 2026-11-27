@@ -44,7 +44,7 @@ func (i FleetItem) Icon() string {
 	if i.Transitioning {
 		return i.SpinnerFrame
 	}
-	if i.State == "running" {
+	if i.State == provider.VMRunning {
 		return theme.IconBird
 	}
 	return theme.IconSleep
@@ -329,7 +329,7 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 			f.DetailView.UpdateDetail(f.detail)
 		}
 		for _, v := range msg.Items {
-			if v.State != "running" {
+			if v.State == provider.VMStopped {
 				delete(f.runtimeStates, v.Name)
 			}
 		}
@@ -436,11 +436,20 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 			delete(f.transitioning, msg.Name)
 			return f, func() tea.Msg { return ops.RequestOpMsg{Op: ops.OpDelete, Name: msg.Name} }
 		case "toggle":
-			f.transitioning[msg.Name] = true
-			if f.detail.State == "running" {
-				return f, func() tea.Msg { return ops.RequestOpMsg{Op: ops.OpStop, Name: msg.Name} }
+			item, ok := f.Sidebar.SelectedItem().(FleetItem)
+			if !ok || item.Name != msg.Name {
+				delete(f.transitioning, msg.Name)
+				return f, nil
 			}
-			return f, func() tea.Msg { return ops.RequestOpMsg{Op: ops.OpStart, Name: msg.Name} }
+			switch item.State {
+			case provider.VMRunning:
+				return f, func() tea.Msg { return ops.RequestOpMsg{Op: ops.OpStop, Name: msg.Name} }
+			case provider.VMStopped:
+				return f, func() tea.Msg { return ops.RequestOpMsg{Op: ops.OpStart, Name: msg.Name} }
+			default:
+				delete(f.transitioning, msg.Name)
+				return f, nil
+			}
 		}
 
 	// Operation Results (Error Handling)
@@ -516,9 +525,13 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 			}
 			// Toggle VM power (start/stop)
 			if selectedItem := f.Sidebar.SelectedItem(); selectedItem != nil {
-				if item, ok := selectedItem.(FleetItem); ok {
+				if item, ok := selectedItem.(FleetItem); ok && (item.State == provider.VMRunning || item.State == provider.VMStopped) {
 					cmds = append(cmds, func() tea.Msg { return FleetActionMsg{Action: "toggle", Name: item.Name} })
 				}
+			}
+		case "r":
+			if item, ok := f.Sidebar.SelectedItem().(FleetItem); ok && resumable(item.State) {
+				return f, func() tea.Msg { return ops.RequestOpMsg{Op: ops.OpResume, Name: item.Name} }
 			}
 		case "s":
 			// SSH Shortcut (In-place)
@@ -532,7 +545,7 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 		case "h":
 			// Graceful guest shutdown (never the forced stop path)
 			if selectedItem := f.Sidebar.SelectedItem(); selectedItem != nil {
-				if item, ok := selectedItem.(FleetItem); ok && item.State == "running" {
+				if item, ok := selectedItem.(FleetItem); ok && item.State == provider.VMRunning {
 					cmds = append(cmds, func() tea.Msg {
 						return ops.RequestOpMsg{Op: ops.OpShutdown, Name: item.Name}
 					})
@@ -542,9 +555,9 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 			// Snapshot manager (stopped VMs only).
 			if selectedItem := f.Sidebar.SelectedItem(); selectedItem != nil {
 				if item, ok := selectedItem.(FleetItem); ok {
-					if item.State == "running" {
+					if item.State != provider.VMStopped {
 						f.ErrorModal.Title = "Snapshots Require a Stopped VM"
-						f.ErrorModal.Message = fmt.Sprintf("VM '%s' is running. Stop or shut it down before snapshot operations.", item.Name)
+						f.ErrorModal.Message = fmt.Sprintf("VM '%s' is %s. Stop or shut it down before snapshot operations.", item.Name, item.State)
 						f.ErrorModal.Show()
 						return f, nil
 					}
@@ -555,7 +568,7 @@ func (f *Fleet) Update(msg tea.Msg) (view.Viewlet, tea.Cmd) {
 			// Template Creation (Context: Selected VM)
 			if selectedItem := f.Sidebar.SelectedItem(); selectedItem != nil {
 				if item, ok := selectedItem.(FleetItem); ok {
-					if item.State != "shutoff" && item.State != "stopped" {
+					if item.State != provider.VMStopped {
 						f.ErrorModal.Title = "Cannot Create Template"
 						f.ErrorModal.Message = fmt.Sprintf("VM '%s' must be stopped before creating a template.", item.Name)
 						f.ErrorModal.Show()
@@ -619,26 +632,30 @@ func (f *Fleet) Shortcuts() []view.Shortcut {
 	if selectedItem := f.Sidebar.SelectedItem(); selectedItem != nil {
 		if item, ok := selectedItem.(FleetItem); ok {
 			// Engage Hint (Toggle)
-			toggleLabel := "engage"
-			if item.State == "running" {
-				toggleLabel = "exhale" // stop
+			if item.State == provider.VMRunning || item.State == provider.VMStopped {
+				toggleLabel := "engage"
+				if item.State == provider.VMRunning {
+					toggleLabel = "exhale" // stop
+				}
+				toggleKey := "enter/space"
+				if f.MasterDetail.Split.SinglePane() && f.MasterDetail.ActiveFocus == widget.FocusSidebar {
+					toggleKey = "space"
+				}
+				shortcuts = append(shortcuts, view.Shortcut{Key: toggleKey, Label: toggleLabel})
 			}
-			toggleKey := "enter/space"
-			if f.MasterDetail.Split.SinglePane() && f.MasterDetail.ActiveFocus == widget.FocusSidebar {
-				toggleKey = "space"
-			}
-			shortcuts = append(shortcuts, view.Shortcut{Key: toggleKey, Label: toggleLabel})
 
-			// Running specific
-			if item.State == "running" {
+			switch {
+			case item.State == provider.VMRunning:
 				shortcuts = append(shortcuts, view.Shortcut{Key: "s", Label: "ssh"})
 				shortcuts = append(shortcuts, view.Shortcut{Key: "S", Label: "ssh (win)"})
 				shortcuts = append(shortcuts, view.Shortcut{Key: "v", Label: "vnc"})
 				shortcuts = append(shortcuts, view.Shortcut{Key: "h", Label: "shutdown"})
-			} else {
+			case item.State == provider.VMStopped:
 				// Stopped specific
 				shortcuts = append(shortcuts, view.Shortcut{Key: "n", Label: "snapshots"})
 				shortcuts = append(shortcuts, view.Shortcut{Key: "t", Label: "template"})
+			case resumable(item.State):
+				shortcuts = append(shortcuts, view.Shortcut{Key: "r", Label: "resume"})
 			}
 
 			// Delete Hint (always available)
@@ -651,6 +668,10 @@ func (f *Fleet) Shortcuts() []view.Shortcut {
 	}
 
 	return shortcuts
+}
+
+func resumable(state string) bool {
+	return state == provider.VMPaused || state == provider.VMIOError
 }
 
 func (f *Fleet) HandleMouse(x, y int, msg tea.MouseMsg) (view.Viewlet, tea.Cmd, bool) {
@@ -850,11 +871,11 @@ func (c *ComponentsDetail) UpdateDetail(d FleetDetail) {
 
 	// Update header
 	icon := theme.IconSleep
-	if d.State == "running" {
+	if d.State == provider.VMRunning {
 		icon = theme.IconBird
 	}
 	status := strings.ToUpper(d.State)
-	if d.QEMUState != "" && d.State == "running" {
+	if d.QEMUState != "" && d.State == provider.VMRunning {
 		status += " / QEMU " + strings.ToUpper(d.QEMUState)
 	}
 	c.header.Icon = icon

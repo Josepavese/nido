@@ -93,11 +93,11 @@ func ToolsCatalog() []map[string]interface{} {
 		eventToolCatalog(),
 		{
 			"name":        "nido_vm",
-			"description": "Operate the VM fleet through a single high-power tool. Use actions such as list, info, create, start, stop, shutdown, wait, delete, ssh, prune, config_update, port_forward, port_unforward, port_list, snapshot_create, snapshot_list, snapshot_restore, and snapshot_delete. shutdown asks the guest to power off and never force-terminates; stop is the forced host-process stop. Snapshots are disk-only, require a stopped VM, and never capture guest memory. Prefer resources like nido://fleet/vms or nido://vm/{name} for inspection when your client supports resources; use this tool for mutations or as a universal fallback.",
+			"description": "Operate the VM fleet through a single high-power tool. Use actions such as list, info, create, start, stop, resume, shutdown, wait, delete, ssh, prune, config_update, port_forward, port_unforward, port_list, snapshot_create, snapshot_list, snapshot_restore, and snapshot_delete. shutdown asks the guest to power off and never force-terminates; stop is the forced host-process stop. On Linux and macOS, resume continues a paused guest in place after host storage recovers. Snapshots are disk-only, require a stopped VM, and never capture guest memory. Prefer resources like nido://fleet/vms or nido://vm/{name} for inspection when your client supports resources; use this tool for mutations or as a universal fallback.",
 			"inputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"action":          map[string]interface{}{"type": "string", "enum": []string{"list", "info", "create", "start", "stop", "shutdown", "wait", "delete", "ssh", "prune", "config_update", "port_forward", "port_unforward", "port_list", "snapshot_create", "snapshot_list", "snapshot_restore", "snapshot_delete"}},
+					"action":          map[string]interface{}{"type": "string", "enum": []string{"list", "info", "create", "start", "stop", "resume", "shutdown", "wait", "delete", "ssh", "prune", "config_update", "port_forward", "port_unforward", "port_list", "snapshot_create", "snapshot_list", "snapshot_restore", "snapshot_delete"}},
 					"name":            map[string]interface{}{"type": "string", "description": "VM name for any action that targets a specific VM."},
 					"snapshot_name":   map[string]interface{}{"type": "string", "description": "Disk snapshot tag for snapshot_create, snapshot_restore, or snapshot_delete; spaces are allowed."},
 					"template":        map[string]interface{}{"type": "string", "description": "Template name for action=create."},
@@ -243,6 +243,7 @@ func HelpPayload() map[string]interface{} {
 			"Use tools only for mutations or when your MCP client cannot read resources.",
 			"Use nido_vm for VM lifecycle, inspection fallback, config changes, and port operations.",
 			"Use nido_vm action=shutdown to request guest poweroff; reserve action=stop for explicit forced host-process termination.",
+			"If a VM reports io-error on Linux or macOS, repair host storage then use nido_vm action=resume to continue the same guest.",
 			"Use nido_vm snapshot_* only on stopped VMs. Snapshots are disk-only, not guest-memory checkpoints.",
 			"Use nido_template for template lifecycle.",
 			"Use nido_image for catalog and cache operations.",
@@ -558,6 +559,11 @@ func (s *Server) callVMTool(raw json.RawMessage) (interface{}, error) {
 			return nil, err
 		}
 		return map[string]interface{}{"action": "stop", "name": args.Name, "status": "stopped"}, nil
+	case "resume":
+		if err := s.Provider.Resume(context.Background(), args.Name); err != nil {
+			return nil, err
+		}
+		return map[string]interface{}{"action": "resume", "name": args.Name, "status": provider.VMRunning}, nil
 	case "shutdown":
 		if args.Name == "" {
 			return nil, fmt.Errorf("name is required for action=shutdown")

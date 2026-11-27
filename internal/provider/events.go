@@ -100,7 +100,7 @@ func ObserveEvents(root, configPath string, host hardware.Host) events.Observer 
 				watchFailureReported = false
 			}
 
-			list, err := p.List()
+			list, err := p.listVMs(childCtx, false)
 			if err != nil {
 				healthy = false
 				emit(events.Event{Source: events.Service, Kind: events.Unavailable})
@@ -122,7 +122,7 @@ func ObserveEvents(root, configPath string, host hardware.Host) events.Observer 
 					source := events.Filesystem
 					if exists && old.State != v.State {
 						source = events.Runtime
-						if v.State == "running" {
+						if v.State == VMRunning {
 							kind = events.VMRunning
 						} else {
 							kind = events.VMStopped
@@ -130,7 +130,7 @@ func ObserveEvents(root, configPath string, host hardware.Host) events.Observer 
 					}
 					emit(events.Event{Source: source, Kind: kind, VM: v.Name, Resources: events.Resources(events.VMConfigure, v.Name)})
 				}
-				if v.State == "running" && pids[v.Name] != v.PID {
+				if v.State == VMRunning && pids[v.Name] != v.PID {
 					if stop := monitors[v.Name]; stop != nil {
 						stop()
 					}
@@ -147,7 +147,7 @@ func ObserveEvents(root, configPath string, host hardware.Host) events.Observer 
 						}
 					})
 				}
-				if v.State != "running" {
+				if v.State != VMRunning {
 					if stop := monitors[v.Name]; stop != nil {
 						stop()
 						delete(monitors, v.Name)

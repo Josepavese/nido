@@ -3,8 +3,10 @@ package scenario
 import (
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"time"
 
+	"github.com/Josepavese/nido/v4/internal/provider"
 	"github.com/Josepavese/nido/v4/internal/validator/mcpclient"
 	"github.com/Josepavese/nido/v4/internal/validator/report"
 )
@@ -73,6 +75,9 @@ func mcpDurableStep(ctx *Context) report.StepResult {
 	}
 
 	createArgs := map[string]interface{}{}
+	if runtime.GOOS != "windows" {
+		createArgs["raw_qemu_args"] = []string{"-S"}
+	}
 	if template != "" {
 		createArgs["template"] = template
 	} else {
@@ -87,6 +92,35 @@ func mcpDurableStep(ctx *Context) report.StepResult {
 		addAssertion(&res, "create_status", payload["status"] == "created", fmt.Sprintf("%v", payload["status"]))
 	} else {
 		addAssertion(&res, "create_payload", false, "missing MCP payload")
+	}
+
+	resumePaused := func() bool {
+		if runtime.GOOS == "windows" {
+			return true // Windows has an event monitor but no managed control endpoint.
+		}
+		info, err := call("info", map[string]interface{}{}, 10*time.Second)
+		if !assertOK("inspect_prelaunch", info, err) {
+			return false
+		}
+		payload, _ := mcpToolPayload(info)
+		detail, _ := payload["vm"].(map[string]interface{})
+		paused := detail["State"] == provider.VMPaused
+		addAssertion(&res, "prelaunch_paused", paused, fmt.Sprint(detail["State"]))
+		if !paused {
+			return false
+		}
+		resumed, err := call("resume", map[string]interface{}{}, 10*time.Second)
+		if !assertOK("resume", resumed, err) {
+			return false
+		}
+		payload, _ = mcpToolPayload(resumed)
+		running := payload["status"] == provider.VMRunning
+		addAssertion(&res, "resume_running", running, fmt.Sprint(payload["status"]))
+		return running
+	}
+	if !resumePaused() {
+		finalize(&res)
+		return res
 	}
 
 	waitSeconds := int(ctx.Config.BootTimeout / time.Second)
@@ -155,7 +189,7 @@ func mcpDurableStep(ctx *Context) report.StepResult {
 	}
 
 	start, err := call("start", map[string]interface{}{}, 120*time.Second)
-	if !assertOK("start", start, err) {
+	if !assertOK("start", start, err) || !resumePaused() {
 		finalize(&res)
 		return res
 	}

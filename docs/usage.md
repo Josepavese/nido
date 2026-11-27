@@ -154,6 +154,29 @@ option is available for a read-only export. To remove it, unmount in the guest,
 shut down the guest, clear the saved arguments, and start again. This is a QEMU
 Linux-guest workflow, not a portable Nido shared-folder API or a Windows share.
 
+## Recover a VM paused by a disk I/O error
+
+On Linux and macOS, `nido info` and `nido ls` report `io-error` when QEMU
+has suspended execution after a disk error. The VM still owns its process,
+memory and disk. A host volume that ran out of space must have capacity restored
+before you resume. Check the host storage that holds the affected disk and fix
+any other I/O problem before attempting recovery.
+
+```bash
+nido info test-lab --json
+nido resume test-lab --json
+nido wait test-lab
+```
+
+Fleet shows the same state. Select the VM and press `r` to resume. Resume
+confirms that QEMU reports runnable vCPUs. Use `wait` to check guest readiness
+and verify the interrupted operation from inside the guest. If the state
+returns to `io-error`, check host storage again. `unknown` means QEMU did not
+confirm execution, for example when its control socket was busy.
+
+On Windows hosts, inspect `vm.io_error` in the event stream. Managed resume
+requires the control socket available on Linux and macOS.
+
 ## Stop and clean up
 
 Prefer guest shutdown for filesystem consistency:

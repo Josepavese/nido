@@ -51,8 +51,22 @@ func TestFilesystemClassifierIgnoresDiskContentAndStaging(t *testing.T) {
 	}
 }
 func TestQMPEndpointIdentityWhitelistAndCancellation(t *testing.T) {
-	for _, identity := range []string{"fixture", "foreign"} {
-		t.Run(identity, func(t *testing.T) {
+	for _, tc := range []struct {
+		name, identity, status string
+		wireEvents             []map[string]any
+		kinds                  []string
+	}{
+		{"running", "fixture", "running", []map[string]any{
+			{"event": "RTC_CHANGE"}, {"event": "STOP"}, {"event": "SHUTDOWN"}, {"event": "GUEST_PANICKED"},
+		}, []string{events.VMRunning, events.VMPaused, events.VMShutdown, events.VMPanic}},
+		{"foreign", "foreign", "running", nil, nil},
+		{"late attachment", "fixture", "io-error", nil, []string{events.VMIOError}},
+		{"live I/O pause and recovery", "fixture", "running", []map[string]any{
+			{"event": "BLOCK_IO_ERROR", "data": map[string]string{"action": "stop"}},
+			{"event": "STOP"}, {"event": "RESUME"}, {"event": "STOP"},
+		}, []string{events.VMRunning, events.VMIOError, events.VMIOError, events.VMResumed, events.VMPaused}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			server, client := net.Pipe()
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -72,11 +86,11 @@ func TestQMPEndpointIdentityWhitelistAndCancellation(t *testing.T) {
 					case "qmp_capabilities":
 						enc.Encode(map[string]interface{}{"return": map[string]interface{}{}})
 					case "query-name":
-						enc.Encode(map[string]interface{}{"return": map[string]string{"name": identity}})
+						enc.Encode(map[string]interface{}{"return": map[string]string{"name": tc.identity}})
 					case "query-status":
-						enc.Encode(map[string]interface{}{"return": map[string]interface{}{"running": true, "status": "running"}})
-						for _, name := range []string{"RTC_CHANGE", "STOP", "SHUTDOWN", "GUEST_PANICKED"} {
-							enc.Encode(map[string]string{"event": name})
+						enc.Encode(map[string]interface{}{"return": map[string]interface{}{"running": tc.status == "running", "status": tc.status}})
+						for _, event := range tc.wireEvents {
+							enc.Encode(event)
 						}
 						return
 					}
@@ -86,17 +100,11 @@ func TestQMPEndpointIdentityWhitelistAndCancellation(t *testing.T) {
 			(&QemuProvider{}).readQMPEvents(ctx, client, "fixture", func(e events.Event) { got = append(got, e) })
 			client.Close()
 			<-wireDone
-			if identity == "foreign" {
-				if len(got) != 0 {
-					t.Fatal("foreign monitor accepted")
-				}
-				return
-			}
 			kinds := []string{}
 			for _, e := range got {
 				kinds = append(kinds, e.Kind)
 			}
-			if !slices.Equal(kinds, []string{events.VMRunning, events.VMPaused, events.VMShutdown, events.VMPanic}) {
+			if !slices.Equal(kinds, tc.kinds) {
 				t.Fatal(kinds)
 			}
 			if slices.Contains(kinds, events.VMStopped) {

@@ -1,7 +1,6 @@
 package provider
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"net"
@@ -35,78 +34,57 @@ func (p *QemuProvider) observeQMP(ctx context.Context, name string, emit events.
 }
 func (p *QemuProvider) readQMPEvents(ctx context.Context, conn net.Conn, name string, emit events.Publisher) {
 	conn.SetDeadline(time.Now().Add(events.IOTimeout))
-	scan := bufio.NewScanner(conn)
-	scan.Buffer(make([]byte, events.MaxFrameBytes), events.MaxFrameBytes)
-	read := func() (map[string]json.RawMessage, bool) {
-		if !scan.Scan() {
-			return nil, false
-		}
-		var msg map[string]json.RawMessage
-		err := json.Unmarshal(scan.Bytes(), &msg)
-		return msg, err == nil
-	}
-	msg, ok := read()
-	if !ok || msg["QMP"] == nil {
-		return
-	}
-	enc := json.NewEncoder(conn)
-	call := func(command string) (json.RawMessage, bool) {
-		if enc.Encode(map[string]string{"execute": command}) != nil {
-			return nil, false
-		}
-		for {
-			msg, ok := read()
-			if !ok || msg["error"] != nil {
-				return nil, false
-			}
-			if result, ok := msg["return"]; ok {
-				return result, true
-			}
-		}
-	}
-	if _, ok := call("qmp_capabilities"); !ok {
-		return
-	}
-	result, ok := call("query-name")
-	if !ok {
-		return
-	}
-	var identity struct {
-		Name string `json:"name"`
-	}
-	if json.Unmarshal(result, &identity) != nil || identity.Name != name {
+	q := newQMPSession(conn)
+	if q.negotiate() != nil || q.verifyName(name) != nil {
 		return
 	}
 	emitVM := func(kind string) {
 		emit(events.Event{Source: events.Runtime, Kind: kind, VM: name, Resources: events.Resources(events.VMConfigure, name)})
 	}
-	result, ok = call("query-status")
-	if !ok {
+	status, err := q.queryStatus()
+	if err != nil {
 		return
 	}
-	var status struct {
-		Running bool   `json:"running"`
-		Status  string `json:"status"`
-	}
-	if json.Unmarshal(result, &status) != nil {
-		return
-	}
-	if status.Running {
+	state := status.state()
+	ioPaused := state == VMIOError
+	switch state {
+	case VMRunning:
 		emitVM(events.VMRunning)
-	} else if status.Status == "paused" || status.Status == "prelaunch" {
+	case VMPaused:
 		emitVM(events.VMPaused)
+	case VMIOError:
+		emitVM(events.VMIOError)
 	}
 	conn.SetDeadline(time.Time{})
 	for ctx.Err() == nil {
-		msg, ok := read()
-		if !ok {
+		msg, err := q.read()
+		if err != nil {
 			return
 		}
 		var event string
-		if json.Unmarshal(msg["event"], &event) == nil {
-			if kind := qmpEventKinds[event]; kind != "" {
-				emitVM(kind)
+		if json.Unmarshal(msg["event"], &event) != nil {
+			continue
+		}
+		kind := qmpEventKinds[event]
+		switch kind {
+		case events.VMIOError:
+			var data struct {
+				Action string `json:"action"`
 			}
+			if json.Unmarshal(msg["data"], &data) == nil && data.Action == "stop" {
+				ioPaused = true
+			}
+		case events.VMPaused:
+			// QEMU follows a stopping BLOCK_IO_ERROR with STOP. Keep the
+			// cause in the broker's latest snapshot for new subscribers.
+			if ioPaused {
+				kind = events.VMIOError
+			}
+		case events.VMResumed, events.VMReset, events.VMWakeup, events.VMShutdown:
+			ioPaused = false
+		}
+		if kind != "" {
+			emitVM(kind)
 		}
 	}
 }

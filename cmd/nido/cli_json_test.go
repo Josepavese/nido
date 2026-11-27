@@ -294,6 +294,7 @@ type fakeProvider struct{}
 func (fakeProvider) Spawn(name string, opts provider.VMOptions) error { return nil }
 func (fakeProvider) Start(name string, opts provider.VMOptions) error { return nil }
 func (fakeProvider) Stop(name string) error                           { return nil }
+func (fakeProvider) Resume(context.Context, string) error             { return nil }
 func (fakeProvider) Shutdown(ctx context.Context, name string, timeout time.Duration) (provider.ShutdownResult, error) {
 	return provider.ShutdownResult{Name: name, Mode: "guest", PID: 123}, nil
 }

@@ -82,7 +82,7 @@ well as mutations:
 | Tool | Actions |
 | --- | --- |
 | `nido_events` | `status`, `subscribe`, `unsubscribe`, `mute`, `unmute` (session controls) |
-| `nido_vm` | `list`, `info`, `create`, `start`, `stop`, `shutdown`, `wait`, `delete`, `ssh`, `prune`, `config_update`, `port_forward`, `port_unforward`, `port_list`, `snapshot_create`, `snapshot_list`, `snapshot_restore`, `snapshot_delete` |
+| `nido_vm` | `list`, `info`, `create`, `start`, `stop`, `resume`, `shutdown`, `wait`, `delete`, `ssh`, `prune`, `config_update`, `port_forward`, `port_unforward`, `port_list`, `snapshot_create`, `snapshot_list`, `snapshot_restore`, `snapshot_delete` |
 | `nido_image` | `list`, `info`, `pull`, `remove`, `refresh_catalog`, `cache_list`, `cache_info`, `cache_remove`, `cache_prune` |
 | `nido_template` | `list`, `create`, `delete` |
 | `nido_blueprint` | `list`, `info`, `build` |
@@ -99,6 +99,19 @@ upgrade step. Disk payloads and original metadata are preserved; see the
 `nido mcp-help` emits the current machine-readable guide with schemas, examples,
 resources and routing rules. `nido mcp --help` is its human-readable entry point.
 The `nido_task_router` prompt helps clients choose resources and tool actions.
+
+## Resume a paused VM
+
+On Linux and macOS, the VM resource and the `info` and `list` actions
+report `io-error` when QEMU pauses after a disk I/O failure. After restoring
+host storage, use the following arguments with `nido_vm`.
+
+```json
+{"action":"resume","name":"test-lab"}
+```
+
+A successful result has `status="running"` and confirms that QEMU resumed
+execution in the same process. Use `action=wait` to observe guest readiness.
 
 ## Create and configure a VM
 

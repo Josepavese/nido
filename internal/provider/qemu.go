@@ -285,8 +285,8 @@ func (p *QemuProvider) Start(name string, opts VMOptions) (resultErr error) {
 		return err
 	}
 	// 0. Check if already running
-	if status, err := p.Info(name); err == nil && status.State == "running" {
-		return nil // Already running
+	if p.isVMProcess(name, p.runningPID(name)) {
+		return nil // The VM already owns a process, including while paused.
 	}
 	p.clearReadiness(name)
 
@@ -590,6 +590,13 @@ func (p *QemuProvider) buildQemuArgs(name, diskPath string, sshPort int, vncPort
 
 // List scans the nest and identifies all existing VMs and their current state.
 func (p *QemuProvider) List() ([]VMStatus, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), events.IOTimeout)
+	defer cancel()
+	return p.listVMs(ctx, true)
+}
+
+// Internal lifecycle consumers can request process liveness without QMP I/O.
+func (p *QemuProvider) listVMs(ctx context.Context, probeRuntime bool) ([]VMStatus, error) {
 	vmsDir := filepath.Join(p.RootDir, "vms")
 	files, err := os.ReadDir(vmsDir)
 	if err != nil {
@@ -605,22 +612,17 @@ func (p *QemuProvider) List() ([]VMStatus, error) {
 		if filepath.Ext(f.Name()) == ".qcow2" && !strings.HasSuffix(f.Name(), ".compact.qcow2") {
 			name := strings.TrimSuffix(f.Name(), ".qcow2")
 
-			// Check runtime state
-			pidFile := filepath.Join(p.RootDir, "run", name+".pid")
-			pidData, _ := os.ReadFile(pidFile)
-			pid := 0
-			fmt.Sscanf(string(pidData), "%d", &pid)
 			vmState, stateErr := p.loadState(name)
 			if stateErr != nil && !os.IsNotExist(stateErr) {
 				return nil, fmt.Errorf("read VM %q state: %w", name, stateErr)
 			}
-			if pid == 0 {
-				pid = vmState.PID
-			}
-
-			stateStr := "stopped"
+			pid := p.savedVMProcessID(name, vmState.PID)
+			stateStr := VMStopped
 			if p.isVMProcess(name, pid) {
-				stateStr = "running"
+				stateStr = VMRunning
+				if probeRuntime {
+					stateStr = p.runtimeState(ctx, name, pid)
+				}
 			}
 
 			results = append(results, VMStatus{
@@ -632,7 +634,7 @@ func (p *QemuProvider) List() ([]VMStatus, error) {
 				SSHUser:    vmState.SSHUser,
 				VNCPort:    vmState.VNCPort,
 				Forwarding: vmState.Forwarding,
-				Readiness:  visibleReadiness(vmState.Readiness, stateStr == "running", pid),
+				Readiness:  visibleReadiness(vmState.Readiness, stateStr == VMRunning, pid),
 			})
 		}
 	}
@@ -655,19 +657,19 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 			return VMDetail{}, fmt.Errorf("VM %q: %w", name, err)
 		}
 		backingPath, backingMissing := backingInfo(diskPath)
-		return VMDetail{Name: name, State: "stopped", IP: "127.0.0.1", DiskPath: diskPath, StateMissing: true, BackingPath: backingPath, BackingMissing: backingMissing}, nil
+		detail := VMDetail{Name: name, State: VMStopped, IP: "127.0.0.1", DiskPath: diskPath, StateMissing: true, BackingPath: backingPath, BackingMissing: backingMissing}
+		detail.PID = p.savedVMProcessID(name, 0)
+		if p.isVMProcess(name, detail.PID) {
+			detail.State = p.runtimeState(context.Background(), name, detail.PID)
+		}
+		return detail, nil
 	}
 
 	// Check liveness for state string
-	liveness := "stopped"
-	pidData, _ := os.ReadFile(filepath.Join(p.RootDir, "run", name+".pid"))
-	pid := 0
-	fmt.Sscanf(string(pidData), "%d", &pid)
-	if pid == 0 {
-		pid = state.PID
-	}
+	liveness := VMStopped
+	pid := p.savedVMProcessID(name, state.PID)
 	if p.isVMProcess(name, pid) {
-		liveness = "running"
+		liveness = p.runtimeState(context.Background(), name, pid)
 	}
 
 	diskPath := filepath.Join(p.RootDir, "vms", name+".qcow2")
@@ -691,7 +693,7 @@ func (p *QemuProvider) Info(name string) (VMDetail, error) {
 		Forwarding:               state.Forwarding,
 		RawQemuArgs:              state.RawQemuArgs,
 		Accelerators:             state.Accelerators,
-		Readiness:                visibleReadiness(state.Readiness, liveness == "running", pid),
+		Readiness:                visibleReadiness(state.Readiness, liveness == VMRunning, pid),
 		DiskPath:                 diskPath,
 		DiskMissing:              statErr != nil,
 		BackingPath:              backingPath,
@@ -1204,7 +1206,7 @@ func (p *QemuProvider) SSHArgs(name string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if info.SSHPort == 0 || info.State != "running" {
+	if info.SSHPort == 0 || info.State != VMRunning {
 		return nil, fmt.Errorf("VM '%s' is not running or has no network access", name)
 	}
 	return sshClientArgs(info.SSHPort, info.SSHUser, info.IP), nil
@@ -1240,13 +1242,13 @@ func (p *QemuProvider) ListTemplates() ([]string, error) {
 }
 
 func (p *QemuProvider) Prune() (int, error) {
-	vms, err := p.List()
+	vms, err := p.listVMs(context.Background(), false)
 	if err != nil {
 		return 0, err
 	}
 	count := 0
 	for _, vm := range vms {
-		if vm.State == "stopped" {
+		if vm.State == VMStopped {
 			if err := p.Delete(vm.Name); err == nil {
 				count++
 			}

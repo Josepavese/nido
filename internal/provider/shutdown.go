@@ -166,23 +166,25 @@ func requestGuestShutdownWithFallback(ctx context.Context, target guestShutdownT
 	}
 }
 
-// qmpControlPath returns the provider-owned control socket created by QEMU at
-// start. It is empty on hosts whose backend has no controllable QMP endpoint.
-func (p *QemuProvider) qmpControlPath(name string) string {
-	return qemuQMPPath(filepath.Join(p.RootDir, "run"), name)
-}
-
 // runningPID reads the same owned PID artifact Stop uses, falling back to the
 // persisted state for recovery after a partially cleaned run directory.
 func (p *QemuProvider) runningPID(name string) int {
+	pid := p.savedVMProcessID(name, 0)
+	if pid == 0 {
+		if state, err := p.loadState(name); err == nil {
+			pid = state.PID
+		}
+	}
+	return pid
+}
+
+func (p *QemuProvider) savedVMProcessID(name string, fallback int) int {
 	pid := 0
 	if data, err := os.ReadFile(filepath.Join(p.RootDir, "run", name+".pid")); err == nil {
 		fmt.Sscanf(string(data), "%d", &pid)
 	}
 	if pid == 0 {
-		if state, err := p.loadState(name); err == nil {
-			pid = state.PID
-		}
+		return fallback
 	}
 	return pid
 }

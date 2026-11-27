@@ -188,6 +188,21 @@ commands:
     positional_completions: ["vms"]
     action: vm.stop
 
+  - id: vm.resume
+    use: resume <name>
+    group: vm
+    short: "Resume a paused QEMU guest in place"
+    long: "Continue a paused guest through its QEMU monitor (Linux and macOS). Resolve any host storage error before resuming. The existing VM process and guest memory are retained."
+    examples:
+      - "nido resume agent-01 --json"
+    flags:
+      - name: json
+    args:
+      min: 1
+      max: 1
+    positional_completions: ["vms"]
+    action: vm.resume
+
   - id: vm.shutdown
     use: shutdown <name>
     group: vm

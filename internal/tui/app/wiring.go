@@ -320,6 +320,8 @@ func (n *NidoApp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return n, tea.Batch(cmd, ops.StartVM(n.prov, msg.Name))
 		case ops.OpStop:
 			return n, tea.Batch(cmd, ops.StopVM(n.prov, msg.Name))
+		case ops.OpResume:
+			return n, tea.Batch(cmd, ops.ResumeVM(n.prov, msg.Name))
 		case ops.OpShutdown:
 			return n, tea.Batch(cmd, ops.ShutdownVM(n.prov, msg.Name))
 		case ops.OpDelete:
