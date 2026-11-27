@@ -13,6 +13,7 @@ func buildActionRegistry(app *appContext) map[string]climeta.ActionFunc {
 		"vm.spawn":                     actionVMSpawn(app),
 		"vm.start":                     actionVMStart(app),
 		"vm.stop":                      actionVMStop(app),
+		"vm.resume":                    actionVMResume(app),
 		"vm.shutdown":                  actionVMShutdown(app),
 		"vm.wait":                      actionVMWait(app),
 		"vm.ssh":                       actionVMSSH(app),

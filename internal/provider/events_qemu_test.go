@@ -4,8 +4,6 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
-	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -77,45 +75,37 @@ func TestRealQEMUEventLifecycle(t *testing.T) {
 	if err := p.CreateDisk("fixture", "1M", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := p.Start("fixture", VMOptions{MemoryMB: 128, VCPUs: 1, RawQemuArgs: []string{"-S"}}); err != nil {
+	if err := p.Start("fixture", VMOptions{Arch: "amd64", MemoryMB: 128, VCPUs: 1, RawQemuArgs: []string{"-S"}}); err != nil {
 		t.Fatal(err)
 	}
 	wait(events.VMPaused)
-	// Use the separate control monitor; event observation remains connected.
-	conn, err := net.DialTimeout("unix", qemuQMPPath(filepath.Join(root, "run"), "fixture"), time.Second)
-	if err != nil {
+	before, err := p.Info("fixture")
+	if err != nil || before.State != VMPaused || before.PID == 0 {
+		t.Fatalf("prelaunch status: %+v %v", before, err)
+	}
+	if err := p.Start("fixture", VMOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	conn.SetDeadline(time.Now().Add(2 * time.Second))
-	defer conn.Close()
-	dec, enc := json.NewDecoder(conn), json.NewEncoder(conn)
-	var message map[string]interface{}
-	if err := dec.Decode(&message); err != nil {
+	if count, err := p.Prune(); err != nil || count != 0 {
+		t.Fatalf("prune touched a paused VM: %d %v", count, err)
+	}
+	if err := p.Resume(ctx, "fixture"); err != nil {
 		t.Fatal(err)
 	}
-	command := func(name string) {
-		t.Helper()
-		if err := enc.Encode(map[string]string{"execute": name}); err != nil {
-			t.Fatal(err)
-		}
-		for {
-			if err := dec.Decode(&message); err != nil {
-				t.Fatal(err)
-			}
-			if _, ok := message["return"]; ok {
-				return
-			}
-			if _, ok := message["error"]; ok {
-				t.Fatal(message)
-			}
-		}
-	}
-	command("qmp_capabilities")
-	command("cont")
 	wait(events.VMResumed)
-	command("stop")
+	after, err := p.List()
+	if err != nil || len(after) != 1 || after[0].State != VMRunning || after[0].PID != before.PID {
+		t.Fatalf("resume replaced the process or failed: %+v %v", after, err)
+	}
+	if err := p.Resume(ctx, "fixture"); err != nil {
+		t.Fatalf("idempotent resume: %v", err)
+	}
+	if err := withQMPControl(ctx, p.qmpControlPath("fixture"), events.IOTimeout, func(q *qmpSession) error {
+		return q.command("stop", nil)
+	}); err != nil {
+		t.Fatal(err)
+	}
 	wait(events.VMPaused)
-	conn.Close()
 	if err := p.Stop("fixture"); err != nil {
 		t.Fatal(err)
 	}
@@ -123,5 +113,8 @@ func TestRealQEMUEventLifecycle(t *testing.T) {
 	if info, err := p.Info("fixture"); err != nil || info.State != "stopped" {
 		t.Fatalf("stop not confirmed: %+v %v", info, err)
 	}
-	t.Log("real process termination verified; guest readiness not tested")
+	if err := p.Resume(ctx, "fixture"); err == nil {
+		t.Fatal("resume accepted a stopped VM")
+	}
+	t.Log("real pause, same-process resume and termination verified; guest readiness not tested")
 }

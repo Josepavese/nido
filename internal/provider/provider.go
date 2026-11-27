@@ -169,6 +169,9 @@ type VMProvider interface {
 	// It does not claim guest ACPI shutdown; an already stopped VM is a no-op.
 	Stop(name string) error
 
+	// Resume resumes paused vCPUs on the owned QEMU process.
+	Resume(ctx context.Context, name string) error
+
 	// Shutdown asks the running guest OS to power off, waits for the owned
 	// process to exit, and never force-terminates it. Use Stop for forced
 	// termination or when the guest cannot complete a shutdown.
@@ -186,7 +189,7 @@ type VMProvider interface {
 
 	// Information queries
 
-	// List returns status of all VMs (running and stopped).
+	// List returns status of all VMs, including paused guests with a live process.
 	List() ([]VMStatus, error)
 
 	// Info retrieves detailed information about a specific VM.

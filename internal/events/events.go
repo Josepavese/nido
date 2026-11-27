@@ -51,6 +51,7 @@ const (
 	VMWakeup          = "vm.wakeup"
 	VMCreate          = "vm.create"
 	VMStart           = "vm.start"
+	VMResume          = "vm.resume"
 	VMStop            = "vm.stop"
 	VMDelete          = "vm.delete"
 	VMConfigure       = "vm.configure"
@@ -97,7 +98,7 @@ type Source interface {
 func VMResource(name string) string { return VMResourcePrefix + url.PathEscape(name) }
 func Resources(action, name string) []string {
 	switch action {
-	case VMCreate, VMStart, VMStop, VMDelete, VMConfigure, VMPortForward, VMPortUnforward, DiskCreate:
+	case VMCreate, VMStart, VMResume, VMStop, VMDelete, VMConfigure, VMPortForward, VMPortUnforward, DiskCreate:
 		return []string{Fleet, VMResource(name)}
 	case SystemUpdate:
 		return []string{VersionResource, Images, Blueprints}

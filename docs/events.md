@@ -74,8 +74,9 @@ QMP observation uses a second monitor, preserving the existing control monitor.
 Unix uses a socket under the private events directory; Windows QEMU uses an
 ephemeral loopback TCP monitor whose address is persisted in that directory. QMP greeting and
 VM name are checked before event delivery. Initial `prelaunch` (QEMU `-S`) is
-reported as paused CPU execution, without implying guest readiness. Only selected event names leave the
-adapter; raw guest/device details do not.
+reported as paused CPU execution. An initial `io-error` state produces
+`vm.io_error`. A `STOP` following an I/O error that paused the VM preserves
+that cause for late subscribers. Only selected event names leave the adapter.
 
 ## MCP: opt in and low noise
 

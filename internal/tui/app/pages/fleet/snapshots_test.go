@@ -57,6 +57,22 @@ func TestTUIHRequestsGuestShutdownNotForcedStop(t *testing.T) {
 	}
 }
 
+func TestTUIResumesIOPausedVM(t *testing.T) {
+	f := fleetWithState(nil, provider.VMIOError)
+	_, cmd := f.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	if cmd == nil {
+		t.Fatal("resume shortcut emitted no command")
+	}
+	msg, ok := cmd().(ops.RequestOpMsg)
+	if !ok || msg.Op != ops.OpResume || msg.Name != "vm-a" {
+		t.Fatalf("resume shortcut = %#v", msg)
+	}
+	_, cmd = f.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	if cmd != nil || !f.ErrorModal.IsActive() {
+		t.Fatal("paused VM opened stopped-only snapshots")
+	}
+}
+
 func TestTUISnapshotsRequireStoppedVM(t *testing.T) {
 	prov := &snapshotTestProvider{}
 	f := fleetWithState(prov, "running")

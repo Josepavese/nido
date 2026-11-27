@@ -96,6 +96,7 @@ type VMDetailRequestMsg struct {
 const (
 	OpStart    = "start"
 	OpStop     = "stop"
+	OpResume   = "resume"
 	OpShutdown = "shutdown"
 	OpDelete   = "delete"
 )
@@ -451,6 +452,12 @@ func StopVM(prov provider.VMProvider, name string) tea.Cmd {
 	return func() tea.Msg {
 		err := prov.Stop(name)
 		return OpResultMsg{Op: "stop", Err: err}
+	}
+}
+
+func ResumeVM(prov provider.VMProvider, name string) tea.Cmd {
+	return func() tea.Msg {
+		return OpResultMsg{Op: OpResume, Err: prov.Resume(context.Background(), name)}
 	}
 }
 

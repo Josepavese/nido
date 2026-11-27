@@ -118,6 +118,9 @@ func actionVMInfo(app *appContext) func(cmd *cobra.Command, args []string) {
 		ui.Header("VM Details")
 		ui.FancyLabel("Name", info.Name)
 		ui.FancyLabel("State", info.State)
+		if info.State == provider.VMIOError {
+			ui.Warn("QEMU paused guest execution after a disk I/O error. Fix host storage, then run nido resume %s.", info.Name)
+		}
 		if info.Readiness != nil {
 			ui.FancyLabel("Readiness", formatGuestReadiness(info.Readiness))
 		}
@@ -442,6 +445,28 @@ func actionVMStop(app *appContext) func(cmd *cobra.Command, args []string) {
 			return
 		}
 		ui.Success("VM %s stopped.", args[0])
+	}
+}
+
+func actionVMResume(app *appContext) func(cmd *cobra.Command, args []string) {
+	return func(cmd *cobra.Command, args []string) {
+		name := args[0]
+		if err := app.Provider.Resume(cmd.Context(), name); err != nil {
+			if jsonEnabled(cmd) {
+				_ = clijson.PrintJSON(clijson.NewResponseError("resume", "ERR_RESUME_FAILED", "Resume failed", err.Error(),
+					"Check host storage and inspect the VM state before trying again.", nil))
+			} else {
+				ui.Error("Resume failed: %v", err)
+			}
+			os.Exit(1)
+		}
+		if jsonEnabled(cmd) {
+			_ = clijson.PrintJSON(clijson.NewResponseOK("resume", map[string]interface{}{
+				"action": map[string]string{"name": name, "result": provider.VMRunning},
+			}))
+		} else {
+			ui.Success("VM %s is running.", name)
+		}
 	}
 }
 

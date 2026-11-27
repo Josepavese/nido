@@ -32,6 +32,7 @@ func (m *mockProvider) Spawn(name string, opts provider.VMOptions) error {
 }
 func (m *mockProvider) Start(name string, opts provider.VMOptions) error               { return nil }
 func (m *mockProvider) Stop(name string) error                                         { return nil }
+func (m *mockProvider) Resume(context.Context, string) error                           { return nil }
 func (m *mockProvider) Delete(name string) error                                       { return nil }
 func (m *mockProvider) List() ([]provider.VMStatus, error)                             { return nil, nil }
 func (m *mockProvider) Info(name string) (provider.VMDetail, error)                    { return provider.VMDetail{}, nil }
@@ -162,6 +163,7 @@ func TestMCPActionsCoverCLIManifest(t *testing.T) {
 		"vm.start":                     {"nido_vm", "start"},
 		"vm.stop":                      {"nido_vm", "stop"},
 		"vm.shutdown":                  {"nido_vm", "shutdown"},
+		"vm.resume":                    {"nido_vm", "resume"},
 		"vm.wait":                      {"nido_vm", "wait"},
 		"vm.ssh":                       {"nido_vm", "ssh"},
 		"vm.delete":                    {"nido_vm", "delete"},

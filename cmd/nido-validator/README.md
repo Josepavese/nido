@@ -50,6 +50,8 @@ Notes and gaps
 - Forwarding dial and cloud-init checks depend on guest capabilities; enable only if image supports SSH and Python (for dummy server).
 
 - Shutdown timeout: `--scenario shutdown-timeout` boots a disposable x86 guest with `-no-acpi` (Ubuntu 24.04 when no image is configured), stops SSH, and proves timeout/no-force behavior before forced cleanup.
-- Durable sessions over MCP: `--scenario mcp-durable` runs the real stdio lifecycle and snapshot flow without reusing CLI state.
+- Durable sessions over MCP: `--scenario mcp-durable` runs the real stdio
+  lifecycle and snapshot flow without reusing CLI state. On hosts with QMP
+  control it checks prelaunch pause and managed resume before guest readiness.
 - Event stream: `--scenario event-stream` verifies the streaming JSON contract,
   cross-process publication and invalid CLI arguments inside a private home.

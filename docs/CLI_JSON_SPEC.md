@@ -68,6 +68,7 @@ Fields:
 - `ERR_NOT_FOUND`
 - `ERR_NOT_READY`
 - `ERR_WAIT_FAILED`
+- `ERR_RESUME_FAILED`
 - `ERR_SHUTDOWN_FAILED`
 - `ERR_SNAPSHOT_FAILED`
 - `ERR_IO`
@@ -108,6 +109,18 @@ The following commands support `--json`:
 ### `info`
 
 `data.vm`: name, state, ip, ssh_user, ssh_port, vnc_port, raw_qemu_args, readiness (optional observed guest state)
+
+On Linux and macOS, `state` in `ls` and `info` is `running`, `stopped`,
+`paused`, `io-error`, or `unknown`. `io-error` is a QEMU disk I/O pause with
+a live process. `unknown` means execution could not be confirmed. Windows
+keeps reporting process liveness through these reads.
+
+### `resume`
+
+`data.action` contains `name` and `result="running"`. The result confirms
+QEMU vCPU execution on the existing process. The action also succeeds for a
+guest already running. Errors use `ERR_RESUME_FAILED` and a non-zero exit
+status. Inspect `info` before retrying an interrupted or failed request.
 
 ### `wait`
 
